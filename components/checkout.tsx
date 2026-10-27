@@ -1,0 +1,253 @@
+"use client";
+
+import clsx from "clsx";
+import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Gift, Percent } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button, Field, Sheet, inputCls, Pill } from "./ui";
+import { FakeQr } from "./qr";
+import { useToast } from "./toast";
+import { inr, GST_RATE } from "@/lib/format";
+import { repo } from "@/lib/repo";
+
+type Method = "upi" | "cash" | "card" | "split";
+
+export function billTotals(subtotal: number, discount = 0) {
+  const taxable = Math.max(0, subtotal - discount);
+  const gst = Math.round(taxable * GST_RATE * 100) / 100;
+  const total = Math.round(taxable + gst);
+  return { subtotal, discount, taxable, cgst: gst / 2, sgst: gst / 2, roundOff: total - (taxable + gst), total };
+}
+
+export function Checkout({
+  open,
+  onClose,
+  subtotal,
+  label,
+  onPaid,
+}: {
+  open: boolean;
+  onClose: () => void;
+  subtotal: number;
+  label: string;
+  onPaid?: () => void;
+}) {
+  const toast = useToast();
+  const [method, setMethod] = useState<Method>("upi");
+  const [discountPct, setDiscountPct] = useState(0);
+  const [cash, setCash] = useState<number | null>(null);
+  const [guests, setGuests] = useState(3);
+  const [paidGuests, setPaidGuests] = useState<number[]>([]);
+  const [done, setDone] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [loyalty, setLoyalty] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setDone(false);
+      setPaidGuests([]);
+      setCash(null);
+      setDiscountPct(0);
+      setMethod("upi");
+    }
+  }, [open]);
+
+  // Demo: guests "pay" one by one on their phones in split mode
+  useEffect(() => {
+    if (!open || method !== "split" || done) return;
+    if (paidGuests.length >= guests) return;
+    const id = window.setTimeout(() => setPaidGuests((p) => [...p, p.length]), 1800);
+    return () => window.clearTimeout(id);
+  }, [open, method, paidGuests, guests, done]);
+
+  const loyaltyOff = loyalty ? 120 : 0;
+  const t = billTotals(subtotal, Math.round((subtotal * discountPct) / 100) + loyaltyOff);
+  const perGuest = Math.ceil(t.total / guests);
+  const upi = repo.restaurant().upi;
+
+  const methods: { v: Method; label: string; icon: typeof QrCode }[] = [
+    { v: "upi", label: "UPI", icon: QrCode },
+    { v: "cash", label: "Cash", icon: Banknote },
+    { v: "card", label: "Card", icon: CreditCard },
+    { v: "split", label: "Split by guest", icon: Users },
+  ];
+
+  const finish = () => {
+    setDone(true);
+    onPaid?.();
+  };
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={done ? "Paid" : `Charge ${label}`}
+      wide
+      footer={
+        done ? (
+          <Button size="lg" className="w-full" onClick={onClose}>
+            Start next order
+          </Button>
+        ) : method === "split" ? (
+          <Button size="lg" className="w-full" disabled={paidGuests.length < guests} onClick={finish}>
+            {paidGuests.length < guests ? `Waiting for ${guests - paidGuests.length} guest${guests - paidGuests.length > 1 ? "s" : ""}…` : `Close bill · ${inr(t.total)}`}
+          </Button>
+        ) : (
+          <Button size="lg" className="w-full" disabled={method === "cash" && (cash ?? 0) < t.total} onClick={finish}>
+            {method === "upi" ? "Payment received" : method === "cash" ? "Cash received" : "Card approved"} · {inr(t.total)}
+          </Button>
+        )
+      }
+    >
+      {done ? (
+        <div className="flex flex-col items-center pt-6 text-center">
+          <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-jade-soft">
+            <CheckCircle2 size={44} className="text-jade" />
+          </div>
+          <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</div>
+          <p className="text-[15px] text-muted">{label} is closed. Table is free for the next guests.</p>
+          <div className="mt-8 w-full max-w-sm space-y-3 text-left">
+            <Field label="Send e-bill on WhatsApp" hint="No paper needed. The guest also gets a 1-tap feedback link.">
+              <div className="flex gap-2">
+                <input className={inputCls} inputMode="tel" placeholder="98220 41187" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Button
+                  variant="tinted"
+                  className="!h-12 shrink-0"
+                  onClick={() => toast(phone ? `E-bill sent to ${phone}` : "Add a number first")}
+                >
+                  <MessageCircle size={17} /> Send
+                </Button>
+              </div>
+            </Field>
+            <Button variant="plain" className="w-full" onClick={() => toast("Sent to printer")}>
+              Print receipt
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* totals */}
+          <div className="rounded-group bg-surface p-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[15px] text-muted">Amount due</span>
+              <span className="text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</span>
+            </div>
+            <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
+              <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
+              {t.discount > 0 && <div className="flex justify-between text-jade"><dt>Discount</dt><dd className="tnum">−{inr(t.discount, { decimals: true })}</dd></div>}
+              <div className="flex justify-between"><dt>CGST 2.5%</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt>SGST 2.5%</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
+            </dl>
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+              {[0, 5, 10].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setDiscountPct(p)}
+                  className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
+                >
+                  <Percent size={13} />
+                  {p === 0 ? "No discount" : `${p}% off`}
+                </button>
+              ))}
+              <button
+                onClick={() => setLoyalty((v) => !v)}
+                className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", loyalty ? "bg-saffron text-white" : "bg-sunken text-muted")}
+              >
+                <Gift size={13} /> Use 1,200 points (₹120)
+              </button>
+            </div>
+          </div>
+
+          {/* method */}
+          <div className="grid grid-cols-4 gap-2">
+            {methods.map((m) => (
+              <button
+                key={m.v}
+                onClick={() => setMethod(m.v)}
+                className={clsx(
+                  "flex flex-col items-center gap-1.5 rounded-[16px] px-1 py-3 text-[12.5px] font-semibold transition",
+                  method === m.v ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
+                )}
+              >
+                <m.icon size={20} />
+                <span className="text-center leading-tight">{m.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {method === "upi" && (
+            <div className="flex flex-col items-center rounded-group bg-surface p-5 text-center">
+              <FakeQr seed={`${label}${t.total}`} size={190} />
+              <div className="mt-3 text-[15px] font-semibold">Scan with any UPI app</div>
+              <div className="text-[13px] text-muted">{upi} · exact amount {inr(t.total)}</div>
+              <Pill tone="jade" className="mt-3">Also showing on the guest screen</Pill>
+            </div>
+          )}
+
+          {method === "cash" && (
+            <div className="rounded-group bg-surface p-4">
+              <div className="grid grid-cols-3 gap-2">
+                {[t.total, Math.ceil(t.total / 100) * 100, Math.ceil(t.total / 500) * 500, 2000, 2500, 5000]
+                  .filter((v, i, a) => a.indexOf(v) === i)
+                  .slice(0, 6)
+                  .map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setCash(v)}
+                      className={clsx("rounded-ctl py-3 text-[16px] font-semibold tnum", cash === v ? "bg-jade text-white" : "bg-sunken")}
+                    >
+                      {v === t.total ? "Exact" : inr(v)}
+                    </button>
+                  ))}
+              </div>
+              {cash !== null && cash >= t.total && (
+                <div className="mt-4 flex items-baseline justify-between rounded-ctl bg-jade-soft px-4 py-3">
+                  <span className="text-[15px] font-medium text-jade-deep">Give back</span>
+                  <span className="text-[24px] font-semibold text-jade-deep tnum">{inr(cash - t.total)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {method === "card" && (
+            <div className="rounded-group bg-surface p-5 text-center text-[14px] text-muted">
+              Tap, dip or swipe on the card machine for <b className="text-ink">{inr(t.total)}</b>, then confirm here.
+            </div>
+          )}
+
+          {method === "split" && (
+            <div className="rounded-group bg-surface p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[15px] font-semibold">Each guest pays on their phone</div>
+                  <div className="text-[13px] text-muted">They scan the table QR and pay their share by UPI.</div>
+                </div>
+                <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
+                  <button aria-label="Fewer guests" onClick={() => { setGuests((g) => Math.max(2, g - 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Minus size={15} /></button>
+                  <span className="w-6 text-center text-[15px] font-semibold tnum">{guests}</span>
+                  <button aria-label="More guests" onClick={() => { setGuests((g) => Math.min(12, g + 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Plus size={15} /></button>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {Array.from({ length: guests }).map((_, i) => {
+                  const paid = paidGuests.includes(i);
+                  return (
+                    <div key={i} className="flex items-center gap-3 rounded-ctl bg-sunken/60 px-3 py-2.5">
+                      <span className={clsx("flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-semibold", paid ? "bg-jade text-white" : "bg-surface text-muted")}>
+                        {paid ? <CheckCircle2 size={16} /> : i + 1}
+                      </span>
+                      <span className="flex-1 text-[14px] font-medium">Guest {i + 1}</span>
+                      <span className="text-[14px] font-semibold tnum">{inr(i === guests - 1 ? t.total - perGuest * (guests - 1) : perGuest)}</span>
+                      <Pill tone={paid ? "jade" : "neutral"}>{paid ? "Paid" : "Waiting"}</Pill>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[12.5px] text-faint">Guests can also split by dish — each one ticks what they ate.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </Sheet>
+  );
+}

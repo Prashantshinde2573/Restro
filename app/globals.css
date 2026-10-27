@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Restro design tokens.
+  Porcelain canvas + white grouped surfaces (iOS inset-group feel),
+  jade as the single action colour, saffron reserved for Pulse/AI moments.
+*/
+:root {
+  --canvas: 243 244 241;
+  --surface: 255 255 255;
+  --sunken: 236 238 234;
+  --ink: 24 33 30;
+  --muted: 104 113 109;
+  --faint: 152 160 156;
+  --line: 226 229 224;
+  --jade: 14 122 95;
+  --jade-soft: 226 241 235;
+  --jade-deep: 9 84 66;
+  --saffron: 222 145 34;
+  --saffron-soft: 252 240 220;
+  --rose: 210 66 66;
+  --rose-soft: 251 232 231;
+  --sky: 44 110 200;
+  --sky-soft: 228 238 251;
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: 14 18 17;
+  --surface: 24 30 28;
+  --sunken: 32 39 37;
+  --ink: 236 240 237;
+  --muted: 150 160 155;
+  --faint: 110 120 116;
+  --line: 44 52 49;
+  --jade: 52 190 150;
+  --jade-soft: 22 52 43;
+  --jade-deep: 120 220 190;
+  --saffron: 240 172 72;
+  --saffron-soft: 58 44 22;
+  --rose: 240 104 100;
+  --rose-soft: 62 30 30;
+  --sky: 110 160 240;
+  --sky-soft: 26 40 62;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
+}
+
+body {
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* iOS-style large title */
+.large-title {
+  font-size: 2rem;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+@media (min-width: 1024px) {
+  .large-title {
+    font-size: 2.125rem;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--jade));
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
