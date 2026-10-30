@@ -1,6 +1,6 @@
 import { PricingTable } from "@/components/pricing";
 import { SiteFooter, SiteNav } from "@/components/site/chrome";
-import { Hero, Mesh } from "@/components/site/hero";
+import { Hero, MadeFor, Mesh } from "@/components/site/hero";
 import { RiseText, SiteMotion } from "@/components/site/motion";
 import { Contact, Features, Modules, Only, Statement, Story } from "@/components/site/sections";
 
@@ -8,9 +8,10 @@ export default function Landing() {
   return (
     <SiteMotion>
       <div className="min-h-dvh overflow-x-clip bg-canvas">
-        <SiteNav />
+        <SiteNav onVideo />
         <main>
           <Hero />
+          <MadeFor />
           <Modules />
           <Statement />
           <Features />

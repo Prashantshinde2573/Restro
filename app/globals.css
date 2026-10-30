@@ -305,3 +305,21 @@ body {
   color: rgb(var(--ink) / 0.16);
   transition: color 0.2s linear;
 }
+
+/* hero fallback scene: out-of-focus warm lamps */
+.hero-bokeh > span {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(40px);
+  mix-blend-mode: screen;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-bokeh > span { animation: bokeh 14s ease-in-out infinite alternate; }
+  .hero-bokeh > span:nth-child(2n) { animation-duration: 19s; }
+  .hero-bokeh > span:nth-child(3n) { animation-duration: 24s; }
+}
+@keyframes bokeh {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: .75; }
+  50% { transform: translate3d(30px, -20px, 0) scale(1.15); opacity: 1; }
+  100% { transform: translate3d(-24px, 18px, 0) scale(.9); opacity: .6; }
+}

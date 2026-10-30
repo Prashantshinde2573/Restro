@@ -16,7 +16,8 @@ const links = [
   { href: "/#contact", label: "Contact" },
 ];
 
-export function SiteNav() {
+/** onVideo: home page — white, see-through nav sitting on the hero video until you scroll. */
+export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [open, setOpen] = useState(false);
@@ -53,35 +54,46 @@ export function SiteNav() {
   }, [open, lenis]);
 
   useEffect(() => setOpen(false), [path]);
+  const light = onVideo && !scrolled && !open; // white on the video
 
   return (
     <>
       <header
         className={clsx(
-          "fixed inset-x-0 top-0 z-50 transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]",
-          hidden && !open && "-translate-y-full",
+          "fixed inset-x-0 top-0 z-50 transition-[transform,padding] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]",
+          hidden && !open && "-translate-y-[130%]",
+          light && "text-white",
         )}
       >
-        <div className={clsx("mx-3 mt-3 flex max-w-6xl items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:mx-6 sm:px-4 lg:mx-auto", scrolled || open ? "glass-strong" : "glass")}>
+        <div
+          className={clsx(
+            "mx-3 mt-3 flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:mx-6 sm:px-4",
+            light ? "max-w-[1400px] border border-transparent sm:mx-8 sm:px-6 lg:mx-auto lg:px-10" : "max-w-6xl lg:mx-auto",
+            !light && (scrolled || open ? "glass-strong" : "glass"),
+          )}
+        >
           <Link href="/" className="rounded-full px-2 py-1" aria-label="Restro home">
-            <Brand className="text-[18px]" />
+            <Brand className={clsx("transition-all duration-500", light ? "text-[21px]" : "text-[18px]")} />
           </Link>
-          <nav className="ml-6 hidden items-center gap-1 whitespace-nowrap lg:flex" aria-label="Main">
+          <nav className={clsx("hidden items-center gap-1 whitespace-nowrap lg:flex", light ? "mx-auto" : "ml-6")} aria-label="Main">
             {links.map((l) => (
-              <Link key={l.href} href={l.href} className="group relative rounded-full px-3.5 py-2 text-[14.5px] text-ink/65 transition hover:bg-white/60 hover:text-ink">
+              <Link key={l.href} href={l.href} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : "text-ink/65 hover:bg-white/60 hover:text-ink")}>
                 {l.label}
               </Link>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-1.5">
-            <Link href="/login" className="hidden whitespace-nowrap rounded-full px-4 py-2 text-[14.5px] font-semibold transition hover:bg-white/60 sm:block">Sign in</Link>
+          <div className={clsx("flex items-center gap-1.5", !light && "ml-auto", light && "max-lg:ml-auto")}>
+            <Link href="/login" className={clsx("hidden whitespace-nowrap rounded-full px-4 py-2 text-[14.5px] font-semibold transition sm:block", light ? "hover:bg-white/15" : "hover:bg-white/60")}>Sign in</Link>
             <Magnetic>
-              <Link href="/#contact" className="group hidden items-center gap-2 whitespace-nowrap rounded-full bg-jade py-2 pl-4 pr-3 text-[14.5px] font-semibold text-white transition hover:bg-jade-deep sm:flex">
+              <Link href="/#contact" className={clsx(
+                  "group hidden items-center gap-2 whitespace-nowrap rounded-full py-2 pl-4 pr-3 text-[14.5px] font-semibold text-white transition sm:flex",
+                  light ? "border border-white/40 bg-white/10 backdrop-blur-md hover:bg-white hover:text-ink" : "bg-jade hover:bg-jade-deep",
+                )}>
                 Get Restro
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:translate-x-0.5 group-hover:-rotate-45"><IconArrow size={14} /></span>
               </Link>
             </Magnetic>
-            <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-sunken lg:hidden">
+            <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"} className={clsx("flex h-10 w-10 items-center justify-center rounded-full lg:hidden", light ? "hover:bg-white/15" : "hover:bg-sunken")}>
               <IconMenu open={open} />
             </button>
           </div>
