@@ -95,7 +95,7 @@ export function SiteNav() {
             {links.map((l, i) => (
               <div key={l.href} className="overflow-hidden border-b border-line">
                 <Link data-m href={l.href} onClick={() => setOpen(false)} className="flex items-baseline justify-between py-4">
-                  <span className="font-display text-[42px] leading-none">{l.label}</span>
+                  <span className="text-[34px] font-semibold leading-none tracking-[-0.03em]">{l.label}</span>
                   <span className="text-[13px] text-faint tnum">0{i + 1}</span>
                 </Link>
               </div>
@@ -112,7 +112,7 @@ export function SiteNav() {
 }
 
 /** Buttons lean toward the pointer a little (desktop only). */
-export function Magnetic({ children, strength = 0.25 }: { children: React.ReactNode; strength?: number }) {
+export function Magnetic({ children, strength = 0.25, block = false }: { children: React.ReactNode; strength?: number; block?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -135,7 +135,7 @@ export function Magnetic({ children, strength = 0.25 }: { children: React.ReactN
       el.removeEventListener("pointerleave", leave);
     };
   }, [strength]);
-  return <span ref={ref} className="inline-block will-change-transform">{children}</span>;
+  return <span ref={ref} className={`${block ? "block sm:inline-block" : "inline-block"} will-change-transform`}>{children}</span>;
 }
 
 // Set these in .env.local to show your contact details on the home page.
@@ -169,7 +169,7 @@ export function SiteFooter() {
         </div>
       </div>
       {/* oversized wordmark, cut by the page edge */}
-      <div aria-hidden className="pointer-events-none select-none px-3 text-center font-display leading-[0.78] text-jade/[0.09]" style={{ fontSize: "clamp(120px, 28vw, 420px)" }} data-parallax="-8">
+      <div aria-hidden className="pointer-events-none select-none px-3 text-center font-semibold leading-[0.8] tracking-[-0.06em] text-jade/[0.08]" style={{ fontSize: "clamp(120px, 28vw, 420px)" }} data-parallax="-8">
         Restro
       </div>
       <div className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-line px-5 py-5 text-[13px] text-muted sm:flex-row lg:px-6">

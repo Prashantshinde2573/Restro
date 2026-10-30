@@ -27,23 +27,35 @@ import { RiseText, ScrollTrigger, gsap, reducedMotion, useIsoLayoutEffect, useTi
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 
-/* ================= marquee ================= */
-export function Marquee() {
-  const words = ["Billing", "Kitchen", "Tables", "Stock", "Team", "Guests", "Reports", "UPI QR", "WhatsApp"];
-  const row = (
-    <div className="flex shrink-0 items-center">
-      {words.map((w) => (
-        <span key={w} className="flex items-center">
-          <span className="px-6 font-display text-[44px] italic leading-none sm:text-[64px]">{w}</span>
-          <span className="h-2.5 w-2.5 rounded-full bg-jade" />
-        </span>
-      ))}
-    </div>
-  );
+/* ================= what Restro covers: icon strip ================= */
+const modules: { icon: Icon; t: string }[] = [
+  { icon: IconBill, t: "Billing" },
+  { icon: IconKitchen, t: "Kitchen" },
+  { icon: IconTable, t: "Tables" },
+  { icon: IconStock, t: "Stock" },
+  { icon: IconTeam, t: "Team" },
+  { icon: IconGuests, t: "Guests" },
+  { icon: IconReports, t: "Reports" },
+  { icon: IconSplit, t: "UPI QR" },
+  { icon: IconChat, t: "WhatsApp" },
+];
+export function Modules() {
   return (
-    <div className="relative overflow-hidden border-y border-line bg-surface py-6" aria-hidden>
-      <div className="flex w-max animate-marquee">{row}{row}</div>
-    </div>
+    <section className="border-y border-line bg-surface">
+      <div className="mx-auto max-w-[1240px] px-5 py-10 lg:px-8 lg:py-12">
+        <p data-reveal className="text-center text-[13px] font-semibold uppercase tracking-[0.18em] text-muted">One login for every part of service</p>
+        <div data-reveal-group className="mt-8 grid grid-cols-3 gap-x-4 gap-y-7 sm:grid-cols-5 lg:grid-cols-9">
+          {modules.map((m) => (
+            <div key={m.t} className="group flex flex-col items-center gap-3">
+              <span className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-jade-soft text-jade transition-all duration-500 group-hover:-translate-y-1 group-hover:bg-jade group-hover:text-white group-hover:shadow-[0_14px_30px_-14px_rgb(var(--jade))]">
+                <m.icon size={30} />
+              </span>
+              <span className="text-[14.5px] font-medium">{m.t}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -73,7 +85,7 @@ export function Features() {
   }, []);
 
   return (
-    <section id="features" className="relative scroll-mt-20 py-24 lg:py-36">
+    <section id="features" className="relative scroll-mt-20 py-20 lg:py-28">
       <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[1fr_1fr] lg:items-end">
           <div>
@@ -85,10 +97,10 @@ export function Features() {
           </p>
         </div>
 
-        <div className="mt-16 grid gap-10 lg:mt-24 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
+        <div className="mt-12 grid gap-10 lg:mt-16 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
           {/* sticky picture that changes with the list */}
           <div className="hidden lg:block">
-            <div className="sticky top-28 h-[560px] overflow-hidden rounded-[36px] bg-surface ring-1 ring-line">
+            <div className="sticky top-28 h-[540px] overflow-hidden rounded-[36px] bg-surface ring-1 ring-line">
               <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgb(var(--jade-soft))_0,transparent_60%)]" />
               {included.map((f, i) => (
                 <div
@@ -115,7 +127,7 @@ export function Features() {
               <div
                 key={f.t}
                 data-feature
-                className={clsx("group border-t border-line py-8 transition-colors duration-500 lg:py-12", i === included.length - 1 && "border-b")}
+                className={clsx("group border-t border-line py-7 transition-colors duration-500 lg:py-10", i === included.length - 1 && "border-b")}
               >
                 <div className="flex items-start gap-3 sm:gap-5">
                   <span className={clsx("mt-1 text-[13px] font-semibold tnum transition-colors duration-500", i === active ? "text-jade" : "text-faint")}>0{i + 1}</span>
@@ -124,7 +136,7 @@ export function Features() {
                       <span className={clsx("flex h-14 w-14 items-center justify-center rounded-2xl transition-colors duration-500", i === active ? "bg-jade text-white" : "bg-surface text-ink ring-1 ring-line")}>
                         <f.icon size={28} />
                       </span>
-                      <h3 className={clsx("font-display text-[36px] leading-none transition-colors duration-500 sm:text-[44px]", i === active ? "text-ink" : "text-ink/45 lg:text-ink/35")}>{f.t}</h3>
+                      <h3 className={clsx("text-[26px] font-semibold leading-tight tracking-[-0.03em] transition-colors duration-500 sm:text-[32px]", i === active ? "text-ink" : "text-ink/45 lg:text-ink/35")}>{f.t}</h3>
                     </div>
                     <p className="mt-4 max-w-md text-[16.5px] leading-relaxed text-muted">{f.d}</p>
                     <div className="relative mt-6 flex h-[300px] items-center justify-center overflow-hidden rounded-[28px] bg-surface ring-1 ring-line lg:hidden">
@@ -300,16 +312,16 @@ export function Story() {
 
   return (
     <section id="story" ref={section} className="relative scroll-mt-0 overflow-hidden bg-surface lg:h-[100svh]">
-      <div className="mx-auto max-w-[1240px] px-5 pt-24 lg:absolute lg:inset-x-0 lg:top-0 lg:px-8 lg:pt-28">
+      <div className="mx-auto max-w-[1240px] px-5 pt-20 lg:absolute lg:inset-x-0 lg:top-0 lg:px-8 lg:pt-24">
         <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-jade">How it works</div>
         <RiseText as="h2" onScroll text="From scan to *thank-you.*" className="mt-3 text-[40px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[56px] lg:text-[64px]" />
         <div className="mt-6 hidden h-px w-full max-w-md bg-line lg:block"><div data-story-bar className="h-px origin-left scale-x-0 bg-jade" /></div>
       </div>
-      <div ref={track} className="flex flex-col gap-6 px-5 pb-24 pt-10 lg:h-full lg:flex-row lg:items-end lg:gap-0 lg:px-0 lg:pb-16 lg:pl-[max(32px,calc((100vw-1240px)/2+32px))] lg:pt-0">
+      <div ref={track} className="flex flex-col gap-6 px-5 pb-20 pt-12 lg:h-full lg:flex-row lg:items-end lg:gap-0 lg:px-0 lg:pb-16 lg:pl-[max(32px,calc((100vw-1240px)/2+32px))] lg:pt-0">
         {steps.map((s) => (
           <article key={s.n} className="relative flex shrink-0 flex-col rounded-[32px] bg-canvas p-6 ring-1 ring-line lg:mr-8 lg:h-[64svh] lg:w-[min(560px,42vw)] lg:flex-row lg:items-stretch lg:gap-6 lg:p-8">
             <div className="flex flex-col lg:w-[44%]">
-              <span className="font-display text-[64px] italic leading-none text-jade/30">{s.n}</span>
+              <span className="text-[15px] font-semibold tnum text-jade">{s.n}</span>
               <h3 className="mt-auto pt-6 text-[26px] font-semibold leading-tight tracking-tight">{s.t}</h3>
               <p className="mt-3 text-[15.5px] leading-relaxed text-muted">{s.d}</p>
             </div>
@@ -351,19 +363,20 @@ function TiltCard({ className, children }: { className?: string; children: React
 export function Only() {
   const [first, second, ...rest] = only;
   return (
-    <section className="relative overflow-hidden bg-ink py-24 text-canvas lg:rounded-[48px] lg:py-36" style={{ marginInline: "clamp(0px, 1.5vw, 24px)" }}>
+    <section className="py-20 lg:py-28">
+    <div className="relative overflow-hidden bg-ink py-16 text-canvas lg:rounded-[40px] lg:py-24" style={{ marginInline: "clamp(0px, 1.5vw, 24px)" }}>
       <div aria-hidden className="absolute -right-40 -top-40 h-[560px] w-[560px] rounded-full bg-saffron/[0.12] blur-[120px]" />
       <div aria-hidden className="absolute -bottom-40 -left-40 h-[520px] w-[520px] rounded-full bg-jade/[0.18] blur-[120px]" />
       <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
         <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-saffron">Only in Restro</div>
         <RiseText as="h2" onScroll text="Things your current software *doesn't* do." className="mt-4 max-w-4xl text-[42px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[58px] lg:text-[72px] [&_.text-jade]:text-saffron" />
 
-        <div className="mt-14 grid gap-4 lg:mt-20 lg:grid-cols-6" data-reveal-group>
-          <TiltCard className="lg:col-span-4 lg:row-span-2">
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:mt-16 lg:grid-cols-6" data-reveal-group>
+          <TiltCard className="sm:col-span-2 lg:col-span-4">
             <div className="grid h-full gap-6 sm:grid-cols-[1fr_auto] sm:items-center">
               <div style={{ transform: "translateZ(30px)" }}>
                 <first.icon size={40} className="text-saffron" />
-                <h3 className="mt-5 font-display text-[40px] leading-[1.02] lg:text-[52px]">{first.t}</h3>
+                <h3 className="mt-5 text-[30px] font-semibold leading-[1.08] tracking-[-0.03em] lg:text-[36px]">{first.t}</h3>
                 <p className="mt-4 max-w-sm text-[16px] leading-relaxed text-canvas/65">{first.d}</p>
               </div>
               <div style={{ transform: "translateZ(60px)" }} className="justify-self-center">
@@ -371,7 +384,7 @@ export function Only() {
               </div>
             </div>
           </TiltCard>
-          <TiltCard className="lg:col-span-2 lg:row-span-2">
+          <TiltCard className="sm:col-span-2 lg:col-span-2">
             <div className="flex h-full flex-col" style={{ transform: "translateZ(30px)" }}>
               <second.icon size={36} className="text-saffron" />
               <h3 className="mt-5 text-[22px] font-semibold leading-tight">{second.t}</h3>
@@ -380,7 +393,7 @@ export function Only() {
             </div>
           </TiltCard>
           {rest.map((f, i) => (
-            <TiltCard key={f.t} className={i < 3 ? "lg:col-span-2" : i === 3 ? "lg:col-span-3" : "lg:col-span-3"}>
+            <TiltCard key={f.t} className="lg:col-span-2">
               <div style={{ transform: "translateZ(24px)" }}>
                 <f.icon size={32} className="text-saffron" />
                 <h3 className="mt-5 text-[20px] font-semibold leading-tight">{f.t}</h3>
@@ -390,6 +403,7 @@ export function Only() {
           ))}
         </div>
       </div>
+    </div>
     </section>
   );
 }
@@ -409,9 +423,9 @@ function Wave() {
 /* ================= contact ================= */
 export function Contact() {
   return (
-    <section id="contact" className="relative scroll-mt-20 overflow-hidden py-24 lg:py-36">
+    <section id="contact" className="relative scroll-mt-20 overflow-hidden pb-20 pt-4 lg:pb-28">
       <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
-        <div className="relative overflow-hidden rounded-[40px] bg-jade px-6 py-16 text-white sm:px-12 lg:px-20 lg:py-24">
+        <div className="relative overflow-hidden rounded-[40px] bg-jade px-6 py-14 text-white sm:px-12 lg:px-16 lg:py-20">
           <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgb(var(--jade-deep))_0,transparent_55%)]" />
           <div aria-hidden className="grain absolute inset-0 opacity-[0.08] mix-blend-overlay" />
           <div aria-hidden className="pointer-events-none absolute -right-10 top-10 hidden rotate-6 opacity-95 lg:block" data-parallax="-25">

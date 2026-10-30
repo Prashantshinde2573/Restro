@@ -32,7 +32,6 @@ export default {
       },
       fontFamily: {
         sans: ['"Instrument Sans Variable"', "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ['"Instrument Serif"', "ui-serif", "Georgia", "serif"],
       },
       borderRadius: {
         group: "20px",

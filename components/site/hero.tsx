@@ -34,7 +34,7 @@ export function Hero() {
   }, []);
 
   return (
-    <section ref={section} className="relative isolate overflow-hidden pb-10 pt-28 sm:pt-32 lg:min-h-[100svh] lg:pb-0 lg:pt-36">
+    <section ref={section} className="relative isolate overflow-hidden pb-14 pt-28 sm:pt-32 lg:flex lg:min-h-[100svh] lg:items-center lg:py-24">
       {/* soft brand light + grain, no images to load */}
       <div aria-hidden className="absolute inset-0 -z-10">
         <div className="absolute -left-40 top-10 h-[520px] w-[520px] rounded-full bg-jade/[0.10] blur-[110px]" />
@@ -42,7 +42,7 @@ export function Hero() {
         <div className="grain absolute inset-0 opacity-[0.05] mix-blend-multiply" />
       </div>
 
-      <div className="mx-auto grid max-w-[1240px] items-center gap-10 px-5 lg:grid-cols-[1.02fr_1fr] lg:px-8">
+      <div className="mx-auto grid w-full max-w-[1240px] items-center gap-10 px-5 lg:grid-cols-[1.02fr_1fr] lg:gap-6 lg:px-8">
         <div data-hero-copy className="relative z-10">
           <div data-hero-fade className="inline-flex items-center gap-2 rounded-full bg-surface/80 px-3 py-1.5 text-[13px] font-medium text-muted ring-1 ring-line backdrop-blur">
             <span className="relative flex h-2 w-2">
@@ -53,25 +53,25 @@ export function Hero() {
           </div>
           <RiseText
             text="Run the whole restaurant from one *calm* screen."
-            className="text-balance mt-6 text-[46px] font-semibold leading-[0.98] tracking-[-0.045em] sm:text-[64px] lg:text-[72px] xl:text-[84px]"
+            className="text-balance mt-6 text-[46px] font-semibold leading-[0.98] tracking-[-0.045em] sm:text-[60px] lg:text-[66px] xl:text-[76px]"
           />
           <p data-hero-fade className="mt-6 max-w-xl text-[17.5px] leading-relaxed text-muted lg:text-[19px]">
             Billing, kitchen, tables, stock, staff and guests — for cafés, restaurants and cloud kitchens. Every morning Restro tells you what to fix, in plain words.
           </p>
-          <div data-hero-fade className="mt-8 flex flex-wrap items-center gap-3">
-            <Magnetic>
-              <a href="#contact" className="group flex h-14 items-center gap-3 rounded-full bg-jade pl-6 pr-2 text-[16.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgb(var(--jade))] transition hover:bg-jade-deep">
+          <div data-hero-fade className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Magnetic block>
+              <a href="#contact" className="group flex h-14 w-full items-center justify-between gap-3 rounded-full bg-jade pl-6 pr-2 sm:w-auto sm:justify-start text-[16.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgb(var(--jade))] transition hover:bg-jade-deep">
                 Get Restro for your restaurant
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow /></span>
               </a>
             </Magnetic>
-            <Link href="/login" className="flex h-14 items-center rounded-full px-6 text-[16.5px] font-semibold ring-1 ring-line transition hover:bg-surface">Sign in</Link>
+            <Link href="/login" className="flex h-14 items-center justify-center rounded-full px-7 text-[16.5px] font-semibold ring-1 ring-line transition hover:bg-surface">Sign in</Link>
           </div>
           <p data-hero-fade className="mt-5 text-[13.5px] text-muted">We set it up with you. Works on the phone, tablet and laptop you already have.</p>
         </div>
 
         {/* the 3D table-top */}
-        <div className="relative h-[420px] sm:h-[520px] lg:h-[640px]" style={{ perspective: "1600px" }}>
+        <div className="relative h-[420px] sm:h-[520px] lg:h-[600px]" style={{ perspective: "1600px" }}>
           <div ref={tilt} className="absolute inset-0" style={{ transformStyle: "preserve-3d" }}>
             <div className="absolute left-1/2 top-1/2 h-[520px] w-[620px] -translate-x-1/2 -translate-y-1/2 scale-[.58] [transform-style:preserve-3d] sm:scale-[.78] lg:left-[62%] lg:scale-[.9] xl:left-[58%] xl:scale-100">
             <div
@@ -92,7 +92,7 @@ export function Hero() {
         </div>
       </div>
 
-      <a href="#features" aria-label="Scroll to features" className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[12px] font-medium uppercase tracking-[0.2em] text-faint lg:flex">
+      <a href="#features" aria-label="Scroll to features" className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-faint xl:flex">
         Scroll
         <span className="relative h-10 w-px overflow-hidden bg-line">
           <span className="absolute inset-x-0 top-0 h-1/2 animate-[scrollcue_1.8s_ease-in-out_infinite] bg-jade" />

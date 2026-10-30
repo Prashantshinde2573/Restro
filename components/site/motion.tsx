@@ -8,8 +8,6 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
-import "@fontsource/instrument-serif/400.css";
-import "@fontsource/instrument-serif/400-italic.css";
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 if (typeof window !== "undefined") gsap.registerPlugin(ScrollTrigger);
@@ -108,7 +106,7 @@ export function RiseText({ text, as: Tag = "h1", className, onScroll = false, de
     }, ref);
     return () => ctx.revert();
   }, [onScroll, delay]);
-  // *word* renders in the italic serif accent
+  // *word* renders in the brand colour
   // "*per outlet.*" may span several words: mark each word inside the stars
   let on = false;
   const marked = text.split(" ").map((w) => {
@@ -126,7 +124,7 @@ export function RiseText({ text, as: Tag = "h1", className, onScroll = false, de
         return (
           <Fragment key={i}>
             <span aria-hidden className="inline-block overflow-hidden pb-[0.12em] align-bottom">
-              <span data-w className={`inline-block will-change-transform ${accent ? "pr-[0.06em] font-display font-normal italic text-jade" : ""}`}>{w}</span>
+              <span data-w className={`inline-block will-change-transform ${accent ? "text-jade" : ""}`}>{w}</span>
             </span>
             {i < parts.length - 1 ? " " : ""}
           </Fragment>
