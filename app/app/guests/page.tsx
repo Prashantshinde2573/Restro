@@ -1,16 +1,15 @@
 "use client";
 
-import clsx from "clsx";
-import { BadgeCheck, Cake, Gift, Lock, MessageCircle, QrCode, Search, Star } from "lucide-react";
+import { BadgeCheck, MessageCircle, QrCode, Search, Star, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Chips, Group, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
-import { useToast } from "@/components/toast";
-import { repo } from "@/lib/repo";
 import { useGuests, useFeedback } from "@/lib/live";
 import { inr, timeAgo } from "@/lib/format";
 import type { Customer } from "@/lib/types";
+import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
 
-type Seg = "all" | "inner" | "birthday" | "lapsed" | "unhappy";
+type Seg = GuestSeg;
+const daysSince = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86_400_000;
 
 function Stars({ n }: { n: number }) {
   return (
@@ -21,116 +20,95 @@ function Stars({ n }: { n: number }) {
     </span>
   );
 }
-
 export default function GuestsPage() {
-  const toast = useToast();
   const [tab, setTab] = useState<"guests" | "reviews">("guests");
   const [seg, setSeg] = useState<Seg>("all");
   const [q, setQ] = useState("");
   const [selId, setSelId] = useState<string | null>(null);
   const all = useGuests();
-  const fb = useFeedback();
+  const fb = useFeedback().slice().sort((a, b) => b.at.localeCompare(a.at));
 
   const sel: Customer | null = all.find((c) => c.id === selId) ?? null;
-  const days = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86_400_000;
-  const match = (c: Customer, s: Seg) =>
-    s === "all" ? true : s === "inner" ? c.tier === "Inner circle" || c.tier === "Gold" : s === "birthday" ? !!c.birthday : s === "lapsed" ? days(c.lastVisit) > 30 : c.mood === "unhappy";
-  const list = useMemo(() => all.filter((c) => match(c, seg) && (!q || `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()))), [all, seg, q]);
+  const list = useMemo(
+    () => all.filter((c) => guestMatch(c, seg) && (!q || `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.lastVisit.localeCompare(a.lastVisit)),
+    [all, seg, q],
+  );
+  const back = all.filter((c) => c.visits > 1 && daysSince(c.lastVisit) <= 30).length;
+  const avg = fb.length ? fb.reduce((s, f) => s + f.stars, 0) / fb.length : 0;
 
   return (
     <>
-      <PageHeader title="Guests" subtitle="1,920 guests · 38% came back this month">
-        <Segmented value={tab} onChange={setTab} options={[{ value: "guests", label: "Guest book" }, { value: "reviews", label: "Reviews" }]} />
+      <PageHeader title="Guests" subtitle={all.length ? `${all.length} guest${all.length === 1 ? "" : "s"} · ${back} came back in the last 30 days` : "Your guest book"}>
+        <Segmented value={tab} onChange={setTab} options={[{ value: "guests", label: "Guest book" }, { value: "reviews", label: `Feedback${fb.length ? ` · ${fb.length}` : ""}` }]} />
       </PageHeader>
       <Page>
         {tab === "guests" ? (
-          <div className="space-y-4">
-            <div className="relative">
-              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="h-11 w-full rounded-ctl bg-surface pl-10 pr-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade lg:max-w-md" />
+          all.length === 0 ? (
+            <div className="flex flex-col items-center rounded-group bg-surface px-6 py-12 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade"><Users size={26} /></span>
+              <h2 className="mt-4 text-[18px] font-semibold">No guests yet</h2>
+              <p className="mt-1 max-w-sm text-[14.5px] text-muted">Guests are added when they order from the table QR with their phone number, or when you add a number to a bill.</p>
             </div>
-            <Chips
-              value={seg}
-              onChange={setSeg}
-              options={[
-                { value: "all", label: "Everyone", count: all.length },
-                { value: "inner", label: "Regulars", count: all.filter((c) => match(c, "inner")).length },
-                { value: "birthday", label: "Birthday soon", count: all.filter((c) => match(c, "birthday")).length },
-                { value: "lapsed", label: "Not seen 30+ days", count: all.filter((c) => match(c, "lapsed")).length },
-                { value: "unhappy", label: "Unhappy last visit", count: all.filter((c) => match(c, "unhappy")).length },
-              ]}
-            />
-            {seg === "lapsed" && (
-              <div className="flex flex-col gap-3 rounded-group bg-saffron-soft/70 p-4 sm:flex-row sm:items-center">
-                <p className="flex-1 text-[14px]">These guests used to come every 2 weeks. A personal WhatsApp brings back about 1 in 6.</p>
-                <Button size="sm" onClick={() => toast("Win-back message scheduled for 11 am")}><MessageCircle size={15} /> Send win-back offer</Button>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="h-11 w-full rounded-ctl bg-surface pl-10 pr-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade lg:max-w-md" />
               </div>
-            )}
-            <Group flush>
-              {list.map((c) => (
-                <button key={c.id} onClick={() => setSelId(c.id)} className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 hover:bg-sunken/40 lg:px-5">
-                  <Avatar name={c.name} hue={(c.name.charCodeAt(0) * 37) % 360} size={40} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[15px] font-medium">{c.name}</span>
-                      {c.verified && <BadgeCheck size={15} className="text-jade" aria-label="Number verified" />}
-                      {c.birthday && <Cake size={14} className="text-saffron" aria-label={`Birthday ${c.birthday}`} />}
-                      {c.source === "qr" && c.tier === "New" && <Pill tone="sky"><QrCode size={11} /> New via QR</Pill>}
+              <Chips
+                value={seg}
+                onChange={setSeg}
+                options={[
+                  { value: "all", label: "Everyone", count: all.length },
+                  { value: "regular", label: "Regulars (3+ visits)", count: all.filter((c) => guestMatch(c, "regular")).length },
+                  { value: "lapsed", label: "Not seen 30+ days", count: all.filter((c) => guestMatch(c, "lapsed")).length },
+                  { value: "optin", label: "OK with offers", count: all.filter((c) => guestMatch(c, "optin")).length },
+                ]}
+              />
+              <Group flush>
+                {list.map((c) => (
+                  <button key={c.id} onClick={() => setSelId(c.id)} className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 hover:bg-sunken/40 lg:px-5">
+                    <Avatar name={c.name || "Guest"} hue={((c.name || "G").charCodeAt(0) * 37) % 360} size={40} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[15px] font-medium">{c.name || "Guest"}</span>
+                        {c.verified && <BadgeCheck size={15} className="text-jade" aria-label="Number verified" />}
+                        {c.source === "qr" && c.visits <= 1 && <Pill tone="sky"><QrCode size={11} /> New via QR</Pill>}
+                      </div>
+                      <div className="truncate text-[13px] text-muted">{c.phone} · {c.visits} {c.visits === 1 ? "visit" : "visits"} · {timeAgo(c.lastVisit)}</div>
                     </div>
-                    <div className="truncate text-[13px] text-muted">{c.phone} · {c.visits} {c.visits === 1 ? "visit" : "visits"} · {timeAgo(c.lastVisit)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[14px] font-semibold tnum">{inr(c.spend)}</div>
-                    <Pill tone={c.tier === "Inner circle" ? "jade" : c.tier === "Gold" ? "saffron" : "neutral"}>{c.tier}</Pill>
-                  </div>
-                </button>
-              ))}
-            </Group>
-          </div>
+                    <div className="text-right text-[14px] font-semibold tnum">{inr(c.spend)}</div>
+                  </button>
+                ))}
+                {list.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">No one matches.</p>}
+              </Group>
+            </div>
+          )
         ) : (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
+            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-group bg-line/70">
               {[
-                ["Google rating", "4.6", "up from 4.3 in July"],
-                ["New Google reviews", "38", "this month"],
-                ["Kept private", "6", "unhappy guests reached you first"],
-                ["Replied within 1 hour", "92%", ""],
-              ].map(([l, v, n]) => (
+                ["Average rating", fb.length ? avg.toFixed(1) : "—"],
+                ["Happy (4–5★)", String(fb.filter((f) => f.stars >= 4).length)],
+                ["Unhappy (1–3★)", String(fb.filter((f) => f.stars <= 3).length)],
+              ].map(([l, v]) => (
                 <div key={l} className="bg-surface p-4">
                   <div className="text-[13px] text-muted">{l}</div>
                   <div className="mt-1 text-[26px] font-semibold tracking-tight tnum">{v}</div>
-                  <div className="text-[12.5px] text-muted">{n}</div>
                 </div>
               ))}
             </div>
-            <Group title="How it works">
-              <p className="text-[14px] leading-relaxed text-muted">
-                4–5★ guests get a Google review link. 1–3★ come to you privately.
-              </p>
-            </Group>
             <Group title="Latest feedback" flush>
+              {fb.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">Guests rate their visit on the thank-you screen after paying. Their ratings show here.</p>}
               {fb.map((f) => (
                 <div key={f.id} className="border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
                   <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-medium">{f.customer}</span>
+                    <span className="text-[15px] font-medium">{f.customer || "Guest"}</span>
                     <Stars n={f.stars} />
                     <span className="ml-auto text-[12.5px] text-muted">{timeAgo(f.at)}</span>
                   </div>
-                  <p className="mt-1 text-[14px]">{f.text}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    {f.routed === "google" ? (
-                      <Pill tone="jade">Sent to Google</Pill>
-                    ) : (
-                      <Pill tone="rose"><Lock size={11} /> Private to you</Pill>
-                    )}
-                    {f.replied ? (
-                      <span className="text-[12.5px] text-muted">Replied</span>
-                    ) : (
-                      <button onClick={() => toast(f.routed === "private" ? "Apology + ₹200 voucher sent on WhatsApp" : "Thank-you reply posted")} className="text-[13px] font-semibold text-jade">
-                        {f.routed === "private" ? "Say sorry with a voucher" : "Reply"}
-                      </button>
-                    )}
-                  </div>
+                  {f.text && <p className="mt-1 text-[14px]">{f.text}</p>}
+                  {f.stars <= 3 && <Pill tone="rose" className="mt-2">Needs a look</Pill>}
                 </div>
               ))}
             </Group>
@@ -138,20 +116,17 @@ export default function GuestsPage() {
         )}
       </Page>
 
-      <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel?.name ?? ""}>
+      <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel?.name || "Guest"}>
         {sel && (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
-              <Avatar name={sel.name} hue={(sel.name.charCodeAt(0) * 37) % 360} size={60} />
-              <div>
-                <div className="flex items-center gap-1.5 text-[15px] text-muted">
-                  +91 {sel.phone} {sel.verified && <BadgeCheck size={16} className="text-jade" aria-label="Verified by OTP" />}
-                </div>
-                <Pill tone={sel.tier === "Inner circle" ? "jade" : sel.tier === "Gold" ? "saffron" : "neutral"} className="mt-1">{sel.tier}</Pill>
+              <Avatar name={sel.name || "Guest"} hue={((sel.name || "G").charCodeAt(0) * 37) % 360} size={60} />
+              <div className="flex items-center gap-1.5 text-[15px] text-muted">
+                +91 {sel.phone} {sel.verified && <BadgeCheck size={16} className="text-jade" aria-label="Verified" />}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-px overflow-hidden rounded-group bg-line/70">
-              {[["Visits", sel.visits], ["Spent", inr(sel.spend)], ["Points", sel.points.toLocaleString("en-IN")]].map(([l, v]) => (
+              {[["Visits", sel.visits], ["Spent", inr(sel.spend)], ["Average bill", inr(Math.round(sel.spend / Math.max(1, sel.visits)))]].map(([l, v]) => (
                 <div key={String(l)} className="bg-surface p-3 text-center">
                   <div className="text-[18px] font-semibold tnum">{v}</div>
                   <div className="text-[12px] text-muted">{l}</div>
@@ -160,26 +135,20 @@ export default function GuestsPage() {
             </div>
             <div className="overflow-hidden rounded-group bg-surface">
               {[
-                ["Usually orders", sel.favourite],
                 ["Last visit", timeAgo(sel.lastVisit)],
-                ["Birthday", sel.birthday ?? "Not added"],
-                ["Average bill", inr(Math.round(sel.spend / Math.max(1, sel.visits)))],
-                ["Offers on WhatsApp", sel.optIn === false ? "Said no" : "Yes"],
-                ["Notes", sel.mood === "unhappy" ? "Complained about salt in mutton last time" : sel.source === "qr" ? "Joined by ordering from the table QR" : "Prefers window seat"],
+                ["Came from", sel.source === "qr" ? "Table QR" : sel.source === "whatsapp" ? "WhatsApp" : "Counter"],
+                ["Offers on WhatsApp", sel.optIn ? "Yes" : "No"],
               ].map(([l, v]) => (
                 <div key={l} className="flex justify-between gap-4 border-b border-line/80 px-4 py-3 text-[14.5px] last:border-0">
                   <span className="text-muted">{l}</span>
-                  <span className={clsx("text-right font-medium", l === "Notes" && sel.mood === "unhappy" && "text-rose")}>{v}</span>
+                  <span className="text-right font-medium">{v}</span>
                 </div>
               ))}
             </div>
             <div>
               <div className="mb-2 px-1 text-[15px] font-semibold">Bills</div>
               <div className="overflow-hidden rounded-group bg-surface">
-                {(sel.bills?.length
-                  ? sel.bills
-                  : Array.from({ length: Math.min(3, sel.visits) }).map((_, i) => ({ orderNo: 1030 - i * 7, at: new Date(Date.now() - (i + 1) * 6 * 86_400_000).toISOString(), amount: Math.round(sel.spend / Math.max(1, sel.visits)), method: i % 2 ? "Cash" : "UPI" }))
-                ).map((b) => (
+                {(sel.bills ?? []).map((b) => (
                   <div key={b.orderNo + b.at} className="flex items-center justify-between border-b border-line/80 px-4 py-3 text-[14.5px] last:border-0">
                     <span>
                       #{b.orderNo}
@@ -188,13 +157,12 @@ export default function GuestsPage() {
                     <span className="font-semibold tnum">{inr(b.amount)}</span>
                   </div>
                 ))}
-                {!sel.bills?.length && sel.visits === 0 && <div className="px-4 py-3 text-[14px] text-muted">No bills yet.</div>}
+                {!sel.bills?.length && <div className="px-4 py-3 text-[14px] text-muted">No bills yet.</div>}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="tinted" onClick={() => toast(`WhatsApp opened for ${sel.name}`)}><MessageCircle size={16} /> Message</Button>
-              <Button variant="plain" onClick={() => toast("₹200 voucher sent")}><Gift size={16} /> Send voucher</Button>
-            </div>
+            <a href={waLink(sel.phone)} target="_blank" rel="noreferrer" className="block">
+              <Button variant="tinted" className="w-full"><MessageCircle size={16} /> Message on WhatsApp</Button>
+            </a>
           </div>
         )}
       </Sheet>

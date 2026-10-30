@@ -36,10 +36,12 @@ const TABLE: Record<string, string> = {
   orders: "orders",
   guests: "guests",
   feedback: "feedback",
+  stock: "stock_items",
 };
 
 /* ---------------- who is signed in on this device ---------------- */
-export type Role = "owner" | "staff" | "guest";
+export type Role = "owner" | "staff" | "guest" | "superadmin";
+/** needsOnboarding = signed in, but this login isn't linked to any restaurant. */
 export type CloudStatus = "off" | "loading" | "signedOut" | "needsOnboarding" | "ready";
 export interface CloudState {
   status: CloudStatus;
@@ -49,6 +51,8 @@ export interface CloudState {
   memberId?: string;
   email?: string | null;
   displayName?: string | null;
+  /** First sign-in with a temporary password: must set their own. */
+  mustChangePassword?: boolean;
 }
 const stateStore = createStore<CloudState>({ status: cloudConfigured ? "loading" : "off" });
 export const useCloud = () => stateStore.use();
@@ -70,28 +74,52 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
     // token refreshes fire too; only re-resolve when the person changes
     if (session.user.id === lastUid && stateStore.get().status !== "loading") return;
     lastUid = session.user.id;
-    const s = await resolveUser(session);
+    let s: CloudState;
+    try {
+      s = await resolveUser(session);
+    } catch {
+      lastUid = null;
+      stateStore.set({ status: "signedOut" });
+      return;
+    }
     stateStore.set(s);
-    if (s.status === "ready" && s.rid && s.role !== "guest") {
+    if (s.status === "ready" && s.rid && (s.role === "owner" || s.role === "staff")) {
       connect(s.rid, s.role!, session.user.id);
       onSignedIn(s);
     }
   };
-  sb().auth.onAuthStateChange((_event, session) => {
+  sb().auth.onAuthStateChange((event, session) => {
     // don't await inside the auth callback (supabase-js deadlocks on nested calls)
-    setTimeout(() => void handle(session), 0);
+    setTimeout(async () => {
+      await handle(session);
+      // opened a "reset password" email link: ask for a new password first
+      if (event === "PASSWORD_RECOVERY") stateStore.set({ ...stateStore.get(), mustChangePassword: true });
+    }, 0);
   });
 }
 
 async function resolveUser(session: Session): Promise<CloudState> {
   const user = session.user;
   if (user.is_anonymous) return { ...stateStore.get(), status: "ready", role: "guest", uid: user.id };
-  const meta = (user.app_metadata ?? {}) as { rid?: string; member_id?: string };
-  if (meta.rid) return { status: "ready", role: "staff", rid: meta.rid, uid: user.id, memberId: meta.member_id ?? "" };
-  const { data } = await sb().from("restaurants").select("id").eq("owner_uid", user.id).limit(1).maybeSingle();
   const name = (user.user_metadata?.name as string | undefined) ?? null;
-  if (!data) return { status: "needsOnboarding", uid: user.id, email: user.email, displayName: name };
-  return { status: "ready", role: "owner", rid: data.id, uid: user.id, memberId: "owner", email: user.email, displayName: name };
+  const must = !!user.user_metadata?.must_change_password;
+  const base = { uid: user.id, email: user.email, displayName: name, mustChangePassword: must };
+  const meta = (user.app_metadata ?? {}) as { rid?: string; member_id?: string };
+  if (meta.rid) return { ...base, status: "ready", role: "staff", rid: meta.rid, memberId: meta.member_id ?? "", mustChangePassword: false };
+  const { data, error } = await sb().rpc("whoami");
+  if (error) throw error;
+  const w = data as { superAdmin: boolean; restaurant: { id: string; status: string } | null };
+  if (w.superAdmin) return { ...base, status: "ready", role: "superadmin" };
+  if (!w.restaurant) return { ...base, status: "needsOnboarding" };
+  return { ...base, status: "ready", role: "owner", rid: w.restaurant.id, memberId: "owner" };
+}
+
+/** Set a new password (first sign-in, or from the profile). */
+export async function changePassword(password: string) {
+  const { data, error } = await sb().auth.updateUser({ password, data: { must_change_password: false } });
+  if (error) throw new Error(/should be different/i.test(error.message) ? "Use a different password from the temporary one." : error.message);
+  stateStore.set({ ...stateStore.get(), mustChangePassword: false });
+  return data;
 }
 
 /* ---------------- sign-in actions ---------------- */
@@ -105,12 +133,6 @@ const friendly = (m: string) =>
 export async function signInOwner(email: string, password: string) {
   const { error } = await sb().auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw new Error(friendly(error.message));
-}
-/** Owner sign up. Returns "confirm" when the project asks people to confirm their email first. */
-export async function signUpOwner(email: string, password: string, name: string): Promise<"ready" | "confirm"> {
-  const { data, error } = await sb().auth.signUp({ email: email.trim(), password, options: { data: { name }, emailRedirectTo: `${window.location.origin}/onboarding` } });
-  if (error) throw new Error(friendly(error.message));
-  return data.session ? "ready" : "confirm";
 }
 export async function sendPasswordReset(email: string) {
   const { error } = await sb().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/login` });
@@ -151,9 +173,23 @@ export async function ensureGuest(rid: string) {
     connect(rid, role, uid);
   }
 }
+/** Sign this login out on every phone and computer. */
+export async function signOutEverywhere() {
+  disconnect();
+  await sb().auth.signOut({ scope: "global" });
+}
 export async function cloudSignOut() {
   disconnect();
   await sb().auth.signOut();
+}
+/** Upload a dish photo (already resized) and get its public link. */
+export async function uploadMenuPhoto(blob: Blob): Promise<string> {
+  const rid = stateStore.get().rid;
+  if (!rid) throw new Error("Not signed in");
+  const path = `${rid}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await sb().storage.from("menu-photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (error) throw new Error(error.message);
+  return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
 }
 /** Owner or sub admin sets a staff member's 4-digit PIN (stored hashed on the server). */
 export async function setStaffPin(rid: string, memberId: string, pin: string) {
@@ -186,8 +222,8 @@ function disconnect() {
 type Row = { id: string; data: Record<string, unknown>; number?: number };
 const fromRow = (key: string, r: Row) => (key === "orders" ? { ...r.data, id: r.id, number: r.number ?? r.data.number ?? 0 } : { ...r.data, id: r.id });
 
-type AccountRow = { name: string; owner: string; plan: string; renews_at: string };
-const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at });
+type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string };
+const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status });
 
 export function connect(rid: string, role: Role, uid: string) {
   if (connected && connected.rid === rid && connected.role === role && connected.uid === uid) return;
@@ -211,7 +247,7 @@ export function connect(rid: string, role: Role, uid: string) {
       );
       void client
         .from("restaurants")
-        .select("name, owner, plan, renews_at")
+        .select("name, owner, plan, renews_at, status")
         .eq("id", rid)
         .maybeSingle()
         .then(({ data }) => data && b.receive({ ...(b.empty as object), ...fromAccount(data as AccountRow) }));
@@ -340,23 +376,50 @@ export function guestUpsert(rid: string, id: string, data: Record<string, unknow
   else track(sb().from("feedback").insert({ rid, id, data }).then(check));
 }
 
-/* ---------------- first sign-in: create the restaurant ---------------- */
+/* ---------------- super admin ---------------- */
+export interface AdminRestaurant {
+  id: string;
+  name: string;
+  owner: string;
+  ownerEmail: string;
+  phone: string;
+  city: string;
+  notes: string;
+  plan: "starter" | "growth" | "pro" | "chain";
+  renewsAt: string;
+  status: "active" | "suspended";
+  createdAt: string;
+  outlets: number;
+  members: number;
+  menuItems: number;
+  orders30: number;
+  lastOrderAt: string | null;
+}
+export async function adminList(): Promise<AdminRestaurant[]> {
+  const { data, error } = await sb().rpc("admin_restaurants");
+  if (error) throw new Error(error.message);
+  return (data as AdminRestaurant[]) ?? [];
+}
+export async function adminUpdate(rid: string, patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">>) {
+  const { error } = await sb().rpc("admin_update_restaurant", { r: rid, patch });
+  if (error) throw new Error(error.message);
+}
 export interface NewRestaurant {
   name: string;
   ownerName: string;
-  outlet: { id: string; name: string; address: string; businessType: "restaurant" | "cafe"; upi: string; payFirst: boolean };
+  ownerEmail: string;
+  phone: string;
+  city: string;
+  notes: string;
+  plan: string;
+  months: number;
+  trialDays: number;
   tables: number;
-  categories: { id: string; name: string; icon?: string }[];
-  menu: Record<string, unknown>[];
+  outlet: { name: string; address: string; businessType: "restaurant" | "cafe"; upi: string; payFirst: boolean };
 }
-export async function createRestaurant(r: NewRestaurant): Promise<string> {
-  const { data: s } = await sb().auth.getSession();
-  if (!s.session || s.session.user.is_anonymous) throw new Error("Sign in first");
-  const { data, error } = await sb().rpc("create_restaurant", { p: r });
-  if (error) throw new Error(error.message);
-  const rid = data as string;
-  lastUid = null;
-  stateStore.set(await resolveUser(s.session));
-  connect(rid, "owner", s.session.user.id);
-  return rid;
-}
+export const adminCreate = (r: NewRestaurant) =>
+  callFn<{ rid: string; ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "create", ...r }, true);
+export const adminResetOwnerPassword = (rid: string) =>
+  callFn<{ ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "reset_owner_password", rid }, true);
+export const adminDelete = (rid: string, confirmName: string) =>
+  callFn<{ ok: true }>("admin-restaurants", { action: "delete", rid, confirmName }, true);

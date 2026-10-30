@@ -1,164 +1,167 @@
 "use client";
 
-import clsx from "clsx";
 import Link from "next/link";
-import { ArrowUp, Banknote, Boxes, Percent, RotateCcw, ShieldCheck, Sparkles, Trash2, TrendingUp, CalendarRange } from "lucide-react";
-import { useState } from "react";
-import { Button, Group, Page, PageHeader, Pill, Sheet } from "@/components/ui";
-import { useToast } from "@/components/toast";
-import { repo } from "@/lib/repo";
-import { inr, timeAgo } from "@/lib/format";
-import type { LeakAlert } from "@/lib/types";
+import { Banknote, Boxes, Clock, PenLine, Percent, ShieldCheck, Trash2, TrendingDown, TrendingUp, Turtle } from "lucide-react";
+import type { ReactNode } from "react";
+import { Group, Page, PageHeader, Pill } from "@/components/ui";
+import { billOf, useCurrentOutlet, useMenu, useOrders, useStock } from "@/lib/live";
+import { DAY_MS, between, byDay, change, inOutlet, live, paid, paidAmount, startOfDay, topDishes, totals } from "@/lib/stats";
+import { clock, inr, timeAgo } from "@/lib/format";
 
-const kindIcon = { void: Trash2, discount: Percent, cash: Banknote, stock: Boxes, refund: RotateCcw };
-
-const answers: Record<string, string> = {
-  "Which dish should I push this weekend?":
-    "Push Kothimbir Vadi and Kokum Sharbat. Both earn over 80% margin, guests who try them rate them 4.7+, but they sell less than a third of your starters. Captains suggesting them with every rooftop table would add roughly ₹6,500 this weekend.",
-  "Why was last Monday slow?":
-    "Last Monday did ₹49,700 — 21% under your Monday average. Lunch was normal; dinner dropped after 8 pm. It rained from 7:40 pm and Swiggy orders went up 30%, but dine-in fell by 38 guests. Nothing went wrong in the restaurant.",
-  "How much do Swiggy and Zomato cost me?":
-    "This month you paid about ₹41,200 in commission on ₹1.87 lakh of aggregator orders (22%). 312 of those guests have also ordered from you directly — a 10% direct-order offer to them would still save you about 12% per order.",
-  "Who is my best captain this month?":
-    "Sneha Kale: highest sales per table (₹2,140), highest guest rating (4.9) and lowest void count (0). Rohit sells more in total but works 6 more shifts.",
-};
+type Alert = { key: string; icon: ReactNode; tone: "rose" | "saffron" | "sky"; title: string; detail: string; amount?: number; href?: string };
 
 export default function InsightsPage() {
-  const toast = useToast();
-  const alerts = repo.leakAlerts();
-  const [sel, setSel] = useState<LeakAlert | null>(null);
-  const [q, setQ] = useState("");
-  const [asked, setAsked] = useState<{ q: string; a: string } | null>(null);
-  const [thinking, setThinking] = useState(false);
+  const outlet = useCurrentOutlet();
+  const orders = inOutlet(useOrders(), outlet.id);
+  const menu = useMenu();
+  const stock = useStock().filter((s) => !s.outletId || s.outletId === outlet.id);
+  const now = Date.now();
+  const week0 = startOfDay(now) - 6 * DAY_MS;
+  const week = between(orders, week0, now + 1);
+  const lastWeek = between(orders, week0 - 7 * DAY_MS, week0);
 
-  const ask = (question: string) => {
-    setQ("");
-    setThinking(true);
-    setAsked({ q: question, a: "" });
-    window.setTimeout(() => {
-      setThinking(false);
-      setAsked({ q: question, a: answers[question] ?? "In the live version I'll answer this from your own sales, stock and staff data. Try one of the suggested questions to see how it works." });
-    }, 900);
-  };
+  /* ---------- money leaks, last 7 days ---------- */
+  const alerts: Alert[] = [];
+  const cancelled = week.filter((o) => o.status === "cancelled");
+  if (cancelled.length) {
+    const byStaff = new Map<string, number>();
+    cancelled.forEach((o) => byStaff.set(o.staff, (byStaff.get(o.staff) ?? 0) + 1));
+    const top = [...byStaff.entries()].sort((a, b) => b[1] - a[1])[0];
+    alerts.push({
+      key: "void", icon: <Trash2 size={18} />, tone: cancelled.length >= 3 ? "rose" : "saffron",
+      title: `${cancelled.length} order${cancelled.length === 1 ? "" : "s"} cancelled`,
+      detail: `Most by ${top[0]} (${top[1]}). Check each one was a real mistake.`,
+      amount: cancelled.reduce((s, o) => s + billOf(o), 0), href: "/app/orders",
+    });
+  }
+  const discounted = paid(week).map((o) => ({ o, off: billOf(o) - paidAmount(o) })).filter((x) => x.off > 0);
+  if (discounted.length)
+    alerts.push({
+      key: "disc", icon: <Percent size={18} />, tone: "saffron",
+      title: `${discounted.length} bill${discounted.length === 1 ? "" : "s"} paid less than the total`,
+      detail: "Discounts or short payments. Make sure each one was approved.",
+      amount: discounted.reduce((s, x) => s + x.off, 0), href: "/app/orders",
+    });
+  const edited = week.filter((o) => (o.paymentLog?.length ?? 0) > 1);
+  if (edited.length)
+    alerts.push({
+      key: "edit", icon: <PenLine size={18} />, tone: "saffron",
+      title: `Payment changed on ${edited.length} bill${edited.length === 1 ? "" : "s"} after billing`,
+      detail: `Latest: #${edited[0].number} by ${edited[0].paymentLog![0]?.by ?? "staff"}. Every change is kept on the order.`,
+      href: "/app/orders",
+    });
+  const stale = live(orders).filter((o) => o.status !== "paid" && now - new Date(o.createdAt).getTime() > 4 * 3_600_000);
+  if (stale.length)
+    alerts.push({
+      key: "open", icon: <Clock size={18} />, tone: "rose",
+      title: `${stale.length} bill${stale.length === 1 ? "" : "s"} open for over 4 hours`,
+      detail: `Oldest: #${stale[stale.length - 1].number} from ${clock(stale[stale.length - 1].createdAt)}. Close them or find out if they were paid.`,
+      amount: stale.reduce((s, o) => s + billOf(o), 0), href: "/app/orders",
+    });
+  const wasted = stock.reduce((s, i) => s + (i.log ?? []).filter((l) => l.kind === "waste" && new Date(l.at).getTime() > week0).reduce((a, l) => a + l.qty * i.costPerUnit, 0), 0);
+  if (wasted > 0)
+    alerts.push({ key: "waste", icon: <Boxes size={18} />, tone: "saffron", title: "Stock wasted this week", detail: "From waste logged on the Stock screen.", amount: Math.round(wasted), href: "/app/inventory" });
+  const out = stock.filter((i) => i.stock <= 0);
+  if (out.length)
+    alerts.push({ key: "out", icon: <Boxes size={18} />, tone: "rose", title: `${out.length} stock item${out.length === 1 ? "" : "s"} finished`, detail: out.slice(0, 4).map((i) => i.name).join(", "), href: "/app/inventory" });
 
-  const atRisk = alerts.reduce((s, a) => s + (a.amount ?? 0), 0);
+  /* ---------- trends ---------- */
+  const t = totals(week);
+  const tl = totals(lastWeek);
+  const salesChange = change(t.sales, tl.sales);
+  const days = byDay(orders, 7, now);
+  const best = days.reduce((a, b) => (b.value > a.value ? b : a), days[0]);
+  const hours = new Array(24).fill(0);
+  live(week).forEach((o) => hours[new Date(o.createdAt).getHours()]++);
+  const peak = hours.indexOf(Math.max(...hours));
+  const sold14 = new Set(topDishes(between(orders, now - 14 * DAY_MS, now + 1), 10_000).map((d) => d.id));
+  const slow = orders.length ? menu.filter((m) => m.available !== false && !sold14.has(m.id)) : [];
 
   return (
     <>
-      <PageHeader title="Insights" subtitle="What your numbers are saying, in plain words" />
+      <PageHeader title="Insights" subtitle={`${outlet.name} · last 7 days, from your own orders`} />
       <Page className="space-y-6">
-        {/* Ask Restro */}
-        <section className="rounded-[24px] bg-surface p-4 lg:p-6">
-          <div className="flex items-center gap-2 text-[14px] font-semibold"><Sparkles size={16} className="text-saffron" /> Ask about your restaurant</div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (q.trim()) ask(q.trim());
-            }}
-            className="mt-3 flex items-center gap-2 rounded-[16px] bg-sunken p-1.5 pl-4"
-          >
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. Why was last Monday slow?" className="h-10 flex-1 bg-transparent text-[16px] outline-none placeholder:text-faint" />
-            <button aria-label="Ask" className="flex h-10 w-10 items-center justify-center rounded-full bg-jade text-white disabled:opacity-40" disabled={!q.trim()}>
-              <ArrowUp size={18} />
-            </button>
-          </form>
-          {asked ? (
-            <div className="mt-4 animate-fade-in">
-              <div className="text-[13px] font-medium text-muted">{asked.q}</div>
-              {thinking ? (
-                <div className="mt-2 flex gap-1">
-                  {[0, 1, 2].map((i) => <span key={i} className="h-2 w-2 animate-pulse rounded-full bg-faint" style={{ animationDelay: `${i * 150}ms` }} />)}
-                </div>
-              ) : (
-                <p className="mt-1.5 max-w-3xl text-[16px] leading-relaxed">{asked.a}</p>
-              )}
-            </div>
-          ) : null}
-          <div className="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0">
-            {Object.keys(answers).map((k) => (
-              <button key={k} onClick={() => ask(k)} className="shrink-0 rounded-full bg-sunken px-3.5 py-2 text-[13.5px] font-medium hover:bg-line">
-                {k}
-              </button>
-            ))}
-          </div>
-        </section>
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
+          <Stat label="Sales · 7 days" value={inr(t.sales)} note={salesChange === null ? "no data for the week before" : `${salesChange >= 0 ? "+" : ""}${salesChange}% vs the week before`} up={(salesChange ?? 0) >= 0} />
+          <Stat label="Average bill" value={t.avgBill ? inr(t.avgBill) : "—"} note={tl.avgBill ? `${inr(tl.avgBill)} the week before` : ""} up={t.avgBill >= tl.avgBill} />
+          <Stat label="Best day" value={best && best.value ? best.label : "—"} note={best && best.value ? inr(best.value) : ""} up />
+          <Stat label="Busiest hour" value={t.orders ? `${peak % 12 || 12}${peak < 12 ? " am" : " pm"}` : "—"} note={t.orders ? `${hours[peak]} order${hours[peak] === 1 ? "" : "s"} this week` : ""} up />
+        </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-          {/* Leak guard */}
-          <Group
-            title={<span className="flex items-center gap-2"><ShieldCheck size={17} className="text-jade" /> Leak guard</span>}
-            action={<span className="text-[13px] text-muted">{inr(atRisk)} worth checking this week</span>}
-            flush
-          >
-            {alerts.map((a) => {
-              const Icon = kindIcon[a.kind];
-              return (
-                <button key={a.id} onClick={() => setSel(a)} className="flex w-full items-start gap-3 border-b border-line/80 px-4 py-3.5 text-left last:border-0 hover:bg-sunken/40 lg:px-5">
-                  <span className={clsx("mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full", a.severity === "high" ? "bg-rose-soft text-rose" : a.severity === "medium" ? "bg-saffron-soft text-saffron" : "bg-sunken text-muted")}>
-                    <Icon size={16} />
-                  </span>
+        <Group title="Money to check" flush>
+          {alerts.length === 0 ? (
+            <div className="flex items-center gap-3 px-4 py-5 lg:px-5">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-jade-soft text-jade"><ShieldCheck size={19} /></span>
+              <div>
+                <div className="text-[15px] font-medium">Nothing unusual</div>
+                <div className="text-[13px] text-muted">No cancellations, short payments, changed bills or old open bills this week.</div>
+              </div>
+            </div>
+          ) : (
+            alerts.map((a) => {
+              const body = (
+                <>
+                  <span className={a.tone === "rose" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-soft text-rose" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-saffron"}>{a.icon}</span>
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-medium">{a.title}</div>
-                    <div className="text-[13px] text-muted">{a.who ? `${a.who} · ` : ""}{timeAgo(a.at)}</div>
+                    <div className="text-[13px] text-muted">{a.detail}</div>
                   </div>
-                  {a.amount ? <span className="text-[14px] font-semibold tnum">{inr(a.amount)}</span> : null}
-                </button>
+                  {a.amount !== undefined && <Pill tone={a.tone}>{inr(a.amount)}</Pill>}
+                </>
               );
-            })}
-          </Group>
+              return a.href ? (
+                <Link key={a.key} href={a.href} className="flex items-center gap-3 border-b border-line/80 px-4 py-3.5 last:border-0 hover:bg-sunken/40 lg:px-5">{body}</Link>
+              ) : (
+                <div key={a.key} className="flex items-center gap-3 border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">{body}</div>
+              );
+            })
+          )}
+        </Group>
 
-          <div className="space-y-6">
-            <Group title="Saved by Restro this month">
-              <div className="text-[34px] font-semibold tracking-tight tnum">{inr(18_420)}</div>
-              <div className="mt-3 space-y-2 text-[14px]">
-                {[["Stock not wasted (forecast)", 7900], ["Leaks caught", 4120], ["Guests won back", 6400]].map(([l, v]) => (
-                  <div key={String(l)} className="flex justify-between"><span className="text-muted">{l}</span><span className="font-medium tnum">{inr(Number(v))}</span></div>
-                ))}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Group title="Selling well · 7 days" flush>
+            {topDishes(week, 5).map((d, i) => (
+              <div key={d.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0 lg:px-5">
+                <TrendingUp size={16} className="text-jade" />
+                <span className="flex-1 text-[14.5px]">{i + 1}. {d.name}</span>
+                <span className="text-[13.5px] text-muted tnum">{d.qty} sold</span>
               </div>
-              <p className="mt-3 text-[12.5px] text-faint">More than 7× your Growth plan.</p>
-            </Group>
-            <Group flush>
-              <Link href="/app/menu" className="flex items-center gap-3 border-b border-line/80 px-4 py-3.5 lg:px-5">
-                <TrendingUp size={18} className="text-jade" />
-                <span className="flex-1 text-[15px] font-medium">Which dishes earn the most</span>
-                <Pill tone="saffron">3 ideas</Pill>
-              </Link>
-              <Link href="/app/inventory" className="flex items-center gap-3 px-4 py-3.5 lg:px-5">
-                <CalendarRange size={18} className="text-jade" />
-                <span className="flex-1 text-[15px] font-medium">Tomorrow&apos;s forecast and prep</span>
-                <Pill tone="jade">240 guests</Pill>
-              </Link>
-            </Group>
-          </div>
+            ))}
+            {topDishes(week, 1).length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">No sales this week yet.</p>}
+          </Group>
+          <Group title="Not sold in 14 days" flush>
+            {slow.length === 0 ? (
+              <p className="px-4 py-6 text-center text-[14px] text-muted">{orders.length ? "Every dish sold at least once." : "Shows up after your first orders."}</p>
+            ) : (
+              slow.slice(0, 8).map((m) => (
+                <Link key={m.id} href="/app/menu" className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0 hover:bg-sunken/40 lg:px-5">
+                  <Turtle size={16} className="text-saffron" />
+                  <span className="flex-1 text-[14.5px]">{m.name}</span>
+                  <span className="text-[13px] text-muted tnum">{inr(m.price)}</span>
+                </Link>
+              ))
+            )}
+            {slow.length > 8 && <p className="px-4 py-2.5 text-[13px] text-muted lg:px-5">and {slow.length - 8} more. Consider removing or reworking them.</p>}
+          </Group>
         </div>
-      </Page>
 
-      <Sheet
-        open={!!sel}
-        onClose={() => setSel(null)}
-        title={sel?.title ?? ""}
-        footer={
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="plain" size="lg" onClick={() => { setSel(null); toast("Marked as fine"); }}>It&apos;s fine</Button>
-            <Button size="lg" onClick={() => { setSel(null); toast("Noted on staff record"); }}>Follow up</Button>
-          </div>
-        }
-      >
-        {sel && (
-          <div className="space-y-4">
-            <Pill tone={sel.severity === "high" ? "rose" : sel.severity === "medium" ? "saffron" : "neutral"}>{sel.severity === "high" ? "Check today" : sel.severity === "medium" ? "Worth a look" : "For your info"}</Pill>
-            <p className="text-[16px] leading-relaxed">{sel.detail}</p>
-            <div className="overflow-hidden rounded-group bg-surface">
-              {[["Who", sel.who ?? "—"], ["When", timeAgo(sel.at)], ["Amount", sel.amount ? inr(sel.amount) : "—"]].map(([l, v]) => (
-                <div key={l} className="flex justify-between border-b border-line/80 px-4 py-3 text-[14.5px] last:border-0">
-                  <span className="text-muted">{l}</span><span className="font-medium">{v}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-[13px] text-muted">Each shift compared with your usual pattern.</p>
-          </div>
+        {orders.length > 0 && (
+          <p className="text-center text-[12.5px] text-faint">
+            Last order {timeAgo(orders[0].createdAt)} · <Banknote size={12} className="inline" /> {inr(totals(between(orders, startOfDay(now), now + 1)).sales)} today
+            {salesChange !== null && salesChange < 0 && <> · <TrendingDown size={12} className="inline text-rose" /> sales down this week</>}
+          </p>
         )}
-      </Sheet>
+      </Page>
     </>
+  );
+}
+
+function Stat({ label, value, note, up }: { label: string; value: string; note: string; up: boolean }) {
+  return (
+    <div className="bg-surface p-4">
+      <div className="text-[13px] text-muted">{label}</div>
+      <div className="mt-1 text-[22px] font-semibold tracking-tight tnum">{value}</div>
+      <div className={up ? "text-[12.5px] text-muted" : "text-[12.5px] text-rose"}>{note}</div>
+    </div>
   );
 }

@@ -2,19 +2,41 @@
 
 Already applied to the live project — nothing to run here. Kept for the record.
 
-- Database: one row per restaurant in `restaurants`; every other table is
-  `(rid, id, data jsonb)` — outlets, members, categories, menu_items,
-  dining_tables, orders, guests, feedback. `staff_pins` holds PIN hashes.
-- Security: row level security on every table.
-  - Owner (email login) and active staff (PIN login) see only their restaurant.
-  - Only the owner and sub admins can change outlets and people.
-  - Nobody can change the plan or renewal date from the app.
-  - Guests (QR page, anonymous login) read the menu side, place and see only their
-    own orders, add their own name/phone, leave feedback.
-- Order numbers come from a server trigger, so two phones never get the same number.
-- Live updates: all tables are in the `supabase_realtime` publication.
-- Edge functions: `set-pin` (owner / sub admin sets a staff PIN) and
-  `staff-login` (PIN → normal session; 5 wrong tries lock for 5 minutes).
+## Who signs in
+- **Super admin** (the Restro team): email + password. Listed in `platform_admins`.
+  Opens `/admin`: adds restaurants (creates the owner login with a temporary
+  password), changes plan and renewal date, suspends, resets owner passwords, deletes.
+- **Owner**: email + password made by the super admin. Must set their own password
+  on first sign-in. Opens `/app`.
+- **Staff**: 4-digit PIN on the restaurant's device (set by the owner or a sub admin).
+- **Guests**: no login screen (anonymous sign-in) on the table / counter QR page.
 
-The exact SQL can be downloaded any time with the Supabase CLI:
+There is no public sign-up.
+
+## Data
+- `restaurants`: one row per restaurant, with plan, renewal date and status (active / suspended).
+- `outlets, members, categories, menu_items, dining_tables, orders, guests,
+  feedback, stock_items`: all `(rid, id, data jsonb)`.
+- `staff_pins`: PIN hashes, edge functions only.
+- `platform_admins`: super admins, checked on the server only.
+- Storage bucket `menu-photos`: dish photos at `<rid>/<file>.jpg`. Anyone can view them;
+  only that restaurant's team can upload.
+
+## Security (row level security on every table)
+- A restaurant's team sees only its own restaurant, and only while it is active.
+- Only the owner and sub admins change outlets and people.
+- Plan, renewal date and status change only through the super admin functions.
+- Guests can read the menu side, place orders and see only their own,
+  add their name and phone, and leave feedback.
+
+## Server functions
+- RPC: `whoami`, `admin_restaurants`, `admin_update_restaurant`, `public_staff`, `public_info`,
+  `guest_touch`, `guest_set_parties`.
+- Edge functions:
+  - `admin-restaurants`: create restaurant + owner login, reset owner password, delete.
+  - `set-pin`
+  - `staff-login`
+- Order numbers come from a database trigger, so two phones never get the same number.
+
+Download the exact SQL any time with the Supabase CLI:
 `supabase link --project-ref rzzhslbotgumhfvkfgvo && supabase db pull`

@@ -50,3 +50,19 @@ export async function checkPin(pin: string, stored: string) {
 }
 
 export type MemberData = { id: string; name?: string; role?: string; active?: boolean; perms?: string[]; outletIds?: string[] };
+
+/** Easy-to-type temporary password, e.g. "Kp7m-Xq4t-Rz9w". The person changes it on first sign-in. */
+export const tempPassword = () => {
+  const abc = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const b = crypto.getRandomValues(new Uint8Array(12));
+  const s = [...b].map((x) => abc[x % abc.length]).join("");
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+};
+
+/** The signed-in user behind a request, or null. */
+export async function caller(req: Request) {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const { data, error } = await admin().auth.getUser(token);
+  return error || !data.user || data.user.is_anonymous ? null : data.user;
+}

@@ -1,15 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Delete } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/shell";
-import { Avatar, Button, Segmented } from "@/components/ui";
-import { OwnerAuth } from "@/components/owner-auth";
-import { cloudConfigured, publicInfo, publicStaff, signInStaff, useCloud } from "@/lib/cloud";
-import { getMembers, sessionActions, useCurrentOutlet, useMembers } from "@/lib/live";
+import { Avatar, Segmented } from "@/components/ui";
+import { ChangePassword, OwnerAuth } from "@/components/owner-auth";
+import { cloudSignOut, publicInfo, publicStaff, signInStaff, useCloud } from "@/lib/cloud";
+import { sessionActions } from "@/lib/live";
 
 type StaffFace = { id: string; name: string; hue: number; outletIds: string[] };
 const RID_KEY = "restro.rid"; // which restaurant this device belongs to (for the staff PIN screen)
@@ -26,13 +25,8 @@ export default function LoginPage() {
   const [place, setPlace] = useState("");
   const [faces, setFaces] = useState<StaffFace[]>([]);
 
-  // demo mode: staff of the outlet on this device
-  const outlet = useCurrentOutlet();
-  const demoStaff = useMembers().filter((m) => m.active && m.role !== "owner" && m.outletIds.includes(outlet.id)).slice(0, 9);
-
-  // cloud mode: which restaurant is this device for?
+  // which restaurant is this device for? (for the staff PIN screen)
   useEffect(() => {
-    if (!cloudConfigured) return;
     const fromUrl = new URLSearchParams(window.location.search).get("r");
     let r = fromUrl;
     try {
@@ -41,32 +35,23 @@ export default function LoginPage() {
     } catch {}
     if (!r) return;
     setRid(r);
+    setMode("staff");
     publicInfo(r).then((i) => setPlace(i?.name ?? "")).catch(() => {});
     publicStaff(r).then(setFaces).catch(() => {});
   }, []);
 
-  // already signed in → straight in
+  // already signed in → straight in (after setting their own password)
   useEffect(() => {
-    if (cloud.status === "ready" && cloud.role !== "guest") {
-      try {
-        if (cloud.rid) localStorage.setItem(RID_KEY, cloud.rid);
-      } catch {}
-      router.replace("/app");
-    }
-    if (cloud.status === "needsOnboarding") router.replace("/onboarding");
+    if (cloud.status !== "ready" || cloud.role === "guest" || cloud.mustChangePassword) return;
+    try {
+      if (cloud.rid) localStorage.setItem(RID_KEY, cloud.rid);
+    } catch {}
+    router.replace(cloud.role === "superadmin" ? "/admin" : "/app");
   }, [cloud, router]);
 
   // PIN complete
   useEffect(() => {
     if (pin.length !== 4 || !who) return;
-    if (!cloudConfigured) {
-      const id = window.setTimeout(() => {
-        const m = getMembers().find((x) => x.id === who.id);
-        if (m) sessionActions.signInAs(m.id);
-        router.push(m?.role === "subadmin" || !m?.perms.includes("pos") ? "/app" : "/app/pos");
-      }, 300);
-      return () => window.clearTimeout(id);
-    }
     setBusy(true);
     setError("");
     signInStaff(rid!, who.id, pin)
@@ -76,9 +61,10 @@ export default function LoginPage() {
         setPin("");
       })
       .finally(() => setBusy(false));
-  }, [pin, who, rid, router]);
+  }, [pin, who, rid]);
 
-  const staff: StaffFace[] = cloudConfigured ? faces : demoStaff;
+  const staff = faces;
+  const mustSet = cloud.status === "ready" && cloud.role !== "guest" && cloud.role !== "staff" && cloud.mustChangePassword;
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas lg:flex-row">
@@ -91,6 +77,13 @@ export default function LoginPage() {
       <div className="flex flex-1 flex-col items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden"><Wordmark className="text-[20px]" /></div>
+          {mustSet ? (
+            <>
+              <ChangePassword subtitle={`Welcome${cloud.displayName ? `, ${cloud.displayName.split(" ")[0]}` : ""}. You signed in with a temporary password — choose your own to continue.`} />
+              <button onClick={() => void cloudSignOut()} className="mt-4 block w-full text-center text-[14px] font-medium text-muted">Sign out</button>
+            </>
+          ) : (
+          <>
           <h1 className="large-title">Sign in</h1>
           {place && <p className="mt-1 text-[15px] text-muted">{place}</p>}
           <Segmented
@@ -102,28 +95,12 @@ export default function LoginPage() {
 
           {mode === "owner" ? (
             <div className="mt-6 space-y-4">
-              {cloudConfigured ? (
-                <OwnerAuth />
-              ) : (
-                <Button
-                  size="lg"
-                  className="w-full"
-                  onClick={() => {
-                    const owner = getMembers().find((m) => m.role === "owner");
-                    if (owner) sessionActions.signInAs(owner.id);
-                    router.push("/app");
-                  }}
-                >
-                  Enter demo as owner
-                </Button>
-              )}
-              <p className="text-center text-[13.5px] text-muted">
-                New to Restro? <Link href="/onboarding" className="font-semibold text-jade">Set up your restaurant</Link>
-              </p>
+              <OwnerAuth />
+              <p className="text-center text-[13px] text-faint">Restaurant logins are given by Restro. Staff sign in with their PIN.</p>
             </div>
-          ) : cloudConfigured && !rid ? (
+          ) : !rid ? (
             <p className="mt-6 rounded-group bg-surface p-4 text-[14px] text-muted">
-              The owner needs to sign in once on this device first. After that, staff can sign in here with their PIN.
+              Open the staff sign-in link from your owner once on this device (or the owner signs in here once). After that, staff sign in here with their PIN.
             </p>
           ) : !who ? (
             staff.length ? (
@@ -166,6 +143,8 @@ export default function LoginPage() {
             </div>
           )}
           {error && <p className="mt-4 text-center text-[14px] font-medium text-rose">{error}</p>}
+          </>
+          )}
         </div>
       </div>
     </div>

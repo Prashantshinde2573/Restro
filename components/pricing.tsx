@@ -5,12 +5,12 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { useState } from "react";
 import { Segmented } from "./ui";
-import { repo } from "@/lib/repo";
+import { plans as allPlans } from "@/lib/plans";
 import { inr } from "@/lib/format";
 
 export function PricingTable() {
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
-  const plans = repo.plans();
+  const plans = allPlans;
   return (
     <div>
       <div className="flex justify-center">
@@ -46,13 +46,13 @@ export function PricingTable() {
                 ))}
               </ul>
               <Link
-                href={p.monthly ? "/onboarding" : "mailto:sales@restro.app"}
+                href="/#contact"
                 className={clsx(
                   "mt-6 flex h-12 items-center justify-center rounded-ctl text-[15px] font-semibold transition active:scale-[.98]",
                   p.highlight ? "bg-canvas text-ink hover:bg-canvas/90" : "bg-jade-soft text-jade-deep hover:brightness-95",
                 )}
               >
-                {p.monthly ? "Start 14-day free trial" : "Talk to us"}
+                {p.monthly ? "Get started" : "Talk to us"}
               </Link>
             </div>
           );

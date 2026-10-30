@@ -1,216 +1,325 @@
 "use client";
 
-import { useFeature } from "@/lib/live";
 import clsx from "clsx";
-import { CloudSun, MessageCircle, PackageCheck, Plus, Sparkles, Trash } from "lucide-react";
-import { useState } from "react";
+import { MessageCircle, Package, PackagePlus, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { repo } from "@/lib/repo";
+import { stockActions, useCurrentOutlet, useFeature, useMe, useOrders, useStock } from "@/lib/live";
+import { DAY_MS, between, inOutlet, startOfDay, topDishes } from "@/lib/stats";
 import { inr } from "@/lib/format";
-import type { Ingredient } from "@/lib/types";
+import type { StockItem, StockLog } from "@/lib/types";
 
-const pos = [
-  { id: "PO-311", supplier: "Chitale Dairy", items: "Paneer 6 kg, Cream 4 L, Milk 10 L", total: 5260, status: "sent", when: "Today, 10:40" },
-  { id: "PO-310", supplier: "Metro Cash & Carry", items: "Maida 25 kg, Basmati 25 kg", total: 3800, status: "received", when: "Yesterday" },
-  { id: "PO-309", supplier: "Sassoon Dock", items: "Surmai 4 kg", total: 3520, status: "late", when: "Due yesterday" },
-  { id: "PO-308", supplier: "Venky's", items: "Chicken boneless 15 kg", total: 4200, status: "received", when: "Sat" },
-];
-
-const prep = [
-  { dish: "Butter Naan", plates: 92 },
-  { dish: "Butter Chicken", plates: 44 },
-  { dish: "Dal Makhani", plates: 38 },
-  { dish: "Hyderabadi Dum Biryani", plates: 33 },
-  { dish: "Paneer Tikka", plates: 31 },
-  { dish: "Masala Chaas", plates: 48 },
-];
-
-function level(i: Ingredient) {
+function level(i: StockItem) {
   if (i.stock <= 0) return { tone: "rose" as const, label: "Out" };
-  if (i.stock < i.par * 0.5) return { tone: "rose" as const, label: "Low" };
-  if (i.stock < i.par) return { tone: "saffron" as const, label: "Below par" };
+  if (i.par > 0 && i.stock < i.par * 0.5) return { tone: "rose" as const, label: "Low" };
+  if (i.par > 0 && i.stock < i.par) return { tone: "saffron" as const, label: "Order soon" };
   return { tone: "jade" as const, label: "OK" };
 }
+const UNITS = ["kg", "g", "L", "ml", "pcs", "packet", "box", "dozen"];
+const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, "").replace(/\.$/, ""));
 
 export default function InventoryPage() {
   const prepOn = useFeature("prepForecast") === "ok";
   const toast = useToast();
-  const [tab, setTab] = useState<"stock" | "prep" | "purchases">("stock");
-  const [waste, setWaste] = useState(false);
-  const [receive, setReceive] = useState<string | null>(null);
-  const items = repo.ingredients();
+  const me = useMe();
+  const outlet = useCurrentOutlet();
+  const [tab, setTab] = useState<"stock" | "buy" | "prep">("stock");
+  const [edit, setEdit] = useState<Partial<StockItem> | null>(null);
+  const [move, setMove] = useState<{ item: StockItem; kind: StockLog["kind"] } | null>(null);
+  const items = useStock().filter((i) => !i.outletId || i.outletId === outlet.id);
 
   const value = items.reduce((s, i) => s + i.stock * i.costPerUnit, 0);
-  const low = items.filter((i) => i.stock < i.par * 0.5);
-  const expiring = items.filter((i) => (i.expiresInDays ?? 99) <= 2);
-  const toOrder = items
-    .map((i) => ({ ...i, need: Math.max(0, Math.ceil((i.forecastTomorrow + i.par * 0.3 - i.stock) * 2) / 2) }))
-    .filter((i) => i.need > 0);
-  const bySupplier = toOrder.reduce<Record<string, typeof toOrder>>((acc, i) => ((acc[i.supplier] ??= []).push(i), acc), {});
+  const low = items.filter((i) => level(i).tone !== "jade");
+  const weekAgo = Date.now() - 7 * DAY_MS;
+  const wasted = items.reduce(
+    (s, i) => s + (i.log ?? []).filter((l) => l.kind === "waste" && new Date(l.at).getTime() > weekAgo).reduce((a, l) => a + l.qty * i.costPerUnit, 0),
+    0,
+  );
+  const toBuy = items.filter((i) => i.par > 0 && i.stock < i.par).map((i) => ({ ...i, need: Math.ceil((i.par - i.stock) * 2) / 2 }));
+  const bySupplier = toBuy.reduce<Record<string, typeof toBuy>>((acc, i) => ((acc[i.supplier || "No supplier set"] ??= []).push(i), acc), {});
 
   return (
     <>
       <PageHeader
         title="Stock"
-        subtitle={`${inr(Math.round(value))} in stock · ${low.length} running low`}
-        actions={<Button variant="tinted" size="sm" onClick={() => setWaste(true)}><Trash size={15} /> Log waste</Button>}
+        subtitle={items.length ? `${inr(Math.round(value))} in stock · ${low.length} need ordering` : outlet.name}
+        actions={<Button variant="tinted" size="sm" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={15} /> Add item</Button>}
       >
-        <Segmented value={tab} onChange={setTab} options={[{ value: "stock", label: "In stock" }, ...(prepOn ? [{ value: "prep" as const, label: "Tomorrow's prep" }] : []), { value: "purchases", label: "Purchases" }]} />
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "stock", label: "In stock" },
+            { value: "buy", label: `To buy${toBuy.length ? ` · ${toBuy.length}` : ""}` },
+            ...(prepOn ? [{ value: "prep" as const, label: "Tomorrow's prep" }] : []),
+          ]}
+        />
       </PageHeader>
 
       <Page>
-        {tab === "stock" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
-              {[
-                ["Stock value", inr(Math.round(value))],
-                ["Running low", `${low.length} items`],
-                ["Use within 2 days", `${expiring.length} items`],
-                ["Wasted this week", inr(2140)],
-              ].map(([l, v]) => (
-                <div key={l} className="bg-surface p-4">
-                  <div className="text-[13px] text-muted">{l}</div>
-                  <div className="mt-1 text-[22px] font-semibold tracking-tight tnum">{v}</div>
-                </div>
-              ))}
+        {tab === "stock" &&
+          (items.length === 0 ? (
+            <div className="flex flex-col items-center rounded-group bg-surface px-6 py-12 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade"><Package size={26} /></span>
+              <h2 className="mt-4 text-[18px] font-semibold">Track your stock</h2>
+              <p className="mt-1 max-w-sm text-[14.5px] text-muted">Add raw materials like paneer, oil or milk with a minimum level. Restro tells you what to order.</p>
+              <Button className="mt-5" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={17} /> Add first item</Button>
             </div>
-            <Group flush>
-              {items
-                .slice()
-                .sort((a, b) => a.stock / a.par - b.stock / b.par)
-                .map((i) => {
-                  const l = level(i);
-                  const pct = Math.min(100, (i.stock / i.par) * 100);
-                  return (
-                    <div key={i.id} className="flex items-center gap-4 border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[15px] font-medium">{i.name}</span>
-                          {(i.expiresInDays ?? 99) <= 2 && <Pill tone="saffron">Use in {i.expiresInDays}d</Pill>}
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-3">
-                          <div className="h-1.5 max-w-[220px] flex-1 overflow-hidden rounded-full bg-sunken">
-                            <div className={clsx("h-full rounded-full", l.tone === "rose" ? "bg-rose" : l.tone === "saffron" ? "bg-saffron" : "bg-jade")} style={{ width: `${pct}%` }} />
+          ) : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
+                {[
+                  ["Stock value", inr(Math.round(value))],
+                  ["Need ordering", `${low.length} item${low.length === 1 ? "" : "s"}`],
+                  ["Items tracked", String(items.length)],
+                  ["Wasted · 7 days", inr(Math.round(wasted))],
+                ].map(([l, v]) => (
+                  <div key={l} className="bg-surface p-4">
+                    <div className="text-[13px] text-muted">{l}</div>
+                    <div className="mt-1 text-[22px] font-semibold tracking-tight tnum">{v}</div>
+                  </div>
+                ))}
+              </div>
+              <Group flush>
+                {items
+                  .slice()
+                  .sort((a, b) => (a.par ? a.stock / a.par : 99) - (b.par ? b.stock / b.par : 99) || a.name.localeCompare(b.name))
+                  .map((i) => {
+                    const l = level(i);
+                    const pct = i.par ? Math.min(100, (i.stock / i.par) * 100) : 100;
+                    return (
+                      <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
+                        <button className="min-w-0 flex-1 text-left" onClick={() => setEdit(i)}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-medium">{i.name}</span>
+                            <Pill tone={l.tone}>{l.label}</Pill>
                           </div>
-                          <span className="text-[12.5px] text-muted tnum">{i.stock} / {i.par} {i.unit}</span>
+                          <div className="mt-1.5 flex items-center gap-3">
+                            <div className="h-1.5 max-w-[220px] flex-1 overflow-hidden rounded-full bg-sunken">
+                              <div className={clsx("h-full rounded-full", l.tone === "rose" ? "bg-rose" : l.tone === "saffron" ? "bg-saffron" : "bg-jade")} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-[12.5px] text-muted tnum">{fmt(i.stock)}{i.par ? ` / ${fmt(i.par)}` : ""} {i.unit}</span>
+                          </div>
+                        </button>
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="tinted" onClick={() => setMove({ item: i, kind: "in" })}><PackagePlus size={15} /> In</Button>
+                          <Button size="sm" variant="plain" onClick={() => setMove({ item: i, kind: "used" })}>Used</Button>
+                          <Button size="sm" variant="plain" onClick={() => setMove({ item: i, kind: "count" })}>Count</Button>
                         </div>
                       </div>
-                      <div className="hidden text-right text-[13px] text-muted sm:block">
-                        <div className="tnum">{inr(i.costPerUnit)}/{i.unit}</div>
-                        <div>{i.supplier}</div>
-                      </div>
-                      <Pill tone={l.tone}>{l.label}</Pill>
-                    </div>
-                  );
-                })}
-            </Group>
-          </div>
-        )}
-
-        {tab === "prep" && prepOn && (
-          <div className="space-y-6">
-            <section className="rounded-group bg-surface p-5">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-saffron"><Sparkles size={18} /></span>
-                <div>
-                  <div className="text-[13px] text-muted">Forecast for Wednesday, 28 Oct</div>
-                  <p className="mt-1 text-[18px] font-medium leading-snug tracking-tight lg:text-[20px]">
-                    Expect about <b>240 guests</b> — 18% more than a normal Wednesday. Diwali shopping crowds and a clear evening.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-3 text-[13px] text-muted">
-                    <span className="flex items-center gap-1"><CloudSun size={14} /> 27°, no rain</span>
-                    <span>Based on 8 weeks of your sales</span>
-                    <span>2 bookings so far</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Group title="Prep list for the kitchen" flush action={<button onClick={() => toast("Prep list sent to Chef Ganesh")} className="text-[14px] font-semibold text-jade">Send to chef</button>}>
-                {prep.map((p) => (
-                  <div key={p.dish} className="flex items-center justify-between border-b border-line/80 px-4 py-3 last:border-0 lg:px-5">
-                    <span className="text-[15px]">{p.dish}</span>
-                    <span className="text-[15px] font-semibold tnum">{p.plates} plates</span>
-                  </div>
-                ))}
+                    );
+                  })}
               </Group>
-              <Group title="Order today so you don't run out" flush>
-                {Object.entries(bySupplier).map(([sup, list]) => (
-                  <div key={sup} className="border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[15px] font-semibold">{sup}</span>
-                      <span className="text-[14px] font-semibold tnum">{inr(Math.round(list.reduce((s, i) => s + i.need * i.costPerUnit, 0)))}</span>
-                    </div>
-                    <div className="mt-0.5 text-[13px] text-muted">{list.map((i) => `${i.name} ${i.need} ${i.unit}`).join(" · ")}</div>
-                  </div>
-                ))}
-                <div className="p-4 lg:p-5">
-                  <Button className="w-full" onClick={() => { setTab("purchases"); toast(`${Object.keys(bySupplier).length} purchase orders sent on WhatsApp`); }}>
-                    <MessageCircle size={17} /> Send {Object.keys(bySupplier).length} orders on WhatsApp
-                  </Button>
-                </div>
-              </Group>
-            </div>
-          </div>
-        )}
-
-        {tab === "purchases" && (
-          <Group flush title="Purchase orders" action={<button onClick={() => toast("New purchase order")} className="flex items-center gap-1 text-[14px] font-semibold text-jade"><Plus size={15} /> New</button>}>
-            {pos.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-semibold">{p.supplier}</span>
-                    <span className="text-[12.5px] text-faint">{p.id}</span>
-                  </div>
-                  <div className="truncate text-[13px] text-muted">{p.items}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[14px] font-semibold tnum">{inr(p.total)}</div>
-                  <div className="text-[12px] text-muted">{p.when}</div>
-                </div>
-                {p.status === "received" ? (
-                  <Pill tone="jade">Received</Pill>
-                ) : (
-                  <Button size="sm" variant={p.status === "late" ? "danger" : "tinted"} onClick={() => setReceive(p.id)}>
-                    <PackageCheck size={15} /> Receive
-                  </Button>
-                )}
-              </div>
-            ))}
-          </Group>
-        )}
-      </Page>
-
-      <Sheet open={waste} onClose={() => setWaste(false)} title="Log waste" footer={<Button size="lg" className="w-full" onClick={() => { setWaste(false); toast("Waste logged · stock updated"); }}>Save</Button>}>
-        <div className="space-y-4">
-          <Field label="Item">
-            <select className={inputCls}>{items.map((i) => <option key={i.id}>{i.name}</option>)}</select>
-          </Field>
-          <Field label="Quantity"><input className={inputCls} inputMode="decimal" placeholder="0.5" /></Field>
-          <Field label="Reason">
-            <div className="flex flex-wrap gap-2">
-              {["Spoiled", "Over-cooked", "Dropped", "Returned by guest", "Expired"].map((r) => (
-                <button key={r} className="rounded-full bg-surface px-3.5 py-2 text-[14px] font-medium focus:bg-ink focus:text-canvas">{r}</button>
-              ))}
-            </div>
-          </Field>
-        </div>
-      </Sheet>
-
-      <Sheet open={!!receive} onClose={() => setReceive(null)} title="Receive delivery" footer={<Button size="lg" className="w-full" onClick={() => { setReceive(null); toast("Stock updated · bill saved to supplier account"); }}>Add to stock</Button>}>
-        <p className="mb-4 text-[14px] text-muted">Check what actually arrived. Short or damaged items are noted against the supplier.</p>
-        <div className="overflow-hidden rounded-group bg-surface">
-          {[["Paneer", "6 kg", "Exp 31 Oct"], ["Fresh cream", "4 L", "Exp 29 Oct"], ["Milk", "10 L", "Exp 28 Oct"]].map(([n, q, e]) => (
-            <div key={n} className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0">
-              <span className="flex-1 text-[15px]">{n}<span className="block text-[12.5px] text-muted">{e}</span></span>
-              <input className="h-10 w-20 rounded-[10px] bg-sunken px-3 text-right text-[15px] tnum outline-none focus:ring-2 focus:ring-jade" defaultValue={q} />
             </div>
           ))}
-        </div>
-        <button className="mt-4 w-full rounded-group border-2 border-dashed border-line py-5 text-[14px] font-medium text-muted">Snap the supplier bill</button>
-      </Sheet>
+
+        {tab === "buy" &&
+          (toBuy.length === 0 ? (
+            <div className="rounded-group bg-surface px-5 py-10 text-center">
+              <p className="text-[16px] font-semibold">Nothing to buy</p>
+              <p className="mt-1 text-[14px] text-muted">Items show up here when they fall below their minimum level.</p>
+            </div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {Object.entries(bySupplier).map(([sup, list]) => {
+                const total = list.reduce((s, i) => s + i.need * i.costPerUnit, 0);
+                const msg = `Order from ${outlet.name}:\n` + list.map((i) => `• ${i.name} — ${fmt(i.need)} ${i.unit}`).join("\n");
+                return (
+                  <Group key={sup} title={sup} flush>
+                    {list.map((i) => (
+                      <div key={i.id} className="flex items-center justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] lg:px-5">
+                        <span>{i.name}</span>
+                        <span className="font-medium tnum">{fmt(i.need)} {i.unit}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5">
+                      <span className="text-[13.5px] text-muted">About {inr(Math.round(total))}</span>
+                      <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer">
+                        <Button size="sm"><MessageCircle size={15} /> Send on WhatsApp</Button>
+                      </a>
+                    </div>
+                  </Group>
+                );
+              })}
+            </div>
+          ))}
+
+        {tab === "prep" && prepOn && <Prep outletId={outlet.id} />}
+      </Page>
+
+      <ItemSheet value={edit} onClose={() => setEdit(null)} onSaved={(n) => toast(`${n} saved`)} />
+      <MoveSheet
+        value={move}
+        onClose={() => setMove(null)}
+        onSave={(qty, note, kind) => {
+          if (!move) return;
+          stockActions.move(move.item.id, kind, qty, me?.name ?? "Staff", note);
+          toast(kind === "in" ? "Added to stock" : kind === "count" ? "Stock count saved" : kind === "waste" ? "Waste logged" : "Stock updated");
+          setMove(null);
+        }}
+      />
     </>
+  );
+}
+
+function ItemSheet({ value, onClose, onSaved }: { value: Partial<StockItem> | null; onClose: () => void; onSaved: (name: string) => void }) {
+  const outlet = useCurrentOutlet();
+  const [d, setD] = useState<Partial<StockItem>>({});
+  const [confirm, setConfirm] = useState(false);
+  const key = value ? value.id ?? "new" : null;
+  useEffect(() => {
+    if (value) { setD(value); setConfirm(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const ok = (d.name ?? "").trim().length > 1 && !!d.unit;
+  const num = (v: string) => Math.max(0, Number(v.replace(",", ".")) || 0);
+
+  return (
+    <Sheet
+      open={!!value}
+      onClose={onClose}
+      title={value?.id ? "Edit item" : "Add stock item"}
+      footer={
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={!ok}
+          onClick={() => {
+            stockActions.save({
+              id: d.id, name: d.name!.trim(), unit: d.unit!, stock: d.stock ?? 0, par: d.par ?? 0, costPerUnit: d.costPerUnit ?? 0,
+              supplier: (d.supplier ?? "").trim(), outletId: d.outletId ?? outlet.id, log: d.log,
+            });
+            onSaved(d.name!.trim());
+            onClose();
+          }}
+        >
+          Save
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Name"><input className={inputCls} placeholder="e.g. Paneer" value={d.name ?? ""} onChange={(e) => setD({ ...d, name: e.target.value })} /></Field>
+        <Field label="Unit">
+          <div className="flex flex-wrap gap-2">
+            {UNITS.map((u) => (
+              <button key={u} type="button" onClick={() => setD({ ...d, unit: u })} className={clsx("rounded-full px-3.5 py-1.5 text-[14px] font-medium", d.unit === u ? "bg-ink text-canvas" : "bg-surface")}>{u}</button>
+            ))}
+          </div>
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          {!value?.id && <Field label={`In stock now (${d.unit ?? ""})`}><input className={inputCls} inputMode="decimal" value={d.stock ?? ""} onChange={(e) => setD({ ...d, stock: num(e.target.value) })} /></Field>}
+          <Field label={`Minimum level (${d.unit ?? ""})`} hint="Below this it goes on the buy list."><input className={inputCls} inputMode="decimal" value={d.par ?? ""} onChange={(e) => setD({ ...d, par: num(e.target.value) })} /></Field>
+          <Field label={`Cost per ${d.unit ?? "unit"} (₹)`}><input className={inputCls} inputMode="decimal" value={d.costPerUnit ?? ""} onChange={(e) => setD({ ...d, costPerUnit: num(e.target.value) })} /></Field>
+        </div>
+        <Field label="Supplier" hint="Optional"><input className={inputCls} value={d.supplier ?? ""} onChange={(e) => setD({ ...d, supplier: e.target.value })} /></Field>
+
+        {value?.id && (d.log?.length ?? 0) > 0 && (
+          <div>
+            <div className="mb-1.5 text-[13px] font-medium text-muted">History</div>
+            <div className="max-h-56 overflow-y-auto rounded-group bg-surface">
+              {d.log!.map((l, i) => (
+                <div key={i} className="flex justify-between border-b border-line/70 px-4 py-2 text-[13.5px] last:border-0">
+                  <span>
+                    {l.kind === "in" ? `+${fmt(l.qty)}` : l.kind === "count" ? `Counted ${fmt(l.qty)}` : `−${fmt(l.qty)}`} {d.unit}
+                    {l.kind === "waste" && <span className="ml-1.5 text-rose">wasted</span>}
+                    {l.note && <span className="ml-1.5 text-muted">· {l.note}</span>}
+                  </span>
+                  <span className="text-muted">{l.by} · {new Date(l.at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {value?.id &&
+          (!confirm ? (
+            <button onClick={() => setConfirm(true)} className="flex items-center gap-2 text-[14px] font-semibold text-rose"><Trash2 size={16} /> Remove item</button>
+          ) : (
+            <div className="flex items-center gap-2 rounded-group bg-rose-soft p-3">
+              <span className="flex-1 text-[14px] text-rose">Remove {d.name}?</span>
+              <Button size="sm" variant="plain" onClick={() => setConfirm(false)}>Keep</Button>
+              <Button size="sm" variant="danger" onClick={() => { stockActions.remove(value.id!); onClose(); }}>Remove</Button>
+            </div>
+          ))}
+        {value?.id && <p className="flex items-center gap-1.5 text-[12.5px] text-faint"><Pencil size={12} /> Use In / Used / Count on the list to change the stock level.</p>}
+      </div>
+    </Sheet>
+  );
+}
+
+function MoveSheet({ value, onClose, onSave }: { value: { item: StockItem; kind: StockLog["kind"] } | null; onClose: () => void; onSave: (qty: number, note: string, kind: StockLog["kind"]) => void }) {
+  const [qty, setQty] = useState("");
+  const [note, setNote] = useState("");
+  const [kind, setKind] = useState<StockLog["kind"]>("in");
+  const key = value ? `${value.item.id}-${value.kind}` : "";
+  useEffect(() => {
+    if (value) { setQty(""); setNote(""); setKind(value.kind); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const n = Number(qty.replace(",", "."));
+  const ok = qty !== "" && n >= 0 && (kind === "count" || n > 0);
+  const i = value?.item;
+
+  return (
+    <Sheet
+      open={!!value}
+      onClose={onClose}
+      title={i ? i.name : ""}
+      footer={<Button size="lg" className="w-full" disabled={!ok} onClick={() => onSave(n, note.trim(), kind)}>Save</Button>}
+    >
+      {i && (
+        <div className="space-y-4">
+          <p className="text-[14px] text-muted">In stock now: <b className="text-ink">{fmt(i.stock)} {i.unit}</b></p>
+          <Segmented
+            className="w-full"
+            value={kind}
+            onChange={setKind}
+            options={[{ value: "in", label: "Received" }, { value: "used", label: "Used" }, { value: "waste", label: "Wasted" }, { value: "count", label: "Count" }]}
+          />
+          <Field label={kind === "count" ? `Counted now (${i.unit})` : `How much (${i.unit})`}>
+            <input className={inputCls} inputMode="decimal" autoFocus value={qty} onChange={(e) => setQty(e.target.value)} />
+          </Field>
+          <Field label="Note" hint="Optional, e.g. bill number or why it was wasted"><input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** Tomorrow's prep: average of what sold on the same weekday over the last 4 weeks. */
+function Prep({ outletId }: { outletId: string }) {
+  const orders = inOutlet(useOrders(), outletId);
+  const tomorrow0 = startOfDay() + DAY_MS;
+  const weeks = [1, 2, 3, 4].map((w) => between(orders, tomorrow0 - w * 7 * DAY_MS, tomorrow0 - w * 7 * DAY_MS + DAY_MS));
+  const withData = weeks.filter((w) => w.length > 0).length;
+  const all = topDishes(weeks.flat(), 1000);
+  const rows = all.map((d) => ({ ...d, plates: Math.ceil(d.qty / Math.max(1, withData)) })).sort((a, b) => b.plates - a.plates).slice(0, 15);
+  const day = new Date(tomorrow0).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-group bg-surface p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-saffron"><Sparkles size={18} /></span>
+          <div>
+            <div className="text-[13px] text-muted">Prep for {day}</div>
+            <p className="mt-1 text-[17px] font-medium leading-snug">
+              {withData ? `Based on the last ${withData} ${new Date(tomorrow0).toLocaleDateString("en-IN", { weekday: "long" })}${withData > 1 ? "s" : ""}.` : "Not enough orders yet. This fills in after a week of sales."}
+            </p>
+          </div>
+        </div>
+      </section>
+      {rows.length > 0 && (
+        <Group title="Expected plates" flush>
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-center justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] last:border-0 lg:px-5">
+              <span>{r.name}</span>
+              <span className="font-semibold tnum">{r.plates}</span>
+            </div>
+          ))}
+        </Group>
+      )}
+    </div>
   );
 }

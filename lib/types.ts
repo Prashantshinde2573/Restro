@@ -23,6 +23,13 @@ export interface Outlet {
   businessType: BusinessType;
   upi: string;
   payFirst: boolean;
+  phone?: string;
+  gstin?: string;
+  fssai?: string;
+  hours?: string; // "11:00 am – 11:30 pm"
+  billFooter?: string; // message at the bottom of the bill
+  acceptCard?: boolean; // card machine at the counter
+  sort?: number;
 }
 
 // The client's account: brand name, plan and when the plan has to be renewed.
@@ -31,6 +38,7 @@ export interface Account {
   owner: string;
   plan: "starter" | "growth" | "pro" | "chain";
   renewsAt: string; // ISO
+  status?: "active" | "suspended"; // set by the super admin
 }
 
 // What the guest page needs: the brand name + the current outlet's settings.
@@ -39,6 +47,13 @@ export interface OutletSettings {
   businessType: BusinessType;
   upi: string; // UPI ID every payment QR is generated for
   payFirst: boolean; // guests pay before the order goes to the kitchen (typical for cafés)
+  address?: string;
+  phone?: string;
+  gstin?: string;
+  fssai?: string;
+  hours?: string;
+  billFooter?: string; // printed at the bottom of the bill
+  acceptCard?: boolean;
 }
 
 export interface MenuItem {
@@ -101,6 +116,7 @@ export interface Table {
   name: string;
   zone: string;
   seats: number;
+  outletId?: string; // which outlet the table belongs to
   parties: Party[];
   reservedAt?: string; // ISO
   // Internal id of the current sitting at this table. The printed QR never
@@ -158,6 +174,7 @@ export interface Order {
   guestUid?: string; // Supabase user id of the guest's phone (cloud mode)
   prepaid?: Payment[]; // part the guest already paid from their phone (e.g. UPI half of "Cash + UPI")
   priority?: boolean;
+  outletId?: string; // which outlet took the order
 }
 
 export interface Ingredient {
@@ -170,6 +187,26 @@ export interface Ingredient {
   supplier: string;
   forecastTomorrow: number;
   expiresInDays?: number;
+}
+
+/** A raw material the kitchen keeps (paneer, oil, milk…). */
+export interface StockItem {
+  id: string;
+  name: string;
+  unit: string; // kg, L, pcs…
+  stock: number;
+  par: number; // order more below this
+  costPerUnit: number;
+  supplier: string;
+  outletId?: string;
+  log?: StockLog[]; // newest first, last 50
+}
+export interface StockLog {
+  at: string; // ISO
+  kind: "in" | "used" | "waste" | "count";
+  qty: number; // for "count": the new stock level
+  by: string;
+  note?: string;
 }
 
 export interface Customer {

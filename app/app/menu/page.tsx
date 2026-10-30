@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, FolderPlus, Plus, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, LocalSegmented, Sheet, SwitchRow, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeature, useMenu } from "@/lib/live";
+import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeature, useMenu, useOrders } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
 import { OptionsEditor, PhotoUploader } from "@/components/dish-editor";
 import { inr } from "@/lib/format";
@@ -26,6 +26,7 @@ type Draft = {
   isNew: boolean;
   tags: string[];
   options: OptionGroup[];
+  cost: string; // ₹ per plate (ingredients)
 };
 
 type Quadrant = "star" | "plowhorse" | "puzzle" | "dog";
@@ -39,19 +40,30 @@ const qMeta: Record<Quadrant, { name: string; hint: string; tone: "jade" | "sky"
 export default function MenuPage() {
   const toast = useToast();
   const [tab, setTab] = useState<"dishes" | "engineering">("dishes");
-  const items = useMenu();
+  const menuRaw = useMenu();
+  const orders = useOrders();
+  // "sold" = plates in the last 7 days, from real orders
+  const items = useMemo(() => {
+    const since = Date.now() - 7 * 86_400_000;
+    const sold = new Map<string, number>();
+    for (const o of orders) {
+      if (o.status === "cancelled" || new Date(o.createdAt).getTime() < since) continue;
+      for (const l of o.lines) sold.set(l.itemId, (sold.get(l.itemId) ?? 0) + l.qty);
+    }
+    return menuRaw.map((m) => ({ ...m, soldThisWeek: sold.get(m.id) ?? 0 }));
+  }, [menuRaw, orders]);
   const [edit, setEditRaw] = useState<MenuItem | "new" | null>(null);
   const cats = useCategories();
   const cafe = useCurrentOutlet().businessType === "cafe";
   const engineeringOn = useFeature("menuEngineering") === "ok";
-  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [] });
+  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], cost: "" });
   const [draft, setDraft] = useState<Draft>(blank());
   const setEdit = (m: MenuItem | "new" | null, catId?: string) => {
     setEditRaw(m);
     const it = m && m !== "new" ? m : null;
     setDraft(
       it
-        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [] }
+        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], cost: it.cost ? String(it.cost) : "" }
         : blank(catId),
     );
     setNewCat(null);
@@ -73,8 +85,8 @@ export default function MenuPage() {
   const priceNum = Number(draft.price);
   const draftOk = draft.name.trim().length > 1 && priceNum > 0 && !!draft.categoryId;
 
-  const avgSold = items.reduce((s, m) => s + m.soldThisWeek, 0) / items.length;
-  const avgMargin = items.reduce((s, m) => s + (m.price - m.cost), 0) / items.length;
+  const avgSold = items.length ? items.reduce((s, m) => s + m.soldThisWeek, 0) / items.length : 0;
+  const avgMargin = items.length ? items.reduce((s, m) => s + (m.price - m.cost), 0) / items.length : 0;
   const quadrant = (m: MenuItem): Quadrant => {
     const pop = m.soldThisWeek >= avgSold * 0.7;
     const prof = m.price - m.cost >= avgMargin;
@@ -88,8 +100,8 @@ export default function MenuPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
-  const maxSold = Math.max(...items.map((m) => m.soldThisWeek));
-  const maxMargin = Math.max(...items.map((m) => m.price - m.cost));
+  const maxSold = Math.max(1, ...items.map((m) => m.soldThisWeek));
+  const maxMargin = Math.max(1, ...items.map((m) => m.price - m.cost));
   const editing = edit && edit !== "new" ? edit : null;
 
   return (
@@ -129,7 +141,7 @@ export default function MenuPage() {
                             <span className={clsx("truncate text-[15px] font-medium", !m.available && "text-muted")}>{m.name}</span>
                           </div>
                           <div className="text-[13px] text-muted tnum">
-                            {inr(m.price)} · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span> · {m.soldThisWeek} sold
+                            {inr(m.price)}{m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>} · {m.soldThisWeek} sold
                             {m.photos?.length ? ` · ${m.photos.length} photos` : ""}
                           </div>
                         </div>
@@ -150,15 +162,22 @@ export default function MenuPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <Group>
-              <div className="flex items-start gap-3">
-                <Sparkles size={18} className="mt-0.5 shrink-0 text-saffron" />
-                <p className="text-[15px] leading-relaxed">
-                  <b>Kothimbir Vadi</b> earns 80% margin but only 36 orders this week. Ask captains to recommend it with drinks — at Butter Chicken&apos;s volume it would add about <b>{inr(168 * 30)}</b> a month.
-                  {" "}<b>Kolhapuri Mutton</b> costs {inr(245)} to make; a ₹40 price rise keeps it under neighbourhood rates.
-                </p>
-              </div>
-            </Group>
+{(() => {
+              const gem = [...byQ.puzzle].sort((x, y) => (y.price - y.cost) - (x.price - x.cost))[0];
+              const star = [...byQ.star].sort((x, y) => y.soldThisWeek - x.soldThisWeek)[0];
+              if (!gem && !star) return null;
+              return (
+                <Group>
+                  <div className="flex items-start gap-3">
+                    <Sparkles size={18} className="mt-0.5 shrink-0 text-saffron" />
+                    <p className="text-[15px] leading-relaxed">
+                      {gem && <><b>{gem.name}</b> earns {inr(gem.price - gem.cost)} a plate but sold only {gem.soldThisWeek} this week. Ask captains to suggest it. </>}
+                      {star && <><b>{star.name}</b> is your star: {star.soldThisWeek} sold with a good margin. Keep it consistent and easy to find.</>}
+                    </p>
+                  </div>
+                </Group>
+              );
+            })()}
 
             <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
               <Group title="Popularity vs profit, this week" overflowVisible>
@@ -241,6 +260,7 @@ export default function MenuPage() {
                 spice: draft.spice as MenuItem["spice"],
                 isNew: draft.isNew,
                 tags: draft.tags,
+                cost: Math.max(0, Math.round(Number(draft.cost) || 0)),
                 options: draft.options.filter((g) => g.name && g.choices.some((c) => c.name)).map((g) => ({ ...g, choices: g.choices.filter((c) => c.name) })),
               };
               if (editing) menuActions.update(editing.id, patch);
@@ -248,7 +268,6 @@ export default function MenuPage() {
                 menuActions.add({
                   ...patch,
                   id: `m${Date.now()}`,
-                  cost: Math.round(priceNum * 0.3),
                   available: true,
                   soldThisWeek: 0,
                   prepMins: 10,
@@ -333,23 +352,9 @@ export default function MenuPage() {
           <Field label="Choices for guests (spice, add-ons, size)">
             <OptionsEditor groups={draft.options} onChange={(options) => setDraft({ ...draft, options })} />
           </Field>
-          <div className="rounded-group bg-surface p-4">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[15px] font-semibold">Recipe</span>
-              <span className="text-[13px] text-muted">Cost {inr(editing?.cost ?? 0)} per plate</span>
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px]">
-              {[["Paneer", "150 g"], ["Curd + spices", "60 g"], ["Butter", "10 g"]].map(([n, q]) => (
-                <div key={n} className="flex justify-between text-muted"><span>{n}</span><span className="tnum">{q}</span></div>
-              ))}
-            </div>
-            <button className="mt-3 text-[14px] font-semibold text-jade">Add ingredient</button>
-          </div>
-          <div className="space-y-px overflow-hidden rounded-group">
-            <SwitchRow label="Show on table QR menu" initial />
-            <SwitchRow label="Show on WhatsApp ordering" initial />
-            <SwitchRow label="Only between 12 and 4 pm" hint="Lunch-only dishes hide themselves after 4." />
-          </div>
+          <Field label="Cost per plate (₹)" hint="What the ingredients cost you. Used for margins in “What's working”. Optional.">
+            <input className={inputCls} inputMode="decimal" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
+          </Field>
         </div>
       </Sheet>
 

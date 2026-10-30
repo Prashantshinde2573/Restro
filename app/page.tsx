@@ -78,6 +78,10 @@ function PhoneMock() {
   );
 }
 
+// Set these in .env.local to show your contact details on the home page.
+const CONTACT_WA = (process.env.NEXT_PUBLIC_CONTACT_WHATSAPP ?? "").replace(/\D/g, "");
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
+
 export default function Landing() {
   return (
     <div className="min-h-dvh bg-canvas">
@@ -87,11 +91,10 @@ export default function Landing() {
           <nav className="hidden flex-1 gap-6 text-[14.5px] text-muted md:flex">
             <a href="#features" className="hover:text-ink">Features</a>
             <a href="#pricing" className="hover:text-ink">Pricing</a>
-            <Link href="/order/T3" className="hover:text-ink">Guest QR demo</Link>
+            <a href="#contact" className="hover:text-ink">Contact</a>
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/login" className="rounded-ctl px-3 py-2 text-[14.5px] font-semibold hover:bg-sunken">Sign in</Link>
-            <Link href="/onboarding" className="rounded-ctl bg-jade px-4 py-2 text-[14.5px] font-semibold text-white hover:bg-jade-deep">Try free</Link>
+            <Link href="/login" className="rounded-ctl bg-jade px-4 py-2 text-[14.5px] font-semibold text-white hover:bg-jade-deep">Sign in</Link>
           </div>
         </div>
       </header>
@@ -105,10 +108,10 @@ export default function Landing() {
             Billing, kitchen, tables, stock, staff and guests — for cafés, restaurants and cloud kitchens. Every morning Restro tells you what to fix, in plain words.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/onboarding" className="flex h-14 items-center rounded-[14px] bg-jade px-6 text-[17px] font-semibold text-white hover:bg-jade-deep">Start 14-day free trial</Link>
-            <Link href="/app" className="flex h-14 items-center rounded-[14px] bg-surface px-6 text-[17px] font-semibold hover:bg-sunken">See the live demo</Link>
+            <a href="#contact" className="flex h-14 items-center rounded-[14px] bg-jade px-6 text-[17px] font-semibold text-white hover:bg-jade-deep">Get Restro for your restaurant</a>
+            <Link href="/login" className="flex h-14 items-center rounded-[14px] bg-surface px-6 text-[17px] font-semibold hover:bg-sunken">Sign in</Link>
           </div>
-          <p className="mt-4 text-[13.5px] text-muted">Set up in 20 minutes. Works on the phone, tablet and laptop you already have.</p>
+          <p className="mt-4 text-[13.5px] text-muted">We set it up with you. Works on the phone, tablet and laptop you already have.</p>
         </div>
         <PhoneMock />
       </section>
@@ -161,11 +164,21 @@ export default function Landing() {
         </div>
       </section>
 
+      <section id="contact" className="mx-auto max-w-6xl px-4 pb-20 lg:px-6">
+        <div className="rounded-[28px] bg-surface p-8 text-center lg:p-12">
+          <h2 className="text-[28px] font-semibold tracking-tight lg:text-[36px]">Want Restro for your restaurant?</h2>
+          <p className="mx-auto mt-3 max-w-xl text-[16px] text-muted">Talk to us. We create your account, and help you add your menu, tables and staff. You get your login the same day.</p>
+          {CONTACT_WA ? (
+            <a href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi, I'd like Restro for my restaurant.")}`} target="_blank" rel="noreferrer" className="mt-6 inline-flex h-14 items-center rounded-[14px] bg-[#25D366] px-6 text-[17px] font-semibold text-white">Message us on WhatsApp</a>
+          ) : null}
+          {CONTACT_EMAIL ? <p className="mt-4 text-[15px]"><a className="font-semibold text-jade" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></p> : null}
+        </div>
+      </section>
+
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 text-[14px] text-muted sm:flex-row sm:items-center lg:px-6">
           <Wordmark className="text-[16px] text-ink" />
           <span className="sm:ml-auto">Made in Pune for Indian restaurants.</span>
-          <Link href="/admin" className="hover:text-ink">Admin</Link>
         </div>
       </footer>
     </div>

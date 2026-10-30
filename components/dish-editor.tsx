@@ -2,25 +2,51 @@
 
 import clsx from "clsx";
 import { ImagePlus, Plus, Star, Trash2, X } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { inputCls } from "./ui";
 import type { OptionGroup } from "@/lib/types";
+import { uploadMenuPhoto } from "@/lib/cloud";
+
+/** Shrink a photo on the phone before uploading: max 1200 px, JPEG. */
+async function shrink(file: File, maxSide = 1200): Promise<Blob> {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) return file;
+  const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k);
+  c.height = Math.round(bmp.height * k);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob((b) => res(b ?? file), "image/jpeg", 0.82));
+}
 
 /**
  * Several photos per dish. The first one is the cover shown on the menu;
  * the rest open in the guest's gallery. Everything is cropped to a square on
- * screen so the menu stays even. (Firebase phase: upload to Cloud Storage,
- * resize with an extension, keep the URLs on the menu item.)
+ * screen so the menu stays even. Photos are shrunk on the phone (max 1200 px)
+ * and stored in Supabase Storage; the menu item keeps their links.
  */
 export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[]; onChange: (p: string[]) => void; max?: number }) {
   const input = useRef<HTMLInputElement>(null);
-  const addFiles = (files: FileList | null) => {
+  const [busy, setBusy] = useState(0);
+  const [err, setErr] = useState("");
+  const latest = useRef(photos);
+  latest.current = photos;
+  const addFiles = async (files: File[] | FileList | null) => {
     if (!files) return;
-    const urls = Array.from(files)
-      .filter((f) => f.type.startsWith("image/"))
-      .slice(0, max - photos.length)
-      .map((f) => URL.createObjectURL(f));
-    onChange([...photos, ...urls]);
+    setErr("");
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, max - photos.length);
+    setBusy(list.length);
+    for (const f of list) {
+      try {
+        const url = await uploadMenuPhoto(await shrink(f));
+        latest.current = [...latest.current, url];
+        onChange(latest.current);
+      } catch (e) {
+        setErr(`Couldn't upload a photo: ${(e as Error).message}`);
+      } finally {
+        setBusy((n) => n - 1);
+      }
+    }
   };
   return (
     <div>
@@ -28,6 +54,7 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
         <span className="text-[13px] font-medium text-muted">Photos</span>
         <span className="text-[12px] text-faint">{photos.length}/{max} · first one is the cover</span>
       </div>
+      {err && <p className="mb-2 text-[13px] font-medium text-rose">{err}</p>}
       <div className="grid grid-cols-3 gap-2">
         {photos.map((src, i) => (
           <div key={src} className="group relative aspect-square overflow-hidden rounded-[14px] bg-sunken">
@@ -59,7 +86,7 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              addFiles(e.dataTransfer.files);
+              void addFiles(Array.from(e.dataTransfer.files));
             }}
             className={clsx(
               "flex aspect-square flex-col items-center justify-center gap-1.5 rounded-[14px] border-2 border-dashed border-line bg-surface text-muted hover:border-jade hover:text-jade",
@@ -67,11 +94,11 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
             )}
           >
             <ImagePlus size={22} />
-            <span className="text-[13px] font-medium">{photos.length ? "Add more" : "Add photos — take or upload"}</span>
+            <span className="text-[13px] font-medium">{busy > 0 ? "Uploading…" : photos.length ? "Add more" : "Add photos — take or upload"}</span>
           </button>
         )}
       </div>
-      <input ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; void addFiles(fs); }} />
       <p className="mt-1.5 text-[12px] text-faint">Tip: shoot from above in daylight. Photos are shown square everywhere, so the menu looks even.</p>
     </div>
   );

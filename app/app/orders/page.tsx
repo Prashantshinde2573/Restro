@@ -4,12 +4,12 @@ import { Banknote, CreditCard, History, PenLine, Phone, Printer, QrCode, XCircle
 import { useMemo, useState } from "react";
 import { Button, Chips, Group, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
 import { ChannelIcon, StatusPill, channelLabel } from "@/components/channel";
-import { Checkout } from "@/components/checkout";
+import { Checkout, billTotals } from "@/components/checkout";
+import { printReceipt } from "@/components/receipt";
 import { PaymentSplit, paidSum } from "@/components/payment-split";
 import { useToast } from "@/components/toast";
-import { repo } from "@/lib/repo";
 import { orderWhere, tableActions, useTables } from "@/lib/tables";
-import { billOf, guestActions, methodLabel, orderActions, paymentsText, useOrders } from "@/lib/live";
+import { billOf, guestActions, methodLabel, orderActions, paymentsText, useCurrentOutlet, useMe, useMenu, useOrders, useSettings } from "@/lib/live";
 import { clock, inr, minutesSince, orderTotal, timeAgo } from "@/lib/format";
 import type { Order, OrderStatus, Payment } from "@/lib/types";
 
@@ -23,7 +23,12 @@ export default function OrdersPage() {
   const [selId, setSelId] = useState<string | null>(null);
   const [pay, setPay] = useState<Order | null>(null);
   const [edit, setEdit] = useState<{ order: Order; rows: Payment[] } | null>(null);
-  const menu = repo.menu();
+  const menu = useMenu();
+  const me = useMe();
+  const settings = useSettings();
+  const outlet = useCurrentOutlet();
+  const [cancelAsk, setCancelAsk] = useState<string | null>(null);
+  const myName = me ? (me.role === "owner" ? `${me.name} (Owner)` : me.name) : "Staff";
   const tables = useTables();
   const sel = list.find((o) => o.id === selId) ?? null;
 
@@ -196,12 +201,31 @@ export default function OrdersPage() {
               </div>
             )}
 
-            {sel.status !== "paid" && (
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="plain" onClick={() => toast("KOT reprinted")}><Printer size={16} /> Reprint KOT</Button>
-                <Button variant="plain" onClick={() => toast("Ask a manager to approve the cancel")}><XCircle size={16} /> Cancel items</Button>
-              </div>
-            )}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="plain"
+                onClick={() => {
+                  const sub = orderTotal(sel.lines);
+                  const ok = printReceipt({
+                    settings, outletName: outlet.name, label: orderWhere(sel, tables), billNo: sel.number,
+                    lines: sel.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })),
+                    totals: billTotals(sub), payments: sel.payments ?? [],
+                  });
+                  if (!ok) toast("Allow pop-ups for this site to print");
+                }}
+              >
+                <Printer size={16} /> Print bill
+              </Button>
+              {sel.status !== "paid" && sel.status !== "cancelled" && (
+                cancelAsk === sel.id ? (
+                  <Button variant="danger" onClick={() => { orderActions.setStatus(sel.id, "cancelled"); setCancelAsk(null); toast(`#${sel.number} cancelled`); }}>
+                    <XCircle size={16} /> Yes, cancel
+                  </Button>
+                ) : (
+                  <Button variant="plain" onClick={() => setCancelAsk(sel.id)}><XCircle size={16} /> Cancel order</Button>
+                )
+              )}
+            </div>
           </div>
         )}
       </Sheet>
@@ -218,7 +242,7 @@ export default function OrdersPage() {
               className="w-full"
               disabled={paidSum(edit.rows) !== paidSum(edit.order.payments ?? []) || edit.rows.some((r) => r.amount <= 0)}
               onClick={() => {
-                orderActions.editPayment(edit.order.id, edit.rows, "Kavya (Manager)");
+                orderActions.editPayment(edit.order.id, edit.rows, myName);
                 setEdit(null);
                 toast("Payment updated · change saved in history");
               }}
@@ -246,9 +270,11 @@ export default function OrdersPage() {
         label={pay ? orderWhere(pay, tables) : ""}
         preferred={pay?.payPreference}
         prepaid={pay?.prepaid}
+        lines={pay?.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))}
+        billNo={pay?.number}
         onPaid={(payments) => {
           if (!pay) return;
-          orderActions.pay([pay.id], payments, "Kavya");
+          orderActions.pay([pay.id], payments, myName);
           if (pay.tableId && pay.partyId) tableActions.close(pay.tableId, pay.partyId);
         }}
       />

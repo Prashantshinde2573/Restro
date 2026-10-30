@@ -39,8 +39,8 @@ import {
 } from "@/components/guest-menu";
 import { PayPanel, ThankYou } from "@/components/guest-pay";
 import { GST_RATE, inr, minutesSince } from "@/lib/format";
-import { isShared, tableActions, useTables } from "@/lib/tables";
-import { cloudConfigured, feedbackActions, getOrders, guestActions, orderActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { isShared, tableActions, useAllTables } from "@/lib/tables";
+import { cloudConfigured, feedbackActions, guestActions, orderActions, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { ensureGuest, useCloud } from "@/lib/cloud";
 import type { MenuItem, Order, Payment } from "@/lib/types";
 
@@ -86,7 +86,7 @@ type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?:
 
 export default function GuestOrder() {
   const params = useParams<{ table: string }>();
-  const table = (params?.table ?? "T3").toString().toUpperCase();
+  const table = decodeURIComponent(params?.table ?? "").toString().toUpperCase();
   const counter = table === "COUNTER"; // café counter QR — no table
   const toast = useToast();
   const settings = useSettings();
@@ -97,9 +97,9 @@ export default function GuestOrder() {
   const menuAll = useMenu();
   const menu = useMemo(() => menuAll.filter((m) => m.available), [menuAll]);
   const cats = useCategories();
-  const tables = useTables();
+  const tables = useAllTables(); // every outlet: the QR link names the table
   const allOrders = useOrders();
-  const t = counter ? undefined : tables.find((x) => x.name.toUpperCase() === table);
+  const t = counter ? undefined : tables.find((x) => x.id.toUpperCase() === table) ?? tables.find((x) => x.name.toUpperCase() === table);
 
   // Cloud: sign this phone in as a guest of the restaurant in the QR link (?r=…).
   const cloud = useCloud();
@@ -121,7 +121,18 @@ export default function GuestOrder() {
     return () => window.clearTimeout(id);
   }, []);
   const account = useAccount();
-  const cloudLoading = cloudConfigured && !cloudErr && (!cloud.rid || !account.name || (!counter && !t && !waitedLong));
+  // Use the outlet this QR belongs to (its UPI ID, café/restaurant mode, menu prices).
+  useEffect(() => {
+    const o = counter ? new URLSearchParams(window.location.search).get("o") : t?.outletId;
+    if (o) sessionActions.setOutlet(o);
+  }, [counter, t?.outletId]);
+  // a suspended or deleted restaurant never loads: give up after a while instead of spinning
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setGaveUp(true), 15000);
+    return () => window.clearTimeout(id);
+  }, []);
+  const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !waitedLong));
 
   const [lang, setLang] = useState<Lang>("en");
   const mr = lang === "mr";
@@ -198,30 +209,6 @@ export default function GuestOrder() {
   // Restaurant flow: the running bill. Pay-first orders are already settled from the phone.
   const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !(payNow && o.payPreference)), [openOrders, payNow]);
 
-  // Demo mode only: pretend the staff/kitchen move each order along.
-  // With Supabase, real staff screens do this and the guest sees it live.
-  useEffect(() => {
-    if (cloudConfigured) return;
-    const timers: number[] = [];
-    const next: Partial<Record<Order["status"], [Order["status"], number]>> = {
-      new: ["accepted", 5000],
-      accepted: ["preparing", 4000],
-      preparing: ["ready", 9000],
-      ready: ["served", 6000],
-    };
-    openOrders.forEach((o) => {
-      const step = next[o.status];
-      if (!step || minutesSince(o.createdAt) > 30) return;
-      timers.push(
-        window.setTimeout(() => {
-          orderActions.setStatus(o.id, step[0]);
-          if (o.status === "new" && t && party?.pendingApproval) tableActions.update(t.id, party.id, { pendingApproval: false, server: "Sneha" });
-        }, step[1]),
-      );
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [openOrders, t, party]);
-
   // ---- settling: show the thank-you once staff have the money ----
   useEffect(() => {
     if (!waiting) return;
@@ -242,23 +229,6 @@ export default function GuestOrder() {
     }
   }, [waiting, allOrders]);
 
-  // Demo only: the captain collects the cash/card a few seconds later. In
-  // production the cashier does this from Orders → Charge on their screen
-  // (the guest's UPI part is already filled in there).
-  useEffect(() => {
-    if (cloudConfigured || !waiting || waiting.payFirst) return;
-    const id = window.setTimeout(() => {
-      const live = getOrders().filter((o) => waiting.ids.includes(o.id) && o.status !== "paid");
-      const payments: Payment[] =
-        waiting.kind === "mixed"
-          ? [{ method: "upi", amount: waiting.upiPart ?? 0 }, { method: "cash", amount: waiting.amount - (waiting.upiPart ?? 0) }]
-          : [{ method: waiting.kind, amount: waiting.amount }];
-      if (live.length) orderActions.pay(live.map((o) => o.id), payments, "Captain");
-      if (t && party) tableActions.update(t.id, party.id, { status: "billing", total: 0 });
-    }, 8000);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiting]);
 
   useEffect(() => {
     if (!shareOpen) return;
@@ -449,7 +419,7 @@ export default function GuestOrder() {
       </div>
     );
   }
-  if (cloudErr || (!t && !counter)) {
+  if (cloudErr || !account.name || (!t && !counter)) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center bg-canvas px-6 text-center">
         <QrCode size={32} className="text-muted" />

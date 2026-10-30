@@ -3,15 +3,16 @@
 import { useCloud } from "@/lib/cloud";
 import clsx from "clsx";
 import Link from "next/link";
-import { ArrowLeftRight, CalendarClock, Check, Clock, Merge, Minus, Plus, QrCode, ReceiptText, MessageCircle, Smartphone, Users, UserPlus } from "lucide-react";
+import { ArrowLeftRight, Check, Clock, LayoutGrid, Merge, Minus, Pencil, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Trash2, Users, UserPlus } from "lucide-react";
 import { useState } from "react";
-import { Button, Group, Page, PageHeader, Pill, Segmented, Sheet, Field, inputCls } from "@/components/ui";
+import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet, Field, inputCls } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
 import { Checkout } from "@/components/checkout";
 import { useToast } from "@/components/toast";
 import { inr, minutesSince, timeAgo } from "@/lib/format";
-import { getOrders, orderActions } from "@/lib/live";
+import { getOrders, orderActions, useCan, useCurrentOutlet, useMe } from "@/lib/live";
 import { isShared, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useTables } from "@/lib/tables";
+import { TableManager } from "@/components/table-manager";
 import type { Party, Table, TableStatus } from "@/lib/types";
 
 const statusStyle: Record<TableStatus, { label: string; tile: string; dot: string; tone: "neutral" | "jade" | "saffron" | "sky" }> = {
@@ -21,18 +22,6 @@ const statusStyle: Record<TableStatus, { label: string; tile: string; dot: strin
   billing: { label: "Wants bill", tile: "bg-saffron-soft", dot: "bg-saffron", tone: "saffron" },
   reserved: { label: "Reserved", tile: "bg-surface", dot: "bg-faint", tone: "neutral" },
 };
-
-const waitlist = [
-  { name: "Joshi family", size: 6, waited: 14, eta: 10 },
-  { name: "Ananya + 1", size: 2, waited: 6, eta: 4 },
-  { name: "Kunal", size: 1, waited: 2, eta: 0, shareHint: "T6 has a free seat — offer to share" },
-];
-
-const bookings = [
-  { name: "Deshpande", size: 8, at: "8:00 pm", table: "T7", note: "Anniversary — cake at 9" },
-  { name: "Corporate · Infosys", size: 4, at: "8:15 pm", table: "R4", note: "Needs GST invoice" },
-  { name: "Mehta", size: 3, at: "9:00 pm", table: "—", note: "" },
-];
 
 function Stepper({ value, onChange, min = 1, max = 20 }: { value: number; onChange: (n: number) => void; min?: number; max?: number }) {
   return (
@@ -54,7 +43,12 @@ export default function TablesPage() {
   const [seat, setSeat] = useState<{ tableId: string; guests: number } | null>(null);
   const [move, setMove] = useState<{ tableId: string; partyId: string } | null>(null);
   const [pay, setPay] = useState<{ tableId: string; party: Party; label: string } | null>(null);
-  const [addWait, setAddWait] = useState(false);
+  const [manage, setManage] = useState(false);
+  const me = useMe();
+  const outlet = useCurrentOutlet();
+  const canManage = useCan("outletSettings");
+  const myName = me?.name ?? "Staff";
+  const qrUrl = (t: Table | null) => `${typeof window !== "undefined" ? window.location.origin : ""}/order/${t?.id ?? ""}${cloud.rid ? `?r=${cloud.rid}` : ""}`;
 
   const sel = tables.find((t) => t.id === selId) ?? null;
   const zones = Array.from(new Set(tables.map((t) => t.zone)));
@@ -66,7 +60,7 @@ export default function TablesPage() {
   const partyOrders = (tableId: string, partyId: string) =>
     getOrders().filter((o) => o.tableId === tableId && (o.partyId ?? "A") === partyId && !["paid", "cancelled"].includes(o.status));
   const acceptParty = (tableId: string, _name: string, partyId: string) => {
-    tableActions.update(tableId, partyId, { pendingApproval: false, server: "Sneha" });
+    tableActions.update(tableId, partyId, { pendingApproval: false, server: myName });
     partyOrders(tableId, partyId).filter((o) => o.status === "new").forEach((o) => orderActions.setStatus(o.id, "accepted"));
   };
   const rejectParty = (tableId: string, _name: string, partyId: string) => {
@@ -79,10 +73,15 @@ export default function TablesPage() {
     <>
       <PageHeader
         title="Tables"
-        subtitle={`${busy} busy · ${tables.filter((t) => tableState(t) === "free").length} free${shared ? ` · ${shared} shared` : ""} · ${waitlist.length} waiting`}
-        actions={<Button variant="tinted" size="sm" onClick={() => setAddWait(true)}><Plus size={16} /> Waitlist</Button>}
+        subtitle={tables.length ? `${outlet.name ? `${outlet.name} · ` : ""}${busy} busy · ${tables.filter((t) => tableState(t) === "free").length} free${shared ? ` · ${shared} shared` : ""}` : outlet.name}
+        actions={
+          <div className="flex gap-2">
+            {tables.length > 0 && <Link href="/print/tables"><Button variant="plain" size="sm"><Printer size={16} /> QR codes</Button></Link>}
+            {canManage && <Button variant="tinted" size="sm" onClick={() => setManage(true)}><Settings2 size={16} /> Manage tables</Button>}
+          </div>
+        }
       >
-        <Segmented value={zone} onChange={setZone} options={[{ value: "all", label: "All" }, ...zones.map((z) => ({ value: z, label: z }))]} />
+        {zones.length > 1 && <Segmented value={zone} onChange={setZone} options={[{ value: "all", label: "All" }, ...zones.map((z) => ({ value: z, label: z }))]} />}
       </PageHeader>
       <Page>
         {pending.length > 0 && (
@@ -98,7 +97,14 @@ export default function TablesPage() {
           </div>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+        {tables.length === 0 ? (
+          <Empty
+            icon={<LayoutGrid size={26} />}
+            title="No tables yet"
+            body={canManage ? "Add your tables once. Each one gets its own QR code for ordering." : "Ask the owner or manager to add tables."}
+            action={canManage ? <Button onClick={() => setManage(true)}><Plus size={16} /> Add tables</Button> : undefined}
+          />
+        ) : (
           <div>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
               {shown.map((t) => {
@@ -157,39 +163,7 @@ export default function TablesPage() {
             </div>
           </div>
 
-          <div className="space-y-6">
-            <Group title="Waitlist" action={<span className="text-[12px] text-muted">Wait predicted from table pace</span>} flush>
-              {waitlist.map((w) => (
-                <div key={w.name} className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0">
-                  <span className="flex h-10 w-10 flex-col items-center justify-center rounded-full bg-sunken text-[13px] font-semibold leading-none tnum">{w.size}<span className="text-[9px] font-medium text-muted">pax</span></span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[15px] font-medium">{w.name}</div>
-                    <div className={clsx("text-[12.5px]", w.shareHint ? "font-medium text-jade" : "text-muted")}>{w.shareHint ?? `Waiting ${w.waited} min · table in ~${w.eta} min`}</div>
-                  </div>
-                  {w.shareHint ? (
-                    <Button size="sm" variant="tinted" onClick={() => { const t = tables.find((x) => x.name === "T6")!; const p = tableActions.seat(t.id, 1); toast(`Kunal seated at T6 · Party ${p.id}, separate bill`); }}>Seat at T6</Button>
-                  ) : (
-                    <button aria-label={`Message ${w.name}`} onClick={() => toast(`WhatsApp sent: "Your table is ready"`)} className="flex h-9 w-9 items-center justify-center rounded-full bg-jade-soft text-jade"><MessageCircle size={16} /></button>
-                  )}
-                </div>
-              ))}
-            </Group>
-            <Group title="Bookings tonight" flush>
-              {bookings.map((b) => (
-                <div key={b.name} className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0">
-                  <CalendarClock size={18} className="mt-0.5 text-muted" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[15px] font-medium">{b.name} · {b.size}</span>
-                      <span className="text-[13px] font-semibold tnum">{b.at}</span>
-                    </div>
-                    <div className="text-[12.5px] text-muted">{b.table === "—" ? "No table yet" : `Table ${b.table}`}{b.note && ` · ${b.note}`}</div>
-                  </div>
-                </div>
-              ))}
-            </Group>
-          </div>
-        </div>
+        )}
       </Page>
 
       {/* ---------- Table detail ---------- */}
@@ -263,6 +237,9 @@ export default function TablesPage() {
             )}
 
             <Button variant="plain" className="w-full" onClick={() => setQr(true)}><QrCode size={16} /> Show table QR</Button>
+            {canManage && sel.parties.length === 0 && (
+              <Button variant="plain" className="w-full" onClick={() => { setSelId(null); setManage(true); }}><Pencil size={16} /> Edit or remove this table</Button>
+            )}
           </div>
         )}
       </Sheet>
@@ -279,7 +256,7 @@ export default function TablesPage() {
               className="w-full"
               onClick={() => {
                 const t = tables.find((x) => x.id === seat.tableId)!;
-                const p = tableActions.seat(t.id, seat.guests);
+                const p = tableActions.seat(t.id, seat.guests, { server: myName });
                 setSeat(null);
                 toast(t.parties.length ? `Party ${p.id} seated at ${t.name} · separate bill` : `${seat.guests} guests seated at ${t.name}`);
               }}
@@ -339,26 +316,20 @@ export default function TablesPage() {
 
       <Sheet open={qr} onClose={() => setQr(false)} title={`Table ${sel?.name ?? ""} QR`}>
         <div className="flex flex-col items-center rounded-group bg-surface p-6 text-center">
-          <ScanQr value={`${typeof window !== "undefined" ? window.location.origin : ""}/order/${sel?.name ?? "T3"}${cloud.rid ? `?r=${cloud.rid}` : ""}`} size={220} label={`Table ${sel?.name ?? ""} ordering QR`} />
+          <ScanQr value={qrUrl(sel)} size={220} label={`Table ${sel?.name ?? ""} ordering QR`} />
           <div className="mt-4 text-[17px] font-semibold">Scan to see the menu and order</div>
           <p className="mt-1 max-w-xs text-[14px] text-muted">
             Print once — it never changes.
           </p>
           <div className="mt-5 grid w-full grid-cols-2 gap-2">
-            <Button variant="tinted" onClick={() => toast(`Table ${sel?.name} QR ready to print`)}>Print this QR</Button>
-            <Button variant="plain" className="!bg-sunken" onClick={() => toast("All 13 table QRs ready to print (A6 size)")}>Print all tables</Button>
+            <Link href={`/print/tables?t=${sel?.id ?? ""}`}><Button variant="tinted" className="w-full"><Printer size={16} /> Print this QR</Button></Link>
+            <Link href="/print/tables"><Button variant="plain" className="w-full !bg-sunken">Print all tables</Button></Link>
           </div>
-          <Link href={`/order/${sel?.name ?? "T3"}${cloud.rid ? `?r=${cloud.rid}` : ""}`} className="mt-4 text-[14px] font-semibold text-jade">Preview what guests see</Link>
+          <a href={qrUrl(sel)} target="_blank" rel="noreferrer" className="mt-4 text-[14px] font-semibold text-jade">Preview what guests see</a>
         </div>
       </Sheet>
 
-      <Sheet open={addWait} onClose={() => setAddWait(false)} title="Add to waitlist" footer={<Button size="lg" className="w-full" onClick={() => { setAddWait(false); toast("Added · WhatsApp sent with ~12 min wait"); }}>Add and notify guest</Button>}>
-        <div className="space-y-4">
-          <Field label="Name"><input className={inputCls} placeholder="Guest name" /></Field>
-          <Field label="Phone" hint="We'll WhatsApp them when their table is ready."><input className={inputCls} inputMode="tel" placeholder="98xxx xxxxx" /></Field>
-          <Field label="Party size"><input className={inputCls} inputMode="numeric" defaultValue={2} /></Field>
-        </div>
-      </Sheet>
+      <TableManager open={manage} onClose={() => setManage(false)} />
 
       <Checkout
         open={!!pay}
@@ -367,10 +338,12 @@ export default function TablesPage() {
         label={pay?.label ?? ""}
         preferred={pay ? partyOrders(pay.tableId, pay.party.id).find((o) => o.payPreference)?.payPreference : undefined}
         prepaid={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.prepaid ?? []) : undefined}
+        lines={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))) : undefined}
+        billNo={pay ? partyOrders(pay.tableId, pay.party.id)[0]?.number : undefined}
         onPaid={(payments) => {
           if (!pay) return;
           const ids = partyOrders(pay.tableId, pay.party.id).map((o) => o.id);
-          if (ids.length) orderActions.pay(ids, payments, "Sneha");
+          if (ids.length) orderActions.pay(ids, payments, myName);
           tableActions.close(pay.tableId, pay.party.id);
         }}
       />

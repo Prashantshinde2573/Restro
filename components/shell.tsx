@@ -29,8 +29,9 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, RENEW_WARN_DAYS, daysLeft, featureState, hasPerm, inOutlet, isOwner, routeFor } from "@/lib/access";
-import { sessionActions, useAccount, useCurrentOutlet, useMe, useMembers, useOutlets } from "@/lib/live";
-import { cloudConfigured, cloudSignOut, useCloud } from "@/lib/cloud";
+import { sessionActions, useAccount, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
+import { cloudSignOut, useCloud } from "@/lib/cloud";
+import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 
@@ -42,7 +43,7 @@ const groups: { key: TKey; items: NavItem[] }[] = [
     items: [
       { href: "/app", key: "pulse", icon: Activity },
       { href: "/app/pos", key: "pos", icon: SquarePlus },
-      { href: "/app/orders", key: "orders", icon: ReceiptText, badge: 2 },
+      { href: "/app/orders", key: "orders", icon: ReceiptText },
       { href: "/app/tables", key: "tables", icon: LayoutGrid },
       { href: "/app/kitchen", key: "kitchen", icon: ChefHat },
     ],
@@ -113,8 +114,9 @@ function useNav() {
     if (r.perm && r.perm !== "ownerOrSettings" && !owner && !(hasPerm(me, r.perm) && inOutlet(me, outlet.id))) return null;
     return "ok";
   };
+  const waiting = useOrders().filter((o) => o.status === "new" && (!o.outletId || o.outletId === outlet.id)).length;
   const navGroups = groups
-    .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)! }] : [])) }))
+    .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)!, badge: it.href === "/app/orders" && waiting ? waiting : undefined }] : [])) }))
     .filter((g) => g.items.length);
   return { navGroups, state };
 }
@@ -181,11 +183,12 @@ function OutletSwitcher() {
   );
 }
 
-/** Signed-in person. The switcher is a prototype aid to try each role's view. */
+/** Signed-in person: profile, change password, sign out. */
 function MeButton({ compact }: { compact?: boolean }) {
   const me = useMe();
-  const members = useMembers().filter((m) => m.active);
+  const cloud = useCloud();
   const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState(false);
   if (!me) return null;
   return (
     <>
@@ -198,46 +201,35 @@ function MeButton({ compact }: { compact?: boolean }) {
           </span>
         )}
       </button>
-      <Sheet open={open} onClose={() => setOpen(false)} title="Signed in as">
-        {!cloudConfigured && <p className="mb-3 text-[13px] text-muted">Demo: switch person to see exactly what each one sees.</p>}
-        {!cloudConfigured && <div className="overflow-hidden rounded-group bg-surface">
-          {members.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => {
-                sessionActions.signInAs(m.id);
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-2.5 text-left last:border-0"
-            >
-              <Avatar name={m.name} hue={m.hue} size={32} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[14.5px] font-medium">{m.name}</span>
-                <span className="block text-[12.5px] text-muted">{m.role === "owner" ? "Owner · admin" : m.role === "subadmin" ? "Sub admin" : m.title}</span>
-              </span>
-              {m.id === me.id && <Check size={18} className="text-jade" />}
-            </button>
-          ))}
-        </div>}
-        {cloudConfigured && (
-          <div className="flex items-center gap-3 rounded-group bg-surface p-4">
-            <Avatar name={me.name} hue={me.hue} size={40} />
-            <div>
-              <div className="text-[15px] font-semibold">{me.name}</div>
-              <div className="text-[13px] text-muted">{me.role === "owner" ? "Owner · admin" : me.title}</div>
+      <Sheet open={open} onClose={() => { setOpen(false); setPw(false); }} title={pw ? "Change password" : "Signed in as"}>
+        {pw ? (
+          <ChangePassword title="" onDone={() => { setPw(false); setOpen(false); }} />
+        ) : (
+          <>
+            <div className="flex items-center gap-3 rounded-group bg-surface p-4">
+              <Avatar name={me.name} hue={me.hue} size={40} />
+              <div className="min-w-0">
+                <div className="text-[15px] font-semibold">{me.name}</div>
+                <div className="truncate text-[13px] text-muted">{me.role === "owner" ? `Owner · ${cloud.email ?? ""}` : me.title}</div>
+              </div>
             </div>
-          </div>
+            {cloud.role === "owner" && (
+              <button onClick={() => setPw(true)} className="mt-3 flex w-full items-center gap-2 rounded-group bg-surface px-4 py-3 text-left text-[15px] font-medium">
+                <KeyRound size={17} className="text-jade" /> Change password
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                setOpen(false);
+                await cloudSignOut();
+                window.location.href = "/login";
+              }}
+              className="mt-4 block w-full text-center text-[14px] font-semibold text-rose"
+            >
+              Sign out
+            </button>
+          </>
         )}
-        <button
-          onClick={async () => {
-            setOpen(false);
-            if (cloudConfigured) await cloudSignOut();
-            window.location.href = "/login";
-          }}
-          className="mt-4 block w-full text-center text-[14px] font-semibold text-rose"
-        >
-          Sign out
-        </button>
       </Sheet>
     </>
   );
@@ -461,22 +453,84 @@ function RouteGate({ children }: { children: ReactNode }) {
   );
 }
 
-/** Cloud mode: only signed-in owner/staff get past here. */
+function Centered({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-6 text-center">
+      <Wordmark className="mb-8 text-[20px]" />
+      <div className="max-w-sm">{children}</div>
+    </div>
+  );
+}
+
+export function Spinner() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-canvas" aria-busy="true">
+      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-jade" />
+    </div>
+  );
+}
+
+const signOutAndLeave = async () => {
+  await cloudSignOut();
+  window.location.href = "/login";
+};
+
+/** Only signed-in owner/staff of an active restaurant get past here. */
 function AuthGate({ children }: { children: ReactNode }) {
   const cloud = useCloud();
   const me = useMe();
+  const account = useAccount();
   const router = useRouter();
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setWaited(true), 8000);
+    return () => window.clearTimeout(id);
+  }, []);
   useEffect(() => {
     if (cloud.status === "signedOut" || (cloud.status === "ready" && cloud.role === "guest")) router.replace("/login");
-    if (cloud.status === "needsOnboarding") router.replace("/onboarding");
+    else if (cloud.status === "ready" && cloud.role === "superadmin") router.replace("/admin");
+    else if (cloud.status === "ready" && cloud.mustChangePassword) router.replace("/login");
   }, [cloud, router]);
-  if (cloud.status === "off") return <>{children}</>;
-  if (cloud.status !== "ready" || cloud.role === "guest" || !me) {
+
+  if (cloud.status === "off") {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-canvas" aria-busy="true">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-jade" />
-      </div>
+      <Centered>
+        <h1 className="text-[22px] font-semibold">Setup needed</h1>
+        <p className="mt-2 text-[15px] text-muted">Add the Supabase URL and publishable key to <code>.env.local</code>, then restart the app.</p>
+      </Centered>
     );
+  }
+  if (cloud.status === "needsOnboarding") {
+    return (
+      <Centered>
+        <h1 className="text-[22px] font-semibold">No restaurant on this login</h1>
+        <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Restro support to set up your restaurant.</p>
+        <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+      </Centered>
+    );
+  }
+  if (cloud.status === "ready" && (cloud.role === "owner" || cloud.role === "staff") && account.status === "suspended") {
+    return (
+      <Centered>
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
+        <h1 className="mt-4 text-[22px] font-semibold">{account.name || "This restaurant"} is paused</h1>
+        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Contact Restro support to turn it back on. Your data is safe.</p>
+        <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+      </Centered>
+    );
+  }
+  if (cloud.status !== "ready" || (cloud.role !== "owner" && cloud.role !== "staff") || cloud.mustChangePassword || !me) {
+    // signed in but the person record isn't there (removed from the team)
+    if (cloud.status === "ready" && cloud.role === "staff" && waited && !me) {
+      return (
+        <Centered>
+          <h1 className="text-[22px] font-semibold">No access</h1>
+          <p className="mt-2 text-[15px] text-muted">Your access was turned off. Ask your manager.</p>
+          <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        </Centered>
+      );
+    }
+    return <Spinner />;
   }
   return <>{children}</>;
 }

@@ -9,10 +9,9 @@ import { PhotoSlide } from "@/components/menu-bits";
 import { Checkout, billTotals } from "@/components/checkout";
 import { VoiceOrder } from "@/components/voice";
 import { ItemSheet } from "@/components/item-sheet";
-import { orderActions, useMenu, useCategories, useCurrentOutlet, useFeature } from "@/lib/live";
+import { getOrders, orderActions, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
-import { repo } from "@/lib/repo";
 import { getTable, isShared, seatsFree, tableActions, tableState, useTables } from "@/lib/tables";
 import { inr } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
@@ -32,6 +31,7 @@ function PosScreen() {
   const { t } = useT();
   const params = useSearchParams();
   const toast = useToast();
+  const me = useMe();
   const menu = useMenu();
   const cats = useCategories();
   const tables = useTables();
@@ -83,7 +83,10 @@ function PosScreen() {
   const label =
     type === "dine-in" ? (pty && tbShared ? `${table} · Party ${party}` : `Table ${table}`) : type === "takeaway" ? "Takeaway" : "Delivery";
 
-  const running = type === "dine-in" ? pty?.total ?? 0 : 0;
+  const [sentIds, setSentIds] = useState<string[]>([]); // takeaway/delivery orders sent but not paid yet
+  const allOrders = useOrders();
+  const sentTotal = allOrders.filter((o) => sentIds.includes(o.id) && o.status !== "paid" && o.status !== "cancelled").reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
+  const running = type === "dine-in" ? pty?.total ?? 0 : sentTotal;
   const chargeAmount = running + (sent ? 0 : subtotal);
 
   /** Make sure the order belongs to a party: a free table gets Party A. */
@@ -95,27 +98,29 @@ function PosScreen() {
     return p.id;
   };
 
-  const sendKitchen = () => {
+  const sendKitchen = (): string => {
     const pid = ensureParty();
     if (tb && pid) {
       const cur = getTable(tb.id)!.parties.find((p) => p.id === pid);
       tableActions.update(tb.id, pid, { status: "ordered", total: (cur?.total ?? 0) + subtotal });
     }
     setSent(true);
-    orderActions.add({
+    const order = orderActions.add({
       type,
       channel: "pos",
       tableId: type === "dine-in" ? tb?.id : undefined,
       tableName: type === "dine-in" ? table : undefined,
       partyId: type === "dine-in" ? pid ?? undefined : undefined,
       customer: type === "dine-in" ? undefined : label,
-      staff: "Rohit",
+      staff: me?.name ?? "Staff",
       createdAt: new Date().toISOString(),
       status: "accepted",
       lines: lines.map((l) => ({ itemId: l.item.id, name: l.item.name, qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
     });
     const kot = type === "dine-in" ? (tb && getTable(tb.id)!.parties.length > 1 ? `${table} · ${pid}` : table) : label;
     toast(`KOT sent · ${count} items for ${kot}`);
+    if (type !== "dine-in") setSentIds((x) => [...x, order.id]);
+    return order.id;
   };
 
   const Cart = (
@@ -195,7 +200,7 @@ function PosScreen() {
           <span className="text-[26px] font-semibold tracking-tight tnum">{inr(billTotals(chargeAmount).total)}</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent} onClick={sendKitchen}>
+          <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent} onClick={() => sendKitchen()}>
             {sent ? <><Check size={18} /> Sent</> : <><Send size={17} /> {t("sendKitchen")}</>}
           </Button>
           <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0} onClick={() => { setCartOpen(false); setPay(true); }}>
@@ -367,14 +372,31 @@ function PosScreen() {
       </Sheet>
 
       <ItemSheet item={customize} onClose={() => setCustomize(null)} onAdd={(l) => add(l.item, l.qty, l.options.join(" · ") || undefined, l.unitPrice)} />
-      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => { setTable("T4"); setParty("A"); ls.forEach((l) => add(l.item, l.qty, l.note)); }} />
+      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => ls.forEach((l) => add(l.item, l.qty, l.note))} />
       <Checkout
         open={pay}
         onClose={() => setPay(false)}
         subtotal={chargeAmount}
         label={label}
-        onPaid={() => {
-          if (type === "dine-in" && tb && pty) tableActions.close(tb.id, pty.id);
+        lines={[
+          ...getOrders()
+            .filter((o) => (type === "dine-in" ? !!tb && o.tableId === tb.id && (o.partyId ?? "A") === (pty?.id ?? party ?? "A") : sentIds.includes(o.id)) && o.status !== "paid" && o.status !== "cancelled")
+            .flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))),
+          ...(sent ? [] : lines.map((l) => ({ name: l.item.name, qty: l.qty, price: priceOf(l) }))),
+        ]}
+        onPaid={(payments) => {
+          // Anything still in the cart becomes an order first, so the sale is saved.
+          const ids = [...sentIds];
+          if (!sent && lines.length) ids.push(sendKitchen());
+          if (type === "dine-in" && tb) {
+            const pid = pty?.id ?? party;
+            getOrders()
+              .filter((o) => o.tableId === tb.id && (o.partyId ?? "A") === (pid ?? "A") && o.status !== "paid" && o.status !== "cancelled")
+              .forEach((o) => ids.includes(o.id) || ids.push(o.id));
+          }
+          if (ids.length) orderActions.pay(ids, payments, me?.name ?? "Staff");
+          if (type === "dine-in" && tb && (pty || party)) tableActions.close(tb.id, (pty?.id ?? party)!);
+          setSentIds([]);
           setLines([]);
           setSent(false);
           setParty(null);

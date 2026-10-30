@@ -2,48 +2,26 @@
 
 // Live stores shared by the staff screens and the guest QR page.
 //
-// Demo mode (no Supabase keys): saved in this browser and synced between tabs.
-// Cloud mode (Supabase keys in .env.local): every store mirrors a Supabase table for
-// this restaurant (rid), so all phones and tablets see the same data live.
-import { repo } from "./repo";
-import { PREFIX, cloudConfigured, createStore, hydrateStores } from "./store";
+// Every store mirrors a Supabase table for this restaurant (rid), so all
+// phones and tablets see the same data live. A new restaurant starts empty.
+import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
-import { featureState, hasPerm, inOutlet, type Feature, type FeatureState, type Member, type Perm, type PlanId } from "./access";
-import type { Account, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, Payment, PayMethod } from "./types";
+import { featureState, hasPerm, inOutlet, type Feature, type FeatureState, type Member, type Perm } from "./access";
+import type { Account, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, Payment, PayMethod, StockItem, StockLog } from "./types";
 
 export { hydrateStores };
-/** Sample data in demo mode; empty in cloud mode (a new restaurant starts clean). */
-const seed = <T,>(sample: T, empty: T): T => (cloudConfigured ? empty : sample);
-
-/** Demo helper: forget everything saved and go back to the sample data. */
-export function resetSavedData() {
-  try {
-    Object.keys(localStorage).filter((k) => k.startsWith(PREFIX)).forEach((k) => localStorage.removeItem(k));
-  } catch {}
-  location.reload();
-}
-
 /* ---------------- account, outlets, members, who is signed in ---------------- */
-const blankAccount: Account = { name: "", owner: "", plan: "growth", renewsAt: new Date(Date.now() + 365 * 86_400_000).toISOString() };
-const accountStore = createStore<Account>(seed({ ...repo.account() }, blankAccount), "account", { kind: "doc", guest: "read" });
+const blankAccount: Account = { name: "", owner: "", plan: "growth", renewsAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), status: "active" };
+const accountStore = createStore<Account>(blankAccount, "account", { kind: "doc", guest: "read" });
 export const useAccount = () => accountStore.use();
 export const accountActions = {
-  setPlan(plan: PlanId) {
-    accountStore.set({ ...accountStore.get(), plan });
-  },
-  /** Prototype stand-in for a Razorpay renewal: pushes the end date a month on. */
-  renew() {
-    const a = accountStore.get();
-    const from = Math.max(Date.now(), new Date(a.renewsAt).getTime());
-    accountStore.set({ ...a, renewsAt: new Date(from + 30 * 86_400_000).toISOString() });
-  },
   rename(name: string) {
     accountStore.set({ ...accountStore.get(), name });
   },
 };
 
-const outletStore = createStore<Outlet[]>(seed(repo.outlets().map((o) => ({ ...o })), []), "outlets", { kind: "collection", coll: "outlets", guest: "read" });
+const outletStore = createStore<Outlet[]>([], "outlets", { kind: "collection", coll: "outlets", guest: "read" });
 export const useOutlets = () => outletStore.use();
 export const outletActions = {
   add(o: Omit<Outlet, "id">): Outlet {
@@ -62,7 +40,7 @@ export const outletActions = {
   },
 };
 
-const memberStore = createStore<Member[]>(seed(repo.members().map((m) => ({ ...m })), []), "members", { kind: "collection", coll: "members" });
+const memberStore = createStore<Member[]>([], "members", { kind: "collection", coll: "members" });
 export const useMembers = () => memberStore.use();
 export const getMembers = () => memberStore.get();
 export const memberActions = {
@@ -76,15 +54,9 @@ export const memberActions = {
 };
 
 // Who is using this device, and which outlet they are looking at.
-const sessionStore = createStore<{ memberId: string; outletId: string }>({ memberId: cloudConfigured ? "" : "s1", outletId: cloudConfigured ? "" : repo.outlets()[0].id }, "session");
+const sessionStore = createStore<{ memberId: string; outletId: string }>({ memberId: "", outletId: "" }, "session");
 export const useSession = () => sessionStore.use();
 export const sessionActions = {
-  signInAs(memberId: string) {
-    const m = memberStore.get().find((x) => x.id === memberId);
-    if (!m) return;
-    const cur = sessionStore.get().outletId;
-    sessionStore.set({ memberId, outletId: m.role === "owner" || m.outletIds.includes(cur) ? cur : m.outletIds[0] ?? cur });
-  },
   /** Cloud sign-in: who this device is now (members may still be loading). */
   setMember(memberId: string) {
     sessionStore.set({ ...sessionStore.get(), memberId });
@@ -124,14 +96,17 @@ export function useCan(p: Perm): boolean {
 export function useSettings(): OutletSettings {
   const a = useAccount();
   const o = useCurrentOutlet();
-  return { name: a.name, businessType: o.businessType, upi: o.upi, payFirst: o.payFirst };
+  return {
+    name: a.name, businessType: o.businessType, upi: o.upi, payFirst: o.payFirst,
+    address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
+  };
 }
 export const settingsActions = {
   /** Brand name goes on the account; the rest on the current outlet. */
   update(patch: Partial<OutletSettings>) {
     const { name, ...rest } = patch;
     if (name !== undefined) accountActions.rename(name);
-    const id = sessionStore.get().outletId;
+    const id = sessionStore.get().outletId || outletStore.get()[0]?.id;
     if (Object.keys(rest).length) outletActions.update(id, rest);
   },
 };
@@ -141,29 +116,47 @@ export const methodLabel: Record<PayMethod, string> = { upi: "UPI", cash: "Cash"
 export const paymentsText = (p?: Payment[]) => (p?.length ? p.map((x) => `${methodLabel[x.method]} ₹${x.amount.toLocaleString("en-IN")}`).join(" + ") : "—");
 
 export const billOf = (o: Order) => Math.round(o.lines.reduce((s, l) => s + l.qty * l.price, 0) * 1.05);
-const seedPayments = (o: Order): Order => {
-  if (o.status !== "paid" || o.payments) return { ...o };
-  const amt = billOf(o);
-  const payments: Payment[] =
-    o.payment === "split"
-      ? [{ method: "upi", amount: Math.round(amt * 0.6) }, { method: "cash", amount: amt - Math.round(amt * 0.6) }]
-      : [{ method: (o.payment as PayMethod) ?? "cash", amount: amt }];
-  return { ...o, payments, paymentLog: [{ at: o.createdAt, by: o.staff, text: `Paid · ${paymentsText(payments)}` }] };
-};
-const orderStore = createStore<Order[]>(seed(repo.orders().map(seedPayments), []), "orders", { kind: "collection", coll: "orders", guest: "own" });
+const orderStore = createStore<Order[]>([], "orders", { kind: "collection", coll: "orders", guest: "own" });
 export const useOrders = () => orderStore.use();
 export const getOrders = () => orderStore.get();
+
+/** The outlet this device is working in (or the first one). */
+export const currentOutletId = (): string | undefined => sessionStore.get().outletId || outletStore.get()[0]?.id;
 
 const patchOrder = (id: string, fn: (o: Order) => Order) =>
   orderStore.set(orderStore.get().map((o) => (o.id === id ? fn(o) : o)));
 
+
+/** Split one bill's payments across its orders in proportion to each order's bill. */
+function splitPayments(orders: Order[], payments: Payment[]): Map<string, Payment[]> {
+  const out = new Map<string, Payment[]>();
+  if (orders.length <= 1) {
+    orders.forEach((o) => out.set(o.id, payments));
+    return out;
+  }
+  const bills = orders.map((o) => billOf(o));
+  const sum = bills.reduce((a, b) => a + b, 0) || orders.length;
+  const left = payments.map((p) => p.amount);
+  orders.forEach((o, i) => {
+    const last = i === orders.length - 1;
+    const mine = payments
+      .map((p, k) => {
+        const amt = last ? left[k] : Math.round((p.amount * (bills[i] || 1)) / sum);
+        left[k] -= amt;
+        return { ...p, amount: amt };
+      })
+      .filter((p) => p.amount > 0);
+    out.set(o.id, mine);
+  });
+  return out;
+}
 
 export const orderActions = {
   add(o: Omit<Order, "id" | "number">): Order {
     if (isConnected()) {
       // Cloud: the order number comes from a server counter (0 until it arrives).
       const id = `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      const order: Order = { ...o, id, number: 0, guestUid: getCloud().role === "guest" ? getCloud().uid : undefined };
+      const order: Order = { ...o, id, number: 0, outletId: o.outletId ?? currentOutletId(), guestUid: getCloud().role === "guest" ? getCloud().uid : undefined };
       orderStore.set([order, ...orderStore.get()]);
       return order;
     }
@@ -197,15 +190,18 @@ export const orderActions = {
       const amount = payments.reduce((a, p) => a + p.amount, 0);
       guestActions.addBill(first.guestPhone, { orderNo: first.number, amount, method: paymentsText(payments) });
     }
+    // One bill can cover several orders (a table's rounds): give each order its share,
+    // so reports add up to exactly what was collected.
+    const share = splitPayments(orderStore.get().filter((o) => ids.includes(o.id)), payments);
     orderStore.set(
       orderStore.get().map((o) =>
         ids.includes(o.id)
           ? {
               ...o,
               status: "paid",
-              payments,
+              payments: share.get(o.id) ?? payments,
               payment: payments.length > 1 ? "split" : payments[0]?.method,
-              paymentLog: [...(o.paymentLog ?? []), { at, by, text: `Paid · ${paymentsText(payments)}` }],
+              paymentLog: [...(o.paymentLog ?? []), { at, by, text: `Paid · ${paymentsText(payments)}${ids.length > 1 ? ` (bill for ${ids.length} orders)` : ""}` }],
             }
           : o,
       ),
@@ -244,7 +240,7 @@ export const orderActions = {
 };
 
 /* ---------------- guests (CRM) ---------------- */
-const guestStore = createStore<Customer[]>(seed(repo.customers().map((c) => ({ ...c })), []), "guests", { kind: "collection", coll: "guests" });
+const guestStore = createStore<Customer[]>([], "guests", { kind: "collection", coll: "guests" });
 export const useGuests = () => guestStore.use();
 
 const normPhone = (p: string) => p.replace(/\D/g, "").slice(-10);
@@ -256,7 +252,7 @@ export const guestActions = {
     const c = getCloud();
     if (c.role === "guest" && c.rid) {
       // Guests can't read the guest book; they only add or update their own name.
-      const rec = { id: key, name, phone: `${key.slice(0, 5)} ${key.slice(5)}`, verified: true, source: "qr" as const, optIn, lastVisit: new Date().toISOString() };
+      const rec = { id: key, name, phone: `${key.slice(0, 5)} ${key.slice(5)}`, verified: false, source: "qr" as const, optIn, lastVisit: new Date().toISOString() };
       guestUpsert(c.rid, key, rec);
       return { ...rec, visits: 1, spend: 0, points: 0, tier: "New", favourite: "—" };
     }
@@ -298,7 +294,7 @@ export const guestActions = {
 };
 
 /* ---------------- menu ---------------- */
-const menuStore = createStore<MenuItem[]>(seed(repo.menu().map((m) => ({ ...m })), []), "menu", { kind: "collection", coll: "menu", guest: "read" });
+const menuStore = createStore<MenuItem[]>([], "menu", { kind: "collection", coll: "menu", guest: "read" });
 export const useMenu = () => menuStore.use();
 export const menuActions = {
   update(id: string, patch: Partial<MenuItem>) {
@@ -310,7 +306,7 @@ export const menuActions = {
 };
 
 /* ---------------- categories (owner-defined → guest filters + side bar) ---------------- */
-const catStore = createStore<Category[]>(seed(repo.categories().map((c) => ({ ...c })), []), "categories", { kind: "collection", coll: "categories", guest: "read" });
+const catStore = createStore<Category[]>([], "categories", { kind: "collection", coll: "categories", guest: "read" });
 export const useCategories = () => catStore.use();
 export const categoryActions = {
   add(name: string, icon?: string): Category {
@@ -336,7 +332,7 @@ export const categoryActions = {
 };
 
 /* ---------------- feedback (guest ratings after paying) ---------------- */
-const feedbackStore = createStore<Feedback[]>(seed(repo.feedback().map((f) => ({ ...f })), []), "feedback", { kind: "collection", coll: "feedback" });
+const feedbackStore = createStore<Feedback[]>([], "feedback", { kind: "collection", coll: "feedback" });
 export const useFeedback = () => feedbackStore.use();
 export const feedbackActions = {
   add(f: Omit<Feedback, "id" | "at">) {
@@ -347,5 +343,31 @@ export const feedbackActions = {
       return;
     }
     feedbackStore.set([{ ...f, id: `f${Date.now()}`, at: new Date().toISOString() }, ...feedbackStore.get()]);
+  },
+};
+
+/* ---------------- stock ---------------- */
+const stockStore = createStore<StockItem[]>([], "stock", { kind: "collection", coll: "stock_items" });
+export const useStock = () => stockStore.use();
+const stockId = () => `st${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+export const stockActions = {
+  save(item: Omit<StockItem, "id"> & { id?: string }) {
+    const list = stockStore.get();
+    if (item.id && list.some((x) => x.id === item.id)) stockStore.set(list.map((x) => (x.id === item.id ? { ...x, ...item, id: x.id } : x)));
+    else stockStore.set([...list, { ...item, id: stockId() }]);
+  },
+  remove(id: string) {
+    stockStore.set(stockStore.get().filter((x) => x.id !== id));
+  },
+  /** Stock in, used, wasted, or a fresh count. */
+  move(id: string, kind: StockLog["kind"], qty: number, by: string, note?: string) {
+    stockStore.set(
+      stockStore.get().map((x) => {
+        if (x.id !== id) return x;
+        const stock = kind === "count" ? qty : kind === "in" ? x.stock + qty : Math.max(0, x.stock - qty);
+        const entry: StockLog = { at: new Date().toISOString(), kind, qty, by, ...(note ? { note } : {}) };
+        return { ...x, stock: Math.round(stock * 1000) / 1000, log: [entry, ...(x.log ?? [])].slice(0, 50) };
+      }),
+    );
   },
 };

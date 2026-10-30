@@ -1,12 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Gift, Percent, Layers } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { useFeature, useSettings } from "@/lib/live";
+import { useCurrentOutlet, useFeature, useSettings } from "@/lib/live";
+import { printReceipt, receiptText } from "./receipt";
 import { useToast } from "./toast";
 import { inr, GST_RATE } from "@/lib/format";
 import { PaymentSplit, paidSum } from "./payment-split";
@@ -29,6 +30,8 @@ export function Checkout({
   onPaid,
   preferred,
   prepaid,
+  lines,
+  billNo,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,6 +40,8 @@ export function Checkout({
   onPaid?: (payments: Payment[]) => void;
   preferred?: PayMethod; // what the guest asked for from their phone
   prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
+  lines?: { name: string; qty: number; price: number }[]; // what's on the bill (for the receipt)
+  billNo?: number;
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
@@ -46,7 +51,6 @@ export function Checkout({
   const [paidGuests, setPaidGuests] = useState<number[]>([]);
   const [done, setDone] = useState(false);
   const [phone, setPhone] = useState("");
-  const [loyalty, setLoyalty] = useState(false);
   const [mixed, setMixed] = useState<Payment[]>([]);
 
   useEffect(() => {
@@ -67,16 +71,7 @@ export function Checkout({
     }
   }, [open, preferred, prepaid, subtotal]);
 
-  // Demo: guests "pay" one by one on their phones in split mode
-  useEffect(() => {
-    if (!open || method !== "split" || done) return;
-    if (paidGuests.length >= guests) return;
-    const id = window.setTimeout(() => setPaidGuests((p) => [...p, p.length]), 1800);
-    return () => window.clearTimeout(id);
-  }, [open, method, paidGuests, guests, done]);
-
-  const loyaltyOff = loyalty ? 120 : 0;
-  const t = billTotals(subtotal, Math.round((subtotal * discountPct) / 100) + loyaltyOff);
+  const t = billTotals(subtotal, Math.round((subtotal * discountPct) / 100));
   const perGuest = Math.ceil(t.total / guests);
   const settings = useSettings();
   const splitOn = useFeature("splitByGuest") === "ok";
@@ -86,7 +81,7 @@ export function Checkout({
   const methods: { v: Method; label: string; icon: typeof QrCode }[] = [
     { v: "upi", label: "UPI", icon: QrCode },
     { v: "cash", label: "Cash", icon: Banknote },
-    { v: "card", label: "Card", icon: CreditCard },
+    ...(settings.acceptCard === false ? [] : [{ v: "card" as Method, label: "Card", icon: CreditCard }]),
     { v: "mixed", label: "UPI + Cash", icon: Layers },
     ...(splitOn ? [{ v: "split" as Method, label: "Split by guest", icon: Users }] : []),
   ];
@@ -95,6 +90,17 @@ export function Checkout({
     if (method === "mixed" && mixed.length === 0) setMixed([{ method: "upi", amount: 0 }, { method: "cash", amount: 0 }]);
   }, [method, mixed.length]);
 
+  const [paidWith, setPaidWith] = useState<Payment[]>([]);
+  const outlet = useCurrentOutlet();
+  const receipt = () => ({
+    settings,
+    outletName: outlet.name,
+    label,
+    billNo,
+    lines: lines?.length ? lines : [{ name: "Food & drinks", qty: 1, price: subtotal }],
+    totals: t,
+    payments: paidWith,
+  });
   const finish = () => {
     setDone(true);
     const payments: Payment[] =
@@ -103,6 +109,7 @@ export function Checkout({
         : method === "split"
           ? [{ method: "upi", amount: t.total }]
           : [{ method, amount: t.total }];
+    setPaidWith(payments);
     onPaid?.(payments);
   };
 
@@ -119,7 +126,7 @@ export function Checkout({
           </Button>
         ) : method === "split" ? (
           <Button size="lg" className="w-full" disabled={paidGuests.length < guests} onClick={finish}>
-            {paidGuests.length < guests ? `Waiting for ${guests - paidGuests.length} guest${guests - paidGuests.length > 1 ? "s" : ""}…` : `Close bill · ${inr(t.total)}`}
+            {paidGuests.length < guests ? `${guests - paidGuests.length} share${guests - paidGuests.length > 1 ? "s" : ""} left to collect` : `Close bill · ${inr(t.total)}`}
           </Button>
         ) : (
           <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? 0) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
@@ -136,19 +143,23 @@ export function Checkout({
           <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</div>
           <p className="text-[15px] text-muted">{label} is paid and closed. Other parties at a shared table keep their own bills.</p>
           <div className="mt-8 w-full max-w-sm space-y-3 text-left">
-            <Field label="Send e-bill on WhatsApp" hint="No paper needed. The guest also gets a 1-tap feedback link.">
+            <Field label="Send e-bill on WhatsApp" hint="No paper needed. Opens WhatsApp with the bill typed in.">
               <div className="flex gap-2">
                 <input className={inputCls} inputMode="tel" placeholder="98220 41187" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 <Button
                   variant="tinted"
                   className="!h-12 shrink-0"
-                  onClick={() => toast(phone ? `E-bill sent to ${phone}` : "Add a number first")}
+                  onClick={() => {
+                    const d = phone.replace(/\D/g, "").slice(-10);
+                    if (d.length !== 10) return toast("Add a 10-digit number first");
+                    window.open(`https://wa.me/91${d}?text=${encodeURIComponent(receiptText(receipt()))}`, "_blank");
+                  }}
                 >
                   <MessageCircle size={17} /> Send
                 </Button>
               </div>
             </Field>
-            <Button variant="plain" className="w-full" onClick={() => toast("Sent to printer")}>
+            <Button variant="plain" className="w-full" onClick={() => { if (!printReceipt(receipt())) toast("Allow pop-ups for this site to print"); }}>
               Print receipt
             </Button>
           </div>
@@ -179,12 +190,6 @@ export function Checkout({
                   {p === 0 ? "No discount" : `${p}% off`}
                 </button>
               ))}
-              <button
-                onClick={() => setLoyalty((v) => !v)}
-                className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", loyalty ? "bg-saffron text-white" : "bg-sunken text-muted")}
-              >
-                <Gift size={13} /> Use 1,200 points (₹120)
-              </button>
             </div>
           </div>
 
@@ -261,8 +266,8 @@ export function Checkout({
             <div className="rounded-group bg-surface p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[15px] font-semibold">Each guest pays on their phone</div>
-                  <div className="text-[13px] text-muted">They scan the table QR and pay their share by UPI.</div>
+                  <div className="text-[15px] font-semibold">Split equally</div>
+                  <div className="text-[13px] text-muted">Tap each guest when their share is paid.</div>
                 </div>
                 <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
                   <button aria-label="Fewer guests" onClick={() => { setGuests((g) => Math.max(2, g - 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Minus size={15} /></button>
@@ -274,14 +279,14 @@ export function Checkout({
                 {Array.from({ length: guests }).map((_, i) => {
                   const paid = paidGuests.includes(i);
                   return (
-                    <div key={i} className="flex items-center gap-3 rounded-ctl bg-sunken/60 px-3 py-2.5">
+                    <button key={i} type="button" onClick={() => setPaidGuests((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]))} className="flex w-full items-center gap-3 rounded-ctl bg-sunken/60 px-3 py-2.5 text-left">
                       <span className={clsx("flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-semibold", paid ? "bg-jade text-white" : "bg-surface text-muted")}>
                         {paid ? <CheckCircle2 size={16} /> : i + 1}
                       </span>
                       <span className="flex-1 text-[14px] font-medium">Guest {i + 1}</span>
                       <span className="text-[14px] font-semibold tnum">{inr(i === guests - 1 ? t.total - perGuest * (guests - 1) : perGuest)}</span>
-                      <Pill tone={paid ? "jade" : "neutral"}>{paid ? "Paid" : "Waiting"}</Pill>
-                    </div>
+                      <Pill tone={paid ? "jade" : "neutral"}>{paid ? "Paid" : "Tap when paid"}</Pill>
+                    </button>
                   );
                 })}
               </div>

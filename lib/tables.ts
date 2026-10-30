@@ -2,8 +2,8 @@
 
 // Table + party helpers and the shared tables store (Tables screen, POS and
 // the guest QR page all read the same live state).
-import { repo } from "./repo";
-import { cloudConfigured, createStore } from "./store";
+import { createStore } from "./store";
+import { useCurrentOutlet } from "./live";
 import type { Party, Table, TableStatus } from "./types";
 
 const rank: Record<Party["status"], number> = { seated: 1, ordered: 2, billing: 3 };
@@ -33,16 +33,19 @@ export const nextPartyId = (t: Table) => {
 export const newCode = () => String(Math.floor(1000 + Math.random() * 9000));
 
 /* ---------------- store ---------------- */
-// Demo: sample tables in this browser. Cloud: restaurants/{rid}/tables (guests may update parties).
-const tableStore = createStore<Table[]>(
-  cloudConfigured ? [] : repo.tables().map((t) => ({ ...t, parties: t.parties.map((p) => ({ ...p })) })),
-  "tables",
-  { kind: "collection", coll: "tables", guest: "read" },
-);
+// restaurants' tables live in Supabase (guests may only change the parties list).
+const tableStore = createStore<Table[]>([], "tables", { kind: "collection", coll: "tables", guest: "read" });
 const all = () => tableStore.get();
 
-export function useTables() {
+/** All tables of the restaurant (every outlet). */
+export function useAllTables() {
   return tableStore.use();
+}
+/** Tables of the outlet on screen, in name order. Tables saved before outlets existed show everywhere. */
+export function useTables() {
+  const all = tableStore.use();
+  const outlet = useCurrentOutlet();
+  return all.filter((t) => !t.outletId || !outlet.id || t.outletId === outlet.id).sort(byTableName);
 }
 
 export const getTable = (nameOrId: string) =>
@@ -52,7 +55,40 @@ function patch(tableId: string, fn: (t: Table) => Table) {
   tableStore.set(all().map((t) => (t.id === tableId ? fn(t) : t)));
 }
 
+const sortKey = (name: string) => name.replace(/\d+/g, (d) => d.padStart(5, "0")).toLowerCase();
+export const byTableName = (a: Table, b: Table) => sortKey(a.name).localeCompare(sortKey(b.name));
+
 export const tableActions = {
+  /** Owner/manager adds a table. Names must be unique within the outlet. */
+  add(t: { name: string; zone: string; seats: number; outletId?: string }): Table {
+    const table: Table = {
+      id: `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+      name: t.name.trim(),
+      zone: t.zone.trim() || "Indoor",
+      seats: Math.max(1, Math.round(t.seats)),
+      outletId: t.outletId,
+      parties: [],
+      visitId: `v-${Date.now().toString(36)}`,
+    };
+    tableStore.set([...all(), table]);
+    return table;
+  },
+  /** Add many at once: "T11" to "T20". */
+  addMany(prefix: string, from: number, to: number, zone: string, seats: number, outletId?: string) {
+    const stamp = Date.now().toString(36);
+    const made: Table[] = [];
+    for (let n = from; n <= to; n++)
+      made.push({ id: `t${stamp}${n}`, name: `${prefix}${n}`, zone: zone.trim() || "Indoor", seats: Math.max(1, seats), outletId, parties: [], visitId: `v-${stamp}-${n}` });
+    tableStore.set([...all(), ...made]);
+    return made.length;
+  },
+  edit(tableId: string, changes: { name?: string; zone?: string; seats?: number }) {
+    patch(tableId, (x) => ({ ...x, ...changes, name: (changes.name ?? x.name).trim(), zone: (changes.zone ?? x.zone).trim() || "Indoor" }));
+  },
+  /** Only an empty table can be removed. */
+  remove(tableId: string) {
+    tableStore.set(all().filter((t) => t.id !== tableId));
+  },
   /** Seat a new party. On a busy table this is "share table". */
   seat(tableId: string, guests: number, opts: Partial<Party> = {}): Party {
     const t = all().find((x) => x.id === tableId)!;
@@ -63,7 +99,6 @@ export const tableActions = {
       status: "seated",
       code: newCode(),
       source: "captain",
-      server: "Rohit",
       ...opts,
     };
     patch(tableId, (x) => ({ ...x, reservedAt: undefined, parties: [...x.parties, p] }));
