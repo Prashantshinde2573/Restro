@@ -64,6 +64,12 @@ export default function LoginPage() {
   }, [pin, who, rid]);
 
   const staff = faces;
+  const [linkExpired, setLinkExpired] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (q.get("link") === "expired" || h.get("error_code") === "otp_expired") setLinkExpired(true);
+  }, []);
   const mustSet = cloud.status === "ready" && cloud.role !== "guest" && cloud.role !== "staff" && cloud.mustChangePassword;
 
   return (
@@ -79,12 +85,20 @@ export default function LoginPage() {
           <div className="mb-8 lg:hidden"><Wordmark className="text-[20px]" /></div>
           {mustSet ? (
             <>
-              <ChangePassword subtitle={`Welcome${cloud.displayName ? `, ${cloud.displayName.split(" ")[0]}` : ""}. You signed in with a temporary password — choose your own to continue.`} />
+              <ChangePassword
+                title="Set a new password"
+                subtitle={`${cloud.email ? `For ${cloud.email}. ` : ""}Choose your own password to continue.`}
+              />
               <button onClick={() => void cloudSignOut()} className="mt-4 block w-full text-center text-[14px] font-medium text-muted">Sign out</button>
             </>
           ) : (
           <>
           <h1 className="large-title">Sign in</h1>
+          {linkExpired && (
+            <p className="mt-3 rounded-group bg-saffron-soft p-3 text-[14px] text-ink">
+              That email link was already used or has expired. Each link works once — use &ldquo;Forgot password?&rdquo; to get a new one, and open only the newest email.
+            </p>
+          )}
           {place && <p className="mt-1 text-[15px] text-muted">{place}</p>}
           <Segmented
             className="mt-6 w-full"

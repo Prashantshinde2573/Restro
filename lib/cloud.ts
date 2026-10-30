@@ -60,9 +60,33 @@ export const getCloud = () => stateStore.get();
 /** Start listening to sign-in changes (called once from <Providers>). */
 let started = false;
 let lastUid: string | null = null;
+const RECOVERY = "restro.recovery";
+const recovering = () => {
+  try {
+    return sessionStorage.getItem(RECOVERY) === "1";
+  } catch {
+    return false;
+  }
+};
+const setRecovering = (on: boolean) => {
+  try {
+    if (on) sessionStorage.setItem(RECOVERY, "1");
+    else sessionStorage.removeItem(RECOVERY);
+  } catch {}
+};
+/** What an email link brought us: a password reset, or a link that was used/expired. */
+export let emailLink: "recovery" | "expired" | null = null;
 export function startCloud(onSignedIn: (s: CloudState) => void) {
   if (!cloudConfigured || started || typeof window === "undefined") return;
   started = true;
+  // Read the email link before Supabase takes the tokens out of the address bar.
+  const h = new URLSearchParams(window.location.hash.replace(/^#/, "") + "&" + window.location.search.replace(/^\?/, ""));
+  if (h.get("type") === "recovery") {
+    emailLink = "recovery";
+    setRecovering(true);
+  } else if (h.get("error_code") === "otp_expired" || h.get("error") === "access_denied") {
+    emailLink = "expired";
+  }
   const handle = async (session: Session | null) => {
     if (!session) {
       lastUid = null;
@@ -82,6 +106,11 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
       return;
     }
     stateStore.set(s);
+    // Signed in from a password-reset link: the new-password screen is on /login.
+    if (s.mustChangePassword && recovering() && window.location.pathname !== "/login") {
+      window.location.replace("/login");
+      return;
+    }
     if (s.status === "ready" && s.rid && (s.role === "owner" || s.role === "staff")) {
       connect(s.rid, s.role!, session.user.id);
       onSignedIn(s);
@@ -92,7 +121,10 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
     setTimeout(async () => {
       await handle(session);
       // opened a "reset password" email link: ask for a new password first
-      if (event === "PASSWORD_RECOVERY") stateStore.set({ ...stateStore.get(), mustChangePassword: true });
+      if (event === "PASSWORD_RECOVERY") {
+        setRecovering(true);
+        stateStore.set({ ...stateStore.get(), mustChangePassword: true });
+      }
     }, 0);
   });
 }
@@ -101,7 +133,7 @@ async function resolveUser(session: Session): Promise<CloudState> {
   const user = session.user;
   if (user.is_anonymous) return { ...stateStore.get(), status: "ready", role: "guest", uid: user.id };
   const name = (user.user_metadata?.name as string | undefined) ?? null;
-  const must = !!user.user_metadata?.must_change_password;
+  const must = !!user.user_metadata?.must_change_password || recovering();
   const base = { uid: user.id, email: user.email, displayName: name, mustChangePassword: must };
   const meta = (user.app_metadata ?? {}) as { rid?: string; member_id?: string };
   if (meta.rid) return { ...base, status: "ready", role: "staff", rid: meta.rid, memberId: meta.member_id ?? "", mustChangePassword: false };
@@ -117,6 +149,7 @@ async function resolveUser(session: Session): Promise<CloudState> {
 export async function changePassword(password: string) {
   const { data, error } = await sb().auth.updateUser({ password, data: { must_change_password: false } });
   if (error) throw new Error(/should be different/i.test(error.message) ? "Use a different password from the temporary one." : error.message);
+  setRecovering(false);
   stateStore.set({ ...stateStore.get(), mustChangePassword: false });
   return data;
 }
@@ -178,6 +211,7 @@ export async function signOutEverywhere() {
   await sb().auth.signOut({ scope: "global" });
 }
 export async function cloudSignOut() {
+  setRecovering(false);
   disconnect();
   await sb().auth.signOut();
 }

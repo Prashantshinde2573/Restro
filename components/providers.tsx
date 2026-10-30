@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { hydrateStores, sessionActions } from "@/lib/live";
-import { startCloud } from "@/lib/cloud";
+import { emailLink, startCloud } from "@/lib/cloud";
 import { LangProvider } from "@/lib/i18n";
 import { ToastProvider } from "./toast";
 
@@ -14,6 +14,8 @@ export function Providers({ children }: { children: ReactNode }) {
     startCloud((s) => {
       if (s.memberId) sessionActions.setMember(s.memberId);
     });
+    // An expired email link can land on any page: explain it on the login screen.
+    if (emailLink === "expired" && window.location.pathname !== "/login") window.location.replace("/login?link=expired");
   }, []);
   return (
     <LangProvider>
