@@ -9,9 +9,10 @@
 //     table filtered by restaurant (rid) — every device sees the
 //     same data live. lib/cloud.ts plugs in the reading and writing.
 import { useSyncExternalStore } from "react";
+import { SUPABASE_KEY, SUPABASE_URL } from "./config";
 
 export const PREFIX = "restro.v1.";
-export const cloudConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export const cloudConfigured = !!SUPABASE_URL && !!SUPABASE_KEY;
 
 /** Where a store lives in Supabase (a table filtered by rid, or the restaurants row). */
 export type RemoteSpec = { kind: "collection"; coll: string; guest?: "read" | "own" | "none" } | { kind: "doc"; guest?: "read" | "none" };

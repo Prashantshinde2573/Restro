@@ -92,7 +92,13 @@ export default function AdminPage() {
   const mrr = live.reduce((s, r) => s + planPrice(r.plan) * Math.max(1, r.outlets), 0);
   const open = all.find((r) => r.id === openId) ?? null;
 
-  if (cloud.status === "off") return <Spinner />;
+  if (cloud.status === "off")
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-6 text-center">
+        <h1 className="text-[22px] font-semibold">Setup needed</h1>
+        <p className="mt-2 text-[15px] text-muted">The app isn&apos;t connected to Supabase.</p>
+      </div>
+    );
   if (cloud.status !== "ready" || cloud.role !== "superadmin" || cloud.mustChangePassword) {
     if (cloud.status === "needsOnboarding")
       return (

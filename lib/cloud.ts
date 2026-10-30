@@ -17,8 +17,7 @@ import { cloudConfigured, createStore, remoteBindings, setRemoteWriter, type Rem
 
 export { cloudConfigured };
 
-const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_ } from "./config";
 
 let _sb: SupabaseClient | null = null;
 export function sb(): SupabaseClient {
