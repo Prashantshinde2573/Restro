@@ -2,7 +2,8 @@
 
 import clsx from "clsx";
 import { X } from "lucide-react";
-import { useEffect, useState as useLocalState, type ReactNode, type ButtonHTMLAttributes } from "react";
+import { useEffect, useRef, useState as useLocalState, type ReactNode, type ButtonHTMLAttributes } from "react";
+import { createPortal } from "react-dom";
 import type { Diet } from "@/lib/types";
 import { initials } from "@/lib/format";
 
@@ -43,12 +44,14 @@ export function Group({
   children,
   className,
   flush,
+  overflowVisible,
 }: {
   title?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
   flush?: boolean;
+  overflowVisible?: boolean;
 }) {
   return (
     <section className={clsx("min-w-0", className)}>
@@ -58,7 +61,7 @@ export function Group({
           {action}
         </div>
       )}
-      <div className={clsx("overflow-hidden rounded-group bg-surface", !flush && "p-4 lg:p-5")}>{children}</div>
+      <div className={clsx("rounded-group bg-surface", !overflowVisible && "overflow-hidden", !flush && "p-4 lg:p-5")}>{children}</div>
     </section>
   );
 }
@@ -275,7 +278,15 @@ export function DishArt({ hue, className }: { hue: number; name?: string; classN
   );
 }
 
-/* ---------- Sheet: bottom sheet on phones, side panel on desktop ---------- */
+/* ---------- Sheet: bottom sheet on phones, side panel on desktop ----------
+   Rendered in a portal on <body> so no page container (sticky headers,
+   blurred bars, animated panels) can trap it under another layer.
+   Open sheets form a stack: each new one sits above the last, Escape and
+   the back-tap close only the top one, and page scroll stays locked until
+   the last sheet closes. */
+const sheetStack: number[] = [];
+let sheetSeq = 0;
+
 export function Sheet({
   open,
   onClose,
@@ -291,20 +302,34 @@ export function Sheet({
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const [layer, setLayer] = useLocalState(0);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const id = ++sheetSeq;
+    sheetStack.push(id);
+    setLayer(sheetStack.length);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && sheetStack[sheetStack.length - 1] === id) {
+        e.stopImmediatePropagation();
+        closeRef.current();
+      }
+    };
     window.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      const i = sheetStack.indexOf(id);
+      if (i >= 0) sheetStack.splice(i, 1);
+      if (sheetStack.length === 0) document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, setLayer]);
 
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0" style={{ zIndex: 50 + layer * 2 }} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined}>
       <div className="absolute inset-0 animate-fade-in bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
       <div
         className={clsx(
@@ -313,17 +338,18 @@ export function Sheet({
           wide ? "lg:w-[640px]" : "lg:w-[460px]",
         )}
       >
-        <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-line lg:hidden" />
-        <div className="flex items-center justify-between px-5 pb-2 pt-3 lg:pt-5">
+        <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-line lg:hidden" />
+        <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-3 lg:pt-5">
           <h2 className="text-[20px] font-semibold tracking-tight">{title}</h2>
           <IconButton label="Close" onClick={onClose} className="bg-sunken !h-8 !w-8">
             <X size={16} />
           </IconButton>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-5">{children}</div>
-        {footer && <div className="pb-safe border-t border-line bg-canvas px-5 pt-3 pb-4">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">{children}</div>
+        {footer && <div className="pb-safe shrink-0 border-t border-line bg-canvas px-5 pt-3 pb-4">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -103,3 +103,62 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Two-thumb price slider: two range inputs stacked on one track. */
+.range-dual {
+  position: relative;
+  height: 28px;
+}
+.range-dual input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-dual input[type="range"]::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  border: 2px solid rgb(var(--jade));
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+  cursor: grab;
+}
+.range-dual input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  border: 2px solid rgb(var(--jade));
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+  cursor: grab;
+}
+.range-dual input[type="range"]::-moz-range-track {
+  background: none;
+}
+.range-single {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(var(--sunken));
+  accent-color: rgb(var(--jade));
+}
+.range-single::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  border: 2px solid rgb(var(--jade));
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+}

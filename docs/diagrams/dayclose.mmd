@@ -1,0 +1,9 @@
+flowchart TB
+  A["🕚 Last order"] --> B["Count cash in drawer"]
+  B --> C{"Expected vs counted"}
+  C -- match --> D["✓ Closed"]
+  C -- short / over --> E["⚠️ Variance saved<br/>with who closed"]
+  D --> F["📩 Summary to owner on WhatsApp"]
+  E --> F
+  F --> G["🌙 Overnight: Pulse briefing,<br/>forecast, Leak guard alerts"]
+  G --> H["☀️ Owner opens /app<br/>reads Pulse + 3 actions"]

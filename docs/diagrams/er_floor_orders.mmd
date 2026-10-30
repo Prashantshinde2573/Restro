@@ -1,0 +1,124 @@
+erDiagram
+  MEMBER }o--o{ OUTLET : "outletIds[] access"
+  OUTLET ||--o{ TABLE : has
+  TABLE ||--o{ PARTY : "holds (shared)"
+  TABLE ||--o{ GUEST_SESSION : "phones this visit"
+  PARTY ||--o{ GUEST_SESSION : links
+  OUTLET ||--o{ ORDER : takes
+  PARTY ||--o{ ORDER : "runs bill"
+  CUSTOMER ||--o{ ORDER : places
+  MEMBER ||--o{ ORDER : "createdBy"
+  ORDER ||--|{ ORDER_LINE : contains
+  MENU_ITEM ||--o{ ORDER_LINE : "sold as"
+  ORDER ||--o{ KOT : "split by station"
+  ORDER ||--o{ PAYMENT : "settled by"
+  ORDER ||--o{ PAYMENT_LOG : "changes"
+  OUTLET ||--o{ CUSTOMER : "guest book"
+  OUTLET {
+    string oid PK
+    string rid FK
+    string name
+    string address
+    string businessType "restaurant|cafe"
+    string upi "payment QRs"
+    bool payFirst
+    string gstin
+  }
+  TABLE {
+    string tid PK
+    string name
+    string zone
+    int seats
+    string qrToken "fixed, printed"
+    string visitId
+  }
+  PARTY {
+    string id PK "A, B, C"
+    string tid FK
+    int guests
+    string status "seated|ordered|billing"
+    string code "4-digit, 10 min"
+    string source "captain|qr"
+    bool pendingApproval
+  }
+  GUEST_SESSION {
+    string sid PK
+    string tableId FK
+    string visitId
+    string partyId FK
+    string deviceId
+  }
+  ORDER {
+    string orderId PK
+    int number
+    string type "dine-in|takeaway|delivery"
+    string channel "pos|qr|whatsapp|swiggy|zomato|voice"
+    string tableId FK
+    string partyId FK
+    string guestPhone FK
+    string status
+    map totals
+    string payPreference
+    array prepaid "paid from guest phone"
+    string createdBy FK
+    date createdAt
+  }
+  ORDER_LINE {
+    string itemId FK
+    string name
+    int qty
+    int price
+    string note
+    string station
+    bool done
+  }
+  KOT {
+    string kotId PK
+    string orderId FK
+    string station
+    array lines
+    string status
+  }
+  PAYMENT {
+    string method "upi|cash|card"
+    int amount
+  }
+  PAYMENT_LOG {
+    date at
+    string by
+    string text
+  }
+  MENU_ITEM {
+    string mid PK
+    string categoryId FK
+    string name
+    int price
+    string diet "veg|nonveg|egg"
+    string station
+    bool available
+    int spice
+    bool sweet
+    array options
+    array photos
+  }
+  MEMBER {
+    string uid PK
+    string rid FK
+    string name
+    string phone
+    string role "owner|manager|captain|cashier|chef"
+    array outletIds
+    string pinHash
+    bool active
+  }
+  CUSTOMER {
+    string phone PK
+    string name
+    bool verified
+    string source
+    bool optIn
+    int visits
+    int spend
+    int points
+    string tier
+  }

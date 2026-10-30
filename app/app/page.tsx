@@ -1,21 +1,64 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, ChefHat, ShoppingBasket, Sparkles, Star, UserX, LayoutGrid, Globe2 } from "lucide-react";
+import { ArrowUpRight, ChefHat, ShoppingBasket, Sparkles, Star, UserX, LayoutGrid, Globe2, SquarePlus, ReceiptText } from "lucide-react";
+import { isOwner } from "@/lib/access";
+import { useCan, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { Bars, Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { UserChip } from "@/components/shell";
 import { repo } from "@/lib/repo";
+import { isShared, useTables } from "@/lib/tables";
 import { inr, orderTotal } from "@/lib/format";
 
+/** Staff without reports see a simple start screen with only their own tools. */
+function StaffHome() {
+  const me = useMe();
+  const outlet = useCurrentOutlet();
+  const links = [
+    { href: "/app/pos", label: "New order", perm: "pos" as const, icon: SquarePlus },
+    { href: "/app/orders", label: "Orders", perm: "orders" as const, icon: ReceiptText },
+    { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true },
+    { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat },
+    { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
+  ].filter((l) => me?.perms.includes(l.perm) && !(l.restaurantOnly && outlet.businessType === "cafe"));
+  return (
+    <>
+      <PageHeader title={`Hi, ${me?.name.split(" ")[0] ?? ""}`} subtitle={outlet.name} actions={<UserChip />} />
+      <Page>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {links.map((l) => (
+            <Link key={l.href} href={l.href} className="flex flex-col gap-3 rounded-group bg-surface p-5 hover:shadow-float">
+              <l.icon size={24} className="text-jade" />
+              <span className="text-[16px] font-semibold">{l.label}</span>
+            </Link>
+          ))}
+        </div>
+      </Page>
+    </>
+  );
+}
+
 export default function PulsePage() {
-  const r = repo.restaurant();
-  const tables = repo.tables();
+  const me = useMe();
+  const canReports = useCan("reports");
+  if (!isOwner(me) && !canReports) return <StaffHome />;
+  return <OwnerHome />;
+}
+
+function OwnerHome() {
+  const me = useMe();
+  const outlet = useCurrentOutlet();
+  const cafe = outlet.businessType === "cafe";
+  const pulseOn = useFeature("pulse") === "ok";
+  const aggregatorsOn = useFeature("aggregators") === "ok";
+  const tables = useTables();
   const orders = repo.orders();
   const hourly = repo.hourly();
   const week = repo.weekSales();
   const menu = repo.menu();
 
-  const busy = tables.filter((t) => t.status !== "free" && t.status !== "reserved").length;
+  const busy = tables.filter((t) => t.parties.length > 0).length;
+  const shared = tables.filter(isShared).length;
   const kitchenQueue = orders.filter((o) => o.status === "new" || o.status === "preparing");
   const online = orders.filter((o) => ["whatsapp", "swiggy", "zomato", "qr"].includes(o.channel) && o.status !== "paid");
   const today = week[week.length - 1].v;
@@ -34,13 +77,13 @@ export default function PulsePage() {
   return (
     <>
       <PageHeader
-        title={`${greeting}, ${r.owner}`}
-        subtitle={`${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} · ${r.outlet}`}
+        title={`${greeting}, ${me?.name.split(" ")[0] ?? ""}`}
+        subtitle={`${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} · ${outlet.name}`}
         actions={<UserChip />}
       />
       <Page className="space-y-6">
-        {/* Restro Pulse — the briefing */}
-        <section className="relative overflow-hidden rounded-[24px] bg-ink p-5 text-canvas lg:p-8">
+        {/* Restro Pulse — the briefing (Growth and up) */}
+        {pulseOn && <section className="relative overflow-hidden rounded-[24px] bg-ink p-5 text-canvas lg:p-8">
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-saffron/25 blur-3xl" />
           <div className="relative flex items-center gap-2 text-[13px] font-semibold text-saffron">
             <span className="relative flex h-2 w-2">
@@ -70,7 +113,7 @@ export default function PulsePage() {
               </Link>
             ))}
           </div>
-        </section>
+        </section>}
 
         {/* Today's numbers */}
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
@@ -99,19 +142,17 @@ export default function PulsePage() {
             }
           >
             <Bars data={hourly.map((h) => ({ label: h.h, value: h.today, ghost: h.usual }))} height={170} />
-            <p className="mt-4 text-[13.5px] text-muted">
-              Expect around <b className="text-ink">180 guests</b> between 7 and 10 pm. Keep 2 captains on the rooftop from 8.
-            </p>
+
           </Group>
 
           <Group title="Right now" flush>
-            <Row
+            {!cafe && <Row
               href="/app/tables"
               leading={<div className="relative"><Ring value={busy / tables.length} size={44} stroke={5} /><LayoutGrid size={16} className="absolute inset-0 m-auto text-jade" /></div>}
               title={`${busy} of ${tables.length} tables busy`}
-              subtitle="T4 has asked for the bill"
+              subtitle={`T4 has asked for the bill${shared ? ` · ${shared} shared table` : ""}`}
               trailing={<Pill tone="saffron">1 bill</Pill>}
-            />
+            />}
             <Row
               href="/app/kitchen"
               leading={<div className="flex h-11 w-11 items-center justify-center rounded-full bg-jade-soft"><ChefHat size={19} className="text-jade" /></div>}
@@ -165,10 +206,12 @@ export default function PulsePage() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex items-start gap-2 rounded-ctl bg-saffron-soft/70 p-3 text-[13px] text-ink">
-              <Sparkles size={15} className="mt-0.5 shrink-0 text-saffron" />
-              Aggregator orders pay ~22% commission. 31 of today&apos;s Swiggy guests are on your list — a WhatsApp offer could bring them direct.
-            </div>
+            {aggregatorsOn && (
+              <div className="mt-4 flex items-start gap-2 rounded-ctl bg-saffron-soft/70 p-3 text-[13px] text-ink">
+                <Sparkles size={15} className="mt-0.5 shrink-0 text-saffron" />
+                Swiggy/Zomato take ~22%. 31 of today&apos;s Swiggy guests are on your list — a WhatsApp offer could bring them direct.
+              </div>
+            )}
           </Group>
         </div>
 

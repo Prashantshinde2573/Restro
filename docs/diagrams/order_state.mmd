@@ -1,0 +1,19 @@
+stateDiagram-v2
+  [*] --> new: Guest QR / online order
+  [*] --> accepted: POS order by staff
+  new --> accepted: Staff tap Accept
+  new --> cancelled: Rejected / prank
+  accepted --> preparing: KOT at station
+  preparing --> ready: Chef marks ready
+  ready --> served: Captain serves
+  served --> paid: Cashier charges
+  accepted --> cancelled: Void (manager PIN)
+  preparing --> cancelled: Void (manager PIN)
+  paid --> [*]
+  cancelled --> [*]
+  note right of paid
+    Stock deducted by recipe
+    Loyalty points added
+    Table / party freed
+    E-bill on WhatsApp
+  end note

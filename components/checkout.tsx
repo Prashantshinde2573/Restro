@@ -1,15 +1,18 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Gift, Percent } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Gift, Percent, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
-import { FakeQr } from "./qr";
+import { ScanQr } from "./qr";
+import { upiUri } from "./upi";
+import { useFeature, useSettings } from "@/lib/live";
 import { useToast } from "./toast";
 import { inr, GST_RATE } from "@/lib/format";
-import { repo } from "@/lib/repo";
+import { PaymentSplit, paidSum } from "./payment-split";
+import type { Payment, PayMethod } from "@/lib/types";
 
-type Method = "upi" | "cash" | "card" | "split";
+type Method = "upi" | "cash" | "card" | "mixed" | "split";
 
 export function billTotals(subtotal: number, discount = 0) {
   const taxable = Math.max(0, subtotal - discount);
@@ -24,12 +27,16 @@ export function Checkout({
   subtotal,
   label,
   onPaid,
+  preferred,
+  prepaid,
 }: {
   open: boolean;
   onClose: () => void;
   subtotal: number;
   label: string;
-  onPaid?: () => void;
+  onPaid?: (payments: Payment[]) => void;
+  preferred?: PayMethod; // what the guest asked for from their phone
+  prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
@@ -40,6 +47,7 @@ export function Checkout({
   const [done, setDone] = useState(false);
   const [phone, setPhone] = useState("");
   const [loyalty, setLoyalty] = useState(false);
+  const [mixed, setMixed] = useState<Payment[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -47,9 +55,17 @@ export function Checkout({
       setPaidGuests([]);
       setCash(null);
       setDiscountPct(0);
-      setMethod("upi");
+      const pre = paidSum(prepaid ?? []);
+      if (pre > 0) {
+        // Guest paid part by UPI from their phone: open on "UPI + Cash" with that part filled in.
+        setMethod("mixed");
+        setMixed([...(prepaid ?? []), { method: "cash", amount: Math.max(0, billTotals(subtotal).total - pre) }]);
+      } else {
+        setMethod(preferred ?? "upi");
+        setMixed([]);
+      }
     }
-  }, [open]);
+  }, [open, preferred, prepaid, subtotal]);
 
   // Demo: guests "pay" one by one on their phones in split mode
   useEffect(() => {
@@ -62,18 +78,32 @@ export function Checkout({
   const loyaltyOff = loyalty ? 120 : 0;
   const t = billTotals(subtotal, Math.round((subtotal * discountPct) / 100) + loyaltyOff);
   const perGuest = Math.ceil(t.total / guests);
-  const upi = repo.restaurant().upi;
+  const settings = useSettings();
+  const splitOn = useFeature("splitByGuest") === "ok";
+  const upi = settings.upi;
+  const prepaidSum = paidSum(prepaid ?? []);
 
   const methods: { v: Method; label: string; icon: typeof QrCode }[] = [
     { v: "upi", label: "UPI", icon: QrCode },
     { v: "cash", label: "Cash", icon: Banknote },
     { v: "card", label: "Card", icon: CreditCard },
-    { v: "split", label: "Split by guest", icon: Users },
+    { v: "mixed", label: "UPI + Cash", icon: Layers },
+    ...(splitOn ? [{ v: "split" as Method, label: "Split by guest", icon: Users }] : []),
   ];
+
+  useEffect(() => {
+    if (method === "mixed" && mixed.length === 0) setMixed([{ method: "upi", amount: 0 }, { method: "cash", amount: 0 }]);
+  }, [method, mixed.length]);
 
   const finish = () => {
     setDone(true);
-    onPaid?.();
+    const payments: Payment[] =
+      method === "mixed"
+        ? mixed.filter((m) => m.amount > 0)
+        : method === "split"
+          ? [{ method: "upi", amount: t.total }]
+          : [{ method, amount: t.total }];
+    onPaid?.(payments);
   };
 
   return (
@@ -92,8 +122,8 @@ export function Checkout({
             {paidGuests.length < guests ? `Waiting for ${guests - paidGuests.length} guest${guests - paidGuests.length > 1 ? "s" : ""}…` : `Close bill · ${inr(t.total)}`}
           </Button>
         ) : (
-          <Button size="lg" className="w-full" disabled={method === "cash" && (cash ?? 0) < t.total} onClick={finish}>
-            {method === "upi" ? "Payment received" : method === "cash" ? "Cash received" : "Card approved"} · {inr(t.total)}
+          <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? 0) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
+            {method === "upi" ? "Payment received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
           </Button>
         )
       }
@@ -104,7 +134,7 @@ export function Checkout({
             <CheckCircle2 size={44} className="text-jade" />
           </div>
           <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</div>
-          <p className="text-[15px] text-muted">{label} is closed. Table is free for the next guests.</p>
+          <p className="text-[15px] text-muted">{label} is paid and closed. Other parties at a shared table keep their own bills.</p>
           <div className="mt-8 w-full max-w-sm space-y-3 text-left">
             <Field label="Send e-bill on WhatsApp" hint="No paper needed. The guest also gets a 1-tap feedback link.">
               <div className="flex gap-2">
@@ -159,7 +189,17 @@ export function Checkout({
           </div>
 
           {/* method */}
-          <div className="grid grid-cols-4 gap-2">
+          {prepaidSum > 0 && (
+            <div className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
+              Guest already paid <b>UPI {inr(prepaidSum)}</b> from their phone. Collect <b>{inr(Math.max(0, t.total - prepaidSum))}</b> in cash.
+            </div>
+          )}
+          {preferred && !prepaidSum && (
+            <div className="flex items-center gap-2 rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
+              Guest chose <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> from their phone. You can still change it.
+            </div>
+          )}
+          <div className={clsx("grid gap-2", methods.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
             {methods.map((m) => (
               <button
                 key={m.v}
@@ -177,8 +217,8 @@ export function Checkout({
 
           {method === "upi" && (
             <div className="flex flex-col items-center rounded-group bg-surface p-5 text-center">
-              <FakeQr seed={`${label}${t.total}`} size={190} />
-              <div className="mt-3 text-[15px] font-semibold">Scan with any UPI app</div>
+              <ScanQr value={upiUri({ upi, payee: settings.name, amount: t.total, note: label })} size={190} label={`UPI QR for ${inr(t.total)}`} />
+              <div className="mt-3 text-[15px] font-semibold">Scan with any UPI app — {inr(t.total)} fills in by itself</div>
               <div className="text-[13px] text-muted">{upi} · exact amount {inr(t.total)}</div>
               <Pill tone="jade" className="mt-3">Also showing on the guest screen</Pill>
             </div>
@@ -215,6 +255,8 @@ export function Checkout({
             </div>
           )}
 
+          {method === "mixed" && mixed.length > 0 && <PaymentSplit total={t.total} rows={mixed} onChange={setMixed} />}
+
           {method === "split" && (
             <div className="rounded-group bg-surface p-4">
               <div className="flex items-center justify-between">
@@ -243,7 +285,7 @@ export function Checkout({
                   );
                 })}
               </div>
-              <p className="mt-3 text-[12.5px] text-faint">Guests can also split by dish — each one ticks what they ate.</p>
+              
             </div>
           )}
         </div>

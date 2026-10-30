@@ -2,7 +2,10 @@
 
 import clsx from "clsx";
 import { Fingerprint, Plus, Star } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
+import { useCurrentOutlet, useFeature, useMembers } from "@/lib/live";
+import type { StaffMember } from "@/lib/types";
 import { Avatar, Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, inputCls, LocalSegmented } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { repo } from "@/lib/repo";
@@ -28,8 +31,16 @@ const salary: Record<string, number> = { s2: 32000, s3: 18000, s4: 18000, s5: 16
 export default function TeamPage() {
   const toast = useToast();
   const [tab, setTab] = useState<"today" | "rota" | "pay">("today");
-  const [add, setAdd] = useState(false);
-  const staff = repo.staff();
+  const outlet = useCurrentOutlet();
+  const members = useMembers();
+  const payrollOn = useFeature("payroll") === "ok";
+  // Team of the outlet on screen; attendance/shift numbers from sample data where we have them.
+  const staff: StaffMember[] = members
+    .filter((m) => m.active && m.role !== "owner" && m.outletIds.includes(outlet.id))
+    .map((m) => {
+      const s = repo.staff().find((x) => x.id === m.id);
+      return { ...(s ?? { id: m.id, onShift: false, hoursThisWeek: 0, salesToday: 0, rating: 0, hue: m.hue }), name: m.name, role: m.title as StaffMember["role"] };
+    });
   const team = staff.filter((s) => s.role !== "Owner");
   const tipsPool = 4860;
   const tipHours = team.reduce((s, m) => s + m.hoursThisWeek, 0);
@@ -39,9 +50,9 @@ export default function TeamPage() {
       <PageHeader
         title="Team"
         subtitle={`${staff.filter((s) => s.onShift).length} on shift now · ${team.length} people`}
-        actions={<Button size="sm" variant="tinted" onClick={() => setAdd(true)}><Plus size={16} /> Add person</Button>}
+        actions={<Link href="/app/access"><Button size="sm" variant="tinted"><Plus size={16} /> Add person</Button></Link>}
       >
-        <Segmented value={tab} onChange={setTab} options={[{ value: "today", label: "Today" }, { value: "rota", label: "Rota" }, { value: "pay", label: "Pay" }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ value: "today", label: "Today" }, ...(payrollOn ? [{ value: "rota" as const, label: "Rota" }, { value: "pay" as const, label: "Pay" }] : [])]} />
       </PageHeader>
       <Page>
         {tab === "today" && (
@@ -82,7 +93,7 @@ export default function TeamPage() {
               <Group>
                 <div className="flex items-start gap-3">
                   <Fingerprint size={20} className="mt-0.5 shrink-0 text-jade" />
-                  <p className="text-[14px] text-muted">Staff clock in with their 4-digit PIN on any till, or with a selfie on their phone. No buddy-punching: each clock-in saves a photo.</p>
+                  <p className="text-[14px] text-muted">Staff clock in with their PIN or a selfie.</p>
                 </div>
               </Group>
             </div>
@@ -160,7 +171,7 @@ export default function TeamPage() {
                       <div className="text-[12.5px] text-muted tnum">{s.hoursThisWeek * 4} h this month · tip share {inr(tip)}</div>
                     </div>
                     {s.id === "s5" && <Pill tone="saffron">−₹5,000 advance</Pill>}
-                    <span className="w-24 text-right text-[15px] font-semibold tnum">{inr(salary[s.id] + tip * 4 - (s.id === "s5" ? 5000 : 0))}</span>
+                    <span className="w-24 text-right text-[15px] font-semibold tnum">{inr((salary[s.id] ?? 15000) + tip * 4 - (s.id === "s5" ? 5000 : 0))}</span>
                   </div>
                 );
               })}
@@ -169,16 +180,6 @@ export default function TeamPage() {
         )}
       </Page>
 
-      <Sheet open={add} onClose={() => setAdd(false)} title="Add person" footer={<Button size="lg" className="w-full" onClick={() => { setAdd(false); toast("Invite sent on WhatsApp"); }}>Send invite</Button>}>
-        <div className="space-y-4">
-          <Field label="Name"><input className={inputCls} placeholder="Full name" /></Field>
-          <Field label="Phone" hint="They get a WhatsApp link to set their PIN."><input className={inputCls} inputMode="tel" placeholder="98xxx xxxxx" /></Field>
-          <Field label="Role">
-            <LocalSegmented className="w-full" initial="Captain" options={["Manager", "Captain", "Cashier", "Chef"].map((r) => ({ value: r, label: r }))} />
-          </Field>
-          <Field label="Monthly salary (₹)"><input className={inputCls} inputMode="numeric" placeholder="18000" /></Field>
-        </div>
-      </Sheet>
     </>
   );
 }

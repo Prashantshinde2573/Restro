@@ -1,0 +1,13 @@
+flowchart LR
+  A["📷 Counter or table QR"] --> B["🔎 Search · filters · side bar"]
+  B --> C["🛒 Cart<br/>Eat here / Take away"]
+  C --> D["🔐 OTP once"]
+  D --> E{"Pay"}
+  E -- UPI --> F["QR for exact amount<br/>→ I've paid"]
+  E -- Cash / Card --> G["Pay at counter<br/>staff accepts"]
+  E -- "Cash + UPI" --> H["UPI part by QR<br/>rest cash at counter"]
+  F --> T["🎫 Token #1047<br/>🙏 Thank-you screen"]
+  G --> T
+  H --> T
+  T --> K["👨‍🍳 Kitchen → Ready<br/>'collect at counter'"]
+  K --> P["✅ Closes itself when served<br/>if fully paid by UPI"]

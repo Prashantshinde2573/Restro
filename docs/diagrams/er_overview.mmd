@@ -1,0 +1,34 @@
+erDiagram
+  PLAN ||--o{ RESTAURANT : "subscribed by"
+  RESTAURANT ||--|{ OUTLET : has
+  RESTAURANT ||--|{ MEMBER : employs
+  MEMBER }o--o{ OUTLET : "outletIds[] access"
+  OUTLET ||--o{ CATEGORY : has
+  CATEGORY ||--o{ MENU_ITEM : groups
+  MENU_ITEM ||--o{ RECIPE_LINE : "made of"
+  INGREDIENT ||--o{ RECIPE_LINE : "used in"
+  OUTLET ||--o{ TABLE : has
+  TABLE ||--o{ PARTY : "holds (shared)"
+  TABLE ||--o{ GUEST_SESSION : "phones this visit"
+  PARTY ||--o{ GUEST_SESSION : links
+  OUTLET ||--o{ ORDER : takes
+  PARTY ||--o{ ORDER : "runs bill"
+  CUSTOMER ||--o{ ORDER : places
+  MEMBER ||--o{ ORDER : "createdBy"
+  ORDER ||--|{ ORDER_LINE : contains
+  MENU_ITEM ||--o{ ORDER_LINE : "sold as"
+  ORDER ||--o{ KOT : "split by station"
+  ORDER ||--o{ PAYMENT : "settled by"
+  ORDER ||--o{ PAYMENT_LOG : "changes"
+  OUTLET ||--o{ INGREDIENT : stocks
+  INGREDIENT ||--o{ STOCK_MOVE : moves
+  SUPPLIER ||--o{ INGREDIENT : supplies
+  SUPPLIER ||--o{ PURCHASE_ORDER : receives
+  OUTLET ||--o{ CUSTOMER : "guest book"
+  CUSTOMER ||--o{ FEEDBACK : gives
+  OUTLET ||--o{ CAMPAIGN : runs
+  MEMBER ||--o{ SHIFT : works
+  MEMBER ||--o{ ATTENDANCE : "clocks in"
+  OUTLET ||--o{ DAY_CLOSE : "closes daily"
+  OUTLET ||--o{ INSIGHT : "nightly Pulse"
+  OUTLET ||--o{ EXPENSE : logs

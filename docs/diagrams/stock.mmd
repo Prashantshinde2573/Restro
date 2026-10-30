@@ -1,0 +1,13 @@
+flowchart TD
+  A["🍛 Dish sold"] -->|recipe| B["Ingredients deducted<br/>stockMoves: sale"]
+  N["🌙 Nightly job 2 am"] --> F["Forecast tomorrow's guests<br/>8 weeks sales · weekday · festivals · weather"]
+  F --> P["📋 Prep list for chef"]
+  F --> PO["🧾 Suggested purchase orders"]
+  PO -->|WhatsApp| SUP["🚚 Supplier"]
+  SUP --> RCV["Receive: actual qty, expiry, bill photo"]
+  RCV --> STK[("📦 Stock + supplier balance")]
+  B --> STK
+  W["🗑️ Waste logged + reason"] --> STK
+  STK --> CHK{"Actual usage vs recipe<br/>> 10% gap?"}
+  CHK -- Yes --> LG["🚨 Leak guard alert to owner"]
+  CHK -- No --> OK["✓ Fine"]

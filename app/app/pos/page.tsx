@@ -2,30 +2,48 @@
 
 import clsx from "clsx";
 import { ChevronDown, Mic, Minus, Plus, Search, Send, Trash2, X, Check } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Button, Chips, DietMark, DishArt, Segmented, Sheet } from "@/components/ui";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Button, Chips, DietMark, Segmented, Sheet } from "@/components/ui";
+import { PhotoSlide } from "@/components/menu-bits";
 import { Checkout, billTotals } from "@/components/checkout";
 import { VoiceOrder } from "@/components/voice";
+import { ItemSheet } from "@/components/item-sheet";
+import { orderActions, useMenu, useCategories, useCurrentOutlet, useFeature } from "@/lib/live";
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
 import { repo } from "@/lib/repo";
+import { getTable, isShared, seatsFree, tableActions, tableState, useTables } from "@/lib/tables";
 import { inr } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
 
-type Line = { item: MenuItem; qty: number; note?: string };
+type Line = { item: MenuItem; qty: number; note?: string; unitPrice?: number };
 const NOTES = ["Less spicy", "Extra spicy", "No onion", "Jain", "Pack separately"];
 
 export default function PosPage() {
+  return (
+    <Suspense>
+      <PosScreen />
+    </Suspense>
+  );
+}
+
+function PosScreen() {
   const { t } = useT();
+  const params = useSearchParams();
   const toast = useToast();
-  const menu = repo.menu();
-  const cats = repo.categories();
-  const tables = repo.tables();
+  const menu = useMenu();
+  const cats = useCategories();
+  const tables = useTables();
 
   const [cat, setCat] = useState<string>("all");
   const [q, setQ] = useState("");
-  const [type, setType] = useState<OrderType>("dine-in");
-  const [table, setTable] = useState("T3");
+  const outlet = useCurrentOutlet();
+  const cafe = outlet.businessType === "cafe";
+  const voiceOn = useFeature("voice") === "ok";
+  const [type, setType] = useState<OrderType>(cafe ? "takeaway" : "dine-in");
+  const [table, setTable] = useState(params.get("table") ?? "T3");
+  const [party, setParty] = useState<string | null>(params.get("party"));
   const [lines, setLines] = useState<Line[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [pickTable, setPickTable] = useState(false);
@@ -33,6 +51,7 @@ export default function PosPage() {
   const [pay, setPay] = useState(false);
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [customize, setCustomize] = useState<MenuItem | null>(null);
 
   const items = useMemo(
     () =>
@@ -42,27 +61,61 @@ export default function PosPage() {
     [menu, cat, q],
   );
 
-  const add = (item: MenuItem, qty = 1, note?: string) => {
+  const add = (item: MenuItem, qty = 1, note?: string, unitPrice?: number) => {
     if (!item.available) return;
     setSent(false);
     setLines((ls) => {
-      const i = ls.findIndex((l) => l.item.id === item.id && l.note === note);
+      const i = ls.findIndex((l) => l.item.id === item.id && l.note === note && l.unitPrice === unitPrice);
       if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, qty: l.qty + qty } : l));
-      return [...ls, { item, qty, note }];
+      return [...ls, { item, qty, note, unitPrice }];
     });
   };
+  const priceOf = (l: Line) => l.unitPrice ?? l.item.price;
   const change = (idx: number, d: number) =>
     setLines((ls) => ls.flatMap((l, i) => (i !== idx ? [l] : l.qty + d <= 0 ? [] : [{ ...l, qty: l.qty + d }])));
 
   const count = lines.reduce((s, l) => s + l.qty, 0);
-  const subtotal = lines.reduce((s, l) => s + l.qty * l.item.price, 0);
-  const totals = billTotals(subtotal);
+  const subtotal = lines.reduce((s, l) => s + l.qty * priceOf(l), 0);
   const qtyOf = (id: string) => lines.filter((l) => l.item.id === id).reduce((s, l) => s + l.qty, 0);
-  const label = type === "dine-in" ? `Table ${table}` : type === "takeaway" ? "Takeaway" : "Delivery";
+  const tb = getTable(table);
+  const tbShared = tb ? isShared(tb) : false;
+  const pty = tb?.parties.find((p) => p.id === party);
+  const label =
+    type === "dine-in" ? (pty && tbShared ? `${table} · Party ${party}` : `Table ${table}`) : type === "takeaway" ? "Takeaway" : "Delivery";
+
+  const running = type === "dine-in" ? pty?.total ?? 0 : 0;
+  const chargeAmount = running + (sent ? 0 : subtotal);
+
+  /** Make sure the order belongs to a party: a free table gets Party A. */
+  const ensureParty = () => {
+    if (type !== "dine-in" || !tb) return null;
+    if (pty) return pty.id;
+    const p = tableActions.seat(tb.id, 2);
+    setParty(p.id);
+    return p.id;
+  };
 
   const sendKitchen = () => {
+    const pid = ensureParty();
+    if (tb && pid) {
+      const cur = getTable(tb.id)!.parties.find((p) => p.id === pid);
+      tableActions.update(tb.id, pid, { status: "ordered", total: (cur?.total ?? 0) + subtotal });
+    }
     setSent(true);
-    toast(`KOT sent · ${count} items for ${label}`);
+    orderActions.add({
+      type,
+      channel: "pos",
+      tableId: type === "dine-in" ? tb?.id : undefined,
+      tableName: type === "dine-in" ? table : undefined,
+      partyId: type === "dine-in" ? pid ?? undefined : undefined,
+      customer: type === "dine-in" ? undefined : label,
+      staff: "Rohit",
+      createdAt: new Date().toISOString(),
+      status: "accepted",
+      lines: lines.map((l) => ({ itemId: l.item.id, name: l.item.name, qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
+    });
+    const kot = type === "dine-in" ? (tb && getTable(tb.id)!.parties.length > 1 ? `${table} · ${pid}` : table) : label;
+    toast(`KOT sent · ${count} items for ${kot}`);
   };
 
   const Cart = (
@@ -72,17 +125,27 @@ export default function PosPage() {
           className="w-full"
           value={type}
           onChange={setType}
-          options={[
-            { value: "dine-in", label: "Dine-in" },
-            { value: "takeaway", label: "Takeaway" },
-            { value: "delivery", label: "Delivery" },
-          ]}
+          options={
+            cafe
+              ? [
+                  { value: "takeaway", label: "Counter" },
+                  { value: "delivery", label: "Delivery" },
+                ]
+              : [
+                  { value: "dine-in", label: "Dine-in" },
+                  { value: "takeaway", label: "Takeaway" },
+                  { value: "delivery", label: "Delivery" },
+                ]
+          }
         />
-        {type === "dine-in" ? (
+        {type === "dine-in" && !cafe ? (
           <button onClick={() => setPickTable(true)} className="flex w-full items-center justify-between rounded-ctl bg-sunken/70 px-4 py-2.5 text-left">
             <span>
-              <span className="block text-[12px] text-muted">Table</span>
-              <span className="text-[16px] font-semibold">{table} · Main hall</span>
+              <span className="block text-[12px] text-muted">{tbShared ? "Shared table · separate bill" : "Table"}</span>
+              <span className="text-[16px] font-semibold">
+                {table}
+                {pty ? (tbShared ? ` · Party ${pty.id} · ${pty.guests} ${pty.guests > 1 ? "guests" : "guest"}` : ` · ${pty.guests} guests`) : tb && tb.parties.length ? " · choose party" : " · new guests"}
+              </span>
             </span>
             <ChevronDown size={18} className="text-muted" />
           </button>
@@ -116,7 +179,7 @@ export default function PosPage() {
                   <Plus size={13} />
                 </button>
               </div>
-              <div className="w-16 pt-1 text-right text-[14px] font-semibold tnum">{inr(l.qty * l.item.price)}</div>
+              <div className="w-16 pt-1 text-right text-[14px] font-semibold tnum">{inr(l.qty * priceOf(l))}</div>
             </div>
           ))
         )}
@@ -124,17 +187,18 @@ export default function PosPage() {
 
       <div className="pb-safe space-y-3 border-t border-line px-4 pt-3 pb-4 lg:px-5">
         <div className="flex items-baseline justify-between text-[13.5px] text-muted">
-          <span>{count} items · GST 5% included at checkout</span>
+          <span>{count} items · GST 5% added at checkout</span>
+          {running > 0 && <span className="tnum">Already on bill {inr(running)}</span>}
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-[15px] font-medium">Total</span>
-          <span className="text-[26px] font-semibold tracking-tight tnum">{inr(totals.total)}</span>
+          <span className="text-[15px] font-medium">{running > 0 ? "Bill so far" : "Total"}</span>
+          <span className="text-[26px] font-semibold tracking-tight tnum">{inr(billTotals(chargeAmount).total)}</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent} onClick={sendKitchen}>
             {sent ? <><Check size={18} /> Sent</> : <><Send size={17} /> {t("sendKitchen")}</>}
           </Button>
-          <Button size="lg" className="!text-[15px]" disabled={!lines.length} onClick={() => { setCartOpen(false); setPay(true); }}>
+          <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0} onClick={() => { setCartOpen(false); setPay(true); }}>
             {t("charge")}
           </Button>
         </div>
@@ -149,9 +213,11 @@ export default function PosPage() {
         <div className="sticky top-0 z-20 space-y-3 bg-canvas/90 px-4 pb-3 pt-3 backdrop-blur-xl lg:static lg:bg-transparent lg:px-8 lg:pt-8">
           <div className="flex items-center justify-between gap-3">
             <h1 className="large-title">{t("pos")}</h1>
-            <Button variant="tinted" size="sm" className="!rounded-full lg:hidden" onClick={() => setVoice(true)}>
-              <Mic size={16} /> Speak
-            </Button>
+            {voiceOn && (
+              <Button variant="tinted" size="sm" className="!rounded-full lg:hidden" onClick={() => setVoice(true)}>
+                <Mic size={16} /> Speak
+              </Button>
+            )}
           </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -168,9 +234,11 @@ export default function PosPage() {
                 </button>
               )}
             </div>
-            <Button variant="tinted" className="hidden lg:inline-flex" onClick={() => setVoice(true)}>
-              <Mic size={17} /> Speak order
-            </Button>
+            {voiceOn && (
+              <Button variant="tinted" className="hidden lg:inline-flex" onClick={() => setVoice(true)}>
+                <Mic size={17} /> Speak order
+              </Button>
+            )}
           </div>
           <Chips
             value={cat}
@@ -186,7 +254,7 @@ export default function PosPage() {
               return (
                 <button
                   key={m.id}
-                  onClick={() => add(m)}
+                  onClick={() => (m.options?.some((g) => g.required) ? setCustomize(m) : add(m))}
                   disabled={!m.available}
                   className={clsx(
                     "group relative flex flex-col overflow-hidden rounded-[18px] bg-surface text-left transition active:scale-[.97]",
@@ -195,7 +263,7 @@ export default function PosPage() {
                   )}
                 >
                   <div className="flex items-start justify-between p-3 pb-0">
-                    <DishArt hue={m.hue} className="h-11 w-11 rounded-full lg:h-12 lg:w-12" />
+                    <PhotoSlide item={m} className="h-11 w-11 rounded-full lg:h-12 lg:w-12" />
                     {n > 0 && (
                       <span className="flex h-7 min-w-7 animate-pop items-center justify-center rounded-full bg-jade px-2 text-[13px] font-bold text-white tnum">
                         {n}
@@ -211,6 +279,8 @@ export default function PosPage() {
                       <span className="text-[14px] font-medium text-muted tnum">{inr(m.price)}</span>
                       {!m.available ? (
                         <span className="text-[11.5px] font-semibold text-rose">Sold out</span>
+                      ) : m.options?.some((g) => g.required) ? (
+                        <span className="text-[11.5px] font-medium text-jade">Choices</span>
                       ) : m.tags?.[0] ? (
                         <span className="text-[11.5px] font-medium text-saffron">{m.tags[0]}</span>
                       ) : null}
@@ -227,12 +297,12 @@ export default function PosPage() {
       <aside className="hidden w-[400px] shrink-0 bg-surface lg:block lg:rounded-r-[28px] lg:border-l lg:border-line">{Cart}</aside>
 
       {/* Cart bar on phones */}
-      {count > 0 && (
+      {(count > 0 || running > 0) && (
         <div className="fixed inset-x-3 bottom-[76px] z-30 lg:hidden">
           <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-4 py-3.5 text-white shadow-float">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
             <span className="flex-1 text-left text-[15px] font-semibold">View order · {label}</span>
-            <span className="text-[16px] font-semibold tnum">{inr(totals.total)}</span>
+            <span className="text-[16px] font-semibold tnum">{inr(billTotals(chargeAmount).total)}</span>
           </button>
         </div>
       )}
@@ -240,22 +310,40 @@ export default function PosPage() {
         <div className="-mx-5 -mb-5 h-[70dvh]">{Cart}</div>
       </Sheet>
 
-      {/* Table picker */}
-      <Sheet open={pickTable} onClose={() => setPickTable(false)} title="Choose table">
-        <div className="grid grid-cols-4 gap-2">
-          {tables.map((tb) => (
-            <button
-              key={tb.id}
-              onClick={() => { setTable(tb.name); setPickTable(false); }}
-              className={clsx(
-                "rounded-[14px] py-3 text-center",
-                table === tb.name ? "bg-jade text-white" : tb.status === "free" ? "bg-surface" : "bg-sunken text-muted",
-              )}
-            >
-              <div className="text-[17px] font-semibold">{tb.name}</div>
-              <div className="text-[11px] opacity-80">{tb.status === "free" ? `${tb.seats} seats` : tb.status}</div>
-            </button>
-          ))}
+      {/* Table picker: a shared table lists each party separately */}
+      <Sheet open={pickTable} onClose={() => setPickTable(false)} title="Choose table" wide>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {tables.map((tb) => {
+            const st = tableState(tb);
+            const pick = (pid: string | null) => {
+              setTable(tb.name);
+              setParty(pid);
+              setPickTable(false);
+              setSent(false);
+            };
+            return (
+              <div key={tb.id} className={clsx("rounded-[16px] p-3", table === tb.name ? "bg-jade-soft ring-2 ring-jade" : "bg-surface")}>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[18px] font-semibold">{tb.name}</span>
+                  <span className="text-[11.5px] text-muted">{st === "free" ? `${tb.seats} seats` : st === "reserved" ? "reserved" : `${seatsFree(tb)} of ${tb.seats} free`}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {tb.parties.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => pick(p.id)}
+                      className={clsx("rounded-full px-2.5 py-1 text-[12.5px] font-semibold", table === tb.name && party === p.id ? "bg-jade text-white" : "bg-sunken")}
+                    >
+                      {tb.parties.length > 1 ? `${p.id} · ${p.guests}` : `${p.guests} guests`}
+                    </button>
+                  ))}
+                  <button onClick={() => pick(null)} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-jade hover:bg-jade-soft">
+                    {tb.parties.length ? "+ New party" : "Seat here"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Sheet>
 
@@ -278,8 +366,20 @@ export default function PosPage() {
         </div>
       </Sheet>
 
-      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => { setTable("T4"); ls.forEach((l) => add(l.item, l.qty, l.note)); }} />
-      <Checkout open={pay} onClose={() => setPay(false)} subtotal={subtotal} label={label} onPaid={() => { setLines([]); setSent(false); }} />
+      <ItemSheet item={customize} onClose={() => setCustomize(null)} onAdd={(l) => add(l.item, l.qty, l.options.join(" · ") || undefined, l.unitPrice)} />
+      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => { setTable("T4"); setParty("A"); ls.forEach((l) => add(l.item, l.qty, l.note)); }} />
+      <Checkout
+        open={pay}
+        onClose={() => setPay(false)}
+        subtotal={chargeAmount}
+        label={label}
+        onPaid={() => {
+          if (type === "dine-in" && tb && pty) tableActions.close(tb.id, pty.id);
+          setLines([]);
+          setSent(false);
+          setParty(null);
+        }}
+      />
 
     </div>
   );

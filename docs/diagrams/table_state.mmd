@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> free
+  free --> reserved: Booking
+  reserved --> seated: Guests arrive
+  free --> seated: Captain seats / first QR order opens Party A
+  seated --> ordered: KOT sent
+  ordered --> billing: Request bill
+  billing --> free: Last party paid (new visitId)
+  ordered --> ordered: Share table, Party B added
+  billing --> ordered: Other parties still eating

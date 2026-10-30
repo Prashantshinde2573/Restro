@@ -1,0 +1,10 @@
+flowchart LR
+  W["💬 WhatsApp"] --> N
+  Z["🛵 Zomato"] --> N
+  S["🛵 Swiggy"] --> N
+  Q["📷 QR / ONDC"] --> N
+  N["Orders → Online<br/>status: New"] --> A{"Staff"}
+  A -- Accept --> K["KOT to kitchen<br/>same as dine-in"]
+  A -- Reject --> X["Cancelled"]
+  K --> R["Ready → Picked up / Delivered"]
+  R --> C["Commission tracked<br/>→ Insights: true cost"]

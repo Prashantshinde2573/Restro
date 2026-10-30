@@ -1,0 +1,13 @@
+stateDiagram-v2
+  [*] --> trial: Signs up · onboarding
+  trial --> active: Adds UPI AutoPay / card
+  trial --> readonly: Trial ends, no payment
+  readonly --> active: Pays
+  readonly --> paused: 7 days, no payment
+  active --> past_due: Payment fails
+  past_due --> active: Pays (WhatsApp reminders)
+  past_due --> paused: 14 days
+  active --> cancelled: Owner cancels
+  paused --> active: Pays · data kept 90 days
+  paused --> [*]: Deleted after 90 days
+  note right of trial: 14-day Growth trial

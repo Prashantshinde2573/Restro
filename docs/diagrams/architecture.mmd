@@ -1,0 +1,41 @@
+flowchart TB
+  subgraph Clients["👥 Who opens Restro"]
+    G["📱 Customer<br/>/order/{table}"]
+    CA["👑 Client Admin<br/>/app (all outlets)"]
+    SA["🏬 Client Sub Admin<br/>/app (own outlet)"]
+    ST["🧑‍🍳 Staff<br/>POS · Tables · Kitchen"]
+    SU["🛡️ Super Admin<br/>/admin"]
+  end
+  subgraph Web["🌐 Next.js 15 app (App Router)"]
+    UI["Screens + components<br/>shell · checkout · voice · QR"]
+    REPO["lib/repo.ts<br/>single data access point"]
+  end
+  subgraph FB["🔥 Firebase (next phase)"]
+    AUTH["Auth<br/>Phone OTP + custom token"]
+    FS[("Firestore<br/>multi-tenant")]
+    CF["Cloud Functions<br/>triggers + nightly jobs"]
+    STO["Cloud Storage<br/>photos · bills"]
+    FCM["Cloud Messaging<br/>push to captains"]
+  end
+  subgraph EXT["🔌 Outside services"]
+    RZP["Razorpay / UPI AutoPay"]
+    WA["WhatsApp Business API"]
+    AGG["Swiggy · Zomato · ONDC"]
+    AI["LLM · Speech-to-text · Vision"]
+  end
+  G --> UI
+  CA --> UI
+  SA --> UI
+  ST --> UI
+  SU --> UI
+  UI --> REPO
+  REPO -->|reads / live onSnapshot| FS
+  UI -->|sign in| AUTH
+  FS -->|on write| CF
+  CF -->|recalc totals, KOTs, stock| FS
+  CF -->|e-bills, reminders| WA
+  RZP -->|webhook: plan status| CF
+  AGG -->|online orders| CF
+  CF -->|Pulse, forecast, Ask Restro| AI
+  CF --> FCM
+  UI --> STO

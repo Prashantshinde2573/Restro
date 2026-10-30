@@ -1,0 +1,533 @@
+<title>Restro Product Film</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a fixed 1920x1080 stage, scaled to fit; twelve timed scenes on one timeline */
+@font-face{font-family:"IS";src:url(fonts/is.woff2) format("woff2");font-weight:400 700;font-display:block}
+@font-face{font-family:"Mukta";src:url(fonts/mukta-400.woff2) format("woff2");font-weight:400;font-display:block}
+@font-face{font-family:"Mukta";src:url(fonts/mukta-500.woff2) format("woff2");font-weight:500;font-display:block}
+@font-face{font-family:"Mukta";src:url(fonts/mukta-600.woff2) format("woff2");font-weight:600;font-display:block}
+@font-face{font-family:"Mukta";src:url(fonts/mukta-700.woff2) format("woff2");font-weight:700;font-display:block}
+@font-face{font-family:"Tiro";src:url(fonts/tiro.woff2) format("woff2");font-display:block}
+@font-face{font-family:"TiroL";src:url(fonts/tiro-latin.woff2) format("woff2");font-display:block}
+:root{
+  --canvas:#F3F4F1; --surface:#FFFFFF; --sunken:#ECEEEA; --ink:#18211E; --muted:#68716D; --line:#E2E5E0;
+  --jade:#0E7A5F; --jade-soft:#E2F1EB; --jade-deep:#095442; --jade-glow:#34BE96;
+  --saffron:#DE9122; --saffron-soft:#FCF0DC; --marigold:#F2A516; --kumkum:#C8323C; --rose:#D24242; --sky:#2C6EC8;
+  --sans:"IS","Mukta",ui-sans-serif,system-ui,sans-serif; --deva:"Tiro","TiroL","Mukta",serif;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;background:#0b0f0e;color:var(--ink);overflow:hidden}
+body{display:flex;align-items:center;justify-content:center;font-family:var(--sans);-webkit-font-smoothing:antialiased}
+#wrap{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;background:#000}
+.scene{position:absolute;inset:0;display:none;overflow:hidden}
+.abs{position:absolute}
+.ph{position:absolute;inset:0;background-size:cover;background-position:center;will-change:transform}
+.fill{position:absolute;inset:0}
+.tnum{font-variant-numeric:tabular-nums}
+.deva{font-family:var(--deva)}
+.eyebrow{font-size:26px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+h1,h2,p{margin:0}
+.h1{font-size:118px;line-height:.98;font-weight:650;letter-spacing:-.035em;text-wrap:balance}
+.h2{font-size:76px;line-height:1.02;font-weight:650;letter-spacing:-.03em;text-wrap:balance}
+.lead{font-size:34px;line-height:1.35;color:var(--muted)}
+.ic{display:inline-block;vertical-align:middle}
+.chip{display:inline-flex;align-items:center;gap:14px;border-radius:999px;padding:14px 26px;font-size:28px;font-weight:600}
+.card{background:var(--surface);border-radius:28px}
+.dot{width:16px;height:16px;border-radius:50%;flex:none}
+
+/* phone */
+.phone{position:absolute;width:400px;height:820px;border-radius:60px;background:#111816;padding:13px;box-shadow:0 60px 120px -40px rgba(0,0,0,.6)}
+.screen{position:relative;width:100%;height:100%;border-radius:48px;background:var(--canvas);overflow:hidden}
+.notch{position:absolute;left:50%;top:12px;width:120px;height:32px;margin-left:-60px;border-radius:20px;background:#111816;z-index:5}
+.scr{position:absolute;inset:0;padding:64px 22px 22px}
+
+/* notification */
+.note{display:flex;align-items:center;gap:20px;width:620px;padding:24px 28px;border-radius:26px;background:rgba(255,255,255,.94);box-shadow:0 30px 60px -20px rgba(0,0,0,.5);font-size:28px}
+.note b{font-weight:650}
+.note span.m{margin-left:auto;color:var(--muted);font-size:23px}
+
+/* strike list */
+.strike-item{position:relative;display:inline-block;font-size:50px;font-weight:600;color:#F3F4F1;padding:6px 0}
+.strike-item .bar{position:absolute;left:-8px;top:52%;height:6px;border-radius:3px;background:var(--saffron);width:0}
+
+/* module cards */
+.mod{display:flex;flex-direction:column;gap:12px;padding:28px 30px;border-radius:28px;background:var(--surface);box-shadow:0 1px 2px rgba(16,24,20,.04),0 16px 40px -18px rgba(16,24,20,.18)}
+.mod .t{font-size:34px;font-weight:650;letter-spacing:-.01em}
+.mod .d{font-size:23px;line-height:1.35;color:var(--muted)}
+.icb{width:72px;height:72px;border-radius:20px;background:var(--jade-soft);display:flex;align-items:center;justify-content:center}
+
+/* roles */
+.role{position:relative;border-radius:28px;overflow:hidden;background:#222}
+.role .ph{filter:saturate(1.05)}
+.role .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 35%,rgba(10,16,14,.88) 100%)}
+.role .txt{position:absolute;left:28px;right:28px;bottom:26px;color:#fff}
+.role .rn{font-size:40px;font-weight:650;letter-spacing:-.01em}
+.role .rd{font-size:23px;line-height:1.3;opacity:.82;margin-top:4px}
+.role .tag{position:absolute;left:24px;top:24px;font-size:20px;font-weight:650;padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.92);color:var(--ink)}
+
+/* pos / kds / bill */
+.panel{position:absolute;top:250px;height:700px;border-radius:32px;overflow:hidden}
+.line{display:flex;align-items:center;gap:14px;font-size:25px;padding:14px 0;border-bottom:1px solid var(--line)}
+.line .q{font-weight:700;color:var(--jade);width:44px}
+.line .p{margin-left:auto;font-weight:600}
+.veg{width:22px;height:22px;border:2.5px solid #1E8E3E;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.veg::after{content:"";width:10px;height:10px;border-radius:50%;background:#1E8E3E}
+.btn{display:flex;align-items:center;justify-content:center;height:72px;border-radius:18px;font-size:27px;font-weight:650}
+.kot{border-radius:22px;background:#1A2220;padding:22px 24px;color:#ECF0ED}
+.kot .h{display:flex;align-items:center;gap:12px;font-size:24px;font-weight:650}
+.kot .st{font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:5px 12px;border-radius:8px}
+.kot .it{font-size:26px;padding:8px 0;color:#DDE4E0}
+
+/* pricing */
+.plan{position:absolute;top:300px;width:390px;height:560px;border-radius:32px;padding:40px 36px;box-sizing:border-box;display:flex;flex-direction:column}
+.plan .n{font-size:38px;font-weight:650}
+.plan .b{font-size:22px;line-height:1.35;margin-top:8px;opacity:.7}
+.plan .pr{font-size:76px;font-weight:650;letter-spacing:-.03em;margin-top:30px}
+.plan .per{font-size:22px;opacity:.6}
+.plan ul{list-style:none;padding:0;margin:28px 0 0;display:flex;flex-direction:column;gap:14px;font-size:23px}
+.plan li{display:flex;gap:12px;align-items:flex-start}
+
+.marq{white-space:nowrap;font-size:40px;font-weight:600;color:#fff}
+.credit{position:absolute;right:40px;bottom:28px;font-size:18px;color:rgba(255,255,255,.55)}
+
+#ui{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:14px;padding:14px max(16px,env(safe-area-inset-left,0px)) calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(0deg,rgba(0,0,0,.7),rgba(0,0,0,0));color:#fff;font:600 14px var(--sans);opacity:0;transition:opacity .3s}
+#wrap:hover #ui,#ui.show{opacity:1}
+#ui button{all:unset;cursor:pointer;padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.16)}
+#ui button:focus-visible{outline:2px solid #fff}
+#ui input{flex:1;accent-color:#34BE96}
+@media (prefers-reduced-motion:reduce){#ui{opacity:1}}
+</style>
+
+<div id="wrap"><div id="stage">
+
+<!-- 1 HOOK -->
+<section class="scene" id="s1" data-start="0" data-end="7">
+  <div class="ph" data-kb="1.04,1.16,0,0,-30,-10" style="background-image:url(img/rush.jpg)"></div>
+  <div class="fill" style="background:linear-gradient(90deg,rgba(8,12,11,.86) 0%,rgba(8,12,11,.55) 48%,rgba(8,12,11,.15) 100%)"></div>
+  <div class="abs" style="left:120px;top:130px" data-in=".3" data-fx="fade">
+    <span class="chip" style="background:rgba(255,255,255,.14);color:#fff;font-size:26px"><span class="dot" style="background:var(--marigold)"></span>शुक्रवार · 7:45 PM · Pune</span>
+  </div>
+  <div class="abs" style="left:120px;top:250px;color:#fff">
+    <div class="h1" data-in=".6">Friday night.</div>
+    <div class="h1" data-in="1.3" style="color:var(--marigold)">Full house.</div>
+  </div>
+  <div class="abs" style="left:120px;top:640px;width:760px;color:rgba(255,255,255,.85);font-size:38px;line-height:1.35" data-in="4.9">
+    And you are running all of it from a notebook and five WhatsApp groups.
+  </div>
+  <div class="abs" style="right:110px;top:230px;display:flex;flex-direction:column;gap:22px">
+    <div class="note" data-in="2.2" data-fx="left" data-d="80"><span class="dot" style="background:var(--saffron)"></span><b>Table 4</b>Wants the bill<span class="m">now</span></div>
+    <div class="note" data-in="2.8" data-fx="left" data-d="80"><span class="dot" style="background:var(--sky)"></span><b>Swiggy #88213</b>New order<span class="m">1 min</span></div>
+    <div class="note" data-in="3.4" data-fx="left" data-d="80"><span class="dot" style="background:var(--rose)"></span><b>Kitchen</b>Paneer almost over<span class="m">2 min</span></div>
+    <div class="note" data-in="4.0" data-fx="left" data-d="80"><span class="dot" style="background:var(--kumkum)"></span><b>Counter</b>Cash ₹420 short?<span class="m">5 min</span></div>
+  </div>
+</section>
+
+<!-- 2 PROBLEM -->
+<section class="scene" id="s2" data-start="7" data-end="14" style="background:#121917">
+  <div class="abs" style="left:90px;top:120px;width:520px;height:380px" data-in=".1" data-fx="up" data-d="90"><div class="fill" style="transform:rotate(-5deg);border-radius:24px;overflow:hidden;box-shadow:0 40px 80px -30px #000"><div class="ph" data-kb="1.0,1.12,0,0,10,0" style="background-image:url(img/streetkitchen.jpg)"></div></div></div>
+  <div class="abs" style="left:420px;top:420px;width:470px;height:330px" data-in=".4" data-fx="up" data-d="90"><div class="fill" style="transform:rotate(4deg);border-radius:24px;overflow:hidden;box-shadow:0 40px 80px -30px #000"><div class="ph" data-kb="1.0,1.12,0,0,-10,0" style="background-image:url(img/vendor.jpg)"></div></div></div>
+  <div class="abs" style="left:110px;top:690px;width:430px;height:300px" data-in=".7" data-fx="up" data-d="90"><div class="fill" style="transform:rotate(-2deg);border-radius:24px;overflow:hidden;box-shadow:0 40px 80px -30px #000"><div class="ph" data-kb="1.0,1.1,0,0,0,-10" style="background-image:url(img/chaistall.jpg)"></div></div></div>
+  <div class="abs" style="left:1020px;top:140px;width:800px;color:#fff">
+    <div class="eyebrow" style="color:var(--marigold)" data-in=".5">The daily mess</div>
+    <div class="h2" style="margin-top:22px" data-in=".8">Five tools that don't talk to each other.</div>
+    <div style="margin-top:50px;display:flex;flex-direction:column;gap:10px">
+      <div><span class="strike-item" data-in="1.6" data-fx="right" data-strike="4.6">Billing software<i class="bar"></i></span></div>
+      <div><span class="strike-item" data-in="2.0" data-fx="right" data-strike="4.8">Kitchen printer & paper KOTs<i class="bar"></i></span></div>
+      <div><span class="strike-item" data-in="2.4" data-fx="right" data-strike="5.0">Stock register<i class="bar"></i></span></div>
+      <div><span class="strike-item" data-in="2.8" data-fx="right" data-strike="5.2">Attendance book<i class="bar"></i></span></div>
+      <div><span class="strike-item" data-in="3.2" data-fx="right" data-strike="5.4">Five WhatsApp groups<i class="bar"></i></span></div>
+    </div>
+    <div class="deva" style="margin-top:46px;font-size:40px;color:var(--marigold)" data-in="5.6">हिशोब एकीकडे, किचन दुसरीकडे.</div>
+  </div>
+</section>
+
+<!-- 3 INTRO -->
+<section class="scene" id="s3" data-start="14" data-end="20" style="background:radial-gradient(circle at 50% 55%,#13906F 0%,#0E7A5F 45%,#08503F 100%)">
+  <svg class="abs mandala" data-rot="8" style="left:960px;top:560px;width:1500px;height:1500px;margin:-750px 0 0 -750px;opacity:.16" viewBox="-500 -500 1000 1000"></svg>
+  <svg class="abs toran" style="left:0;top:0;width:1920px;height:230px" viewBox="0 0 1920 230"></svg>
+  <div class="abs" style="left:0;right:0;top:360px;display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center">
+    <div style="display:flex;align-items:center;gap:36px" data-in=".4" data-fx="pop">
+      <svg width="150" height="150" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#fff"/><path d="M8 17V7.5h4.6a3 3 0 0 1 .4 6L16 17" stroke="#0E7A5F" stroke-width="2.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span style="font-size:168px;font-weight:650;letter-spacing:-.045em">Restro</span>
+    </div>
+    <div style="margin-top:46px;font-size:56px;font-weight:600;letter-spacing:-.02em" data-in="1.4">Run the whole restaurant from one calm screen.</div>
+    <div class="deva" style="margin-top:22px;font-size:46px;color:#FFD27A" data-in="2.2">संपूर्ण रेस्टॉरंट, एका शांत स्क्रीनवर.</div>
+  </div>
+</section>
+
+<!-- 4 MODULES -->
+<section class="scene" id="s4" data-start="20" data-end="28" style="background:var(--canvas)">
+  <div class="abs" style="left:120px;top:110px;width:1200px">
+    <div class="eyebrow" style="color:var(--jade)" data-in=".3">What Restro is</div>
+    <div class="h2" style="margin-top:18px" data-in=".5">One app instead of five.</div>
+    <div class="lead" style="margin-top:18px;width:1100px" data-in=".8">Billing, kitchen, tables, stock, staff and guests, all talking to each other.</div>
+  </div>
+  <div class="abs" style="left:120px;right:120px;top:390px;display:grid;grid-template-columns:repeat(4,1fr);gap:28px">
+    <div class="mod" data-in="1.2" data-fx="pop"><div class="icb"><i data-ic="receipt-text"></i></div><div class="t">Billing & GST</div><div class="d">GST bills, UPI QR for the exact amount, cash, card, KOTs.</div></div>
+    <div class="mod" data-in="1.45" data-fx="pop"><div class="icb"><i data-ic="layout-grid"></i></div><div class="t">Tables & QR</div><div class="d">Live floor, waitlist, bookings and QR ordering.</div></div>
+    <div class="mod" data-in="1.7" data-fx="pop"><div class="icb"><i data-ic="chef-hat"></i></div><div class="t">Kitchen screen</div><div class="d">Tickets by station with timers for the chef.</div></div>
+    <div class="mod" data-in="1.95" data-fx="pop"><div class="icb"><i data-ic="boxes"></i></div><div class="t">Stock</div><div class="d">Recipes deduct stock as you sell. POs on WhatsApp.</div></div>
+    <div class="mod" data-in="2.2" data-fx="pop"><div class="icb"><i data-ic="user-round"></i></div><div class="t">Team</div><div class="d">PIN clock-in, rota, payroll and tip sharing.</div></div>
+    <div class="mod" data-in="2.45" data-fx="pop"><div class="icb"><i data-ic="users"></i></div><div class="t">Guests</div><div class="d">Who comes back, birthdays, loyalty points.</div></div>
+    <div class="mod" data-in="2.7" data-fx="pop"><div class="icb"><i data-ic="chart-column"></i></div><div class="t">Reports</div><div class="d">P&L, day close, GSTR-1 and 3B for your CA.</div></div>
+    <div class="mod" data-in="2.95" data-fx="pop" style="background:var(--jade);color:#fff"><div class="icb" style="background:rgba(255,255,255,.16)"><i data-ic="sparkles" data-c="#FFD27A"></i></div><div class="t">AI layer</div><div class="d" style="color:rgba(255,255,255,.8)">Pulse briefing, voice orders, prep forecast, Leak guard.</div></div>
+  </div>
+  <div class="abs" style="left:120px;top:975px;display:flex;gap:16px" data-in="3.6">
+    <span class="chip" style="background:var(--saffron-soft);color:#8A5208;font-size:25px">Swiggy & Zomato on the same screen</span>
+    <span class="chip" style="background:var(--jade-soft);color:var(--jade-deep);font-size:25px">Multiple outlets</span>
+    <span class="chip" style="background:var(--sunken);font-size:25px">English · मराठी · हिंदी</span>
+  </div>
+</section>
+
+<!-- 5 ROLES -->
+<section class="scene" id="s5" data-start="28" data-end="37" style="background:#F7F3EA">
+  <div class="abs" style="left:120px;top:90px;width:1700px;display:flex;align-items:flex-end;justify-content:space-between">
+    <div>
+      <div class="eyebrow" style="color:var(--jade)" data-in=".3">Who uses it</div>
+      <div class="h2" style="margin-top:16px" data-in=".5">Everyone in your restaurant.</div>
+    </div>
+    <div class="lead" style="font-size:28px;text-align:right" data-in=".9">On the phone, tablet and laptop<br>you already have.</div>
+  </div>
+  <div class="abs" style="left:120px;right:120px;top:330px;bottom:70px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;gap:28px">
+    <div class="role" data-in="1.2" data-fx="up"><div class="ph" data-kb="1.0,1.08,0,0,0,0" style="background-image:url(img/cafe.jpg)"></div><div class="shade"></div><span class="tag">Phone or laptop</span><div class="txt"><div class="rn">Owner</div><div class="rd">Reads the morning Pulse, checks profit, approves refunds.</div></div></div>
+    <div class="role" data-in="1.5" data-fx="up"><div class="ph" data-kb="1.0,1.08,0,0,0,0" style="background-image:url(img/spread.jpg)"></div><div class="shade"></div><span class="tag">Runs the floor</span><div class="txt"><div class="rn">Manager</div><div class="rd">Closes the day, handles stock, rota and staff.</div></div></div>
+    <div class="role" data-in="1.8" data-fx="up"><div class="ph" data-kb="1.0,1.08,0,0,0,0" style="background-image:url(img/captain.jpg);background-position:50% 28%"></div><div class="shade"></div><span class="tag">Phone or tablet</span><div class="txt"><div class="rn">Captain / waiter</div><div class="rd">Seats guests, takes orders by tap or voice, sends KOTs.</div></div></div>
+    <div class="role" data-in="2.1" data-fx="up" style="background:linear-gradient(140deg,#0E7A5F,#095442)">
+      <div class="abs" style="right:40px;top:40px;width:190px;height:190px;border-radius:24px;background:#fff;padding:18px;box-sizing:border-box"><svg class="qrsvg" viewBox="0 0 29 29" width="154" height="154"></svg></div>
+      <div class="abs" style="left:28px;top:40px;color:#fff;font-size:64px;font-weight:650;letter-spacing:-.03em" class="tnum">₹1,240</div>
+      <div class="abs" style="left:30px;top:122px;color:#BFE6D8;font-size:24px;font-weight:600">UPI · Cash · Card · Split</div>
+      <div class="txt"><div class="rn">Cashier</div><div class="rd">Charges bills with UPI QR, cash, card or split by guest.</div></div></div>
+    <div class="role" data-in="2.4" data-fx="up"><div class="ph" data-kb="1.0,1.08,0,0,0,0" style="background-image:url(img/chef.jpg);background-position:50% 30%"></div><div class="shade"></div><span class="tag">Tablet on the wall</span><div class="txt"><div class="rn">Chef</div><div class="rd">Sees tickets by station, ticks dishes done, marks ready.</div></div></div>
+    <div class="role" data-in="2.7" data-fx="up"><div class="ph" data-kb="1.0,1.08,0,0,0,0" style="background-image:url(img/family.jpg)"></div><div class="shade"></div><span class="tag">Their own phone</span><div class="txt"><div class="rn">Guest</div><div class="rd">Scans the table QR, orders, pays their share, rates the meal.</div></div></div>
+  </div>
+</section>
+
+<!-- 6 ORDER FLOW -->
+<section class="scene" id="s6" data-start="37" data-end="48" style="background:var(--canvas)">
+  <div class="abs" style="left:120px;top:80px">
+    <div class="eyebrow" style="color:var(--jade)" data-in=".2">How an order moves</div>
+    <div class="h2" style="margin-top:14px;font-size:68px" data-in=".4">Say it. Cook it. Bill it.</div>
+  </div>
+  <!-- steps labels -->
+  <div class="abs" style="left:120px;top:258px;display:flex;gap:0;font-size:24px;font-weight:650;color:var(--muted)">
+    <span style="width:580px" data-in=".6">1 · Captain speaks the order</span>
+    <span style="width:600px" data-in="4.2">2 · Kitchen screen, by station</span>
+    <span data-in="7.6">3 · Bill and pay</span>
+  </div>
+  <!-- A: POS -->
+  <div class="panel card" style="left:120px;width:540px;top:310px;height:690px;box-shadow:0 30px 60px -30px rgba(16,24,20,.25)" data-in=".6" data-fx="up">
+    <div style="padding:30px 32px">
+      <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:30px;font-weight:650">New order · T4</span><span class="chip" style="padding:8px 16px;font-size:20px;background:var(--jade-soft);color:var(--jade-deep)">Dine-in</span></div>
+      <div style="margin-top:22px;display:flex;align-items:center;gap:20px">
+        <div style="position:relative;width:84px;height:84px;flex:none">
+          <div class="ring abs" style="inset:0;border-radius:50%;background:var(--saffron)"></div>
+          <div class="abs" style="inset:0;border-radius:50%;background:var(--saffron);display:flex;align-items:center;justify-content:center"><i data-ic="mic" data-c="#fff" data-s="40"></i></div>
+        </div>
+        <div class="wave" style="display:flex;gap:6px;align-items:center;height:60px"></div>
+      </div>
+      <div style="margin-top:20px;padding:20px 22px;border-radius:20px;background:var(--saffron-soft);font-family:var(--deva);font-size:31px;line-height:1.4;min-height:88px;color:#5A3A06" data-type="1.2,16">“टेबल चार — दोन पनीर टिक्का, एक बटर नान, दोन कटिंग चहा.”</div>
+      <div style="margin-top:14px">
+        <div class="line" data-in="3.0" data-fx="left"><span class="q">2×</span><span class="veg"></span>Paneer Tikka<span class="p tnum">₹580</span></div>
+        <div class="line" data-in="3.25" data-fx="left"><span class="q">1×</span><span class="veg"></span>Butter Naan<span class="p tnum">₹70</span></div>
+        <div class="line" data-in="3.5" data-fx="left"><span class="q">2×</span><span class="veg"></span>Cutting Chai<span class="p tnum">₹60</span></div>
+      </div>
+      <div class="btn" style="margin-top:24px;background:var(--jade);color:#fff" data-in="3.8" data-fx="pop">Send to kitchen →</div>
+    </div>
+  </div>
+  <!-- B: KDS -->
+  <div class="panel" style="left:700px;width:560px;top:310px;height:690px;background:#0E1211;box-shadow:0 30px 60px -30px rgba(0,0,0,.6)" data-in="4.2" data-fx="up">
+    <div style="padding:30px 30px;color:#ECF0ED">
+      <div style="display:flex;align-items:center;gap:14px"><i data-ic="chef-hat" data-c="#34BE96" data-s="34"></i><span style="font-size:30px;font-weight:650">Kitchen</span><span style="margin-left:auto;font-size:22px;color:#96A09B">2 to cook</span></div>
+      <div style="margin-top:26px;display:flex;flex-direction:column;gap:20px">
+        <div class="kot" data-in="4.7" data-fx="scale">
+          <div class="h">T4 · #1047<span class="st" style="background:#3A2C16;color:#F0AC48;margin-left:10px">Tandoor</span><span class="tnum kt" style="margin-left:auto;font-size:22px;color:#96A09B" data-timer="4.7">0:00</span></div>
+          <div class="it" style="margin-top:10px">2 × Paneer Tikka</div><div class="it">1 × Butter Naan</div>
+        </div>
+        <div class="kot" data-in="5.0" data-fx="scale">
+          <div class="h">T4 · #1047<span class="st" style="background:#1A283E;color:#6EA0F0;margin-left:10px">Bar</span><span class="tnum kt" style="margin-left:auto;font-size:22px;color:#96A09B" data-timer="5.0">0:00</span></div>
+          <div class="it" style="margin-top:10px">2 × Cutting Chai</div>
+        </div>
+      </div>
+      <div class="btn" style="margin-top:30px;background:#34BE96;color:#06261D" data-in="6.6" data-fx="pop">✓ Ready · T4</div>
+      <div style="margin-top:20px;font-size:22px;color:#96A09B;text-align:center" data-in="6.9">Captain gets a “T4 ready” alert</div>
+    </div>
+  </div>
+  <!-- C: Bill -->
+  <div class="panel card" style="left:1300px;width:500px;top:310px;height:690px;box-shadow:0 30px 60px -30px rgba(16,24,20,.25)" data-in="7.6" data-fx="up">
+    <div style="padding:30px 32px">
+      <div style="font-size:30px;font-weight:650">Bill · Table 4</div>
+      <div style="margin-top:16px;font-size:24px;display:flex;flex-direction:column;gap:10px;color:var(--muted)" class="tnum">
+        <div style="display:flex">Item total<span style="margin-left:auto;color:var(--ink)">₹710.00</span></div>
+        <div style="display:flex">CGST 2.5%<span style="margin-left:auto;color:var(--ink)">₹17.75</span></div>
+        <div style="display:flex">SGST 2.5%<span style="margin-left:auto;color:var(--ink)">₹17.75</span></div>
+        <div style="display:flex;border-top:1px solid var(--line);padding-top:12px;font-size:34px;font-weight:650;color:var(--ink)">To pay<span style="margin-left:auto" class="tnum">₹746</span></div>
+      </div>
+      <div style="margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:20px;font-weight:650;text-align:center">
+        <span style="padding:12px 0;border-radius:12px;background:var(--jade);color:#fff">UPI</span><span style="padding:12px 0;border-radius:12px;background:var(--sunken)">Cash</span><span style="padding:12px 0;border-radius:12px;background:var(--sunken)">Card</span><span style="padding:12px 0;border-radius:12px;background:var(--sunken)">Split</span>
+      </div>
+      <div style="margin-top:20px;display:flex;gap:20px;align-items:center">
+        <div style="width:140px;height:140px;border-radius:18px;border:2px solid var(--line);padding:10px;box-sizing:border-box;flex:none"><svg class="qrsvg" viewBox="0 0 29 29" width="116" height="116"></svg></div>
+        <div style="font-size:22px;color:var(--muted);line-height:1.4">Scan with any UPI app<br><b style="color:var(--ink)">GPay · PhonePe · Paytm</b></div>
+      </div>
+      <div class="btn" style="margin-top:22px;background:var(--jade-soft);color:var(--jade-deep)" data-in="9.0" data-fx="pop">✓ Paid ₹746 by UPI</div>
+      <div style="margin-top:14px;font-size:21px;color:var(--muted);text-align:center" data-in="9.4">E-bill sent on WhatsApp · stock deducted</div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 GUEST QR -->
+<section class="scene" id="s7" data-start="48" data-end="58">
+  <div class="ph" data-kb="1.05,1.15,0,0,20,0" style="background-image:url(img/family.jpg)"></div>
+  <div class="fill" style="background:linear-gradient(90deg,rgba(8,12,11,.9) 0%,rgba(8,12,11,.7) 50%,rgba(8,12,11,.3) 100%)"></div>
+  <div class="abs" style="left:120px;top:150px;width:860px;color:#fff">
+    <div class="eyebrow" style="color:var(--marigold)" data-in=".3">Guest QR ordering</div>
+    <div class="h2" style="margin-top:18px" data-in=".5">Guests order and pay from their own phone.</div>
+    <div style="margin-top:50px;display:flex;flex-direction:column;gap:26px;font-size:34px;line-height:1.3">
+      <div style="display:flex;gap:20px" data-in="1.2" data-fx="right"><i data-ic="qr-code" data-c="#F2A516" data-s="40"></i>Scan the table QR. No app, no login.</div>
+      <div style="display:flex;gap:20px" data-in="1.8" data-fx="right"><span class="veg" style="width:34px;height:34px;margin:2px 3px;background:#fff"></span>Veg only filter, spice level, dish photos.</div>
+      <div style="display:flex;gap:20px" data-in="4.0" data-fx="right"><i data-ic="indian-rupee" data-c="#F2A516" data-s="40"></i>Everyone pays their own share by UPI.</div>
+      <div style="display:flex;gap:20px" data-in="7.2" data-fx="right"><i data-ic="star" data-c="#F2A516" data-s="40"></i>Happy guests get a Google review link. Unhappy ones reach you first.</div>
+    </div>
+  </div>
+  <div class="phone" style="left:1340px;top:130px" data-in=".6" data-fx="up" data-d="120">
+    <div class="screen"><div class="notch"></div>
+      <!-- menu -->
+      <div class="scr" data-in="0" data-fx="fade" data-out="3.6">
+        <div style="font-size:15px;color:var(--muted);font-weight:600">Table T3 · Misal House, Baner</div>
+        <div style="font-size:32px;font-weight:650;margin-top:4px">Menu</div>
+        <div style="display:flex;gap:8px;margin-top:12px;font-size:15px;font-weight:650"><span style="padding:7px 12px;border-radius:999px;background:#E3F3E6;color:#1E8E3E">● Veg only</span><span style="padding:7px 12px;border-radius:999px;background:var(--sunken)">Breakfast 6</span><span style="padding:7px 12px;border-radius:999px;background:var(--sunken)">Chai 4</span></div>
+        <div style="margin-top:14px;height:160px;border-radius:18px;background:url(img/dosa.jpg) center/cover"></div>
+        <div style="margin-top:6px;display:flex;flex-direction:column">
+          <div class="line" style="font-size:19px;padding:11px 0"><span class="veg" style="width:16px;height:16px"></span><span><b>Masala Dosa</b><br><span style="color:var(--saffron);font-size:14px;font-weight:700">BESTSELLER</span></span><span class="p tnum">₹160</span></div>
+          <div class="line" style="font-size:19px;padding:11px 0"><span class="veg" style="width:16px;height:16px"></span><span><b>Misal Pav</b> 🌶🌶</span><span class="p tnum">₹140</span></div>
+          <div class="line" style="font-size:19px;padding:11px 0"><span class="veg" style="width:16px;height:16px"></span><span><b>Vada Pav</b></span><span class="p tnum">₹40</span></div>
+          <div class="line" style="font-size:19px;padding:11px 0;border:0"><span class="veg" style="width:16px;height:16px"></span><span><b>Filter Coffee</b></span><span class="p tnum">₹60</span></div>
+        </div>
+        <div class="btn" style="margin-top:10px;height:60px;font-size:20px;background:var(--jade);color:#fff" data-in="2.4" data-fx="pop">Place order · ₹630</div>
+      </div>
+      <!-- split -->
+      <div class="scr" data-in="3.6" data-fx="fade" data-out="7.0">
+        <div style="font-size:15px;color:var(--muted);font-weight:600">Table T3 · #1052</div>
+        <div style="font-size:32px;font-weight:650;margin-top:4px">Split the bill</div>
+        <div style="margin-top:16px;padding:20px;border-radius:20px;background:var(--surface)">
+          <div style="font-size:16px;color:var(--muted)">Total with GST</div>
+          <div style="font-size:48px;font-weight:650" class="tnum">₹630</div>
+          <div style="font-size:16px;color:var(--muted)">3 guests · ₹210 each</div>
+        </div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+          <div class="splitrow" data-paid="4.6" style="display:flex;align-items:center;gap:12px;padding:16px;border-radius:18px;background:var(--surface);font-size:20px"><span style="width:44px;height:44px;border-radius:50%;background:#FCE3C4;display:flex;align-items:center;justify-content:center;font-weight:700">A</span><b>Aarav</b><span class="tnum" style="margin-left:auto">₹210</span><span class="pd" style="font-size:15px;font-weight:700;padding:5px 10px;border-radius:999px">Paying…</span></div>
+          <div class="splitrow" data-paid="5.4" style="display:flex;align-items:center;gap:12px;padding:16px;border-radius:18px;background:var(--surface);font-size:20px"><span style="width:44px;height:44px;border-radius:50%;background:#DDEBFB;display:flex;align-items:center;justify-content:center;font-weight:700">S</span><b>Sneha</b><span class="tnum" style="margin-left:auto">₹210</span><span class="pd" style="font-size:15px;font-weight:700;padding:5px 10px;border-radius:999px">Paying…</span></div>
+          <div class="splitrow" data-paid="6.2" style="display:flex;align-items:center;gap:12px;padding:16px;border-radius:18px;background:var(--surface);font-size:20px"><span style="width:44px;height:44px;border-radius:50%;background:#E2F1EB;display:flex;align-items:center;justify-content:center;font-weight:700">R</span><b>Rohan</b><span class="tnum" style="margin-left:auto">₹210</span><span class="pd" style="font-size:15px;font-weight:700;padding:5px 10px;border-radius:999px">Paying…</span></div>
+        </div>
+        <div style="margin-top:16px;text-align:center;font-size:16px;color:var(--muted)">Pay with GPay · PhonePe · Paytm · BHIM</div>
+      </div>
+      <!-- rating -->
+      <div class="scr" data-in="7.0" data-fx="fade" style="display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:150px">
+        <div style="width:110px;height:110px;border-radius:50%;background:var(--jade-soft);display:flex;align-items:center;justify-content:center"><i data-ic="check" data-c="#0E7A5F" data-s="60"></i></div>
+        <div style="font-size:30px;font-weight:650;margin-top:24px">Thank you, Aarav!</div>
+        <div style="font-size:18px;color:var(--muted);margin-top:8px">E-bill sent on WhatsApp</div>
+        <div style="font-size:20px;font-weight:600;margin-top:40px">How was your meal?</div>
+        <div class="stars" style="display:flex;gap:10px;margin-top:14px"></div>
+        <div class="btn" style="margin-top:34px;width:300px;height:60px;font-size:19px;background:var(--ink);color:#fff" data-in="8.6" data-fx="pop">Rate us on Google ★</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 PULSE -->
+<section class="scene" id="s8" data-start="58" data-end="66" style="background:var(--canvas)">
+  <div class="abs" style="left:0;top:0;width:700px;height:1080px;overflow:hidden"><div class="ph" data-kb="1.0,1.12,0,0,0,-20" style="background-image:url(img/chai.jpg)"></div>
+    <div class="abs" style="left:60px;bottom:70px;color:#fff;font-size:30px;font-weight:600;text-shadow:0 2px 20px rgba(0,0,0,.6)" data-in=".8">7:30 AM · before the shutter opens</div>
+    <div class="abs" style="left:50px;top:70px" data-in="5.8" data-fx="pop"><span class="chip" style="background:var(--saffron-soft);color:#8A5208;font-size:25px;box-shadow:0 20px 40px -16px rgba(0,0,0,.5)"><i data-ic="calendar-range" data-c="#8A5208" data-s="28"></i>Diwali weekend: +38% guests</span></div>
+  </div>
+  <div class="abs" style="left:800px;top:90px;width:1000px">
+    <div class="eyebrow" style="color:var(--saffron)" data-in=".3">Restro Pulse · <span class="deva" style="text-transform:none;letter-spacing:0">सकाळची नोंद</span></div>
+    <div class="h2" style="margin-top:14px;font-size:70px" data-in=".5">A morning note, not a dashboard.</div>
+    <div class="abs" style="left:0;top:270px;width:1000px;border-radius:32px;background:#18211E;color:#F3F4F1;padding:44px 48px;box-sizing:border-box;overflow:hidden" data-in="1.0" data-fx="up">
+      <div class="abs glow" style="right:-80px;top:-80px;width:340px;height:340px;border-radius:50%;background:#DE9122;filter:blur(60px);opacity:.35"></div>
+      <div style="position:relative;display:flex;align-items:center;gap:12px;font-size:24px;font-weight:650;color:#F0AC48"><i data-ic="sparkles" data-c="#F0AC48" data-s="30"></i>Good morning, Ramesh ji</div>
+      <div style="position:relative;margin-top:18px;font-size:38px;line-height:1.35;font-weight:550;min-height:156px" data-type="1.6,42">Yesterday's lunch beat a normal Tuesday by 14%. Order paneer before 5 PM — you'll run out around 8:30.</div>
+    </div>
+    <div class="abs" style="left:0;top:620px;width:1000px;display:flex;flex-direction:column;gap:16px">
+      <div style="font-size:24px;font-weight:650;color:var(--muted)" data-in="4.2">3 things to do today</div>
+      <div class="card" style="display:flex;align-items:center;gap:18px;padding:20px 26px;font-size:28px" data-in="4.4" data-fx="right"><span class="icb" style="width:48px;height:48px;border-radius:14px"><i data-ic="check" data-c="#0E7A5F" data-s="28"></i></span>Order 6 kg paneer from Shree Dairy<span style="margin-left:auto;font-size:21px;color:var(--jade);font-weight:650">Send on WhatsApp</span></div>
+      <div class="card" style="display:flex;align-items:center;gap:18px;padding:20px 26px;font-size:28px" data-in="4.8" data-fx="right"><span class="icb" style="width:48px;height:48px;border-radius:14px"><i data-ic="check" data-c="#0E7A5F" data-s="28"></i></span>Add 2 captains for the 7–10 PM rush</div>
+      <div class="card" style="display:flex;align-items:center;gap:18px;padding:20px 26px;font-size:28px" data-in="5.2" data-fx="right"><span class="icb" style="width:48px;height:48px;border-radius:14px"><i data-ic="check" data-c="#0E7A5F" data-s="28"></i></span>Push the Misal combo, it's a hidden gem</div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 LEAKS -->
+<section class="scene" id="s9" data-start="66" data-end="73" style="background:#121917;color:#fff">
+  <div class="abs" style="left:120px;top:100px">
+    <div class="eyebrow" style="color:var(--marigold)" data-in=".3">Leak guard · stock · GST</div>
+    <div class="h2" style="margin-top:16px" data-in=".5">Stops the leaks you never see.</div>
+  </div>
+  <div class="abs" style="left:120px;right:120px;top:350px;display:grid;grid-template-columns:repeat(2,1fr);gap:28px">
+    <div style="display:flex;gap:24px;padding:34px;border-radius:28px;background:#1C2623" data-in="1.0" data-fx="up"><span style="width:12px;border-radius:6px;background:#F06864;flex:none"></span><div><div style="font-size:22px;font-weight:700;color:#F06864;letter-spacing:.04em">ALERT · VOID AFTER KOT</div><div style="font-size:36px;font-weight:600;margin-top:8px">T7 · ₹320 cancelled after cooking</div><div style="font-size:24px;color:#96A09B;margin-top:6px">By Suresh · 9:42 PM · needs a reason</div></div></div>
+    <div style="display:flex;gap:24px;padding:34px;border-radius:28px;background:#1C2623" data-in="1.4" data-fx="up"><span style="width:12px;border-radius:6px;background:#F0AC48;flex:none"></span><div><div style="font-size:22px;font-weight:700;color:#F0AC48;letter-spacing:.04em">STOCK BEYOND RECIPE</div><div style="font-size:36px;font-weight:600;margin-top:8px">Paneer used 12% more than sold</div><div style="font-size:24px;color:#96A09B;margin-top:6px">Recipes deduct stock as you sell</div></div></div>
+    <div style="display:flex;gap:24px;padding:34px;border-radius:28px;background:#1C2623" data-in="1.8" data-fx="up"><span style="width:12px;border-radius:6px;background:#34BE96;flex:none"></span><div><div style="font-size:22px;font-weight:700;color:#34BE96;letter-spacing:.04em">GST READY</div><div style="font-size:36px;font-weight:600;margin-top:8px">GSTR-1 and 3B files for your CA</div><div style="font-size:24px;color:#96A09B;margin-top:6px">Plus P&L and day close with cash count</div></div></div>
+    <div style="display:flex;gap:24px;padding:34px;border-radius:28px;background:#1C2623" data-in="2.2" data-fx="up"><span style="width:12px;border-radius:6px;background:#6EA0F0;flex:none"></span><div><div style="font-size:22px;font-weight:700;color:#6EA0F0;letter-spacing:.04em">WORKS OFFLINE</div><div style="font-size:36px;font-weight:600;margin-top:8px">Billing keeps going when the net drops</div><div style="font-size:24px;color:#96A09B;margin-top:6px">Syncs when you're back online</div></div></div>
+  </div>
+  <div class="abs" style="left:0;right:0;top:860px;height:130px;background:#25D366;display:flex;align-items:center;overflow:hidden" data-in="3.0" data-fx="fade">
+    <div class="marq" data-marq="1" style="color:#05341A">WhatsApp everything &nbsp;·&nbsp; e-bills &nbsp;·&nbsp; waitlist alerts &nbsp;·&nbsp; supplier orders &nbsp;·&nbsp; payslips &nbsp;·&nbsp; win-back offers &nbsp;·&nbsp; birthday wishes &nbsp;·&nbsp; WhatsApp everything &nbsp;·&nbsp; e-bills &nbsp;·&nbsp; waitlist alerts &nbsp;·&nbsp; supplier orders &nbsp;·&nbsp; payslips &nbsp;·&nbsp; win-back offers &nbsp;·&nbsp; birthday wishes</div>
+  </div>
+</section>
+
+<!-- 10 FOR WHOM -->
+<section class="scene" id="s10" data-start="73" data-end="79" style="background:#F7F3EA">
+  <div class="abs" style="left:120px;top:90px">
+    <div class="eyebrow" style="color:var(--jade)" data-in=".2">Who it's for</div>
+    <div class="h2" style="margin-top:16px" data-in=".4">Every kind of Indian food business.</div>
+  </div>
+  <div class="abs" style="left:120px;right:120px;top:330px;bottom:80px;display:grid;grid-template-columns:repeat(4,1fr);gap:26px">
+    <div class="role" data-in=".8" data-fx="up" data-d="80"><div class="ph" data-kb="1.0,1.1,0,0,0,-10" style="background-image:url(img/chaistall.jpg)"></div><div class="shade"></div><div class="txt"><div class="deva" style="font-size:34px;color:#FFD27A">कॅफे · चहा</div><div class="rn">Cafés & chai bars</div></div></div>
+    <div class="role" data-in="1.1" data-fx="up" data-d="80"><div class="ph" data-kb="1.0,1.1,0,0,0,-10" style="background-image:url(img/thali.jpg)"></div><div class="shade"></div><div class="txt"><div class="deva" style="font-size:34px;color:#FFD27A">रेस्टॉरंट</div><div class="rn">Family restaurants</div></div></div>
+    <div class="role" data-in="1.4" data-fx="up" data-d="80"><div class="ph" data-kb="1.0,1.1,0,0,0,-10" style="background-image:url(img/tandoor.jpg)"></div><div class="shade"></div><div class="txt"><div class="deva" style="font-size:34px;color:#FFD27A">क्लाउड किचन</div><div class="rn">Cloud kitchens</div></div></div>
+    <div class="role" data-in="1.7" data-fx="up" data-d="80"><div class="ph" data-kb="1.0,1.1,0,0,0,-10" style="background-image:url(img/market.jpg)"></div><div class="shade"></div><div class="txt"><div class="deva" style="font-size:34px;color:#FFD27A">चेन · आउटलेट्स</div><div class="rn">Chains with many outlets</div></div></div>
+  </div>
+</section>
+
+<!-- 11 PRICING -->
+<section class="scene" id="s11" data-start="79" data-end="85" style="background:var(--canvas)">
+  <div class="abs" style="left:0;right:0;top:90px;text-align:center">
+    <div class="eyebrow" style="color:var(--jade)" data-in=".2">Pricing</div>
+    <div class="h2" style="margin-top:16px" data-in=".4">Simple pricing, per outlet.</div>
+  </div>
+  <div class="plan card" style="left:120px" data-in=".8" data-fx="up"><div class="n">Starter</div><div class="b">For a café or a single small outlet.</div><div class="pr tnum" data-count="1.0,1.0,999">₹0</div><div class="per">per month + GST</div><ul><li>✓ UPI QR & GST billing</li><li>✓ Kitchen display</li><li>✓ WhatsApp e-bills</li></ul></div>
+  <div class="plan" style="left:540px;background:#18211E;color:#F3F4F1;transform-origin:50% 50%" data-in="1.0" data-fx="up"><div style="display:flex;align-items:center;justify-content:space-between"><div class="n">Growth</div><span style="background:var(--saffron);color:#fff;font-size:18px;font-weight:700;padding:6px 14px;border-radius:999px">Most picked</span></div><div class="b">For a busy restaurant that wants fewer leaks.</div><div class="pr tnum" data-count="1.2,1.0,2499">₹0</div><div class="per">per month + GST</div><ul><li>✓ QR ordering + split pay</li><li>✓ Stock & recipe costing</li><li>✓ Restro Pulse briefing</li></ul></div>
+  <div class="plan card" style="left:960px" data-in="1.2" data-fx="up"><div class="n">Pro</div><div class="b">For owners who want the numbers to run themselves.</div><div class="pr tnum" data-count="1.4,1.0,4999">₹0</div><div class="per">up to 3 outlets · + GST</div><ul><li>✓ Voice ordering</li><li>✓ Prep forecast & Leak guard</li><li>✓ Swiggy & Zomato orders</li></ul></div>
+  <div class="plan card" style="left:1380px" data-in="1.4" data-fx="up"><div class="n">Chain</div><div class="b">For brands with many outlets and a central kitchen.</div><div class="pr" style="font-size:58px">Let's talk</div><div class="per">4+ outlets</div><ul><li>✓ Central kitchen</li><li>✓ Brand-wide menu</li><li>✓ Priority WhatsApp support</li></ul></div>
+  <div class="abs" style="left:0;right:0;top:920px;text-align:center;font-size:30px;font-weight:600;color:var(--jade-deep)" data-in="2.6">14-day free trial · No card needed · Set up in 20 minutes</div>
+</section>
+
+<!-- 12 CTA -->
+<section class="scene" id="s12" data-start="85" data-end="92" style="background:radial-gradient(circle at 50% 60%,#13906F 0%,#0E7A5F 45%,#08503F 100%)">
+  <svg class="abs mandala" data-rot="-6" style="left:960px;top:600px;width:1500px;height:1500px;margin:-750px 0 0 -750px;opacity:.16" viewBox="-500 -500 1000 1000"></svg>
+  <svg class="abs toran" style="left:0;top:0;width:1920px;height:230px" viewBox="0 0 1920 230"></svg>
+  <div class="abs" style="left:0;right:0;top:330px;display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center">
+    <div class="deva" style="font-size:60px;color:#FFD27A" data-in=".3">चला, सुरुवात करूया!</div>
+    <div style="margin-top:20px;font-size:96px;font-weight:650;letter-spacing:-.035em;line-height:1.02" data-in=".7">Try Restro free<br>for 14 days.</div>
+    <div style="margin-top:50px;display:flex;align-items:center;gap:24px" data-in="1.5" data-fx="pop">
+      <span style="display:inline-flex;align-items:center;gap:18px;padding:26px 46px;border-radius:22px;background:#fff;color:#0E7A5F;font-size:38px;font-weight:650">
+        <svg width="46" height="46" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#0E7A5F"/><path d="M8 17V7.5h4.6a3 3 0 0 1 .4 6L16 17" stroke="#fff" stroke-width="2.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Start your free trial</span>
+    </div>
+    <div style="margin-top:44px;font-size:30px;color:#CDEBE0" data-in="2.2">Billing · Kitchen · Tables · Stock · Team · Guests · Reports</div>
+    <div style="margin-top:14px;font-size:26px;color:#9FD3C1" data-in="2.6">Made in Pune for Indian restaurants.</div>
+  </div>
+  <div class="credit" data-in="1" data-fx="fade">Photos: Unsplash</div>
+</section>
+
+</div>
+<div id="ui"><button id="pp" aria-label="Play or pause">Pause</button><input id="sc" type="range" min="0" max="92" step="0.01" value="0" aria-label="Seek"><span id="tm" class="tnum">0:00</span><button id="fs">Fullscreen</button></div>
+</div>
+
+<script>
+const ICONS=/*ICONS*/{};
+const DUR=92;
+const C=x=>x<0?0:x>1?1:x;
+const eo=x=>1-Math.pow(1-x,3);
+const eb=x=>{const c1=1.7,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const seg=(t,a,d)=>C((t-a)/d);
+
+// icons
+document.querySelectorAll('i[data-ic]').forEach(el=>{
+  const s=el.dataset.s||38,c=el.dataset.c||'#0E7A5F';
+  el.outerHTML=`<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[el.dataset.ic]||''}</svg>`;
+});
+// QR (decorative pattern, seeded)
+document.querySelectorAll('.qrsvg').forEach(svg=>{
+  let r='',seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  const finder=(x,y)=>`<rect x="${x}" y="${y}" width="7" height="7" fill="#18211E"/><rect x="${x+1}" y="${y+1}" width="5" height="5" fill="#fff"/><rect x="${x+2}" y="${y+2}" width="3" height="3" fill="#18211E"/>`;
+  for(let y=0;y<29;y++)for(let x=0;x<29;x++){const inF=(x<8&&y<8)||(x>20&&y<8)||(x<8&&y>20);if(!inF&&rnd()>.52)r+=`<rect x="${x}" y="${y}" width="1" height="1" fill="#18211E"/>`}
+  svg.innerHTML=r+finder(0,0)+finder(22,0)+finder(0,22)+`<rect x="11.5" y="11.5" width="6" height="6" rx="1.4" fill="#fff"/><circle cx="14.5" cy="14.5" r="2.4" fill="#0E7A5F"/>`;
+});
+// mandala (rangoli)
+document.querySelectorAll('.mandala').forEach(svg=>{
+  let s='';const ring=(n,r,rx,ry,op)=>{for(let i=0;i<n;i++){const a=360/n*i;s+=`<ellipse cx="0" cy="${-r}" rx="${rx}" ry="${ry}" transform="rotate(${a})" fill="none" stroke="#fff" stroke-width="3" opacity="${op}"/>`}};
+  ring(8,60,22,46,1);ring(16,150,26,60,.9);ring(24,250,20,52,.8);ring(32,340,14,40,.7);ring(48,420,8,26,.6);
+  [100,200,300,385,460].forEach(r=>s+=`<circle r="${r}" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 10"/>`);
+  for(let i=0;i<64;i++){const a=i/64*Math.PI*2;s+=`<circle cx="${Math.sin(a)*480}" cy="${-Math.cos(a)*480}" r="6" fill="#FFD27A"/>`}
+  svg.innerHTML=s;
+});
+// toran (marigold garland)
+document.querySelectorAll('.toran').forEach(svg=>{
+  let s=`<path d="M0 18 Q960 40 1920 18" stroke="#7A4A12" stroke-width="4" fill="none"/>`;const n=22;
+  for(let i=0;i<n;i++){const x=40+i*(1840/(n-1)),len=(i%2?120:170);
+    let g=`<g class="strand" data-i="${i}" style="transform-origin:${x}px 22px"><line x1="${x}" y1="22" x2="${x}" y2="${22+len}" stroke="#7A4A12" stroke-width="2"/>`;
+    for(let k=0;k<(i%2?4:6);k++){const y=40+k*26;g+=`<circle cx="${x}" cy="${y}" r="15" fill="${k%2?'#F2A516':'#E8740C'}"/><circle cx="${x}" cy="${y}" r="7" fill="${k%2?'#FFC94A':'#F59A2C'}"/>`}
+    g+=`<path d="M${x} ${22+len} q-16 22 0 44 q16 -22 0 -44z" fill="#3E8E3A"/></g>`;s+=g}
+  svg.innerHTML=s;
+});
+// waveform bars
+document.querySelectorAll('.wave').forEach(w=>{for(let i=0;i<26;i++){const b=document.createElement('span');b.style.cssText='width:8px;border-radius:4px;background:#DE9122;height:8px';w.appendChild(b)}});
+// stars
+document.querySelectorAll('.stars').forEach(w=>{for(let i=0;i<5;i++){w.insertAdjacentHTML('beforeend',`<svg width="52" height="52" viewBox="0 0 24 24" stroke="#DE9122" stroke-width="1.6" stroke-linejoin="round"><path d="${ICONS.star.match(/d="([^"]+)"/)[1]}" fill="transparent"/></svg>`)}});
+// typing setup
+const seg8=new Intl.Segmenter('mr',{granularity:'grapheme'});
+document.querySelectorAll('[data-type]').forEach(el=>{el._g=[...seg8.segment(el.textContent.trim())].map(x=>x.segment);el.textContent=''});
+
+const SC=[...document.querySelectorAll('.scene')].map(s=>({el:s,a:+s.dataset.start,b:+s.dataset.end,
+  ins:[...s.querySelectorAll('[data-in]')],kb:[...s.querySelectorAll('[data-kb]')],ty:[...s.querySelectorAll('[data-type]')],
+  st:[...s.querySelectorAll('[data-strike]')],ct:[...s.querySelectorAll('[data-count]')]}));
+
+function fx(el,lt){
+  const [t0,d0]=el.dataset.in.split(',').map(Number);const d=d0||(el.dataset.fx==='pop'?.55:.7);
+  const p=seg(lt,t0,d),e=eo(p),q=1-e,D=+(el.dataset.d||44),f=el.dataset.fx||'up';
+  let tf='none',o=e,flt='';
+  if(f==='up')tf=`translateY(${q*D}px)`;else if(f==='down')tf=`translateY(${-q*D}px)`;
+  else if(f==='left')tf=`translateX(${q*D}px)`;else if(f==='right')tf=`translateX(${-q*D}px)`;
+  else if(f==='scale')tf=`scale(${.9+.1*e})`;else if(f==='pop'){tf=`scale(${p<=0?.6:.6+.4*eb(p)})`;o=C(p*2.5)}
+  if(f!=='fade'&&f!=='pop'&&p<1)flt=`blur(${q*6}px)`;
+  if(el.dataset.out){const r=seg(lt,+el.dataset.out,.35);o*=1-r}
+  el.style.opacity=o;el.style.transform=tf;el.style.filter=flt;
+}
+function seek(T){
+  for(const s of SC){
+    const vis=T>=s.a&&T<s.b+.7;s.el.style.display=vis?'block':'none';if(!vis)continue;
+    const lt=T-s.a,len=s.b-s.a+.7;s.el.style.opacity=s.a===0?C(lt/.4):eio(C(lt/.6));
+    for(const el of s.ins)fx(el,lt);
+    for(const el of s.kb){const [s0,s1,x0,y0,x1,y1]=el.dataset.kb.split(',').map(Number);const p=C(lt/len);el.style.transform=`translate(${x0+(x1-x0)*p}px,${y0+(y1-y0)*p}px) scale(${s0+(s1-s0)*p})`}
+    for(const el of s.ty){const [t0,cps]=el.dataset.type.split(',').map(Number);el.textContent=el._g.slice(0,Math.floor(C((lt-t0)*cps/el._g.length)*el._g.length)).join('')}
+    for(const el of s.st){el.querySelector('.bar').style.width=(eo(seg(lt,+el.dataset.strike,.35))*(el.offsetWidth+16))+'px';el.style.color=lt>+el.dataset.strike?'rgba(243,244,241,.45)':'#F3F4F1'}
+    for(const el of s.ct){const [t0,d,v]=el.dataset.count.split(',').map(Number);el.textContent='₹'+Math.round(v*eo(seg(lt,t0,d))).toLocaleString('en-IN')}
+    (H[s.el.id]||(()=>{}))(lt,s.el);
+  }
+}
+const H={
+  s3:(t,el)=>{el.querySelector('.mandala').style.transform=`rotate(${t*8}deg) scale(${.9+.1*eo(C(t/2))})`;swing(el,t)},
+  s12:(t,el)=>{el.querySelector('.mandala').style.transform=`rotate(${-t*6}deg) scale(${.9+.1*eo(C(t/2))})`;swing(el,t)},
+  s6:(t,el)=>{
+    const ring=el.querySelector('.ring');const rp=(t%1.2)/1.2;const on=t>.9&&t<3.2;ring.style.transform=`scale(${1+rp*.8})`;ring.style.opacity=on?(1-rp)*.5:0;
+    el.querySelectorAll('.wave span').forEach((b,i)=>{const a=on?(.35+.65*Math.abs(Math.sin(t*9+i*.7)*Math.sin(t*3.1+i*1.3))):0.12;b.style.height=(8+a*52)+'px'});
+    el.querySelectorAll('[data-timer]').forEach(k=>{const s=Math.max(0,(t-+k.dataset.timer))*48;const m=Math.floor(s/60),ss=Math.floor(s%60);k.textContent=`${m}:${String(ss).padStart(2,'0')}`;if(t>6.6)k.style.color='#34BE96'});
+  },
+  s7:(t,el)=>{
+    el.querySelectorAll('.splitrow').forEach(r=>{const pd=r.querySelector('.pd');const ok=t>+r.dataset.paid;pd.textContent=ok?'✓ Paid':'Paying…';pd.style.background=ok?'#E2F1EB':'#FCF0DC';pd.style.color=ok?'#095442':'#8A5208'});
+    el.querySelectorAll('.stars svg').forEach((s,i)=>{const p=seg(t,7.6+i*.15,.3);s.querySelector('path').setAttribute('fill',p>0?'#DE9122':'transparent');s.style.transform=`scale(${p>0&&p<1?1+.3*Math.sin(p*Math.PI):1})`});
+  },
+  s8:(t,el)=>{el.querySelector('.glow').style.opacity=.25+.15*Math.sin(t*2)},
+  s9:(t,el)=>{const m=el.querySelector('.marq');m.style.transform=`translateX(${-t*140}px)`},
+};
+function swing(el,t){el.querySelectorAll('.strand').forEach(g=>{const i=+g.dataset.i;g.style.transform=`rotate(${Math.sin(t*1.6+i*.6)*2.2}deg)`})}
+
+// scale stage
+function fit(){const st=document.getElementById('stage');const k=Math.min(innerWidth/1920,innerHeight/1080);st.style.transform=`scale(${k}) translate(-50%,-50%)`;st.style.transformOrigin='0 0';st.style.left='50%';st.style.top='50%';st.style.transform=`translate(-50%,-50%) scale(${k})`;st.style.transformOrigin='50% 50%'}
+window.seek=seek;window.DUR=DUR;
+const RENDER=location.search.includes('render');
+if(RENDER){document.getElementById('ui').remove();const st=document.getElementById('stage');st.style.cssText='left:0;top:0;transform:none';document.body.style.display='block';seek(0)}
+else{
+  addEventListener('resize',fit);fit();
+  let t0=performance.now(),off=0,playing=true;const pp=document.getElementById('pp'),sc=document.getElementById('sc'),tm=document.getElementById('tm');
+  const now=()=>playing?(off+(performance.now()-t0)/1000)%DUR:off;
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){playing=false;off=17;pp.textContent='Play'}
+  pp.onclick=()=>{if(playing){off=now();playing=false;pp.textContent='Play'}else{t0=performance.now();playing=true;pp.textContent='Pause'}};
+  sc.oninput=()=>{off=+sc.value;t0=performance.now();seek(off)};
+  document.getElementById('fs').onclick=()=>{document.documentElement.requestFullscreen?.().catch(()=>{})};
+  (function loop(){const T=now();seek(T);sc.value=T;tm.textContent=`${Math.floor(T/60)}:${String(Math.floor(T%60)).padStart(2,'0')}`;requestAnimationFrame(loop)})();
+}
+</script>

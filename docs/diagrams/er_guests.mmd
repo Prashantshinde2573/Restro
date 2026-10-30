@@ -1,0 +1,55 @@
+erDiagram
+  OUTLET ||--o{ ORDER : takes
+  CUSTOMER ||--o{ ORDER : places
+  OUTLET ||--o{ CUSTOMER : "guest book"
+  CUSTOMER ||--o{ FEEDBACK : gives
+  OUTLET ||--o{ CAMPAIGN : runs
+  OUTLET {
+    string oid PK
+    string rid FK
+    string name
+    string address
+    string businessType "restaurant|cafe"
+    string upi "payment QRs"
+    bool payFirst
+    string gstin
+  }
+  CUSTOMER {
+    string phone PK
+    string name
+    bool verified
+    string source
+    bool optIn
+    int visits
+    int spend
+    int points
+    string tier
+  }
+  ORDER {
+    string orderId PK
+    int number
+    string type "dine-in|takeaway|delivery"
+    string channel "pos|qr|whatsapp|swiggy|zomato|voice"
+    string tableId FK
+    string partyId FK
+    string guestPhone FK
+    string status
+    map totals
+    string payPreference
+    array prepaid "paid from guest phone"
+    string createdBy FK
+    date createdAt
+  }
+  FEEDBACK {
+    string fid PK
+    string phone FK
+    int stars
+    string text
+    string routed "google|private"
+  }
+  CAMPAIGN {
+    string cid PK
+    string channel
+    string audience
+    string status
+  }

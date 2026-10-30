@@ -14,6 +14,7 @@ const dict = {
   inventory: { en: "Stock", mr: "स्टॉक", hi: "स्टॉक" },
   customers: { en: "Guests", mr: "ग्राहक", hi: "ग्राहक" },
   staff: { en: "Team", mr: "टीम", hi: "टीम" },
+  access: { en: "Members & access", mr: "सदस्य आणि परवानग्या", hi: "सदस्य और एक्सेस" },
   marketing: { en: "Campaigns", mr: "मोहिमा", hi: "कैंपेन" },
   insights: { en: "Insights", mr: "इनसाइट्स", hi: "इनसाइट्स" },
   reports: { en: "Reports", mr: "रिपोर्ट्स", hi: "रिपोर्ट" },

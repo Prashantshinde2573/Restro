@@ -95,14 +95,65 @@ sequenceDiagram
   DB->>DB: Deduct stock by recipe, add loyalty points, free the table
 ```
 
-### 3.3 Guest QR order and split pay
+### 3.3 Guest QR ordering (conversion-first)
 
-1. Guest scans the table QR → `/order/T3` (no app, no login).
-2. Picks dishes → "Place order". If *Orders need captain approval* is on, the
-   order waits in **Orders → Online**; otherwise it goes straight to the kitchen.
-3. Guest sees live status (Received → Cooking → At your table), can **Call waiter**.
-4. **Pay my share**: split equally, or tick what I ate → UPI intent (GPay/PhonePe/Paytm).
-5. After paying: 1–5 stars. 4–5 → Google review link. 1–3 → private note to the owner.
+The guest is never asked for anything until the moment it matters.
+
+1. **Scan** the table QR → `/order/T3`. No app, no login. Menu opens straight away
+   (search, *Veg only*, categories with counts, veg/non-veg marks, spice chillies,
+   *Bestseller / Chef's special / New / Seasonal* labels, square photos with a photo-count chip → gallery).
+2. **Add dishes.** Dishes with choices (spice level, add-ons, size) open a sheet with the
+   usual choice pre-selected, so one tap still adds. Cart shows a *Goes well with* suggestion.
+3. **Cart** shows item total, CGST + SGST, *Service charge: none*, and the amount to pay.
+4. **Place order → name + mobile + OTP**, asked once per phone (remembered). Optional tick for WhatsApp offers.
+   The guest is saved in **Guests** with a verified badge.
+5. **Confirmation screen** with the order number (#1047) and live status
+   **Received → Accepted → Preparing → Ready → Served**.
+6. **My orders** shows every order of the group this visit; **Order more** adds to the same running bill.
+7. **Get the bill**: full breakdown, optional tip (none/5/10/15%), and *How will you pay?*
+   - **UPI now** → pays in the app → e-bill on WhatsApp → rating (4–5★ → Google review link, 1–3★ → private note to owner).
+   - **Cash / Card** → captain is told; the order shows *Bill · Cash* on the staff screen and the checkout opens on that method.
+   - Part UPI + part cash → staff use **UPI + Cash** at checkout.
+
+### 3.3a Payments staff can correct later
+
+- Checkout tender: UPI · Cash · Card · **UPI + Cash** (any mix of up to 3 payments, "put the rest on…" in one tap) · Split by guest.
+- **Orders → Paid → Change how it was paid**: e.g. guest chose UPI but paid cash. The change is saved with
+  who/when (*Changed from UPI ₹630 to UPI ₹100 + Cash ₹530 · Kavya (Manager)*). The Paid tab totals UPI / Cash / Card for the day close.
+
+### 3.3b Groups at one table and home-order protection
+
+- **New phone = new group** (its own bill). No question on scan.
+- Friends join with **Share access** → a 4-digit group code valid for 10 minutes (WhatsApp share / copy).
+  The friend taps *Friends already ordered? → enter code*.
+- If a captain already seated a group with no phone yet, the new phone sees *Just seated by our staff? Tap to use that bill*.
+- **The printed QR never changes.** It only encodes the table (`/order/T6` plus a fixed table token), so you print it
+  once. That also means a photo of it opens the menu from anywhere — protection therefore happens on the order, not the QR:
+  - a new group's **first** order arrives as *Received* and needs one tap **Accept** by staff (Orders or the Tables banner);
+    later orders from that group go straight to the kitchen;
+  - every order carries an OTP-verified mobile number (a prank is traceable and can be blocked);
+  - QR ordering is off outside opening hours (setting);
+  - optional location check at the first order (setting, off by default because some guests refuse location).
+- Behind the scenes each sitting at a table gets a **visit id**. When the last group pays and leaves, the next guests start a
+  new visit — so yesterday's phone isn't put back into a finished bill. Nothing about the printed QR changes.
+
+### 3.3c Shared tables (strangers at one table)
+
+A table holds one or more **parties**. Each party has its own order, KOT label and bill.
+
+```
+T6 (4 seats)
+├── Party A · 2 guests · code 4821 · ₹940   ← opened from QR, phone linked
+└── Party B · 1 guest  · code 7163 · ₹400   ← seated by captain
+```
+
+- **Captain seats a second group:** Tables → T6 → *Share table · seat another party* → Party B.
+  (Or straight from the waitlist: "T6 has a free seat — Seat at T6".)
+- **Ordering:** POS → table picker shows `T6: A·2  B·1  + New party`. KOTs print as **T6 · B**.
+- **Billing:** each party is charged separately. When a party pays, only that party closes;
+  the table becomes free when the last party leaves.
+- **Merge** (they turn out to be together → one bill) and **Move** (party B moves to T3 with its order).
+- A free table needs no extra step: the first order opens Party A automatically.
 
 ### 3.4 Online orders (WhatsApp, Swiggy, Zomato)
 
@@ -171,14 +222,19 @@ restaurants/{rid}                      name, ownerUid, plan, status(trial|active
   members/{uid}                        name, phone, role, outletIds[], pinHash, active
   outlets/{oid}                        name, address, gstin, gstRate, upi, settings{}
     categories/{cid}
-    menuItems/{mid}                    name, categoryId, price, diet, station, available, recipe[{ingredientId, qty}], photoPath
-    tables/{tid}                       name, zone, seats, status, currentOrderId, qrToken
-    orders/{orderId}                   number, type, channel, tableId, lines[], status, totals{}, payments[], createdBy, createdAt
+    menuItems/{mid}                    name, categoryId, price, diet, station, available, spice, isNew, tags[],
+                                       options[{name, type, required, choices[{name, price}]}], photos[], recipe[]
+    tables/{tid}                       name, zone, seats, qrToken (fixed, printed), visitId, reservedAt,
+                                       parties[{ id, guests, since, status, total, code, source, phoneClaimed, pendingApproval }]
+    guestSessions/{sid}                tableId, visitId, partyId, deviceId     ← which phone belongs to which group this visit
+    orders/{orderId}                   number, type, channel, tableId, partyId, guestPhone, payPreference,
+                                       payments[{method, amount}], paymentLog[{at, by, text}], lines[], status, totals{}, payments[], createdBy, createdAt
     kots/{kotId}                       orderId, station, lines[], status   ← kitchen screen listens here
     ingredients/{iid}                  name, unit, stock, par, costPerUnit, supplierId
     stockMoves/{id}                    ingredientId, qty(+/-), reason(sale|purchase|waste|adjust), ref
     suppliers/{sid}  purchaseOrders/{poId}
-    customers/{cuid}                   phone, name, visits, spend, points, tier, birthday, optIn
+    customers/{phone}                  name, verified, source, optIn, visits, spend, points, tier, birthday
+      bills/{orderId}                  amount, method, at
     feedback/{fid}   campaigns/{cid}   expenses/{eid}
     shifts/{id}  attendance/{id}  payroll/{month}
     dayCloses/{yyyy-mm-dd}             expected, counted, variance, by
@@ -211,7 +267,8 @@ match /restaurants/{rid}/outlets/{oid}/orders/{id} {
 |---|---|
 | `orders` created/updated | Recalculate totals + GST server-side; create `kots` per station |
 | order status → `paid` | Deduct stock by recipe, add loyalty points, free table, send WhatsApp e-bill |
-| `guestOrders` created | Validate table token + prices, copy into `orders` |
+| `guestOrders` created | Validate fixed table token + current visit + party + prices, copy into `orders` (held until captain confirms a pending party) |
+| `joinParty` (callable) | Check the 4-digit party code (rate-limited), link the phone's guest session to that party |
 | nightly 2 am | Pulse briefing, forecast, prep list, Leak guard alerts, platform stats |
 | Razorpay webhook | Update plan/status; past-due reminders on WhatsApp |
 | `staffLogin` (callable) | Check PIN hash → custom token |

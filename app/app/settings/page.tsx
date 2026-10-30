@@ -1,14 +1,20 @@
 "use client";
 
+import { Bike, Check, ChevronRight, CreditCard, KeyRound, LogOut, MessageCircle, Printer, QrCode, Receipt, ShieldCheck, Store, Users, Database } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Bike, Building2, ChevronRight, CreditCard, KeyRound, LogOut, MessageCircle, Printer, QrCode, Receipt, ShieldCheck, Store, Users, Database, Languages } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { Avatar, Button, Field, Page, PageHeader, Pill, Sheet, SwitchRow, inputCls, LocalSegmented } from "@/components/ui";
+import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, SwitchRow, Toggle, inputCls, LocalSegmented } from "@/components/ui";
+import { UpiPayCard, isValidUpi } from "@/components/upi";
+import { accountActions, resetSavedData, settingsActions, useAccount, useCan, useCurrentOutlet, useMe, useOutlets, useSettings } from "@/lib/live";
+import { useCloud } from "@/lib/cloud";
+import { OUTLET_LIMIT, RENEW_WARN_DAYS, daysLeft, isOwner } from "@/lib/access";
+import clsx from "clsx";
+import type { OutletSettings } from "@/lib/types";
 import { useToast } from "@/components/toast";
 import { repo } from "@/lib/repo";
 import { inr } from "@/lib/format";
 
-type Panel = "restaurant" | "tax" | "payments" | "ordering" | "printers" | "roles" | "outlets" | "security" | "data" | null;
+type Panel = "restaurant" | "tax" | "payments" | "ordering" | "printers" | "security" | "data" | null;
 
 function Item({ icon, tint, title, value, onClick }: { icon: ReactNode; tint: string; title: string; value?: ReactNode; onClick: () => void }) {
   return (
@@ -21,28 +27,39 @@ function Item({ icon, tint, title, value, onClick }: { icon: ReactNode; tint: st
   );
 }
 
-const roles = [
-  { r: "Owner", can: "Everything, including payouts and deleting data" },
-  { r: "Manager", can: "Refunds, discounts above 10%, day close, staff rota" },
-  { r: "Captain", can: "Take orders, move tables, request bill" },
-  { r: "Cashier", can: "Charge bills, small discounts, print receipts" },
-  { r: "Chef", can: "Kitchen screen, stock counts, waste" },
-];
-
 export default function SettingsPage() {
   const toast = useToast();
   const r = repo.restaurant();
-  const plan = repo.plans().find((p) => p.name === r.plan)!;
-  const [panel, setPanel] = useState<Panel>(null);
+  const me = useMe();
+  const owner = isOwner(me);
+  const canOutlet = useCan("outletSettings");
+  const account = useAccount();
+  const outlets = useOutlets();
+  const outlet = useCurrentOutlet();
+  const plans = repo.plans();
+  const plan = plans.find((p) => p.id === account.plan)!;
+  const days = daysLeft(account.renewsAt);
+  const renewDate = new Date(account.renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const [planOpen, setPlanOpen] = useState(false);
+  useEffect(() => {
+    if (owner && window.location.hash === "#plan") setPlanOpen(true);
+  }, [owner]);
+  const [panel, setPanelRaw] = useState<Panel>(null);
+  const settings = useSettings();
+  const cloud = useCloud();
+  const [draft, setDraft] = useState<OutletSettings>(settings);
+  const setPanel = (p: Panel) => {
+    setDraft(settings);
+    setPanelRaw(p);
+  };
+  const upiOk = isValidUpi(draft.upi);
 
   const titles: Record<Exclude<Panel, null>, string> = {
     restaurant: "Restaurant details",
     tax: "Bills and GST",
-    payments: "Payments",
-    ordering: "Online ordering",
+    payments: `Payments · ${outlet.name}`,
+    ordering: `Ordering · ${outlet.name}`,
     printers: "Printers and screens",
-    roles: "Who can do what",
-    outlets: "Outlets",
     security: "Sign-in and security",
     data: "Backups and export",
   };
@@ -51,66 +68,134 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" />
       <Page className="mx-auto max-w-2xl space-y-6 lg:mx-0">
-        <div className="flex items-center gap-4 rounded-group bg-surface p-4">
-          <Avatar name={r.owner} hue={160} size={52} />
-          <div className="min-w-0 flex-1">
-            <div className="text-[17px] font-semibold">{r.owner}</div>
-            <div className="text-[14px] text-muted">Owner · owner@saffronlane.in</div>
-          </div>
-        </div>
-
-        {/* Subscription */}
-        <section className="overflow-hidden rounded-group bg-ink p-5 text-canvas">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[13px] text-canvas/60">Your plan</div>
-              <div className="text-[24px] font-semibold tracking-tight">{plan.name}</div>
-              <div className="text-[14px] text-canvas/70">{inr(plan.monthly!)} per outlet / month · {r.outlets.length} outlets</div>
+        {me && (
+          <div className="flex items-center gap-4 rounded-group bg-surface p-4">
+            <Avatar name={me.name} hue={me.hue} size={52} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[17px] font-semibold">{me.name}</div>
+              <div className="text-[14px] text-muted">{owner ? "Owner · admin" : `${me.title} · ${outlet.name}`}</div>
             </div>
-            <Pill tone="jade">Active</Pill>
           </div>
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-canvas/70">
-            <span>Next bill {inr(plan.monthly! * r.outlets.length)} on 1 Nov</span>
-            <span>Paid by UPI AutoPay</span>
+        )}
+
+        {/* Subscription — owner only */}
+        {owner && (
+          <section id="plan" className="overflow-hidden rounded-group bg-ink p-5 text-canvas">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[13px] text-canvas/60">Your plan</div>
+                <div className="text-[24px] font-semibold tracking-tight">{plan.name}</div>
+                <div className="text-[14px] text-canvas/70">{plan.monthly ? `${inr(plan.monthly)} per outlet / month · ` : ""}{outlets.length} outlets</div>
+              </div>
+              <Pill tone={days <= 0 ? "rose" : days <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{days <= 0 ? "Ended" : days <= RENEW_WARN_DAYS ? `${days} days left` : "Active"}</Pill>
+            </div>
+            <div className="mt-4 text-[13px] text-canvas/70">
+              {days <= 0 ? `Ended on ${renewDate}` : `Renews on ${renewDate}`}
+              {plan.monthly ? ` · ${inr(plan.monthly * outlets.length)}` : ""}
+            </div>
+            {cloud.rid ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>See plans</Button>
+                <span className="text-[12.5px] text-canvas/60">To renew or change plan, contact Restro on WhatsApp.</span>
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" className="!bg-canvas !text-ink hover:!bg-canvas/90" onClick={() => { accountActions.renew(); toast("Renewed for 1 month"); }}>Renew now</Button>
+                <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>Change plan</Button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {owner && (
+          <div className="overflow-hidden rounded-group bg-surface">
+            <Item icon={<Store size={16} />} tint="#0E7A5F" title="Restaurant details" value={settings.name} onClick={() => setPanel("restaurant")} />
+            <Link href="/app/access" className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40">
+              <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#2C6EC8] text-white"><Users size={16} /></span>
+              <span className="flex-1 text-[15px]">Outlets, members & access</span>
+              <span className="text-[14px] text-muted">{outlets.length} outlets</span>
+              <ChevronRight size={17} className="text-faint" />
+            </Link>
           </div>
-          <div className="mt-4 flex gap-2">
-            <Link href="/pricing"><Button size="sm" className="!bg-canvas !text-ink hover:!bg-canvas/90">Compare plans</Button></Link>
-            <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => toast("Invoices downloaded")}>Invoices</Button>
+        )}
+
+        {(owner || canOutlet) && (
+          <div>
+            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}</div>
+            <div className="overflow-hidden rounded-group bg-surface">
+              <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi} onClick={() => setPanel("payments")} />
+              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.businessType === "cafe" ? "Café · pay first" : settings.payFirst ? "Pay first" : "Pay at the end"} onClick={() => setPanel("ordering")} />
+              <Item icon={<Receipt size={16} />} tint="#DE9122" title="Bills and GST" value="5%" onClick={() => setPanel("tax")} />
+              <Item icon={<Printer size={16} />} tint="#68716D" title="Printers and screens" onClick={() => setPanel("printers")} />
+            </div>
           </div>
-        </section>
+        )}
 
-        <div className="overflow-hidden rounded-group bg-surface">
-          <Item icon={<Store size={16} />} tint="#0E7A5F" title="Restaurant details" value={r.name} onClick={() => setPanel("restaurant")} />
-          <Item icon={<Building2 size={16} />} tint="#2C6EC8" title="Outlets" value={`${r.outlets.length} outlets`} onClick={() => setPanel("outlets")} />
-          <Item icon={<Users size={16} />} tint="#7A5AF8" title="Who can do what" value="5 roles" onClick={() => setPanel("roles")} />
-        </div>
+        {owner && (
+          <div className="overflow-hidden rounded-group bg-surface">
+            <Item icon={<ShieldCheck size={16} />} tint="#D24242" title="Sign-in and security" onClick={() => setPanel("security")} />
+            <Item icon={<Database size={16} />} tint="#68716D" title="Backups and export" onClick={() => setPanel("data")} />
+          </div>
+        )}
 
-        <div className="overflow-hidden rounded-group bg-surface">
-          <Item icon={<Receipt size={16} />} tint="#DE9122" title="Bills and GST" value="5% · prices exclude GST" onClick={() => setPanel("tax")} />
-          <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={r.upi} onClick={() => setPanel("payments")} />
-          <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Online ordering" value="QR, WhatsApp, Swiggy, Zomato" onClick={() => setPanel("ordering")} />
-          <Item icon={<Printer size={16} />} tint="#68716D" title="Printers and screens" value="3 connected" onClick={() => setPanel("printers")} />
-        </div>
-
-        <div className="overflow-hidden rounded-group bg-surface">
-          <Item icon={<ShieldCheck size={16} />} tint="#D24242" title="Sign-in and security" value="2-step on" onClick={() => setPanel("security")} />
-          <Item icon={<Database size={16} />} tint="#68716D" title="Backups and export" value="Daily, automatic" onClick={() => setPanel("data")} />
-          <Item icon={<Languages size={16} />} tint="#7A5AF8" title="Language" value="English, मराठी, हिंदी" onClick={() => toast("Change language from the menu")} />
-        </div>
-
-        <Button variant="danger" className="w-full" onClick={() => toast("Signed out")}><LogOut size={16} /> Sign out</Button>
-        <p className="text-center text-[12px] text-faint">Restro 0.1 · prototype</p>
+        <Link href="/login"><Button variant="danger" className="w-full"><LogOut size={16} /> Sign out</Button></Link>
       </Page>
+
+      {/* ---------- change plan ---------- */}
+      <Sheet open={planOpen} onClose={() => setPlanOpen(false)} title="Plans" wide>
+        <div className="grid gap-3 md:grid-cols-2">
+          {plans.map((p) => {
+            const cur = p.id === account.plan;
+            const tooSmall = OUTLET_LIMIT[p.id] < outlets.length;
+            return (
+              <div key={p.id} className={clsx("rounded-group bg-surface p-4", cur && "ring-2 ring-jade")}>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[17px] font-semibold">{p.name}</span>
+                  <span className="text-[15px] font-semibold tnum">{p.monthly ? `${inr(p.monthly)}/outlet` : "Custom"}</span>
+                </div>
+                <div className="text-[13px] text-muted">{p.outlets}</div>
+                <ul className="mt-2 space-y-1 text-[13.5px]">
+                  {p.features.map((f) => <li key={f} className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-jade" />{f}</li>)}
+                </ul>
+                <Button
+                  size="sm"
+                  className="mt-3 w-full"
+                  variant={cur ? "plain" : "primary"}
+                  disabled={cur || tooSmall || !!cloud.rid}
+                  onClick={() => { accountActions.setPlan(p.id); setPlanOpen(false); toast(`Now on ${p.name}`); }}
+                >
+                  {cur ? "Current plan" : tooSmall ? `Allows ${OUTLET_LIMIT[p.id]} outlet` : `Switch to ${p.name}`}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </Sheet>
 
       <Sheet
         open={!!panel}
         onClose={() => setPanel(null)}
         title={panel ? titles[panel] : ""}
-        footer={panel && panel !== "roles" ? <Button size="lg" className="w-full" onClick={() => { setPanel(null); toast("Saved"); }}>Save</Button> : undefined}
+        footer={
+          panel ? (
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={panel === "payments" && !upiOk}
+              onClick={() => {
+                settingsActions.update(draft);
+                setPanel(null);
+                toast(panel === "payments" ? "Saved · every new bill QR uses this UPI ID" : "Saved");
+              }}
+            >
+              Save
+            </Button>
+          ) : undefined
+        }
       >
         {panel === "restaurant" && (
           <div className="space-y-4">
-            <Field label="Name on bills"><input className={inputCls} defaultValue={r.name} /></Field>
+            <Field label="Name on bills and the guest menu"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
             <Field label="GSTIN"><input className={inputCls} defaultValue={r.gstin} /></Field>
             <Field label="FSSAI licence"><input className={inputCls} defaultValue="11521999000123" /></Field>
             <Field label="Address"><input className={inputCls} defaultValue="Baner Road, Pune 411045" /></Field>
@@ -125,7 +210,7 @@ export default function SettingsPage() {
             <div className="space-y-px overflow-hidden rounded-group">
               <SwitchRow label="Menu prices include GST" />
               <SwitchRow label="Round bills to nearest rupee" initial />
-              <SwitchRow label="Ask for service charge" hint="Optional for guests, as per CCPA guidelines" />
+              <SwitchRow label="Ask guests for an optional tip" hint="Never added automatically." initial />
               <SwitchRow label="Print FSSAI number on bill" initial />
             </div>
             <Field label="Message at the bottom of the bill"><input className={inputCls} defaultValue="Thank you! See you again 🙏" /></Field>
@@ -133,7 +218,16 @@ export default function SettingsPage() {
         )}
         {panel === "payments" && (
           <div className="space-y-4">
-            <Field label="UPI ID for QR payments" hint="Money goes straight to this account. No gateway fees."><input className={inputCls} defaultValue={r.upi} /></Field>
+            <Field label="UPI ID for QR payments" hint="Each bill gets a QR for its exact amount.">
+              <input className={inputCls} autoCapitalize="none" value={draft.upi} onChange={(e) => setDraft({ ...draft, upi: e.target.value.replace(/\s/g, "") })} />
+            </Field>
+            {!upiOk && <p className="-mt-2 text-[13.5px] font-medium text-rose">Enter a UPI ID like name@bank.</p>}
+            {upiOk && (
+              <div className="rounded-group bg-surface p-4">
+                <div className="mb-2 text-center text-[13.5px] font-semibold">Test QR · scan with your UPI app</div>
+                <UpiPayCard upi={draft.upi} payee={draft.name} amount={1} note="Restro test" size={140} compact />
+              </div>
+            )}
             <div className="space-y-px overflow-hidden rounded-group">
               <SwitchRow label="Cash" initial />
               <SwitchRow label="Card machine" initial />
@@ -144,10 +238,37 @@ export default function SettingsPage() {
         )}
         {panel === "ordering" && (
           <div className="space-y-4">
+            <Field label="How guests are served">
+              <Segmented
+                className="w-full"
+                value={draft.businessType}
+                onChange={(v) => setDraft({ ...draft, businessType: v, payFirst: v === "cafe" ? true : draft.payFirst })}
+                options={[{ value: "restaurant", label: "Restaurant · table service" }, { value: "cafe", label: "Café · counter + token" }]}
+              />
+            </Field>
+            <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
+              <div>
+                <div className="text-[15px]">Guests pay before the kitchen starts</div>
+                <div className="text-[12.5px] text-muted">Order → pay (UPI, cash, or both) → token. Usual for cafés. Off: guests pay at the end.</div>
+              </div>
+              <Toggle checked={draft.payFirst} onChange={(v) => setDraft({ ...draft, payFirst: v })} label="Guests pay first" />
+            </div>
+            {draft.businessType === "cafe" && (
+              <Link href={`/order/counter${cloud.rid ? `?r=${cloud.rid}` : ""}`} className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu →</Link>
+            )}
             <div className="space-y-px overflow-hidden rounded-group">
               <SwitchRow label="Table QR ordering" hint="Guests order and pay from their phone" initial />
-              <SwitchRow label="Orders need captain approval" hint="Turn off to send QR orders straight to the kitchen" initial />
+              <SwitchRow label="Staff accept a new group's first order" hint="Stops orders from a photo of the QR." initial />
+              <SwitchRow label="Take QR orders only during opening hours" hint="Outside your hours the QR shows the menu but ordering is off." initial />
+              <SwitchRow label="Check the phone is at the restaurant" hint="Asked once, at the first order." />
+              <SwitchRow label="Ask for mobile number + OTP" hint="Asked once, before the first order." initial />
               <SwitchRow label="WhatsApp ordering" hint="Guests message your number and get a menu link" initial />
+            </div>
+            <div className="mb-1 px-1 text-[13px] font-medium text-muted">Shared tables</div>
+            <div className="space-y-px overflow-hidden rounded-group">
+              <SwitchRow label="Allow table sharing" hint="Seat strangers at one table, each party with its own order and bill" initial />
+              <SwitchRow label="Each new phone starts its own bill" hint="Friends join one bill with a group code shared from the first phone" initial />
+              <SwitchRow label="Group codes expire after 10 minutes" hint="An old code passed around can't be used to add to someone's bill" initial />
             </div>
             <div className="overflow-hidden rounded-group bg-surface">
               {[["Swiggy", "Connected", "#E2620C"], ["Zomato", "Connected", "#D24242"], ["ONDC", "Not connected", "#2C6EC8"]].map(([n, s, c]) => (
@@ -172,29 +293,6 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
-        {panel === "roles" && (
-          <div className="overflow-hidden rounded-group bg-surface">
-            {roles.map((x) => (
-              <div key={x.r} className="border-b border-line/80 px-4 py-3 last:border-0">
-                <div className="text-[15px] font-medium">{x.r}</div>
-                <div className="text-[13px] text-muted">{x.can}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {panel === "outlets" && (
-          <div className="space-y-3">
-            <div className="overflow-hidden rounded-group bg-surface">
-              {r.outlets.map((o) => (
-                <div key={o} className="flex items-center justify-between border-b border-line/80 px-4 py-3 last:border-0">
-                  <span className="text-[15px]">{o}</span>
-                  <Pill tone="jade">Live</Pill>
-                </div>
-              ))}
-            </div>
-            <Button variant="tinted" className="w-full" onClick={() => toast("New outlet wizard")}>Add outlet · {inr(plan.monthly!)}/month</Button>
-          </div>
-        )}
         {panel === "security" && (
           <div className="space-y-px overflow-hidden rounded-group">
             <SwitchRow label="2-step sign-in for owner" hint="Code on WhatsApp when signing in on a new device" initial />
@@ -205,8 +303,9 @@ export default function SettingsPage() {
         )}
         {panel === "data" && (
           <div className="space-y-4">
-            <p className="text-[14px] text-muted">Your data is backed up every night and kept for 30 days. You can download everything at any time — it&apos;s yours.</p>
+            <p className="text-[14px] text-muted">Backed up every night, kept for 30 days.</p>
             <Button variant="plain" className="w-full" onClick={() => toast("Export started · link on email")}>Download all data</Button>
+            {!cloud.rid && <Button variant="danger" className="w-full" onClick={resetSavedData}>Demo only: reset to sample data</Button>}
           </div>
         )}
       </Sheet>

@@ -1,0 +1,13 @@
+flowchart LR
+  A["🧾 Amount due"] --> Q["UPI link built per bill<br/>upi://pay?pa=outlet UPI&am=amount"]
+  Q --> B{"Guest picks"}
+  B --> U["UPI · scan or 'Pay with UPI app'"]
+  B --> C["Cash"]
+  B --> M["Cash + UPI · slider splits"]
+  B --> K["Card (restaurant)"]
+  U --> P["✅ Paid"]
+  C -->|staff collects| P
+  M -->|UPI part saved as prepaid,<br/>checkout pre-filled| P
+  K -->|staff charges| P
+  P --> TY["🙏 Thank-you screen + rating"]
+  P --> S[("Saved: order payments,<br/>guest bills & visits,<br/>feedback")]

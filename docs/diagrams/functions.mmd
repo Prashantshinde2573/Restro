@@ -1,0 +1,26 @@
+flowchart LR
+  subgraph T["Triggers"]
+    T1["orders created / updated"]
+    T2["order → paid"]
+    T3["guestOrders created"]
+    T4["joinParty (callable)"]
+    T5["⏰ nightly 2 am"]
+    T6["Razorpay webhook"]
+    T7["staffLogin (callable)"]
+  end
+  subgraph D["What it does"]
+    D1["Recalc totals + GST server-side<br/>create KOTs per station"]
+    D2["Deduct stock · loyalty · free table<br/>WhatsApp e-bill"]
+    D3["Validate token, visit, party, prices<br/>copy into orders (held if pending)"]
+    D4["Check 4-digit code (rate-limited)<br/>link phone to party"]
+    D5["Pulse · forecast · prep list<br/>Leak guard · platform stats"]
+    D6["Update plan/status<br/>past-due reminders"]
+    D7["Check PIN hash<br/>→ custom token {rid, oid, role}"]
+  end
+  T1 --> D1
+  T2 --> D2
+  T3 --> D3
+  T4 --> D4
+  T5 --> D5
+  T6 --> D6
+  T7 --> D7

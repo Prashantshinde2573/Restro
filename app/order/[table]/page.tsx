@@ -2,231 +2,1002 @@
 
 import clsx from "clsx";
 import { useParams } from "next/navigation";
-import { BellRing, Check, ChefHat, Minus, Plus, ReceiptText, Star, Users } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Button, DietMark, DishArt, Sheet } from "@/components/ui";
+import {
+  Banknote,
+  BellRing,
+  Check,
+  ClipboardCheck,
+  Copy,
+  CreditCard,
+  MessageCircle,
+  Minus,
+  Plus,
+  QrCode,
+  ReceiptText,
+  Search,
+  ShoppingBag,
+  Users,
+  UtensilsCrossed,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, DietMark, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { repo } from "@/lib/repo";
-import { inr } from "@/lib/format";
+import { ItemSheet, makeLine, type CartLine } from "@/components/item-sheet";
+import { PhotoSlide } from "@/components/menu-bits";
+import { OtpSheet, type GuestProfile } from "@/components/otp-sheet";
+import {
+  ActiveFilters,
+  CategoryRail,
+  DishRow,
+  FilterButton,
+  FilterSheet,
+  applyFilters,
+  noFilters,
+  sheetFilterCount,
+  type MenuFilters,
+} from "@/components/guest-menu";
+import { PayPanel, ThankYou } from "@/components/guest-pay";
+import { GST_RATE, inr, minutesSince } from "@/lib/format";
+import { isShared, tableActions, useTables } from "@/lib/tables";
+import { cloudConfigured, feedbackActions, getOrders, guestActions, orderActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { ensureGuest, useCloud } from "@/lib/cloud";
+import type { MenuItem, Order, Payment } from "@/lib/types";
 
-type Stage = "menu" | "placed";
+const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
+const STEPS_MR = ["मिळाली", "स्वीकारली", "बनत आहे", "तयार", "टेबलवर"] as const;
+const stepOf = (s: Order["status"]) => (s === "new" ? 0 : s === "accepted" ? 1 : s === "preparing" ? 2 : s === "ready" ? 3 : 4);
+const PAIRINGS: Record<string, string> = { mains: "m10", starters: "m19", rice: "m16", breads: "m6", desserts: "m21", drinks: "m4", hot: "m16" };
+const sumOf = (p: Payment[]) => p.reduce((s, x) => s + x.amount, 0);
+const num = (n: number) => (n ? n : "…"); // cloud: number arrives a moment after the order
 
-const desc: Record<string, string> = {
-  m1: "Cottage cheese, hung-curd marinade, charred in the tandoor.",
-  m5: "Our most-ordered. Smoky tomato-butter gravy, tender chicken.",
-  m13: "Slow-cooked under dough seal, served with raita.",
-  m3: "Crisp coriander-gram flour squares, a Pune favourite.",
-  m6: "Black lentils cooked overnight with butter and cream.",
-  m18: "Seasonal. Custard-apple folded into reduced milk.",
-  m20: "Konkan kokum, chilled. Good for the heat.",
-};
+function StatusTrack({ status, lang }: { status: Order["status"]; lang: "en" | "mr" }) {
+  const cur = stepOf(status);
+  const labels = lang === "mr" ? STEPS_MR : STEPS;
+  return (
+    <ol className="flex items-start" aria-label={`Order status: ${STEPS[cur]}`}>
+      {labels.map((l, i) => (
+        <li key={l} className="flex flex-1 flex-col items-center gap-1">
+          <div className="flex w-full items-center">
+            <span className={clsx("h-0.5 flex-1", i === 0 ? "bg-transparent" : i <= cur ? "bg-jade" : "bg-line")} />
+            <span
+              className={clsx(
+                "flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+                i < cur ? "bg-jade text-white" : i === cur ? "bg-jade text-white ring-4 ring-jade-soft" : "bg-sunken text-faint",
+              )}
+            >
+              {i < cur ? <Check size={14} strokeWidth={3} /> : <span className="h-2 w-2 rounded-full bg-current" />}
+            </span>
+            <span className={clsx("h-0.5 flex-1", i === labels.length - 1 ? "bg-transparent" : i < cur ? "bg-jade" : "bg-line")} />
+          </div>
+          <span className={clsx("text-center text-[11px] font-medium leading-tight", i <= cur ? "text-ink" : "text-faint")}>{l}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+type Lang = "en" | "mr";
+const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
+
+// While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
+type Waiting = { ids: string[]; kind: "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean };
+type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
 
 export default function GuestOrder() {
   const params = useParams<{ table: string }>();
   const table = (params?.table ?? "T3").toString().toUpperCase();
+  const counter = table === "COUNTER"; // café counter QR — no table
   const toast = useToast();
-  const r = repo.restaurant();
-  const menu = repo.menu().filter((m) => m.available);
-  const cats = repo.categories();
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const settings = useSettings();
+  const cafe = settings.businessType === "cafe";
+  const payNow = counter || settings.payFirst; // pay before the order goes to the kitchen
+  // QR ordering is a Growth feature; on Starter the QR shows the menu only.
+  const qrOn = useFeature("qrOrdering") === "ok";
+  const menuAll = useMenu();
+  const menu = useMemo(() => menuAll.filter((m) => m.available), [menuAll]);
+  const cats = useCategories();
+  const tables = useTables();
+  const allOrders = useOrders();
+  const t = counter ? undefined : tables.find((x) => x.name.toUpperCase() === table);
+
+  // Cloud: sign this phone in as a guest of the restaurant in the QR link (?r=…).
+  const cloud = useCloud();
+  const [cloudErr, setCloudErr] = useState("");
+  const [waitedLong, setWaitedLong] = useState(false);
+  useEffect(() => {
+    if (!cloudConfigured) return;
+    let rid = new URLSearchParams(window.location.search).get("r");
+    try {
+      rid = rid ?? localStorage.getItem("restro.rid") ?? process.env.NEXT_PUBLIC_DEFAULT_RID ?? null;
+      if (rid) localStorage.setItem("restro.rid", rid);
+    } catch {}
+    if (!rid) {
+      setCloudErr("This QR code is missing the restaurant link.");
+      return;
+    }
+    ensureGuest(rid).catch(() => setCloudErr("Couldn't connect. Check your internet and scan again."));
+    const id = window.setTimeout(() => setWaitedLong(true), 6000);
+    return () => window.clearTimeout(id);
+  }, []);
+  const account = useAccount();
+  const cloudLoading = cloudConfigured && !cloudErr && (!cloud.rid || !account.name || (!counter && !t && !waitedLong));
+
+  const [lang, setLang] = useState<Lang>("en");
+  const mr = lang === "mr";
+  const [view, setView] = useState<"menu" | "orders">("menu");
+  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<MenuFilters>(noFilters);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [note, setNote] = useState("");
+  const [eat, setEat] = useState<"here" | "away">("here");
+  const [detail, setDetail] = useState<MenuItem | null>(null);
+  const [photosOf, setPhotosOf] = useState<MenuItem | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
-  const [stage, setStage] = useState<Stage>("menu");
-  const [payOpen, setPayOpen] = useState(false);
-  const [payMode, setPayMode] = useState<"equal" | "mine">("equal");
-  const [mine, setMine] = useState<string[]>([]);
-  const [paid, setPaid] = useState(false);
-  const [stars, setStars] = useState(0);
-  const [lang, setLang] = useState<"en" | "mr">("en");
+  const [otpOpen, setOtpOpen] = useState(false);
+  const afterOtp = useRef<"order" | "pay">("order");
+  const [confirmed, setConfirmed] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [billOpen, setBillOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false); // pay-first: pay for the cart
+  const [tipPct, setTipPct] = useState(0);
+  const [waiting, setWaiting] = useState<Waiting | null>(null);
+  const [thanks, setThanks] = useState<Thanks | null>(null);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [, tick] = useState(0);
 
-  const lines = Object.entries(cart).filter(([, q]) => q > 0).map(([id, q]) => ({ item: menu.find((m) => m.id === id)!, q }));
-  const count = lines.reduce((s, l) => s + l.q, 0);
-  const subtotal = lines.reduce((s, l) => s + l.q * l.item.price, 0);
-  const total = Math.round(subtotal * 1.05);
-  const myShare = payMode === "equal" ? Math.ceil(total / 3) : Math.round(lines.filter((l) => mine.includes(l.item.id)).reduce((s, l) => s + l.q * l.item.price, 0) * 1.05);
-  const grouped = useMemo(() => cats.map((c) => ({ c, items: menu.filter((m) => m.categoryId === c.id) })).filter((g) => g.items.length), [cats, menu]);
+  // ---- who is this phone? (its group for this visit to the table, guest profile) ----
+  const storeKey = t ? `restro.party.${t.name}.${t.visitId}` : "";
+  const [myParty, setMyParty] = useState<string | null>(null);
+  const [mine, setMine] = useState<string[]>([]); // counter orders placed from this phone
+  const [guest, setGuest] = useState<GuestProfile | null>(null);
+  useEffect(() => {
+    try {
+      if (storeKey) setMyParty(localStorage.getItem(storeKey));
+      const g = localStorage.getItem("restro.guest");
+      if (g) setGuest(JSON.parse(g));
+      const m = localStorage.getItem("restro.mine.counter");
+      if (m) setMine(JSON.parse(m));
+    } catch {}
+  }, [storeKey]);
+  const remember = useCallback(
+    (pid: string | null) => {
+      setMyParty(pid);
+      try {
+        if (pid) localStorage.setItem(storeKey, pid);
+        else localStorage.removeItem(storeKey);
+      } catch {}
+    },
+    [storeKey],
+  );
+  const addMine = (id: string) =>
+    setMine((m) => {
+      const next = [id, ...m].slice(0, 20);
+      try {
+        localStorage.setItem("restro.mine.counter", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
-  const set = (id: string, d: number) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) + d) }));
+  const party = t?.parties.find((p) => p.id === myParty);
+  const shared = t ? isShared(t) : false;
+  const groupName = party ? (shared ? `Group ${party.id}` : tx(lang, "Your group", "तुमचा गट")) : "";
+  const unclaimed = !party ? t?.parties.find((p) => p.source === "captain" && !p.phoneClaimed) : undefined;
+
+  const myOrders = useMemo(() => {
+    if (counter) return allOrders.filter((o) => mine.includes(o.id) && o.status !== "cancelled" && minutesSince(o.createdAt) < 240);
+    return t && myParty
+      ? allOrders.filter((o) => o.tableName === t.name && (o.partyId ?? "A") === myParty && o.status !== "cancelled" && (o.status !== "paid" || o.guestPhone))
+      : [];
+  }, [allOrders, t, myParty, counter, mine]);
+  const openOrders = useMemo(() => myOrders.filter((o) => o.status !== "paid"), [myOrders]);
+  // Restaurant flow: the running bill. Pay-first orders are already settled from the phone.
+  const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !(payNow && o.payPreference)), [openOrders, payNow]);
+
+  // Demo mode only: pretend the staff/kitchen move each order along.
+  // With Supabase, real staff screens do this and the guest sees it live.
+  useEffect(() => {
+    if (cloudConfigured) return;
+    const timers: number[] = [];
+    const next: Partial<Record<Order["status"], [Order["status"], number]>> = {
+      new: ["accepted", 5000],
+      accepted: ["preparing", 4000],
+      preparing: ["ready", 9000],
+      ready: ["served", 6000],
+    };
+    openOrders.forEach((o) => {
+      const step = next[o.status];
+      if (!step || minutesSince(o.createdAt) > 30) return;
+      timers.push(
+        window.setTimeout(() => {
+          orderActions.setStatus(o.id, step[0]);
+          if (o.status === "new" && t && party?.pendingApproval) tableActions.update(t.id, party.id, { pendingApproval: false, server: "Sneha" });
+        }, step[1]),
+      );
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [openOrders, t, party]);
+
+  // ---- settling: show the thank-you once staff have the money ----
+  useEffect(() => {
+    if (!waiting) return;
+    const os = allOrders.filter((o) => waiting.ids.includes(o.id));
+    if (!os.length) return;
+    const payments: Payment[] =
+      waiting.kind === "mixed"
+        ? [{ method: "upi", amount: waiting.upiPart ?? 0 }, { method: "cash", amount: waiting.amount - (waiting.upiPart ?? 0) }]
+        : [{ method: waiting.kind, amount: waiting.amount }];
+    // Pay-first: staff accept the order once they have the cash/card payment at the counter.
+    const settled = waiting.payFirst ? os.every((o) => o.status !== "new") : os.every((o) => o.status === "paid");
+    if (settled) {
+      setThanks({ payments: waiting.payFirst ? payments : os[0].payments ?? payments, orderNo: os[0].number, orderId: os[0].id, token: waiting.payFirst });
+      setWaiting(null);
+      setConfirmed(null);
+      setBillOpen(false);
+      return;
+    }
+  }, [waiting, allOrders]);
+
+  // Demo only: the captain collects the cash/card a few seconds later. In
+  // production the cashier does this from Orders → Charge on their screen
+  // (the guest's UPI part is already filled in there).
+  useEffect(() => {
+    if (cloudConfigured || !waiting || waiting.payFirst) return;
+    const id = window.setTimeout(() => {
+      const live = getOrders().filter((o) => waiting.ids.includes(o.id) && o.status !== "paid");
+      const payments: Payment[] =
+        waiting.kind === "mixed"
+          ? [{ method: "upi", amount: waiting.upiPart ?? 0 }, { method: "cash", amount: waiting.amount - (waiting.upiPart ?? 0) }]
+          : [{ method: waiting.kind, amount: waiting.amount }];
+      if (live.length) orderActions.pay(live.map((o) => o.id), payments, "Captain");
+      if (t && party) tableActions.update(t.id, party.id, { status: "billing", total: 0 });
+    }, 8000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting]);
+
+  useEffect(() => {
+    if (!shareOpen) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [shareOpen]);
+
+  // ---- menu: search + filters ----
+  const shownItems = useMemo(() => applyFilters(menu, filters, q, cats), [menu, filters, q, cats]);
+  const grouped = useMemo(
+    () => cats.map((c) => ({ c, items: shownItems.filter((m) => m.categoryId === c.id) })).filter((g) => g.items.length),
+    [cats, shownItems],
+  );
+  const filtering = !!q.trim() || sheetFilterCount(filters) > 0;
+
+  // height of the sticky search bar, so the side bar and section jumps sit right under it
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barH, setBarH] = useState(68);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBarH(Math.round(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [view]);
+
+  // side bar follows the scroll
+  useEffect(() => {
+    if (view !== "menu") return;
+    const els = grouped.map((g) => document.getElementById(`cat-${g.c.id}`)).filter(Boolean) as HTMLElement[];
+    if (!els.length) return;
+    setActiveCat((a) => (a && grouped.some((g) => g.c.id === a) ? a : grouped[0].c.id));
+    const io = new IntersectionObserver(
+      (entries) => {
+        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (top) setActiveCat(top.target.id.replace("cat-", ""));
+      },
+      { rootMargin: `-${barH + 14}px 0px -55% 0px` },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [grouped, view, barH]);
+  const jumpTo = (id: string) => {
+    setActiveCat(id);
+    document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const qtyOf = (id: string) => cart.filter((l) => l.item.id === id).reduce((s, l) => s + l.qty, 0);
+  const addLine = (line: CartLine) =>
+    setCart((c) => {
+      const i = c.findIndex((x) => x.key === line.key);
+      return i >= 0 ? c.map((x, j) => (j === i ? { ...x, qty: x.qty + line.qty } : x)) : [...c, line];
+    });
+  const changeLine = (key: string, d: number) => setCart((c) => c.flatMap((x) => (x.key !== key ? [x] : x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }])));
+  const tapAdd = (m: MenuItem) => (m.options?.length ? setDetail(m) : addLine(makeLine(m, 1)));
+  const tapLess = (m: MenuItem) => {
+    const last = [...cart].reverse().find((l) => l.item.id === m.id);
+    if (last) changeLine(last.key, -1);
+  };
+
+  const count = cart.reduce((s, l) => s + l.qty, 0);
+  const itemTotal = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const gst = Math.round(itemTotal * GST_RATE * 100) / 100;
+  const payable = Math.round(itemTotal + gst);
+
+  const pairing = useMemo(() => {
+    if (!cart.length) return null;
+    const ids = new Set(cart.map((l) => l.item.id));
+    for (const l of cart) {
+      const pid = PAIRINGS[l.item.categoryId];
+      const m = pid ? menu.find((x) => x.id === pid) : undefined;
+      if (m && !ids.has(m.id)) return m;
+    }
+    return null;
+  }, [cart, menu]);
+
+  // ---- placing an order ----
+  const sendOrder = (g: GuestProfile, extra: Partial<Order> = {}): Order => {
+    let p = party;
+    if (t && !p) {
+      // New phone = new group on this table. Its first order waits for staff to
+      // accept — unless it's already paid from the phone (a paid order is no prank).
+      p = tableActions.seat(t.id, 1, { source: "qr", phoneClaimed: true, pendingApproval: !extra.prepaid, server: undefined });
+      remember(p.id);
+    }
+    const order = orderActions.add({
+      type: (cafe || counter) && eat === "away" ? "takeaway" : "dine-in",
+      channel: "qr",
+      tableId: t?.id,
+      tableName: t?.name ?? "Counter",
+      partyId: p?.id,
+      customer: g.name,
+      guestPhone: g.phone,
+      staff: "QR",
+      createdAt: new Date().toISOString(),
+      status: p?.pendingApproval ? "new" : "accepted",
+      lines: cart.map((l) => ({
+        itemId: l.item.id,
+        name: l.item.name,
+        qty: l.qty,
+        price: l.unitPrice,
+        station: l.item.station,
+        note: [...l.options, ...(note ? [note] : [])].join(" · ") || undefined,
+      })),
+      ...extra,
+    });
+    if (t && p) {
+      const cur = tables.find((x) => x.id === t.id)?.parties.find((x) => x.id === p!.id);
+      tableActions.update(t.id, p.id, { status: "ordered", total: (cur?.total ?? 0) + itemTotal });
+    }
+    if (counter) addMine(order.id);
+    guestActions.upsert(g.name, g.phone, g.optIn);
+    setCart([]);
+    setNote("");
+    setCartOpen(false);
+    return order;
+  };
+
+  // QR ordering only during opening hours (11:00 am – 11:30 pm, from Settings).
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const isOpen = mins >= 11 * 60 && mins <= 23 * 60 + 30;
+  const placeOrder = () => {
+    if (!isOpen) return toast(tx(lang, "Ordering opens at 11 am", "आत्ता ऑर्डर बंद आहे"));
+    if (payNow) {
+      if (!guest) {
+        afterOtp.current = "pay";
+        return setOtpOpen(true);
+      }
+      setCartOpen(false);
+      return setPayOpen(true);
+    }
+    if (!guest) {
+      afterOtp.current = "order";
+      return setOtpOpen(true);
+    }
+    setConfirmed(sendOrder(guest).id);
+  };
+
+  // ---- pay-first outcomes (café) ----
+  const payFirstUpi = () => {
+    if (!guest) return;
+    const o = sendOrder(guest, { prepaid: [{ method: "upi", amount: payable }], payPreference: "upi", status: "accepted" });
+    setPayOpen(false);
+    setThanks({ payments: [{ method: "upi", amount: payable }], orderNo: o.number, orderId: o.id, token: true });
+  };
+  const payFirstLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
+    if (!guest) return;
+    const o = sendOrder(guest, {
+      status: "new",
+      payPreference: kind === "card" ? "card" : "cash",
+      ...(kind === "mixed" && upiPart ? { prepaid: [{ method: "upi" as const, amount: upiPart }] } : {}),
+    });
+    setPayOpen(false);
+    setWaiting({ ids: [o.id], kind, amount: payable, upiPart, payFirst: true });
+    setConfirmed(o.id);
+  };
+
+  // ---- the group's bill (restaurant flow) ----
+  const billItems = unbilled.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
+  const billGst = Math.round(billItems * GST_RATE * 100) / 100;
+  const tip = Math.round((billItems * tipPct) / 100);
+  const billTotal = Math.round(billItems + billGst + tip);
+  const billIds = unbilled.map((o) => o.id);
+  const who = guest?.name ?? "Guest";
+
+  const billUpi = () => {
+    orderActions.setPreference(billIds, "upi");
+    orderActions.pay(billIds, [{ method: "upi", amount: billTotal }], who);
+    if (t && party) tableActions.update(t.id, party.id, { status: "billing", total: 0 });
+    setBillOpen(false);
+    setThanks({ payments: [{ method: "upi", amount: billTotal }], orderNo: unbilled[0]?.number, orderId: unbilled[0]?.id });
+  };
+  const billLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
+    if (kind === "mixed" && upiPart) orderActions.prepay(billIds, { method: "upi", amount: upiPart }, who);
+    else orderActions.setPreference(billIds, kind === "card" ? "card" : "cash");
+    if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
+    setWaiting({ ids: billIds, kind, amount: billTotal, upiPart, payFirst: false });
+  };
+
+  const confirmedOrder = allOrders.find((o) => o.id === confirmed);
+  const thanksOrder = thanks?.orderId ? allOrders.find((o) => o.id === thanks.orderId) : undefined;
+
+  if (cloudLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-canvas" aria-busy="true">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-jade" />
+      </div>
+    );
+  }
+  if (cloudErr || (!t && !counter)) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center bg-canvas px-6 text-center">
+        <QrCode size={32} className="text-muted" />
+        <div className="mt-3 text-[20px] font-semibold">This QR code isn&apos;t active</div>
+        <p className="mt-2 text-[15px] text-muted">Please ask a staff member for help, or scan the code on your table again.</p>
+      </div>
+    );
+  }
+
+  const statusLine = (s: Order["status"]) =>
+    s === "new"
+      ? payNow ? tx(lang, "Waiting for your payment at the counter", "काउंटरवर पेमेंटची वाट") : tx(lang, "Waiting for staff to accept", "स्टाफ ऑर्डर पाहत आहे")
+      : s === "accepted"
+        ? tx(lang, "Accepted — sent to the kitchen", "स्वीकारली — किचनला गेली")
+        : s === "preparing"
+          ? tx(lang, "Being prepared", "बनत आहे")
+          : s === "ready"
+            ? cafe || counter ? tx(lang, "Ready — collect it at the counter", "तयार — काउंटरवरून घ्या") : tx(lang, "Ready — on its way", "तयार — येत आहे")
+            : s === "paid"
+              ? tx(lang, "Done. Enjoy!", "झालं. आनंद घ्या!")
+              : tx(lang, "Served. Enjoy your meal!", "टेबलवर आली");
+
+  const placeLabel = counter ? tx(lang, "Counter", "काउंटर") : `${tx(lang, "Table", "टेबल")} ${t!.name}`;
+  const cashWhere = payNow ? "counter" : "table";
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-32">
-      <header className="px-5 pb-2 pt-6">
-        <div className="flex items-center justify-between">
-          <span className="rounded-full bg-surface px-3 py-1 text-[13px] font-semibold">Table {table}</span>
-          <button onClick={() => setLang(lang === "en" ? "mr" : "en")} className="rounded-full bg-surface px-3 py-1 text-[13px] font-semibold">{lang === "en" ? "मराठी" : "English"}</button>
+    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-36 sm:max-w-2xl">
+      {/* ---------- header ---------- */}
+      <header className="px-5 pb-3 pt-6">
+        <div className="flex items-center justify-between gap-2">
+          <span className="rounded-full bg-surface px-3 py-1 text-[13px] font-semibold">
+            {placeLabel}
+            {party && shared && <> · {groupName}</>}
+          </span>
+          <button onClick={() => setLang(mr ? "en" : "mr")} className="rounded-full bg-surface px-3 py-1 text-[13px] font-semibold">{mr ? "English" : "मराठी"}</button>
         </div>
-        <h1 className="mt-4 text-[30px] font-semibold leading-tight tracking-tight">{r.name}</h1>
-        <p className="text-[14px] text-muted">{lang === "en" ? "Order from your phone. We'll bring it to your table." : "तुमच्या फोनवरून ऑर्डर करा. आम्ही टेबलवर आणू."}</p>
+        <h1 className="mt-4 text-[30px] font-semibold leading-tight tracking-tight">{settings.name}</h1>
+        <p className="text-[14px] text-muted">
+          {payNow
+            ? tx(lang, "Order and pay from your phone. We'll call your token when it's ready.", "फोनवरून ऑर्डर करा आणि पैसे भरा. तयार झालं की टोकन बोलावू.")
+            : tx(lang, "Order from your phone. We'll bring it to your table.", "फोनवरून ऑर्डर करा. आम्ही टेबलवर आणू.")}
+        </p>
+
+        {t && qrOn && !payNow && !cafe && (party ? (
+          <div className="mt-4 flex items-center gap-3 rounded-[18px] bg-surface px-4 py-3">
+            <Users size={18} className="shrink-0 text-jade" />
+            <div className="min-w-0 flex-1 text-[13.5px]">
+              <div className="font-semibold">{groupName}{guest ? ` · ${guest.name}` : ""}</div>
+              <div className="text-muted">{tx(lang, "Friends can join this bill and order too", "मित्रांना याच बिलात जोडा")}</div>
+            </div>
+            <Button size="sm" variant="tinted" onClick={() => { tableActions.shareCode(t.id, party.id); setShareOpen(true); }}>
+              {tx(lang, "Share access", "शेअर करा")}
+            </Button>
+          </div>
+        ) : t.parties.length > 0 ? (
+          <div className="mt-4 overflow-hidden rounded-[18px] bg-surface">
+            {unclaimed && (
+              <button
+                onClick={() => { tableActions.update(t.id, unclaimed.id, { phoneClaimed: true }); remember(unclaimed.id); toast(tx(lang, "Linked to your table's bill", "तुमच्या टेबलशी जोडलं")); }}
+                className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left"
+              >
+                <ClipboardCheck size={18} className="shrink-0 text-jade" />
+                <span className="flex-1 text-[13.5px]"><b>{tx(lang, "Just seated by our staff?", "स्टाफने तुम्हाला आत्ता बसवलं?")}</b> <span className="text-muted">{tx(lang, `Tap to use that bill (${unclaimed.guests} ${unclaimed.guests > 1 ? "guests" : "guest"})`, "त्या बिलाशी जोडा")}</span></span>
+              </button>
+            )}
+            <button onClick={() => { setJoinCode(""); setJoinError(""); setJoinOpen(true); }} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+              <Users size={18} className="shrink-0 text-jade" />
+              <span className="flex-1 text-[13.5px]"><b>{tx(lang, "Friends already ordered?", "मित्रांनी आधीच ऑर्डर केली आहे?")}</b> <span className="text-muted">{tx(lang, "Enter their group code to share one bill", "त्यांचा ग्रुप कोड टाका")}</span></span>
+            </button>
+          </div>
+        ) : null)}
       </header>
 
-      {stage === "placed" && (
-        <section className="mx-4 mt-3 rounded-[22px] bg-surface p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[15px] font-semibold">Your order</span>
-            <span className="text-[13px] text-muted">about 15 min</span>
-          </div>
-          <div className="mt-4 flex items-center">
-            {[["Received", Check], ["Cooking", ChefHat], ["At your table", ReceiptText]].map(([l, I], i) => {
-              const Icon = I as typeof Check;
-              const active = i <= 1;
-              return (
-                <div key={String(l)} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div className="flex w-full items-center">
-                    <span className={clsx("h-0.5 flex-1", i === 0 ? "bg-transparent" : active ? "bg-jade" : "bg-line")} />
-                    <span className={clsx("flex h-9 w-9 items-center justify-center rounded-full", active ? "bg-jade text-white" : "bg-sunken text-faint", i === 1 && "animate-pulse")}><Icon size={17} /></span>
-                    <span className={clsx("h-0.5 flex-1", i === 2 ? "bg-transparent" : i < 1 ? "bg-jade" : "bg-line")} />
-                  </div>
-                  <span className={clsx("text-[12px] font-medium", active ? "text-ink" : "text-faint")}>{String(l)}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button variant="plain" className="!bg-sunken" onClick={() => toast("A waiter is on the way")}><BellRing size={16} /> Call waiter</Button>
-            <Button onClick={() => setPayOpen(true)}><Users size={16} /> Pay my share</Button>
-          </div>
-        </section>
-      )}
-
-      <nav className="no-scrollbar sticky top-0 z-20 flex gap-2 overflow-x-auto bg-canvas/90 px-4 py-3 backdrop-blur-xl">
-        {grouped.map(({ c }) => (
-          <a key={c.id} href={`#${c.id}`} className="shrink-0 rounded-full bg-surface px-3.5 py-1.5 text-[14px] font-medium">{c.name}</a>
-        ))}
-      </nav>
-
-      <main className="space-y-6 px-4">
-        {grouped.map(({ c, items }) => (
-          <section key={c.id} id={c.id} className="scroll-mt-16">
-            <h2 className="mb-2 px-1 text-[19px] font-semibold tracking-tight">{c.name}</h2>
-            <div className="overflow-hidden rounded-[22px] bg-surface">
-              {items.map((m) => {
-                const q = cart[m.id] ?? 0;
-                return (
-                  <div key={m.id} className="flex gap-3 border-b border-line/80 p-4 last:border-0">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5"><DietMark diet={m.diet} />{m.tags?.[0] && <span className="text-[12px] font-semibold text-saffron">{m.tags[0]}</span>}</div>
-                      <div className="mt-1 text-[16px] font-semibold leading-tight">{m.name}</div>
-                      <div className="mt-0.5 text-[14px] font-medium tnum">{inr(m.price)}</div>
-                      {desc[m.id] && <p className="mt-1 text-[13px] leading-snug text-muted">{desc[m.id]}</p>}
-                    </div>
-                    <div className="relative w-[104px] shrink-0">
-                      <DishArt hue={m.hue} className="h-[96px] w-[104px] rounded-[16px]" />
-                      <div className="absolute -bottom-3 left-1/2 -translate-x-1/2">
-                        {q === 0 ? (
-                          <button onClick={() => set(m.id, 1)} className="rounded-[10px] bg-surface px-5 py-1.5 text-[14px] font-bold text-jade shadow-float">ADD</button>
-                        ) : (
-                          <div className="flex items-center gap-2 rounded-[10px] bg-jade px-1.5 py-1 text-white shadow-float">
-                            <button aria-label="Less" onClick={() => set(m.id, -1)} className="p-1"><Minus size={14} /></button>
-                            <span className="w-4 text-center text-[14px] font-bold tnum">{q}</span>
-                            <button aria-label="More" onClick={() => set(m.id, 1)} className="p-1"><Plus size={14} /></button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </main>
-
-      {count > 0 && stage === "menu" && (
-        <div className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-4">
-          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-5 py-4 text-white shadow-float">
-            <span className="text-[15px] font-semibold">{count} item{count > 1 ? "s" : ""}</span>
-            <span className="text-[15px] tnum opacity-80">{inr(subtotal)}</span>
-            <span className="ml-auto text-[16px] font-semibold">View order</span>
-          </button>
+      {!qrOn && (
+        <div className="mx-4 mb-3 rounded-[18px] bg-sky-soft px-4 py-3 text-[14px] text-sky">
+          {tx(lang, "Browse the menu here — please order with our staff.", "इथे मेनू पहा — ऑर्डर स्टाफकडे द्या.")}
         </div>
       )}
 
+      {qrOn && !isOpen && (
+        <div className="mx-4 mb-3 rounded-[18px] bg-saffron-soft px-4 py-3 text-[14px]">
+          <b>{tx(lang, "We're closed right now.", "आत्ता ऑर्डर बंद आहे.")}</b> {tx(lang, "You can browse the menu — ordering opens at 11 am.", "मेनू पाहू शकता. ऑर्डर सकाळी 11 पासून.")}
+        </div>
+      )}
+
+      {/* ---------- menu / my orders switch ---------- */}
+      {myOrders.length > 0 && (
+        <div className="px-4 pb-1">
+          <div className="flex rounded-ctl bg-sunken p-[3px]" role="tablist">
+            {(["menu", "orders"] as const).map((v) => (
+              <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", view === v ? "bg-surface shadow-float" : "text-muted")}>
+                {v === "menu" ? tx(lang, "Menu", "मेनू") : `${tx(lang, "My orders", "माझ्या ऑर्डर्स")} · ${myOrders.length}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "menu" ? (
+        <>
+          {/* search, veg/non-veg, filters — each its own control */}
+          <div ref={barRef} className="sticky top-0 z-20 space-y-2 border-b border-line/60 bg-canvas px-4 pb-3 pt-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  type="search"
+                  enterKeyHint="search"
+                  placeholder={tx(lang, "Search menu", "मेनू शोधा")}
+                  className="h-11 w-full rounded-ctl bg-surface pl-10 pr-9 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade [&::-webkit-search-cancel-button]:hidden"
+                />
+                {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
+              </div>
+              <FilterButton count={sheetFilterCount(filters)} onClick={() => setFilterOpen(true)} lang={lang} />
+            </div>
+            <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
+          </div>
+
+          <div className="flex items-start gap-2.5 px-3 pt-3">
+            {grouped.length > 1 && (
+              <aside className="sticky w-[66px] shrink-0 sm:w-[84px]" style={{ top: barH + 12, height: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
+                <CategoryRail groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />
+              </aside>
+            )}
+            <main className="min-w-0 flex-1 space-y-6 pb-4">
+              {filtering && grouped.length > 0 && (
+                <p className="px-1 text-[13px] text-muted">{tx(lang, `${shownItems.length} dishes`, `${shownItems.length} डिश`)}</p>
+              )}
+              {grouped.length === 0 && (
+                <div className="py-16 text-center">
+                  <div className="text-[16px] font-semibold">{tx(lang, "No dishes match", "काही सापडलं नाही")}</div>
+                  <button onClick={() => { setQ(""); setFilters(noFilters); }} className="mt-2 text-[14px] font-semibold text-jade">{tx(lang, "Clear search and filters", "शोध आणि फिल्टर काढा")}</button>
+                </div>
+              )}
+              {grouped.map(({ c, items }) => (
+                <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 12 }}>
+                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[17px] font-semibold leading-tight tracking-tight">
+                    {c.icon && <span aria-hidden>{c.icon}</span>} {c.name}
+                    <span className="text-[13px] font-medium text-faint tnum">{items.length}</span>
+                  </h2>
+                  <div className="overflow-hidden rounded-[18px] bg-surface">
+                    {items.map((m) => (
+                      <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </main>
+          </div>
+        </>
+      ) : (
+        /* ---------- my orders ---------- */
+        <main className="space-y-3 px-4 pt-3">
+          {myOrders.map((o) => (
+            <section key={o.id} className="rounded-[22px] bg-surface p-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-[16px] font-semibold">{payNow ? tx(lang, "Token", "टोकन") : tx(lang, "Order", "ऑर्डर")} #{num(o.number)}</span>
+                <span className="text-[13px] text-muted">{o.type === "takeaway" ? tx(lang, "Take away · ", "पार्सल · ") : ""}{o.customer} · {minutesSince(o.createdAt)} min</span>
+              </div>
+              <ul className="mt-2 space-y-1 text-[14px]">
+                {o.lines.map((l, i) => (
+                  <li key={i} className="flex justify-between gap-3">
+                    <span className="min-w-0">
+                      {l.qty}× {l.name}
+                      {l.note && <span className="block text-[12.5px] text-muted">{l.note}</span>}
+                    </span>
+                    <span className="shrink-0 text-muted tnum">{inr(l.qty * l.price)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3">
+                {o.status === "paid" ? (
+                  <span className="text-[13px] font-semibold text-jade">{tx(lang, "Paid", "पैसे भरले")}</span>
+                ) : (
+                  <>
+                    {(o.prepaid ?? []).length > 0 && <div className="mb-2 text-[12.5px] font-semibold text-jade">{tx(lang, `UPI ${inr(sumOf(o.prepaid!))} paid`, `UPI ${inr(sumOf(o.prepaid!))} भरले`)}</div>}
+                    <div className="mb-2 text-[13px] font-medium text-muted">{statusLine(o.status)}</div>
+                    <StatusTrack status={o.status} lang={lang} />
+                  </>
+                )}
+              </div>
+            </section>
+          ))}
+          {!payNow && unbilled.length > 0 && (
+            <div className="flex items-baseline justify-between px-1 pt-1 text-[15px]">
+              <span className="text-muted">{tx(lang, "Bill so far", "आतापर्यंतचं बिल")} · incl. GST</span>
+              <span className="text-[20px] font-semibold tnum">{inr(Math.round(billItems * (1 + GST_RATE)))}</span>
+            </div>
+          )}
+          {!counter && (
+            <button onClick={() => toast(tx(lang, "A waiter is on the way", "वेटर येत आहे"))} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+              <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
+            </button>
+          )}
+        </main>
+      )}
+
+      {/* ---------- bottom bar ---------- */}
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-4 sm:max-w-2xl">
+        {count > 0 ? (
+          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-5 py-4 text-white shadow-float">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
+            <span className="text-[15px] tnum opacity-90">{inr(itemTotal)} <span className="text-[12px] opacity-75">+ GST</span></span>
+            <span className="ml-auto text-[16px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
+          </button>
+        ) : openOrders.length > 0 ? (
+          <div className={clsx("grid gap-2", !payNow && unbilled.length > 0 ? "grid-cols-2" : "grid-cols-1")}>
+            <Button size="lg" variant="plain" className="shadow-float" onClick={() => { setView(view === "menu" ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}>
+              {view === "menu" ? <><ReceiptText size={17} /> {tx(lang, "My orders", "माझ्या ऑर्डर्स")}</> : <><UtensilsCrossed size={17} /> {tx(lang, "Order more", "आणखी ऑर्डर")}</>}
+            </Button>
+            {!payNow && unbilled.length > 0 && (
+              <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setBillOpen(true); }}>
+                {tx(lang, "Get the bill", "बिल मागवा")}
+              </Button>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {/* ---------- dish detail / photos ---------- */}
+      <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={qrOn ? addLine : undefined} photosOnly={!qrOn} />
+      <ItemSheet item={photosOf} onClose={() => setPhotosOf(null)} photosOnly />
+
+      {/* ---------- filters ---------- */}
+      <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} value={filters} onApply={setFilters} menu={menu} cats={cats} term={q} lang={lang} />
+
+      {/* ---------- cart ---------- */}
       <Sheet
         open={cartOpen}
         onClose={() => setCartOpen(false)}
-        title={`Table ${table}`}
-        footer={<Button size="lg" className="w-full" onClick={() => { setCartOpen(false); setStage("placed"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Place order · {inr(total)}</Button>}
+        title={tx(lang, "Your order", "तुमची ऑर्डर")}
+        footer={
+          <Button size="lg" className="w-full" disabled={!count || !isOpen} onClick={placeOrder}>
+            {payNow
+              ? tx(lang, `Continue to pay · ${inr(payable)}`, `पैसे भरा · ${inr(payable)}`)
+              : `${tx(lang, myOrders.length ? "Send to kitchen" : "Place order", "ऑर्डर पाठवा")} · ${inr(payable)}`}
+          </Button>
+        }
       >
-        <div className="overflow-hidden rounded-group bg-surface">
-          {lines.map((l) => (
-            <div key={l.item.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0">
-              <DietMark diet={l.item.diet} />
-              <span className="flex-1 text-[15px]">{l.item.name}</span>
-              <div className="flex items-center gap-1 rounded-full bg-sunken p-0.5">
-                <button aria-label="Less" onClick={() => set(l.item.id, -1)} className="flex h-7 w-7 items-center justify-center rounded-full bg-surface"><Minus size={13} /></button>
-                <span className="w-5 text-center text-[14px] font-semibold tnum">{l.q}</span>
-                <button aria-label="More" onClick={() => set(l.item.id, 1)} className="flex h-7 w-7 items-center justify-center rounded-full bg-surface"><Plus size={13} /></button>
-              </div>
-              <span className="w-14 text-right text-[14px] tnum">{inr(l.q * l.item.price)}</span>
+        <div className="space-y-4">
+          {!payNow && unbilled.length > 0 && (
+            <p className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
+              {tx(lang, `This is added to your table's running bill (${unbilled.length} earlier ${unbilled.length > 1 ? "orders" : "order"}).`, "हे तुमच्या आधीच्या बिलात जोडलं जाईल.")}
+            </p>
+          )}
+          {(cafe || counter) && (
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={tx(lang, "Eat here or take away", "इथे खाणार की पार्सल")}>
+              {([["here", tx(lang, "Eat here", "इथे खाणार"), UtensilsCrossed], ["away", tx(lang, "Take away", "पार्सल"), ShoppingBag]] as const).map(([v, l, I]) => (
+                <button key={v} role="radio" aria-checked={eat === v} onClick={() => setEat(v)} className={clsx("flex items-center justify-center gap-2 rounded-ctl py-3 text-[14.5px] font-semibold", eat === v ? "bg-ink text-canvas" : "bg-surface")}>
+                  <I size={17} /> {l}
+                </button>
+              ))}
             </div>
-          ))}
+          )}
+          <div className="overflow-hidden rounded-group bg-surface">
+            {cart.map((l) => (
+              <div key={l.key} className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0">
+                <span className="mt-1"><DietMark diet={l.item.diet} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-medium leading-snug">{l.item.name}</div>
+                  {l.options.length > 0 && <div className="mt-0.5 text-[12.5px] text-muted">{l.options.join(" · ")}</div>}
+                  <div className="mt-1 text-[13.5px] text-muted tnum">{inr(l.qty * l.unitPrice)}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1 rounded-full bg-sunken p-0.5">
+                  <button aria-label="Less" onClick={() => changeLine(l.key, -1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Minus size={14} /></button>
+                  <span className="w-6 text-center text-[14px] font-semibold tnum">{l.qty}</span>
+                  <button aria-label="More" onClick={() => changeLine(l.key, 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Plus size={14} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {pairing && (
+            <div className="flex items-center gap-3 rounded-group bg-surface p-3">
+              <PhotoSlide item={pairing} className="h-12 w-12 shrink-0 rounded-[12px]" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] text-muted">{tx(lang, "Goes well with your order", "यासोबत छान लागतं")}</div>
+                <div className="truncate text-[15px] font-medium">{pairing.name} · {inr(pairing.price)}</div>
+              </div>
+              <Button size="sm" variant="tinted" onClick={() => tapAdd(pairing)}><Plus size={15} /> {tx(lang, "Add", "जोडा")}</Button>
+            </div>
+          )}
+
+          <input value={note} onChange={(e) => setNote(e.target.value)} className="h-12 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder={tx(lang, "Note for the kitchen (no onion, less sugar…)", "किचनसाठी सूचना (कमी तिखट, कांदा नको…)")} />
+
+          <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
+            <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(itemTotal, { decimals: true })}</dd></div>
+            <div className="flex justify-between"><dt className="text-muted">CGST 2.5% + SGST 2.5%</dt><dd className="tnum">{inr(gst, { decimals: true })}</dd></div>
+            <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
+            <div className="flex justify-between border-t border-line pt-2 text-[16px] font-semibold"><dt>{tx(lang, "To pay", "एकूण")}</dt><dd className="tnum">{inr(payable)}</dd></div>
+            <p className="pt-1 text-[12.5px] text-faint">
+              {payNow ? tx(lang, "Pay now — UPI, cash, or part cash part UPI.", "आत्ता भरा — UPI, रोख किंवा थोडे रोख थोडे UPI.") : tx(lang, "You pay at the end — UPI, cash, card, or part cash part UPI.", "पैसे शेवटी भरा — UPI, रोख, कार्ड किंवा दोन्ही.")}
+            </p>
+          </dl>
         </div>
-        <input className="mt-3 h-12 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder="Anything the kitchen should know? (less spicy, no onion…)" />
-        <p className="mt-3 text-[13px] text-muted">Includes 5% GST. You pay at the end — together or one by one.</p>
       </Sheet>
 
-      <Sheet
-        open={payOpen}
-        onClose={() => setPayOpen(false)}
-        title={paid ? "Thank you!" : "Pay my share"}
-        footer={!paid ? <Button size="lg" className="w-full" disabled={myShare === 0} onClick={() => setPaid(true)}>Pay {inr(myShare)} with UPI</Button> : undefined}
-      >
-        {!paid ? (
-          <div className="space-y-4">
-            <div className="flex rounded-ctl bg-sunken p-[3px]">
-              {(["equal", "mine"] as const).map((m) => (
-                <button key={m} onClick={() => setPayMode(m)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", payMode === m ? "bg-surface shadow-float" : "text-muted")}>
-                  {m === "equal" ? "Split equally (3)" : "Pay for what I ate"}
-                </button>
-              ))}
-            </div>
-            {payMode === "mine" ? (
-              <div className="overflow-hidden rounded-group bg-surface">
-                {lines.map((l) => {
-                  const on = mine.includes(l.item.id);
-                  return (
-                    <button key={l.item.id} onClick={() => setMine((x) => (on ? x.filter((i) => i !== l.item.id) : [...x, l.item.id]))} className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0">
-                      <span className={clsx("flex h-6 w-6 items-center justify-center rounded-full border-2", on ? "border-jade bg-jade text-white" : "border-line")}>{on && <Check size={14} strokeWidth={3} />}</span>
-                      <span className="flex-1 text-[15px]">{l.q}× {l.item.name}</span>
-                      <span className="text-[14px] tnum">{inr(l.q * l.item.price)}</span>
-                    </button>
-                  );
-                })}
-              </div>
+      {/* ---------- pay-first: pay for this order ---------- */}
+      <Sheet open={payOpen} onClose={() => setPayOpen(false)} title={tx(lang, `Pay ${inr(payable)}`, `${inr(payable)} भरा`)}>
+        {payOpen && (
+          <PayPanel
+            amount={payable}
+            upi={settings.upi}
+            payee={settings.name}
+            note={`${settings.name} · ${placeLabel}`}
+            lang={lang}
+            cashWhere="counter"
+            onUpiPaid={payFirstUpi}
+            onCash={() => payFirstLater("cash")}
+            onCard={() => payFirstLater("card")}
+            onMixed={(upiPart) => payFirstLater("mixed", upiPart)}
+          />
+        )}
+      </Sheet>
+
+      {/* ---------- OTP (only before the first order) ---------- */}
+      <OtpSheet
+        open={otpOpen}
+        lang={lang}
+        onClose={() => setOtpOpen(false)}
+        onVerified={(g) => {
+          setGuest(g);
+          try {
+            localStorage.setItem("restro.guest", JSON.stringify(g));
+          } catch {}
+          setOtpOpen(false);
+          if (afterOtp.current === "pay") {
+            setCartOpen(false);
+            setPayOpen(true);
+          } else {
+            setConfirmed(sendOrder(g).id);
+          }
+        }}
+      />
+
+      {/* ---------- confirmation (and "pay at the counter" for pay-first cash) ---------- */}
+      {confirmedOrder && !thanks && (
+        <div className="fixed inset-0 z-40 mx-auto flex max-w-md animate-fade-in flex-col bg-canvas px-5 pb-6 pt-14" role="dialog" aria-label="Order placed">
+          <div className="flex flex-1 flex-col items-center text-center">
+            {waiting?.payFirst ? (
+              <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-saffron-soft text-saffron">{waiting.kind === "card" ? <CreditCard size={36} /> : <Banknote size={36} />}</div>
             ) : (
-              <div className="rounded-group bg-surface p-5 text-center">
-                <div className="text-[14px] text-muted">Bill {inr(total)} ÷ 3 guests</div>
-                <div className="mt-1 text-[36px] font-semibold tracking-tight tnum">{inr(myShare)}</div>
+              <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-jade text-white"><Check size={40} strokeWidth={2.5} /></div>
+            )}
+            <div className="mt-5 text-[14px] font-medium text-muted">{payNow ? tx(lang, "Your token", "तुमचा टोकन") : tx(lang, "Order placed", "ऑर्डर पाठवली")}</div>
+            <div className="mt-1 text-[44px] font-semibold tracking-tight tnum">#{num(confirmedOrder.number)}</div>
+            <div className="text-[15px] text-muted">
+              {placeLabel}
+              {shared && party ? ` · ${groupName}` : ""} · {confirmedOrder.lines.reduce((s, l) => s + l.qty, 0)} {tx(lang, "items", "पदार्थ")}
+            </div>
+            {waiting?.payFirst && (
+              <div className="mt-6 w-full rounded-[22px] bg-saffron-soft p-4 text-left text-[15px]">
+                <b>
+                  {waiting.kind === "mixed"
+                    ? tx(lang, `UPI ${inr(waiting.upiPart ?? 0)} received. Please pay ${inr(waiting.amount - (waiting.upiPart ?? 0))} cash at the counter.`, `UPI ${inr(waiting.upiPart ?? 0)} मिळाले. उरलेले ${inr(waiting.amount - (waiting.upiPart ?? 0))} रोख काउंटरवर द्या.`)
+                    : waiting.kind === "card"
+                      ? tx(lang, `Please pay ${inr(waiting.amount)} by card at the counter.`, `${inr(waiting.amount)} कार्डने काउंटरवर भरा.`)
+                      : tx(lang, `Please pay ${inr(waiting.amount)} cash at the counter.`, `${inr(waiting.amount)} रोख काउंटरवर द्या.`)}
+                </b>{" "}
+                {tx(lang, "Show this token. Your order goes to the kitchen as soon as you pay.", "हा टोकन दाखवा. पैसे भरल्यावर ऑर्डर किचनला जाईल.")}
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2 text-center text-[13px] font-medium">
-              {["GPay", "PhonePe", "Paytm"].map((a) => <div key={a} className="rounded-ctl bg-surface py-3">{a}</div>)}
+            <div className="mt-6 w-full rounded-[22px] bg-surface p-4 text-left">
+              <div className="mb-3 flex items-baseline justify-between">
+                <span className="text-[15px] font-semibold">{statusLine(confirmedOrder.status)}</span>
+                <span className="text-[13px] text-muted">~15 min</span>
+              </div>
+              <StatusTrack status={confirmedOrder.status} lang={lang} />
             </div>
+            <p className="mt-4 text-[13px] text-muted">{tx(lang, "You can close this — status stays in My orders.", "हे बंद केलं तरी चालेल. स्थिती 'माझ्या ऑर्डर्स' मध्ये दिसेल.")}</p>
           </div>
-        ) : (
-          <div className="flex flex-col items-center pt-4 text-center">
-            <div className="flex h-16 w-16 animate-pop items-center justify-center rounded-full bg-jade text-white"><Check size={32} strokeWidth={2.5} /></div>
-            <p className="mt-3 text-[15px] text-muted">{inr(myShare)} paid. Your e-bill is on WhatsApp.</p>
-            <div className="mt-6 text-[17px] font-semibold">How was your meal?</div>
-            <div className="mt-3 flex gap-2">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <button key={s} aria-label={`${s} stars`} onClick={() => setStars(s)}>
-                  <Star size={36} className={s <= stars ? "fill-saffron text-saffron" : "text-line"} />
-                </button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="lg" variant="plain" onClick={() => { setConfirmed(null); setView("orders"); window.scrollTo({ top: 0 }); }}>{tx(lang, "My orders", "माझ्या ऑर्डर्स")}</Button>
+            <Button size="lg" onClick={() => { setConfirmed(null); setView("menu"); }}>{tx(lang, "Order more", "आणखी ऑर्डर")}</Button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- thank you ---------- */}
+      {thanks && (
+        <ThankYou
+          name={guest?.name}
+          place={settings.name}
+          payments={thanks.payments}
+          orderNo={thanksOrder?.number || thanks.orderNo || undefined}
+          token={thanks.token ? thanksOrder?.number || thanks.orderNo || undefined : undefined}
+          lang={lang}
+          onRate={(stars, text) =>
+            feedbackActions.add({ customer: guest?.name ?? "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: stars >= 4 ? "google" : "private" })
+          }
+          onClose={() => { setThanks(null); setView(thanks.token ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}
+        >
+          {thanks.token && thanksOrder && thanksOrder.status !== "paid" && (
+            <div className="mt-3 border-t border-line pt-3">
+              <div className="mb-3 text-[14px] font-semibold">{statusLine(thanksOrder.status)}</div>
+              <StatusTrack status={thanksOrder.status} lang={lang} />
+            </div>
+          )}
+        </ThankYou>
+      )}
+
+      {/* ---------- share group access ---------- */}
+      <Sheet open={shareOpen} onClose={() => setShareOpen(false)} title={tx(lang, "Share group access", "ग्रुप ॲक्सेस शेअर करा")}>
+        {party && t && (
+          <div className="flex flex-col items-center text-center">
+            <p className="text-[15px] text-muted">{tx(lang, "Friends at this table scan the QR and enter this code. They'll order on the same bill.", "मित्रांनी टेबलचा QR scan करून हा कोड टाकावा. ते याच बिलात ऑर्डर करू शकतील.")}</p>
+            <div className="mt-5 flex gap-2">
+              {party.code.split("").map((d, i) => (
+                <span key={i} className="flex h-16 w-14 items-center justify-center rounded-[14px] bg-surface text-[32px] font-semibold tnum">{d}</span>
               ))}
             </div>
-            {stars >= 4 && (
-              <div className="mt-6 w-full animate-fade-in">
-                <p className="text-[14px] text-muted">Glad you liked it! Would you share that on Google? It helps a small restaurant a lot.</p>
-                <Button size="lg" className="mt-3 w-full" onClick={() => toast("Opening Google reviews")}>Write a Google review</Button>
+            {party.codeExpiresAt && (
+              <div className="mt-3 text-[13.5px] text-muted tnum">
+                {(() => {
+                  const s = Math.max(0, Math.round((new Date(party.codeExpiresAt).getTime() - Date.now()) / 1000));
+                  return s > 0 ? `${tx(lang, "Works for", "वैध")} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : tx(lang, "Code expired", "कोड संपला");
+                })()}
               </div>
             )}
-            {stars > 0 && stars < 4 && (
-              <div className="mt-6 w-full animate-fade-in text-left">
-                <p className="text-[14px] text-muted">Sorry about that. Tell us what went wrong — this goes straight to the owner.</p>
-                <textarea rows={3} className="mt-3 w-full rounded-ctl bg-surface p-3 text-[15px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade" />
-                <Button size="lg" className="mt-3 w-full" onClick={() => toast("Sent to the owner")}>Send to the owner</Button>
+            <div className="mt-6 grid w-full grid-cols-2 gap-2">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Join our table ${t.name} at ${settings.name}: scan the table QR and enter code ${party.code}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex h-12 items-center justify-center gap-2 rounded-ctl bg-[#25D366] text-[15px] font-semibold text-white"
+              >
+                <MessageCircle size={17} /> WhatsApp
+              </a>
+              <Button
+                variant="plain"
+                className="!h-12"
+                onClick={() => {
+                  navigator.clipboard?.writeText(party.code).catch(() => {});
+                  toast(tx(lang, "Code copied", "कोड कॉपी केला"));
+                }}
+              >
+                <Copy size={16} /> {tx(lang, "Copy code", "कॉपी")}
+              </Button>
+            </div>
+            <button onClick={() => tableActions.shareCode(t.id, party.id)} className="mt-4 text-[14px] font-semibold text-jade">{tx(lang, "Get a new code", "नवीन कोड")}</button>
+          </div>
+        )}
+      </Sheet>
+
+      {/* ---------- join a group ---------- */}
+      <Sheet
+        open={joinOpen}
+        onClose={() => setJoinOpen(false)}
+        title={tx(lang, "Join your friends", "ग्रुप कोड टाका")}
+        footer={
+          <Button
+            size="lg"
+            className="w-full"
+            disabled={joinCode.length !== 4}
+            onClick={() => {
+              if (!t) return;
+              const p = tableActions.findByCode(t.id, joinCode);
+              if (!p) {
+                setJoinError(tx(lang, "That code doesn't match or has expired. Ask your friend to tap “Share access” for a new one.", "कोड जुळत नाही किंवा संपला आहे. मित्रांना 'शेअर करा' दाबायला सांगा."));
+                return;
+              }
+              tableActions.update(t.id, p.id, { phoneClaimed: true });
+              remember(p.id);
+              setJoinOpen(false);
+              toast(tx(lang, "You're in — ordering on the same bill", "ग्रुपमध्ये जोडलं"));
+            }}
+          >
+            {tx(lang, "Join", "जोडा")}
+          </Button>
+        }
+      >
+        <p className="text-[15px] text-muted">{tx(lang, "Your friend finds it under “Share access” on their phone.", "हा कोड मित्रांच्या फोनवर 'शेअर करा' मध्ये दिसतो.")}</p>
+        <input
+          aria-label="Group code"
+          inputMode="numeric"
+          maxLength={4}
+          value={joinCode}
+          onChange={(e) => { setJoinError(""); setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 4)); }}
+          className={clsx("mt-4 h-16 w-full rounded-[16px] bg-surface text-center text-[30px] font-semibold tracking-[0.6em] outline-none ring-1 tnum focus:ring-2 focus:ring-jade", joinError ? "ring-rose" : "ring-line")}
+        />
+        {joinError && <p className="mt-3 text-[14px] font-medium text-rose">{joinError}</p>}
+        <p className="mt-4 text-[13px] text-faint">{tx(lang, "No code? Just order — you'll get your own bill.", "कोड नसेल तर फक्त ऑर्डर करा — तुमचं स्वतंत्र बिल सुरू होईल.")}</p>
+      </Sheet>
+
+      {/* ---------- final bill (restaurant flow) ---------- */}
+      <Sheet
+        open={billOpen}
+        onClose={() => setBillOpen(false)}
+        title={waiting && !waiting.payFirst ? tx(lang, "Almost done", "जवळजवळ झालं") : tx(lang, "Your bill", "तुमचं बिल")}
+      >
+        {waiting && !waiting.payFirst ? (
+          <div className="flex flex-col items-center pt-4 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-saffron-soft text-saffron">{waiting.kind === "card" ? <CreditCard size={30} /> : <Banknote size={30} />}</div>
+            <p className="mt-4 max-w-xs text-[15px] text-muted">
+              {waiting.kind === "mixed"
+                ? tx(lang, `UPI ${inr(waiting.upiPart ?? 0)} received. Your captain is coming to collect ${inr(waiting.amount - (waiting.upiPart ?? 0))} in cash.`, `UPI ${inr(waiting.upiPart ?? 0)} मिळाले. कॅप्टन ${inr(waiting.amount - (waiting.upiPart ?? 0))} रोख घ्यायला येत आहे.`)
+                : waiting.kind === "cash"
+                  ? tx(lang, `Your captain is bringing the bill. Please keep ${inr(waiting.amount)} ready in cash.`, `कॅप्टन बिल घेऊन येत आहे. ${inr(waiting.amount)} रोख तयार ठेवा.`)
+                  : tx(lang, "Your captain is bringing the card machine.", "कॅप्टन कार्ड मशीन घेऊन येत आहे.")}
+            </p>
+            <p className="mt-3 text-[13px] text-faint">{tx(lang, "This screen says thank you once it's done.", "झालं की इथे धन्यवाद दिसेल.")}</p>
+          </div>
+        ) : unbilled.length === 0 ? (
+          <p className="py-8 text-center text-[15px] text-muted">{tx(lang, "Nothing to pay right now.", "आत्ता भरायचं काही नाही.")}</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="overflow-hidden rounded-group bg-surface">
+              {unbilled.map((o) => (
+                <div key={o.id} className="border-b border-line/80 px-4 py-3 last:border-0">
+                  <div className="mb-1 text-[12.5px] font-semibold text-muted">#{num(o.number)} · {o.customer}</div>
+                  {o.lines.map((l, i) => (
+                    <div key={i} className="flex justify-between text-[14px]"><span>{l.qty}× {l.name}</span><span className="tnum">{inr(l.qty * l.price)}</span></div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Tip for the staff (optional)", "स्टाफसाठी टिप (ऐच्छिक)")}</div>
+              <div className="grid grid-cols-4 gap-2">
+                {[0, 5, 10, 15].map((p) => (
+                  <button key={p} onClick={() => setTipPct(p)} className={clsx("rounded-ctl py-2.5 text-[14px] font-semibold", tipPct === p ? "bg-ink text-canvas" : "bg-surface")}>
+                    {p === 0 ? tx(lang, "No tip", "नको") : `${p}%`}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+            <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
+              <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(billItems, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">CGST 2.5% + SGST 2.5%</dt><dd className="tnum">{inr(billGst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
+              {tip > 0 && <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Tip", "टिप")}</dt><dd className="tnum">{inr(tip)}</dd></div>}
+              <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>{tx(lang, "Total payable", "भरायचे")}</dt><dd className="tnum">{inr(billTotal)}</dd></div>
+            </dl>
+            <div className="text-[14px] font-semibold">{tx(lang, "How will you pay?", "कसे भरणार?")}</div>
+            <PayPanel
+              amount={billTotal}
+              upi={settings.upi}
+              payee={settings.name}
+              note={`${settings.name} · ${placeLabel}`}
+              lang={lang}
+              cashWhere={cashWhere}
+              onUpiPaid={billUpi}
+              onCash={() => billLater("cash")}
+              onCard={() => billLater("card")}
+              onMixed={(upiPart) => billLater("mixed", upiPart)}
+            />
           </div>
         )}
       </Sheet>

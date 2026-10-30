@@ -8,6 +8,9 @@ import * as mock from "./mock";
 
 export const repo = {
   restaurant: () => mock.restaurant,
+  account: () => mock.account,
+  outlets: () => mock.outlets,
+  members: () => mock.members,
   categories: () => mock.categories,
   menu: () => mock.menu,
   tables: () => mock.tables,

@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  participant Cap as 🧾 Captain (POS)
+  participant DB as 🔥 Firestore
+  participant CF as ⚙️ Cloud Functions
+  participant K as 👨‍🍳 Kitchen screen
+  participant Cash as 💳 Cashier
+  participant G as 📱 Guest
+  Cap->>DB: Seat guests at T4 (table → seated)
+  Cap->>DB: Add dishes / voice order → Send to kitchen
+  DB->>CF: orders onCreate
+  CF->>DB: Recalculate totals + GST, create KOTs per station
+  DB-->>K: KOT appears (kitchen · tandoor · bar · dessert)
+  K->>DB: Tick dishes → Mark ready
+  DB-->>Cap: Push: "T4 ready"
+  Cap->>DB: Served → Request bill (table → billing)
+  Cash->>DB: Charge UPI / cash / card / split
+  DB->>CF: status → paid
+  CF->>DB: Deduct stock, loyalty points, free table
+  CF-->>G: E-bill + feedback link on WhatsApp

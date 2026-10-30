@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  participant G as 📱 Guest phone
+  participant IN as 📥 guestOrders inbox
+  participant CF as ⚙️ Cloud Function
+  participant O as 🧾 orders
+  participant ST as 🧑‍💼 Staff (Orders / Tables)
+  participant K as 👨‍🍳 Kitchen
+  G->>IN: Place order (table token, visitId, partyId, lines, OTP phone)
+  IN->>CF: onCreate
+  CF->>CF: Validate table token, visit, party, prices (never trust client)
+  alt Group's first order
+    CF->>O: Copy as status = new (pendingApproval)
+    O-->>ST: Banner: "T6 · new group · Accept?"
+    ST->>O: Accept
+  else Later orders of same group
+    CF->>O: Copy as accepted
+  end
+  O-->>K: KOT per station
+  K-->>G: Live status Preparing → Ready → Served

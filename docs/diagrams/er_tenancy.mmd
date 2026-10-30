@@ -1,0 +1,79 @@
+erDiagram
+  PLAN ||--o{ RESTAURANT : "subscribed by"
+  RESTAURANT ||--|{ OUTLET : has
+  RESTAURANT ||--|{ MEMBER : employs
+  MEMBER }o--o{ OUTLET : "outletIds[] access"
+  MEMBER ||--o{ SHIFT : works
+  MEMBER ||--o{ ATTENDANCE : "clocks in"
+  OUTLET ||--o{ DAY_CLOSE : "closes daily"
+  OUTLET ||--o{ INSIGHT : "nightly Pulse"
+  OUTLET ||--o{ EXPENSE : logs
+  PLAN {
+    string planId PK
+    string name
+    int monthly
+    int yearly
+    array features
+    map limits
+  }
+  RESTAURANT {
+    string rid PK
+    string name
+    string ownerUid FK
+    string plan FK
+    string status "trial|active|past-due|paused"
+    date renewsAt "badge from 10 days before"
+    map billing
+  }
+  OUTLET {
+    string oid PK
+    string rid FK
+    string name
+    string address
+    string businessType "restaurant|cafe"
+    string upi "payment QRs"
+    bool payFirst
+    string gstin
+  }
+  MEMBER {
+    string uid PK
+    string rid FK
+    string name
+    string phone
+    string role "owner|subadmin|staff"
+    string title "Captain, Chef..."
+    array outletIds
+    array perms "ticked boxes"
+    string pinHash
+    bool active
+  }
+  SHIFT {
+    string id PK
+    string uid FK
+    date start
+    date end
+  }
+  ATTENDANCE {
+    string id PK
+    string uid FK
+    date clockIn
+    date clockOut
+  }
+  DAY_CLOSE {
+    string date PK
+    int expected
+    int counted
+    int variance
+    string by FK
+  }
+  INSIGHT {
+    string date PK
+    map pulse
+    map forecast
+    array alerts
+  }
+  EXPENSE {
+    string eid PK
+    string category
+    int amount
+  }

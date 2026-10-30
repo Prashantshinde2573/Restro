@@ -1,0 +1,33 @@
+flowchart TD
+  A(["📷 Scan table QR<br/>/order/T3"]) --> B{"Ordering on?<br/>opening hours"}
+  B -- No --> B1["Menu only<br/>ordering off"]
+  B -- Yes --> C{"Phone already<br/>in a group?"}
+  C -- "Yes (same visit)" --> E
+  C -- No --> D{"How to start?"}
+  D -- "New group" --> D1["Own bill<br/>Party A / B"]
+  D -- "Friends ordered" --> D2["Enter 4-digit<br/>group code (10 min)"]
+  D -- "Seated by staff" --> D3["Use that bill"]
+  D1 --> E
+  D2 --> E
+  D3 --> E
+  E["🍽️ Menu<br/>search · Veg/Non-veg · filters · side bar"] --> F["➕ Add dish<br/>choices sheet: spice, add-ons"]
+  F --> G["🛒 Cart<br/>item total + CGST + SGST<br/>Goes well with…"]
+  G --> H{"First order<br/>from this phone?"}
+  H -- Yes --> I["🔐 Name + mobile + OTP<br/>saved to Guests ✓ verified"]
+  H -- No --> J
+  I --> J["✅ Order placed #1047"]
+  J --> K{"Group's first order?"}
+  K -- Yes --> L["⏳ Received · waits for<br/>staff Accept"]
+  K -- No --> M
+  L --> M["🔥 Kitchen: Accepted → Preparing → Ready → Served"]
+  M --> N{"Order more?"}
+  N -- Yes --> E
+  N -- No --> O["🧾 Get the bill<br/>tip: none / 5 / 10 / 15%"]
+  O --> P{"How will you pay?"}
+  P -- "UPI" --> Q["💸 QR for exact amount"]
+  P -- "Cash / Card" --> R["Captain collects"]
+  P -- "Cash + UPI" --> R2["UPI part by QR<br/>captain collects cash"]
+  Q --> S["🙏 Thank-you screen"]
+  R --> S
+  R2 --> S
+  S --> T["⭐ Rating saved for owner"]

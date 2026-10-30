@@ -1,0 +1,13 @@
+flowchart TD
+  O["👑 Owner · Members & access"] -->|Add member · role Sub admin<br/>tick outlets + boxes| SA["🏬 Sub admin<br/>outletIds = [baner]"]
+  SA --> L["📱 Signs in: mobile OTP or face + PIN"]
+  L --> TK["🎫 Token { rid, outletIds, role, perms }"]
+  TK --> APP["/app opens on own outlet<br/>only ticked screens in the menu"]
+  APP --> M["Members & access<br/>sees own outlet's staff only"]
+  M -->|add / edit / pause / remove| ST["🧾 Staff of that outlet"]
+  M -.->|cannot| X1["⛔ Give a box they don't have"]
+  M -.->|cannot| X2["⛔ Assign another outlet"]
+  M -.->|cannot| X3["⛔ Edit owner or other sub admins"]
+  O -->|can do all of this too,<br/>for any outlet| ST
+  classDef bad fill:#FCE8E8,stroke:#D24242,color:#14201C
+  class X1,X2,X3 bad

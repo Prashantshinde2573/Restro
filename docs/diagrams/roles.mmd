@@ -1,0 +1,30 @@
+flowchart TB
+  SU["🛡️ SUPER ADMIN<br/>Platform owner · /admin<br/>All restaurants, plans, payments"]
+  CA["👑 CLIENT ADMIN<br/>Restaurant owner · role = owner<br/>All outlets of one restaurant"]
+  SA1["🏬 CLIENT SUB ADMIN<br/>Outlet manager · Baner<br/>outletIds = [baner]"]
+  SA2["🏬 CLIENT SUB ADMIN<br/>Outlet manager · Koregaon Park<br/>outletIds = [kp]"]
+  CAP["🧾 Captain"]
+  CAS["💳 Cashier"]
+  CHF["👨‍🍳 Chef"]
+  CAP2["🧾 Captain"]
+  CHF2["👨‍🍳 Chef"]
+  CU["📱 CUSTOMER<br/>No login · OTP at first order<br/>Only their own party's bill"]
+  SU -->|creates plan, extends trial,<br/>pauses account| CA
+  CA -->|invites + assigns outlet| SA1
+  CA -->|invites + assigns outlet| SA2
+  SA1 -->|rota, PIN, roles| CAP
+  SA1 --> CAS
+  SA1 --> CHF
+  SA2 --> CAP2
+  SA2 --> CHF2
+  CU -.->|scans table QR of an outlet| SA1
+  classDef su fill:#FCE8E8,stroke:#D24242,color:#14201C
+  classDef ca fill:#E6F4EF,stroke:#0E7A5F,color:#14201C
+  classDef sa fill:#E8F0FB,stroke:#2C6EC8,color:#14201C
+  classDef st fill:#F4F6F5,stroke:#68716D,color:#14201C
+  classDef cu fill:#FFF4E0,stroke:#DE9122,color:#14201C
+  class SU su
+  class CA ca
+  class SA1,SA2 sa
+  class CAP,CAS,CHF,CAP2,CHF2 st
+  class CU cu

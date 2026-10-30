@@ -1,0 +1,14 @@
+flowchart LR
+  L["🔐 Super Admin login<br/>platform role claim"] --> D["📊 /admin dashboard<br/>MRR · paying · trial · due · orders today"]
+  D --> T["🏢 Restaurants tab<br/>search + filter by status"]
+  D --> PL["💰 Plans and prices tab"]
+  T --> R["Open a restaurant"]
+  R --> A1["⏩ Extend trial 7 days"]
+  R --> A2["📩 Send payment reminder"]
+  R --> A3["🔁 Change plan"]
+  R --> A4["👁️ Open as support (read-only)"]
+  R --> A5["⏸️ Pause account"]
+  PL --> E["Edit monthly / yearly per outlet"]
+  E --> S["Save · new signups see new price<br/>existing keep price till renewal"]
+  W["Razorpay webhook"] -.-> D
+  N["Nightly platform/stats job"] -.-> D

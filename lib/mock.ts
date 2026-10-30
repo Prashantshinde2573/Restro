@@ -1,6 +1,10 @@
 // Sample data for the UI prototype. Replace with Firestore reads in
 // lib/repo.ts — nothing in the screens imports this file directly.
+import type { Member, Perm } from "./access";
 import type {
+  Account,
+  Outlet,
+  OptionGroup,
   Campaign,
   Category,
   Customer,
@@ -18,6 +22,7 @@ import type {
 const now = Date.now();
 export const minsAgo = (m: number) => new Date(now - m * 60_000).toISOString();
 export const daysAgo = (d: number) => new Date(now - d * 86_400_000).toISOString();
+export const daysAhead = (d: number) => new Date(now + d * 86_400_000).toISOString();
 
 export const restaurant = {
   name: "Saffron Lane",
@@ -29,54 +34,122 @@ export const restaurant = {
   plan: "Growth" as const,
 };
 
-export const categories: Category[] = [
-  { id: "starters", name: "Starters" },
-  { id: "mains", name: "Mains" },
-  { id: "breads", name: "Breads" },
-  { id: "rice", name: "Rice & Biryani" },
-  { id: "desserts", name: "Desserts" },
-  { id: "drinks", name: "Drinks" },
+export const account: Account = {
+  name: restaurant.name,
+  owner: restaurant.owner,
+  plan: "pro",
+  renewsAt: daysAhead(8), // inside the 10-day window, so the renewal reminder shows
+};
+
+export const outlets: Outlet[] = [
+  { id: "baner", name: "Baner, Pune", address: "Baner Road, Pune 411045", businessType: "restaurant", upi: "saffronlane@okhdfc", payFirst: false },
+  { id: "kp", name: "Koregaon Park", address: "North Main Road, Pune 411001", businessType: "restaurant", upi: "saffronlane.kp@okhdfc", payFirst: false },
+  { id: "kothrud", name: "Kothrud Café", address: "Paud Road, Pune 411038", businessType: "cafe", upi: "saffronlane.cafe@okhdfc", payFirst: true },
 ];
+
+const MANAGER: Perm[] = ["pos", "orders", "charge", "tables", "kitchen", "discount", "refund", "editPayment", "dayClose", "menu", "stock", "team", "guests", "campaigns", "insights", "reports", "outletSettings"];
+export const members: Member[] = [
+  { id: "s1", name: "Prashant", phone: "98220 00001", role: "owner", title: "Owner", outletIds: ["baner", "kp", "kothrud"], perms: [], active: true, hue: 160 },
+  { id: "s2", name: "Kavya More", phone: "98220 00002", role: "subadmin", title: "Outlet manager", outletIds: ["baner"], perms: MANAGER, active: true, hue: 280 },
+  { id: "s9", name: "Rahul Desai", phone: "98220 00009", role: "subadmin", title: "Outlet manager", outletIds: ["kp"], perms: MANAGER, active: true, hue: 200 },
+  { id: "s10", name: "Anjali Joshi", phone: "98220 00010", role: "subadmin", title: "Café manager", outletIds: ["kothrud"], perms: MANAGER.filter((p) => p !== "tables"), active: true, hue: 330 },
+  { id: "s3", name: "Rohit Sawant", phone: "98220 00003", role: "staff", title: "Captain", outletIds: ["baner"], perms: ["pos", "orders", "tables", "kitchen"], active: true, hue: 210 },
+  { id: "s4", name: "Sneha Kale", phone: "98220 00004", role: "staff", title: "Captain", outletIds: ["baner"], perms: ["pos", "orders", "tables", "kitchen"], active: true, hue: 330 },
+  { id: "s5", name: "Aman Verma", phone: "98220 00005", role: "staff", title: "Captain", outletIds: ["kp"], perms: ["pos", "orders", "tables", "kitchen"], active: true, hue: 30 },
+  { id: "s6", name: "Chef Ganesh", phone: "98220 00006", role: "staff", title: "Chef", outletIds: ["baner"], perms: ["kitchen", "stock"], active: true, hue: 10 },
+  { id: "s7", name: "Imran Khan", phone: "98220 00007", role: "staff", title: "Chef", outletIds: ["kp"], perms: ["kitchen", "stock"], active: true, hue: 100 },
+  { id: "s8", name: "Pooja Nair", phone: "98220 00008", role: "staff", title: "Cashier", outletIds: ["baner", "kp"], perms: ["pos", "orders", "charge", "discount", "dayClose"], active: true, hue: 250 },
+  { id: "s11", name: "Sahil Patil", phone: "98220 00011", role: "staff", title: "Counter staff", outletIds: ["kothrud"], perms: ["pos", "orders", "charge", "kitchen"], active: true, hue: 60 },
+];
+
+export const categories: Category[] = [
+  { id: "starters", name: "Starters", icon: "🍢" },
+  { id: "mains", name: "Mains", icon: "🍛" },
+  { id: "breads", name: "Breads", icon: "🫓" },
+  { id: "rice", name: "Rice & Biryani", icon: "🍚" },
+  { id: "desserts", name: "Desserts", icon: "🍨" },
+  { id: "drinks", name: "Cold drinks", icon: "🥤" },
+  { id: "hot", name: "Tea & Coffee", icon: "☕" },
+];
+
+const spiceLevel: OptionGroup = {
+  id: "spice",
+  name: "Spice level",
+  type: "single",
+  required: true,
+  choices: [
+    { id: "mild", name: "Mild", price: 0 },
+    { id: "medium", name: "Medium", price: 0 },
+    { id: "hot", name: "Hot", price: 0 },
+  ],
+};
+const addOns = (...c: [string, number][]): OptionGroup => ({
+  id: "addons",
+  name: "Add extra",
+  type: "multi",
+  choices: c.map(([name, price]) => ({ id: name.toLowerCase().replace(/\W+/g, "-"), name, price })),
+});
 
 export const menu: MenuItem[] = [
-  { id: "m1", name: "Paneer Tikka", categoryId: "starters", price: 320, cost: 96, diet: "veg", available: true, soldThisWeek: 142, prepMins: 14, station: "tandoor", tags: ["Bestseller"], hue: 28 },
-  { id: "m2", name: "Chicken Malai Kebab", categoryId: "starters", price: 380, cost: 140, diet: "nonveg", available: true, soldThisWeek: 118, prepMins: 16, station: "tandoor", hue: 40 },
-  { id: "m3", name: "Kothimbir Vadi", categoryId: "starters", price: 210, cost: 42, diet: "veg", available: true, soldThisWeek: 36, prepMins: 10, station: "kitchen", tags: ["Chef special"], hue: 95 },
-  { id: "m4", name: "Crispy Corn", categoryId: "starters", price: 240, cost: 58, diet: "veg", available: true, soldThisWeek: 96, prepMins: 8, station: "kitchen", hue: 50 },
-  { id: "m5", name: "Butter Chicken", categoryId: "mains", price: 420, cost: 150, diet: "nonveg", available: true, soldThisWeek: 204, prepMins: 18, station: "kitchen", tags: ["Bestseller"], hue: 18 },
-  { id: "m6", name: "Dal Makhani", categoryId: "mains", price: 290, cost: 62, diet: "veg", available: true, soldThisWeek: 176, prepMins: 10, station: "kitchen", hue: 12 },
-  { id: "m7", name: "Kolhapuri Mutton", categoryId: "mains", price: 520, cost: 245, diet: "nonveg", available: true, soldThisWeek: 41, prepMins: 22, station: "kitchen", tags: ["Spicy"], hue: 4 },
-  { id: "m8", name: "Paneer Lababdar", categoryId: "mains", price: 340, cost: 118, diet: "veg", available: true, soldThisWeek: 88, prepMins: 15, station: "kitchen", hue: 32 },
-  { id: "m9", name: "Malvani Fish Curry", categoryId: "mains", price: 460, cost: 210, diet: "nonveg", available: false, soldThisWeek: 22, prepMins: 20, station: "kitchen", hue: 22 },
-  { id: "m10", name: "Butter Naan", categoryId: "breads", price: 70, cost: 12, diet: "veg", available: true, soldThisWeek: 410, prepMins: 4, station: "tandoor", hue: 44 },
-  { id: "m11", name: "Garlic Naan", categoryId: "breads", price: 90, cost: 15, diet: "veg", available: true, soldThisWeek: 260, prepMins: 4, station: "tandoor", hue: 48 },
-  { id: "m12", name: "Tandoori Roti", categoryId: "breads", price: 40, cost: 6, diet: "veg", available: true, soldThisWeek: 190, prepMins: 3, station: "tandoor", hue: 36 },
-  { id: "m13", name: "Hyderabadi Dum Biryani", categoryId: "rice", price: 440, cost: 170, diet: "nonveg", available: true, soldThisWeek: 150, prepMins: 12, station: "kitchen", tags: ["Bestseller"], hue: 34 },
-  { id: "m14", name: "Veg Pulao", categoryId: "rice", price: 260, cost: 70, diet: "veg", available: true, soldThisWeek: 54, prepMins: 10, station: "kitchen", hue: 60 },
-  { id: "m15", name: "Jeera Rice", categoryId: "rice", price: 180, cost: 30, diet: "veg", available: true, soldThisWeek: 120, prepMins: 6, station: "kitchen", hue: 52 },
-  { id: "m16", name: "Gulab Jamun", categoryId: "desserts", price: 140, cost: 30, diet: "veg", available: true, soldThisWeek: 98, prepMins: 2, station: "dessert", hue: 14 },
-  { id: "m17", name: "Rasmalai", categoryId: "desserts", price: 180, cost: 64, diet: "veg", available: true, soldThisWeek: 31, prepMins: 2, station: "dessert", hue: 40 },
-  { id: "m18", name: "Sitaphal Basundi", categoryId: "desserts", price: 190, cost: 52, diet: "veg", available: true, soldThisWeek: 27, prepMins: 2, station: "dessert", tags: ["Seasonal"], hue: 80 },
-  { id: "m19", name: "Masala Chaas", categoryId: "drinks", price: 90, cost: 14, diet: "veg", available: true, soldThisWeek: 220, prepMins: 2, station: "bar", hue: 110 },
-  { id: "m20", name: "Kokum Sharbat", categoryId: "drinks", price: 110, cost: 18, diet: "veg", available: true, soldThisWeek: 64, prepMins: 2, station: "bar", hue: 340 },
-  { id: "m21", name: "Cold Coffee", categoryId: "drinks", price: 160, cost: 38, diet: "veg", available: true, soldThisWeek: 130, prepMins: 4, station: "bar", hue: 25 },
-  { id: "m22", name: "Fresh Lime Soda", categoryId: "drinks", price: 100, cost: 12, diet: "veg", available: true, soldThisWeek: 175, prepMins: 2, station: "bar", hue: 90 },
+  { id: "m1", name: "Paneer Tikka", categoryId: "starters", price: 320, cost: 96, diet: "veg", available: true, soldThisWeek: 142, prepMins: 14, station: "tandoor", tags: ["Bestseller"], hue: 28 , spice: 2, photoCount: 4, desc: "Cottage cheese in hung-curd marinade, charred in the tandoor.", options: [spiceLevel, addOns(["Extra cheese", 40], ["Extra mint chutney", 20])] },
+  { id: "m2", name: "Chicken Malai Kebab", categoryId: "starters", price: 380, cost: 140, diet: "nonveg", available: true, soldThisWeek: 118, prepMins: 16, station: "tandoor", hue: 40 , spice: 1, photoCount: 3, desc: "Cream-and-cashew marinated chicken, soft and smoky.", options: [addOns(["Extra cheese", 40], ["Garlic dip", 20])] },
+  { id: "m3", name: "Kothimbir Vadi", categoryId: "starters", price: 210, cost: 42, diet: "veg", available: true, soldThisWeek: 36, prepMins: 10, station: "kitchen", tags: ["Chef special"], hue: 95 , spice: 1, photoCount: 2, desc: "Crisp coriander and gram-flour squares, a Pune favourite." },
+  { id: "m4", name: "Crispy Corn", categoryId: "starters", price: 240, cost: 58, diet: "veg", available: true, soldThisWeek: 96, prepMins: 8, station: "kitchen", hue: 50 , spice: 2, photoCount: 2, desc: "Golden corn tossed with pepper, garlic and spring onion.", options: [spiceLevel] },
+  { id: "m5", name: "Butter Chicken", categoryId: "mains", price: 420, cost: 150, diet: "nonveg", available: true, soldThisWeek: 204, prepMins: 18, station: "kitchen", tags: ["Bestseller"], hue: 18 , spice: 1, photoCount: 4, desc: "Our most-ordered. Smoky tomato-butter gravy, tender chicken.", options: [spiceLevel, addOns(["Extra gravy", 60], ["Extra butter", 25])] },
+  { id: "m6", name: "Dal Makhani", categoryId: "mains", price: 290, cost: 62, diet: "veg", available: true, soldThisWeek: 176, prepMins: 10, station: "kitchen", hue: 12 , spice: 1, photoCount: 3, desc: "Black lentils slow-cooked overnight with butter and cream.", options: [addOns(["Extra butter", 25])] },
+  { id: "m7", name: "Kolhapuri Mutton", categoryId: "mains", price: 520, cost: 245, diet: "nonveg", available: true, soldThisWeek: 41, prepMins: 22, station: "kitchen", tags: ["Spicy"], hue: 4 , spice: 3, photoCount: 3, desc: "Fiery Kolhapuri masala, bone-in mutton. Comes with tambda rassa.", options: [spiceLevel] },
+  { id: "m8", name: "Paneer Lababdar", categoryId: "mains", price: 340, cost: 118, diet: "veg", available: true, soldThisWeek: 88, prepMins: 15, station: "kitchen", hue: 32 , spice: 1, photoCount: 2, desc: "Paneer in a rich onion-tomato gravy with a hint of fenugreek.", options: [spiceLevel, addOns(["Extra cheese", 40])] },
+  { id: "m9", name: "Malvani Fish Curry", categoryId: "mains", price: 460, cost: 210, diet: "nonveg", available: false, soldThisWeek: 22, prepMins: 20, station: "kitchen", hue: 22 , spice: 2, photoCount: 2, desc: "Surmai in coconut-kokum curry, Konkan style." },
+  { id: "m10", name: "Butter Naan", categoryId: "breads", price: 70, cost: 12, diet: "veg", available: true, soldThisWeek: 410, prepMins: 4, station: "tandoor", hue: 44 , photoCount: 2, desc: "Soft tandoor naan brushed with butter.", options: [addOns(["Extra butter", 15], ["Cheese stuffed", 50])] },
+  { id: "m11", name: "Garlic Naan", categoryId: "breads", price: 90, cost: 15, diet: "veg", available: true, soldThisWeek: 260, prepMins: 4, station: "tandoor", hue: 48 , photoCount: 2, desc: "Naan topped with garlic and coriander.", options: [addOns(["Extra butter", 15], ["Cheese stuffed", 50])] },
+  { id: "m12", name: "Tandoori Roti", categoryId: "breads", price: 40, cost: 6, diet: "veg", available: true, soldThisWeek: 190, prepMins: 3, station: "tandoor", hue: 36 , photoCount: 1, desc: "Whole-wheat roti from the tandoor." },
+  { id: "m13", name: "Hyderabadi Dum Biryani", categoryId: "rice", price: 440, cost: 170, diet: "nonveg", available: true, soldThisWeek: 150, prepMins: 12, station: "kitchen", tags: ["Bestseller"], hue: 34 , spice: 2, photoCount: 4, desc: "Slow-cooked under a dough seal, served with raita.", options: [spiceLevel, addOns(["Extra raita", 30], ["Boiled egg", 25], ["Extra chicken piece", 90])] },
+  { id: "m14", name: "Veg Pulao", categoryId: "rice", price: 260, cost: 70, diet: "veg", available: true, soldThisWeek: 54, prepMins: 10, station: "kitchen", hue: 60 , spice: 0, photoCount: 2, desc: "Fragrant basmati with seasonal vegetables." },
+  { id: "m15", name: "Jeera Rice", categoryId: "rice", price: 180, cost: 30, diet: "veg", available: true, soldThisWeek: 120, prepMins: 6, station: "kitchen", hue: 52 , photoCount: 1, desc: "Basmati tempered with cumin and ghee." },
+  { id: "m16", name: "Gulab Jamun", categoryId: "desserts", price: 140, cost: 30, diet: "veg", available: true, soldThisWeek: 98, prepMins: 2, station: "dessert", hue: 14 , sweet: true, photoCount: 2, desc: "Two warm gulab jamuns in cardamom syrup.", options: [addOns(["Vanilla ice cream", 50])] },
+  { id: "m17", name: "Rasmalai", categoryId: "desserts", price: 180, cost: 64, diet: "veg", available: true, soldThisWeek: 31, prepMins: 2, station: "dessert", hue: 40 , sweet: true, photoCount: 2, desc: "Soft cheese dumplings in saffron milk." },
+  { id: "m18", name: "Sitaphal Basundi", categoryId: "desserts", price: 190, cost: 52, diet: "veg", available: true, soldThisWeek: 27, prepMins: 2, station: "dessert", tags: ["Seasonal"], hue: 80 , isNew: true, sweet: true, photoCount: 3, desc: "Seasonal. Custard-apple folded into reduced milk." },
+  { id: "m19", name: "Masala Chaas", categoryId: "drinks", price: 90, cost: 14, diet: "veg", available: true, soldThisWeek: 220, prepMins: 2, station: "bar", hue: 110 , photoCount: 1, desc: "Spiced buttermilk with roasted cumin." },
+  { id: "m20", name: "Kokum Sharbat", categoryId: "drinks", price: 110, cost: 18, diet: "veg", available: true, soldThisWeek: 64, prepMins: 2, station: "bar", hue: 340 , isNew: true, sweet: true, photoCount: 2, desc: "Konkan kokum, chilled. Good for the heat." },
+  { id: "m21", name: "Cold Coffee", categoryId: "drinks", price: 160, cost: 38, diet: "veg", available: true, soldThisWeek: 130, prepMins: 4, station: "bar", hue: 25 , sweet: true, photoCount: 3, desc: "Thick cold coffee, blended to order.", options: [{ id: "sugar", name: "Sugar", type: "single", required: true, choices: [{ id: "regular", name: "Regular", price: 0 }, { id: "less", name: "Less sugar", price: 0 }, { id: "none", name: "No sugar", price: 0 }] }, addOns(["Extra shot", 30], ["Ice cream scoop", 50])] },
+  { id: "m22", name: "Fresh Lime Soda", categoryId: "drinks", price: 100, cost: 12, diet: "veg", available: true, soldThisWeek: 175, prepMins: 2, station: "bar", hue: 90 , photoCount: 1, desc: "Sweet, salted or mixed — your call.", options: [{ id: "style", name: "Style", type: "single", required: true, choices: [{ id: "sweet", name: "Sweet", price: 0 }, { id: "salted", name: "Salted", price: 0 }, { id: "mixed", name: "Mixed", price: 0 }] }] },
+  { id: "m23", name: "Masala Chai", categoryId: "hot", price: 40, cost: 8, diet: "veg", available: true, soldThisWeek: 310, prepMins: 4, station: "bar", hue: 30, photoCount: 1, desc: "Kadak chai with ginger and cardamom.", options: [{ id: "sugar", name: "Sugar", type: "single", required: true, choices: [{ id: "regular", name: "Regular", price: 0 }, { id: "less", name: "Less sugar", price: 0 }, { id: "none", name: "No sugar", price: 0 }] }] },
+  { id: "m24", name: "Filter Coffee", categoryId: "hot", price: 70, cost: 14, diet: "veg", available: true, soldThisWeek: 140, prepMins: 4, station: "bar", hue: 22, tags: ["Bestseller"], photoCount: 2, desc: "South Indian decoction coffee, frothed tumbler-davara style." },
 ];
 
+const party = (
+  id: string,
+  guests: number,
+  mins: number,
+  status: "seated" | "ordered" | "billing",
+  extra: { total?: number; server?: string; code: string; source?: "captain" | "qr"; phoneClaimed?: boolean; pendingApproval?: boolean },
+) => ({ id, guests, since: minsAgo(mins), status, source: "captain" as const, ...extra });
+
 export const tables: Table[] = [
-  { id: "t1", name: "T1", zone: "Main hall", seats: 2, status: "seated", guests: 2, since: minsAgo(6), server: "Rohit" },
-  { id: "t2", name: "T2", zone: "Main hall", seats: 4, status: "ordered", guests: 4, since: minsAgo(28), total: 1860, server: "Rohit" },
-  { id: "t3", name: "T3", zone: "Main hall", seats: 4, status: "free" },
-  { id: "t4", name: "T4", zone: "Main hall", seats: 6, status: "billing", guests: 5, since: minsAgo(64), total: 3420, server: "Sneha" },
-  { id: "t5", name: "T5", zone: "Main hall", seats: 2, status: "free" },
-  { id: "t6", name: "T6", zone: "Main hall", seats: 4, status: "ordered", guests: 3, since: minsAgo(17), total: 1240, server: "Sneha" },
-  { id: "t7", name: "T7", zone: "Main hall", seats: 8, status: "reserved", since: minsAgo(-25) },
-  { id: "t8", name: "T8", zone: "Main hall", seats: 4, status: "free" },
-  { id: "t9", name: "R1", zone: "Rooftop", seats: 4, status: "ordered", guests: 4, since: minsAgo(41), total: 2280, server: "Aman" },
-  { id: "t10", name: "R2", zone: "Rooftop", seats: 2, status: "free" },
-  { id: "t11", name: "R3", zone: "Rooftop", seats: 6, status: "seated", guests: 6, since: minsAgo(3), server: "Aman" },
-  { id: "t12", name: "R4", zone: "Rooftop", seats: 4, status: "reserved", since: minsAgo(-50) },
-  { id: "t13", name: "P1", zone: "Private room", seats: 12, status: "free" },
+  { id: "t1", name: "T1", zone: "Main hall", seats: 2, visitId: "v1-1", parties: [party("A", 2, 6, "seated", { server: "Rohit", code: "3307" })] },
+  { id: "t2", name: "T2", zone: "Main hall", seats: 4, visitId: "v2-1", parties: [party("A", 4, 28, "ordered", { total: 1860, server: "Rohit", code: "5512" })] },
+  { id: "t3", name: "T3", zone: "Main hall", seats: 4, visitId: "v3-1", parties: [] },
+  { id: "t4", name: "T4", zone: "Main hall", seats: 6, visitId: "v4-1", parties: [party("A", 5, 64, "billing", { total: 3420, server: "Sneha", code: "9021" })] },
+  { id: "t5", name: "T5", zone: "Main hall", seats: 2, visitId: "v5-1", parties: [] },
+  // Shared table: a couple (A) and a solo guest (B) seated together
+  {
+    id: "t6",
+    name: "T6",
+    zone: "Main hall",
+    seats: 4,
+    visitId: "v6-1",
+    parties: [
+      party("A", 2, 17, "ordered", { total: 940, server: "Sneha", code: "4821", phoneClaimed: true, source: "qr" }),
+      party("B", 1, 5, "ordered", { total: 400, server: "Sneha", code: "7163" }),
+    ],
+  },
+  { id: "t7", name: "T7", zone: "Main hall", seats: 8, visitId: "v7-1", parties: [], reservedAt: minsAgo(-25) },
+  { id: "t8", name: "T8", zone: "Main hall", seats: 4, visitId: "v8-1", parties: [] },
+  { id: "t9", name: "R1", zone: "Rooftop", seats: 4, visitId: "v9-1", parties: [party("A", 4, 41, "ordered", { total: 2280, server: "Aman", code: "6640", source: "qr", phoneClaimed: true })] },
+  { id: "t10", name: "R2", zone: "Rooftop", seats: 2, visitId: "v10-1", parties: [] },
+  { id: "t11", name: "R3", zone: "Rooftop", seats: 6, visitId: "v11-1", parties: [party("A", 6, 3, "seated", { server: "Aman", code: "1188" })] },
+  { id: "t12", name: "R4", zone: "Rooftop", seats: 4, visitId: "v12-1", parties: [], reservedAt: minsAgo(-50) },
+  { id: "t13", name: "P1", zone: "Private room", seats: 12, visitId: "v13-1", parties: [] },
 ];
 
 const line = (id: string, qty: number, done = false, note?: string) => {
@@ -86,10 +159,11 @@ const line = (id: string, qty: number, done = false, note?: string) => {
 
 export const orders: Order[] = [
   { id: "o1", number: 1042, type: "dine-in", channel: "pos", tableId: "t2", tableName: "T2", lines: [line("m5", 2, true), line("m10", 4, true), line("m6", 1), line("m19", 4, true)], status: "preparing", createdAt: minsAgo(22), staff: "Rohit" },
-  { id: "o2", number: 1043, type: "dine-in", channel: "qr", tableId: "t9", tableName: "R1", lines: [line("m13", 2), line("m1", 1, false, "Less spicy"), line("m22", 2)], status: "preparing", createdAt: minsAgo(14), staff: "QR", priority: true },
+  { id: "o2", number: 1043, type: "dine-in", channel: "qr", tableId: "t9", tableName: "R1", partyId: "A", lines: [line("m13", 2), line("m1", 1, false, "Less spicy"), line("m22", 2)], status: "preparing", createdAt: minsAgo(14), staff: "QR", priority: true },
   { id: "o3", number: 1044, type: "takeaway", channel: "whatsapp", customer: "Neha Kulkarni", lines: [line("m8", 1), line("m11", 3), line("m15", 1)], status: "new", createdAt: minsAgo(3), staff: "WhatsApp" },
-  { id: "o4", number: 1045, type: "delivery", channel: "swiggy", customer: "Swiggy #88213", lines: [line("m5", 1), line("m10", 2), line("m16", 2)], status: "new", createdAt: minsAgo(1), staff: "Swiggy" },
-  { id: "o5", number: 1041, type: "dine-in", channel: "voice", tableId: "t6", tableName: "T6", lines: [line("m2", 1, true), line("m4", 1, true), line("m21", 2, true)], status: "ready", createdAt: minsAgo(17), staff: "Sneha" },
+  { id: "o4", number: 1045, type: "delivery", channel: "swiggy", customer: "Swiggy #88213", lines: [line("m5", 1), line("m10", 2), line("m16", 2)], status: "accepted", createdAt: minsAgo(1), staff: "Swiggy" },
+  { id: "o5", number: 1041, type: "dine-in", channel: "voice", tableId: "t6", tableName: "T6", partyId: "A", lines: [line("m2", 1, true), line("m4", 1, true), line("m21", 2, true)], status: "ready", createdAt: minsAgo(17), staff: "Sneha" },
+  { id: "o11", number: 1046, type: "dine-in", channel: "qr", tableId: "t6", tableName: "T6", partyId: "B", lines: [line("m21", 1), line("m4", 1, false, "Extra spicy")], status: "preparing", createdAt: minsAgo(4), staff: "QR" },
   { id: "o6", number: 1040, type: "dine-in", channel: "pos", tableId: "t4", tableName: "T4", lines: [line("m7", 2, true), line("m13", 2, true), line("m11", 4, true), line("m17", 3, true), line("m20", 5, true)], status: "served", createdAt: minsAgo(58), staff: "Sneha" },
   { id: "o7", number: 1039, type: "takeaway", channel: "pos", customer: "Walk-in", lines: [line("m3", 2, true), line("m19", 2, true)], status: "paid", createdAt: minsAgo(72), staff: "Kavya", payment: "upi" },
   { id: "o8", number: 1038, type: "delivery", channel: "zomato", customer: "Zomato #5521", lines: [line("m13", 1, true), line("m16", 1, true)], status: "paid", createdAt: minsAgo(95), staff: "Zomato", payment: "upi" },
@@ -183,7 +257,7 @@ export const weekSales = [
 ];
 
 export const tenants: Tenant[] = [
-  { id: "r1", name: "Saffron Lane", city: "Pune", plan: "Growth", outlets: 3, status: "active", mrr: 7497, since: "Mar 2026", ordersToday: 186 },
+  { id: "r1", name: "Saffron Lane", city: "Pune", plan: "Pro", outlets: 3, status: "active", mrr: 14997, since: "Mar 2026", ordersToday: 186 },
   { id: "r2", name: "Café Bloom", city: "Mumbai", plan: "Starter", outlets: 1, status: "active", mrr: 999, since: "Jun 2026", ordersToday: 74 },
   { id: "r3", name: "Konkan Kitchen", city: "Ratnagiri", plan: "Growth", outlets: 1, status: "trial", mrr: 0, since: "Oct 2026", ordersToday: 41 },
   { id: "r4", name: "The Brew Room", city: "Bengaluru", plan: "Pro", outlets: 2, status: "active", mrr: 9998, since: "Jan 2026", ordersToday: 233 },

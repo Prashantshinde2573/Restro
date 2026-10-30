@@ -1,0 +1,10 @@
+flowchart TD
+  A["👆 Opens a screen<br/>or taps an action"] --> B{"1 · Plan has it?<br/>Starter / Growth / Pro / Chain"}
+  B -- No --> B1["🔒 Owner: 'See plans'<br/>Staff: hidden"]
+  B -- Yes --> C{"2 · Outlet type uses it?<br/>Restaurant / Café"}
+  C -- No --> C1["Hidden<br/>e.g. Tables at a café"]
+  C -- Yes --> D{"3 · Person has the box ticked?<br/>Owner = all boxes"}
+  D -- No --> D1["⛔ No access<br/>ask your admin"]
+  D -- Yes --> E{"4 · Works in this outlet?"}
+  E -- No --> D1
+  E -- Yes --> F["✅ Screen opens"]

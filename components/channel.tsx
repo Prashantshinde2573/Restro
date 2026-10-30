@@ -26,6 +26,7 @@ export const channelLabel = (c: OrderChannel) => meta[c].label;
 export function StatusPill({ status }: { status: OrderStatus }) {
   const map: Record<OrderStatus, { tone: "neutral" | "jade" | "saffron" | "rose" | "sky"; label: string }> = {
     new: { tone: "saffron", label: "New" },
+    accepted: { tone: "sky", label: "Accepted" },
     preparing: { tone: "sky", label: "Cooking" },
     ready: { tone: "jade", label: "Ready" },
     served: { tone: "neutral", label: "Served" },

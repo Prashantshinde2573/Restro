@@ -1,0 +1,69 @@
+erDiagram
+  OUTLET ||--o{ CATEGORY : has
+  CATEGORY ||--o{ MENU_ITEM : groups
+  MENU_ITEM ||--o{ RECIPE_LINE : "made of"
+  INGREDIENT ||--o{ RECIPE_LINE : "used in"
+  OUTLET ||--o{ INGREDIENT : stocks
+  INGREDIENT ||--o{ STOCK_MOVE : moves
+  SUPPLIER ||--o{ INGREDIENT : supplies
+  SUPPLIER ||--o{ PURCHASE_ORDER : receives
+  OUTLET {
+    string oid PK
+    string rid FK
+    string name
+    string address
+    string businessType "restaurant|cafe"
+    string upi "payment QRs"
+    bool payFirst
+    string gstin
+  }
+  CATEGORY {
+    string cid PK
+    string name
+    string icon "side-bar emoji"
+  }
+  MENU_ITEM {
+    string mid PK
+    string categoryId FK
+    string name
+    int price
+    string diet "veg|nonveg|egg"
+    string station
+    bool available
+    int spice
+    bool sweet
+    array options
+    array photos
+  }
+  RECIPE_LINE {
+    string mid FK
+    string iid FK
+    float qty
+  }
+  INGREDIENT {
+    string iid PK
+    string name
+    string unit
+    float stock
+    float par
+    float costPerUnit
+    string supplierId FK
+  }
+  STOCK_MOVE {
+    string id PK
+    string ingredientId FK
+    float qty
+    string reason "sale|purchase|waste|adjust"
+    string ref
+  }
+  SUPPLIER {
+    string sid PK
+    string name
+    float balance
+  }
+  PURCHASE_ORDER {
+    string poId PK
+    string supplierId FK
+    array lines
+    string status
+  }

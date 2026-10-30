@@ -5,8 +5,9 @@ import { Check, Flame, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChannelIcon } from "@/components/channel";
 import { useToast } from "@/components/toast";
-import { repo } from "@/lib/repo";
+import { orderActions, useCurrentOutlet, useOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
+import { orderWhere, useTables } from "@/lib/tables";
 import type { MenuItem, Order } from "@/lib/types";
 
 type Station = "all" | MenuItem["station"];
@@ -20,10 +21,15 @@ const stations: { v: Station; label: string }[] = [
 
 export default function KitchenPage() {
   const toast = useToast();
-  const [orders, setOrders] = useState<Order[]>(repo.orders().filter((o) => ["new", "preparing", "ready"].includes(o.status)));
+  const all = useOrders();
+  // The kitchen only sees orders a captain has accepted (QR/online orders start as "new").
+  const orders = useMemo(() => all.filter((o) => ["accepted", "preparing", "ready"].includes(o.status)), [all]);
+  const waiting = all.filter((o) => o.status === "new").length;
   const [station, setStation] = useState<Station>("all");
+  const cafe = useCurrentOutlet().businessType === "cafe";
   const [col, setCol] = useState<"new" | "preparing" | "ready">("preparing");
   const [, tick] = useState(0);
+  const tables = useTables();
 
   useEffect(() => {
     const id = window.setInterval(() => tick((n) => n + 1), 15_000);
@@ -45,11 +51,10 @@ export default function KitchenPage() {
   }, [visible]);
 
   const move = (id: string, status: Order["status"], msg: string) => {
-    setOrders((os) => (status === "served" ? os.filter((o) => o.id !== id) : os.map((o) => (o.id === id ? { ...o, status } : o))));
+    orderActions.setStatus(id, status);
     toast(msg);
   };
-  const toggleLine = (id: string, idx: number) =>
-    setOrders((os) => os.map((o) => (o.id !== id ? o : { ...o, lines: o.lines.map((l, i) => (i === idx ? { ...l, done: !l.done } : l)) })));
+  const toggleLine = (id: string, idx: number) => orderActions.toggleLine(id, idx);
 
   const columns: { key: "new" | "preparing" | "ready"; title: string }[] = [
     { key: "new", title: "New" },
@@ -67,7 +72,7 @@ export default function KitchenPage() {
           </div>
         </div>
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
-          {stations.map((s) => (
+          {stations.filter((s) => !(cafe && s.v === "tandoor")).map((s) => (
             <button
               key={s.v}
               onClick={() => setStation(s.v)}
@@ -77,6 +82,9 @@ export default function KitchenPage() {
             </button>
           ))}
         </div>
+        {waiting > 0 && (
+          <p className="text-[13px] text-saffron">{waiting} new {waiting > 1 ? "orders are" : "order is"} waiting for a captain to accept — they appear here once accepted.</p>
+        )}
         {allDay.length > 0 && (
           <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 text-[13.5px] lg:mx-0 lg:px-0">
             <span className="shrink-0 text-muted">To cook</span>
@@ -88,7 +96,7 @@ export default function KitchenPage() {
         <div className="flex rounded-ctl bg-sunken p-[3px] lg:hidden">
           {columns.map((c) => (
             <button key={c.key} onClick={() => setCol(c.key)} className={clsx("flex-1 rounded-[9px] py-1.5 text-[13px] font-semibold", col === c.key ? "bg-surface" : "text-muted")}>
-              {c.title} <span className="tnum opacity-60">{visible.filter((o) => o.status === c.key).length}</span>
+              {c.title} <span className="tnum opacity-60">{visible.filter((o) => o.status === (c.key === "new" ? "accepted" : c.key)).length}</span>
             </button>
           ))}
         </div>
@@ -96,7 +104,7 @@ export default function KitchenPage() {
 
       <div className="grid gap-4 px-4 pb-28 lg:grid-cols-3 lg:px-8 lg:pb-8">
         {columns.map((c) => {
-          const list = visible.filter((o) => o.status === c.key).sort((a, b) => Number(!!b.priority) - Number(!!a.priority) || a.createdAt.localeCompare(b.createdAt));
+          const list = visible.filter((o) => o.status === (c.key === "new" ? "accepted" : c.key)).sort((a, b) => Number(!!b.priority) - Number(!!a.priority) || a.createdAt.localeCompare(b.createdAt));
           return (
             <section key={c.key} className={clsx("space-y-3", col !== c.key && "hidden lg:block")}>
               <h2 className="hidden px-1 text-[15px] font-semibold text-muted lg:block">
@@ -111,7 +119,7 @@ export default function KitchenPage() {
                     <header className="flex items-center gap-3 border-b border-line px-4 py-3">
                       <ChannelIcon channel={o.channel} size={32} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[17px] font-semibold">{o.tableName ? `Table ${o.tableName}` : o.type === "delivery" ? "Delivery" : "Takeaway"}</div>
+                        <div className="text-[17px] font-semibold">{orderWhere(o.tableName ? o : { type: o.type }, tables)}</div>
                         <div className="text-[12px] text-muted tnum">#{o.number} · {o.staff}</div>
                       </div>
                       {o.priority && <Flame size={18} className="text-saffron" aria-label="Priority" />}
@@ -133,7 +141,7 @@ export default function KitchenPage() {
                       ))}
                     </ul>
                     <div className="p-3 pt-1">
-                      {o.status === "new" && (
+                      {o.status === "accepted" && (
                         <button onClick={() => move(o.id, "preparing", `Started #${o.number}`)} className="h-12 w-full rounded-ctl bg-sky text-[15px] font-semibold text-canvas">Start cooking</button>
                       )}
                       {o.status === "preparing" && (

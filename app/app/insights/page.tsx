@@ -155,7 +155,7 @@ export default function InsightsPage() {
                 </div>
               ))}
             </div>
-            <p className="text-[13px] text-muted">Restro compares every shift with your usual pattern. Alerts are hints, not accusations — most have an innocent reason.</p>
+            <p className="text-[13px] text-muted">Each shift compared with your usual pattern.</p>
           </div>
         )}
       </Sheet>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useFeature } from "@/lib/live";
 import clsx from "clsx";
 import { CloudSun, MessageCircle, PackageCheck, Plus, Sparkles, Trash } from "lucide-react";
 import { useState } from "react";
@@ -33,6 +34,7 @@ function level(i: Ingredient) {
 }
 
 export default function InventoryPage() {
+  const prepOn = useFeature("prepForecast") === "ok";
   const toast = useToast();
   const [tab, setTab] = useState<"stock" | "prep" | "purchases">("stock");
   const [waste, setWaste] = useState(false);
@@ -54,7 +56,7 @@ export default function InventoryPage() {
         subtitle={`${inr(Math.round(value))} in stock · ${low.length} running low`}
         actions={<Button variant="tinted" size="sm" onClick={() => setWaste(true)}><Trash size={15} /> Log waste</Button>}
       >
-        <Segmented value={tab} onChange={setTab} options={[{ value: "stock", label: "In stock" }, { value: "prep", label: "Tomorrow's prep" }, { value: "purchases", label: "Purchases" }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ value: "stock", label: "In stock" }, ...(prepOn ? [{ value: "prep" as const, label: "Tomorrow's prep" }] : []), { value: "purchases", label: "Purchases" }]} />
       </PageHeader>
 
       <Page>
@@ -106,7 +108,7 @@ export default function InventoryPage() {
           </div>
         )}
 
-        {tab === "prep" && (
+        {tab === "prep" && prepOn && (
           <div className="space-y-6">
             <section className="rounded-group bg-surface p-5">
               <div className="flex items-start gap-3">
