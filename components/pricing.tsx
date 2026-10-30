@@ -24,7 +24,7 @@ function PlanCard({ p, cycle }: { p: (typeof allPlans)[number]; cycle: "monthly"
     <div
       className={clsx(
         "relative flex h-full flex-col overflow-hidden rounded-[28px] p-6 transition-all duration-500 lg:p-7",
-        dark ? "bg-ink text-canvas shadow-[0_30px_60px_-30px_rgb(16_24_20/.55)]" : "bg-surface ring-1 ring-line hover:-translate-y-1 hover:shadow-float",
+        dark ? "bg-ink text-canvas shadow-[0_30px_60px_-30px_rgb(16_24_20/.55),inset_0_1px_0_rgb(255_255_255/.12)]" : "glass glass-shine hover:-translate-y-1",
       )}
     >
       {dark && <div aria-hidden className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-saffron/20 blur-3xl" />}
@@ -78,7 +78,7 @@ export function PricingTable() {
   return (
     <div>
       <div className="flex justify-center">
-        <div role="tablist" aria-label="Billing cycle" className="relative inline-flex rounded-full bg-surface p-1 ring-1 ring-line">
+        <div role="tablist" aria-label="Billing cycle" className="glass relative inline-flex rounded-full p-1">
           <span
             aria-hidden
             className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-ink transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]"
@@ -102,7 +102,7 @@ export function PricingTable() {
           <PlanCard key={p.id} p={p} cycle={cycle} />
         ))}
       </div>
-      <p className="mt-8 text-center text-[13.5px] text-muted">No card needed for the trial. Cancel any time. Your data stays downloadable.</p>
+      <p className="mt-8 text-center text-[13.5px] text-ink/50">No card needed for the trial. Cancel any time. Your data stays downloadable.</p>
     </div>
   );
 }

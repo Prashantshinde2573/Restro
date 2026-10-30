@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Wordmark } from "@/components/shell";
 import { KotTicket, PhoneOwner, UpiCard } from "@/components/site/mockups";
 import { RiseText } from "@/components/site/motion";
+import { Mesh } from "@/components/site/hero";
 import { Avatar, Segmented } from "@/components/ui";
 import { ChangePassword, OwnerAuth } from "@/components/owner-auth";
 import { cloudSignOut, publicInfo, publicStaff, signInStaff, useCloud } from "@/lib/cloud";
@@ -77,16 +78,15 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas lg:flex-row">
-      <div className="relative m-3 hidden flex-1 flex-col justify-between overflow-hidden rounded-[36px] bg-surface p-12 ring-1 ring-line lg:flex">
-        <div aria-hidden className="absolute -left-32 -top-32 h-[460px] w-[460px] rounded-full bg-jade/[0.12] blur-[100px]" />
-        <div aria-hidden className="absolute -bottom-40 right-0 h-[420px] w-[420px] rounded-full bg-saffron/[0.12] blur-[100px]" />
+      <div className="relative isolate m-3 hidden flex-1 flex-col justify-between overflow-hidden rounded-[36px] bg-canvas p-12 lg:flex">
+        <Mesh solid />
         <Link href="/" className="relative w-fit" aria-label="Restro home"><Wordmark className="text-[20px]" /></Link>
         {/* the owner's evening, floating in 3D */}
         <div aria-hidden className="relative mx-auto h-[420px] w-full max-w-[460px]" style={{ perspective: "1400px" }}>
           <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(14deg) rotateY(-18deg) rotateZ(4deg)" }}>
-            <div className="absolute left-[18%] top-0" style={{ transform: "translateZ(0px)" }}><div className="animate-float"><PhoneOwner /></div></div>
-            <div className="absolute right-0 top-[38%]" style={{ transform: "translateZ(120px)" }}><div className="animate-float" style={{ animationDelay: "-3s" }}><UpiCard /></div></div>
-            <div className="absolute bottom-0 left-0" style={{ transform: "translateZ(80px) rotateZ(-6deg)" }}><div className="animate-float" style={{ animationDelay: "-5s" }}><KotTicket /></div></div>
+            <div className="absolute left-[18%] top-0" style={{ transform: "translateZ(0px)" }}><div className="animate-float"><div className="glass rounded-[48px] p-2.5"><PhoneOwner /></div></div></div>
+            <div className="absolute right-0 top-[38%]" style={{ transform: "translateZ(120px)" }}><div className="animate-float" style={{ animationDelay: "-3s" }}><div className="glass rounded-[30px] p-2.5"><UpiCard className="!shadow-none" /></div></div></div>
+            <div className="absolute bottom-0 left-0" style={{ transform: "translateZ(80px) rotateZ(-6deg)" }}><div className="animate-float" style={{ animationDelay: "-5s" }}><div className="glass rounded-[26px] p-2.5"><KotTicket className="!shadow-none" /></div></div></div>
           </div>
         </div>
         <div className="relative">

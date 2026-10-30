@@ -1,117 +1,126 @@
 "use client";
 
-// Hero: big headline + a 3D table-top of Restro screens (tablet, guest phone,
-// bill, UPI QR, kitchen ticket). It follows the pointer and unfolds on scroll.
+// Hero, Apple-style: centred headline, then the product shown big on a glass
+// stage that tilts up into view as you scroll, with glass cards floating around it.
 import Link from "next/link";
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { Magnetic } from "./chrome";
 import { IconArrow } from "./icons";
-import { KotTicket, PhoneMenu, Receipt, TabletPOS, UpiCard } from "./mockups";
-import { RiseText, gsap, reducedMotion, useIsoLayoutEffect, useTilt } from "./motion";
+import { KotTicket, PhoneMenu, PulseNote, TabletPOS, UpiCard } from "./mockups";
+import { RiseText, gsap, reducedMotion, useIsoLayoutEffect } from "./motion";
+
+export function Mesh({ tone = "light", solid = tone !== "light", top = false }: { tone?: "light" | "dark" | "jade"; solid?: boolean; top?: boolean }) {
+  const c =
+    tone === "dark"
+      ? ["rgb(var(--jade) / .55)", "rgb(var(--saffron) / .35)", "rgb(var(--jade-deep) / .6)"]
+      : tone === "jade"
+        ? ["rgb(var(--jade-deep) / .9)", "rgb(var(--saffron) / .45)", "rgb(120 220 190 / .45)"]
+        : ["rgb(var(--jade) / .30)", "rgb(var(--saffron) / .28)", "rgb(var(--jade-soft) / 1)"];
+  return (
+    <div aria-hidden className={solid ? "mesh mesh-solid" : top ? "mesh mesh-top" : "mesh"}>
+      <span style={{ background: c[0], width: "48vw", height: "48vw", left: "-12vw", top: "-6vw" }} />
+      <span style={{ background: c[1], width: "40vw", height: "40vw", right: "-10vw", top: "8vw" }} />
+      <span style={{ background: c[2], width: "54vw", height: "40vw", left: "22vw", bottom: "-18vw" }} />
+    </div>
+  );
+}
+
+function Float({ className, depth, children }: { className: string; depth: number; children: ReactNode }) {
+  return (
+    <div className={`absolute ${className}`} data-depth={depth}>
+      <div className="animate-float" style={{ animationDelay: `${-depth * 2}s` }}>{children}</div>
+    </div>
+  );
+}
 
 export function Hero() {
   const section = useRef<HTMLElement>(null);
-  const tilt = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
-  useTilt(tilt, 7);
 
   useIsoLayoutEffect(() => {
     if (reducedMotion() || !section.current) return;
     const ctx = gsap.context(() => {
-      gsap.set(stage.current, { rotateX: 24, rotateZ: -10 });
-      // entrance: pieces drop onto the table one by one
-      gsap.fromTo("[data-piece]", { opacity: 0, y: 90, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 1.6, ease: "expo.out", stagger: 0.09, delay: 0.25 });
-      gsap.fromTo("[data-hero-fade]", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1.2, ease: "expo.out", stagger: 0.08, delay: 0.55 });
-      // scroll: the table tips up toward the viewer and the pieces spread out
-      const tl = gsap.timeline({ scrollTrigger: { trigger: section.current, start: "top top", end: "bottom top", scrub: 0.8 } });
-      tl.to(stage.current, { rotateX: 6, rotateZ: 0, scale: 1.08, yPercent: -8, ease: "none" }, 0)
-        .to("[data-spread='left']", { xPercent: -35, ease: "none" }, 0)
-        .to("[data-spread='right']", { xPercent: 30, ease: "none" }, 0)
-        .to("[data-spread='up']", { yPercent: -60, ease: "none" }, 0)
-        .to("[data-hero-copy]", { yPercent: -18, opacity: 0.2, ease: "none" }, 0);
+      gsap.fromTo("[data-hero-fade]", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1.2, ease: "expo.out", stagger: 0.08, delay: 0.5 });
+      gsap.fromTo(stage.current, { opacity: 0, y: 120 }, { opacity: 1, y: 0, duration: 1.8, ease: "expo.out", delay: 0.7 });
+      // scroll: the screen tips up to face you, the floating cards drift apart
+      gsap.fromTo(
+        "[data-tilt]",
+        { rotateX: 32, scale: 0.86 },
+        { rotateX: 0, scale: 1, ease: "none", scrollTrigger: { trigger: stage.current, start: "top 95%", end: "top 15%", scrub: 0.6 } },
+      );
+      gsap.utils.toArray<HTMLElement>("[data-depth]").forEach((el) => {
+        const d = Number(el.dataset.depth);
+        gsap.to(el, { yPercent: -d * 40, ease: "none", scrollTrigger: { trigger: stage.current, start: "top bottom", end: "bottom top", scrub: true } });
+      });
+      // pointer: the whole stage leans a little toward the mouse
+      if (window.matchMedia("(pointer: fine)").matches && stage.current) {
+        const ry = gsap.quickTo(stage.current, "rotationY", { duration: 1, ease: "power3.out" });
+        const rx = gsap.quickTo(stage.current, "rotationX", { duration: 1, ease: "power3.out" });
+        const move = (e: PointerEvent) => {
+          ry((e.clientX / window.innerWidth - 0.5) * 6);
+          rx(-(e.clientY / window.innerHeight - 0.5) * 4);
+        };
+        window.addEventListener("pointermove", move);
+        return () => window.removeEventListener("pointermove", move);
+      }
     }, section);
     return () => ctx.revert();
   }, []);
 
   return (
-    <section ref={section} className="relative isolate overflow-hidden pb-14 pt-28 sm:pt-32 lg:flex lg:min-h-[100svh] lg:items-center lg:py-24">
-      {/* soft brand light + grain, no images to load */}
-      <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute -left-40 top-10 h-[520px] w-[520px] rounded-full bg-jade/[0.10] blur-[110px]" />
-        <div className="absolute -right-20 top-48 h-[420px] w-[420px] rounded-full bg-saffron/[0.10] blur-[110px]" />
-        <div className="grain absolute inset-0 opacity-[0.05] mix-blend-multiply" />
+    <section ref={section} className="relative isolate overflow-hidden pb-20 pt-32 sm:pt-40 lg:pb-28">
+      <Mesh top />
+      <div className="relative mx-auto max-w-[1240px] px-5 text-center lg:px-8">
+        <div data-hero-fade className="glass inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13.5px] font-medium text-ink/80">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inset-0 animate-pulse-ring rounded-full bg-jade" />
+            <span className="relative h-2 w-2 rounded-full bg-jade" />
+          </span>
+          For cafés, restaurants and cloud kitchens
+        </div>
+        <RiseText
+          text="Run the whole restaurant from one *calm* screen."
+          className="text-balance mx-auto mt-7 max-w-[15ch] text-[48px] font-semibold leading-[0.98] tracking-[-0.05em] sm:text-[72px] lg:text-[96px]"
+        />
+        <p data-hero-fade className="mx-auto mt-7 max-w-2xl text-[18px] leading-relaxed text-ink/60 lg:text-[20px]">
+          Billing, kitchen, tables, stock, staff and guests — for cafés, restaurants and cloud kitchens. Every morning Restro tells you what to fix, in plain words.
+        </p>
+        <div data-hero-fade className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Magnetic block>
+            <a href="#contact" className="group flex h-14 w-full items-center justify-between gap-3 rounded-full bg-jade pl-7 pr-2 text-[16.5px] font-semibold text-white shadow-[0_20px_40px_-16px_rgb(var(--jade)),inset_0_1px_0_rgb(255_255_255/.25)] transition hover:bg-jade-deep sm:w-auto">
+              Get Restro for your restaurant
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow /></span>
+            </a>
+          </Magnetic>
+          <Link href="/login" className="glass flex h-14 w-full items-center justify-center rounded-full px-8 text-[16.5px] font-semibold transition hover:bg-white/70 sm:w-auto">Sign in</Link>
+        </div>
+        <p data-hero-fade className="mt-5 text-[13.5px] text-ink/50">We set it up with you. Works on the phone, tablet and laptop you already have.</p>
       </div>
 
-      <div className="mx-auto grid w-full max-w-[1240px] items-center gap-10 px-5 lg:grid-cols-[1.02fr_1fr] lg:gap-6 lg:px-8">
-        <div data-hero-copy className="relative z-10">
-          <div data-hero-fade className="inline-flex items-center gap-2 rounded-full bg-surface/80 px-3 py-1.5 text-[13px] font-medium text-muted ring-1 ring-line backdrop-blur">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-jade" />
-              <span className="relative h-2 w-2 rounded-full bg-jade" />
-            </span>
-            For cafés, restaurants and cloud kitchens
-          </div>
-          <RiseText
-            text="Run the whole restaurant from one *calm* screen."
-            className="text-balance mt-6 text-[46px] font-semibold leading-[0.98] tracking-[-0.045em] sm:text-[60px] lg:text-[66px] xl:text-[76px]"
-          />
-          <p data-hero-fade className="mt-6 max-w-xl text-[17.5px] leading-relaxed text-muted lg:text-[19px]">
-            Billing, kitchen, tables, stock, staff and guests — for cafés, restaurants and cloud kitchens. Every morning Restro tells you what to fix, in plain words.
-          </p>
-          <div data-hero-fade className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Magnetic block>
-              <a href="#contact" className="group flex h-14 w-full items-center justify-between gap-3 rounded-full bg-jade pl-6 pr-2 sm:w-auto sm:justify-start text-[16.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgb(var(--jade))] transition hover:bg-jade-deep">
-                Get Restro for your restaurant
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow /></span>
-              </a>
-            </Magnetic>
-            <Link href="/login" className="flex h-14 items-center justify-center rounded-full px-7 text-[16.5px] font-semibold ring-1 ring-line transition hover:bg-surface">Sign in</Link>
-          </div>
-          <p data-hero-fade className="mt-5 text-[13.5px] text-muted">We set it up with you. Works on the phone, tablet and laptop you already have.</p>
-        </div>
-
-        {/* the 3D table-top */}
-        <div className="relative h-[420px] sm:h-[520px] lg:h-[600px]" style={{ perspective: "1600px" }}>
-          <div ref={tilt} className="absolute inset-0" style={{ transformStyle: "preserve-3d" }}>
-            <div className="absolute left-1/2 top-1/2 h-[520px] w-[620px] -translate-x-1/2 -translate-y-1/2 scale-[.58] [transform-style:preserve-3d] sm:scale-[.78] lg:left-[62%] lg:scale-[.9] xl:left-[58%] xl:scale-100">
-            <div
-              ref={stage}
-              className="absolute inset-0 origin-center"
-              style={{ transformStyle: "preserve-3d", transform: "rotateX(24deg) rotateZ(-10deg)" }}
-            >
-              <Piece at="left-[30px] top-[110px]" z={0}><TabletPOS /></Piece>
-              <Piece at="right-[-30px] top-[40px]" z={150} spread="right" delay={-2}><PhoneMenu /></Piece>
-              <Piece at="left-[-10px] top-[270px]" z={210} rot={-8} spread="left" delay={-4}><Receipt /></Piece>
-              <Piece at="left-[200px] top-[-30px]" z={260} rot={6} spread="up" delay={0}><UpiCard /></Piece>
-              <Piece at="bottom-[-40px] left-[230px] hidden sm:block" z={180} rot={4} spread="left" delay={-1}><KotTicket /></Piece>
-              {/* soft contact shadow on the "table" */}
-              <div className="absolute inset-x-10 bottom-0 h-24 rounded-[50%] bg-ink/20 blur-3xl" style={{ transform: "translateZ(-40px)" }} />
-            </div>
+      {/* the product, big, on glass */}
+      <div className="relative mx-auto mt-16 max-w-[1240px] px-5 lg:mt-20 lg:px-8" style={{ perspective: "2000px" }}>
+        <div ref={stage} data-piece className="relative mx-auto" style={{ transformStyle: "preserve-3d" }}>
+          <div data-tilt className="glass-strong relative mx-auto origin-bottom overflow-hidden rounded-[28px] p-2 sm:rounded-[40px] sm:p-3 lg:w-[980px]">
+            <div className="flex h-[260px] items-center justify-center overflow-hidden rounded-[20px] bg-canvas/70 sm:h-[420px] sm:rounded-[30px] lg:h-[560px]">
+              <div className="origin-center scale-[.55] sm:scale-[1.05] lg:scale-[1.55]">
+                <TabletPOS className="!shadow-none" />
+              </div>
             </div>
           </div>
+          <Float className="-right-2 top-[18%] hidden sm:block lg:right-[-10px]" depth={0.9}>
+            <div className="glass rounded-[48px] p-2.5"><PhoneMenu className="!shadow-[0_30px_60px_-30px_rgb(16_24_20/.5)]" /></div>
+          </Float>
+          <Float className="-left-2 top-[-6%] hidden sm:block lg:left-[10px]" depth={1.3}>
+            <div className="glass rounded-[30px] p-2.5"><UpiCard className="!shadow-none" /></div>
+          </Float>
+          <Float className="bottom-[8%] left-[2%] hidden md:block" depth={0.6}>
+            <div className="glass rounded-[26px] p-2.5"><KotTicket className="!shadow-none" /></div>
+          </Float>
+          <Float className="-bottom-[8%] right-[18%] hidden lg:block" depth={1.1}>
+            <PulseNote className="!w-[280px]" />
+          </Float>
         </div>
       </div>
-
-      <a href="#features" aria-label="Scroll to features" className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-faint xl:flex">
-        Scroll
-        <span className="relative h-10 w-px overflow-hidden bg-line">
-          <span className="absolute inset-x-0 top-0 h-1/2 animate-[scrollcue_1.8s_ease-in-out_infinite] bg-jade" />
-        </span>
-      </a>
     </section>
-  );
-}
-
-/** One object on the table. Position/depth, scroll spread, entrance and float
- *  each live on their own wrapper so the animations never overwrite each other. */
-function Piece({ at, z, rot = 0, spread, delay, children }: { at: string; z: number; rot?: number; spread?: "left" | "right" | "up"; delay?: number; children: React.ReactNode }) {
-  return (
-    <div className={`absolute ${at}`} style={{ transform: `translateZ(${z}px) rotateZ(${rot}deg)`, transformStyle: "preserve-3d" }}>
-      <div data-spread={spread}>
-        <div data-piece>
-          <div className={delay === undefined ? undefined : "animate-float"} style={delay === undefined ? undefined : { animationDelay: `${delay}s` }}>{children}</div>
-        </div>
-      </div>
-    </div>
   );
 }

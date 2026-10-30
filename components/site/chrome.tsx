@@ -62,20 +62,19 @@ export function SiteNav() {
           hidden && !open && "-translate-y-full",
         )}
       >
-        <div className={clsx("mx-auto mt-3 flex max-w-6xl items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:px-4", scrolled || open ? "mx-3 bg-surface/80 shadow-float ring-1 ring-line/70 backdrop-blur-xl sm:mx-6 lg:mx-auto" : "mx-3 sm:mx-6 lg:mx-auto")}>
+        <div className={clsx("mx-3 mt-3 flex max-w-6xl items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:mx-6 sm:px-4 lg:mx-auto", scrolled || open ? "glass-strong" : "glass")}>
           <Link href="/" className="rounded-full px-2 py-1" aria-label="Restro home">
             <Brand className="text-[18px]" />
           </Link>
           <nav className="ml-6 hidden items-center gap-1 whitespace-nowrap lg:flex" aria-label="Main">
             {links.map((l) => (
-              <Link key={l.href} href={l.href} className="group relative rounded-full px-3.5 py-2 text-[14.5px] text-muted transition hover:text-ink">
+              <Link key={l.href} href={l.href} className="group relative rounded-full px-3.5 py-2 text-[14.5px] text-ink/65 transition hover:bg-white/60 hover:text-ink">
                 {l.label}
-                <span className="absolute inset-x-3.5 bottom-1.5 h-px origin-left scale-x-0 bg-jade transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:scale-x-100" />
               </Link>
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-1.5">
-            <Link href="/login" className="hidden whitespace-nowrap rounded-full px-4 py-2 text-[14.5px] font-semibold transition hover:bg-sunken sm:block">Sign in</Link>
+            <Link href="/login" className="hidden whitespace-nowrap rounded-full px-4 py-2 text-[14.5px] font-semibold transition hover:bg-white/60 sm:block">Sign in</Link>
             <Magnetic>
               <Link href="/#contact" className="group hidden items-center gap-2 whitespace-nowrap rounded-full bg-jade py-2 pl-4 pr-3 text-[14.5px] font-semibold text-white transition hover:bg-jade-deep sm:flex">
                 Get Restro
@@ -90,7 +89,7 @@ export function SiteNav() {
       </header>
 
       {open && (
-        <div ref={menu} className="fixed inset-0 z-40 flex flex-col bg-canvas px-6 pb-10 pt-28 lg:hidden">
+        <div ref={menu} className="fixed inset-0 z-40 flex flex-col bg-canvas/80 px-6 pb-10 pt-28 backdrop-blur-2xl lg:hidden">
           <nav className="flex flex-col" aria-label="Mobile">
             {links.map((l, i) => (
               <div key={l.href} className="overflow-hidden border-b border-line">
@@ -102,7 +101,7 @@ export function SiteNav() {
             ))}
           </nav>
           <div className="mt-auto grid gap-3">
-            <div className="overflow-hidden"><Link data-m href="/login" className="flex h-14 items-center justify-center rounded-full bg-surface text-[16px] font-semibold ring-1 ring-line">Sign in</Link></div>
+            <div className="overflow-hidden"><Link data-m href="/login" className="glass flex h-14 items-center justify-center rounded-full text-[16px] font-semibold">Sign in</Link></div>
             <div className="overflow-hidden"><Link data-m href="/#contact" onClick={() => setOpen(false)} className="flex h-14 items-center justify-center rounded-full bg-jade text-[16px] font-semibold text-white">Get Restro for your restaurant</Link></div>
           </div>
         </div>
@@ -144,7 +143,7 @@ export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
 
 export function SiteFooter() {
   return (
-    <footer className="relative overflow-hidden border-t border-line bg-canvas">
+    <footer className="relative overflow-hidden bg-canvas">
       <div className="mx-auto max-w-6xl px-5 pb-10 pt-16 lg:px-6">
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>

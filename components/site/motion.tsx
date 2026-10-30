@@ -119,7 +119,7 @@ export function RiseText({ text, as: Tag = "h1", className, onScroll = false, de
   });
   const parts = marked;
   return (
-    <Tag ref={ref as RefObject<never>} className={className} aria-label={text.replace(/\*/g, "")}>
+    <Tag ref={ref as RefObject<never>} className={`text-balance ${className ?? ""}`} aria-label={text.replace(/\*/g, "")}>
       {parts.map(({ w, accent }, i) => {
         return (
           <Fragment key={i}>

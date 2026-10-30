@@ -4,6 +4,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import { useRef, useState, type ComponentType, type ReactNode } from "react";
 import { CONTACT_EMAIL, CONTACT_WA, Magnetic } from "./chrome";
+import { Mesh } from "./hero";
 import {
   IconArrow,
   IconBill,
@@ -27,7 +28,11 @@ import { RiseText, ScrollTrigger, gsap, reducedMotion, useIsoLayoutEffect, useTi
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 
-/* ================= what Restro covers: icon strip ================= */
+const Eyebrow = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <div data-reveal className={clsx("text-[13px] font-semibold uppercase tracking-[0.18em] text-jade", className)}>{children}</div>
+);
+
+/* ================= the dock: every part of service ================= */
 const modules: { icon: Icon; t: string }[] = [
   { icon: IconBill, t: "Billing" },
   { icon: IconKitchen, t: "Kitchen" },
@@ -39,124 +44,133 @@ const modules: { icon: Icon; t: string }[] = [
   { icon: IconSplit, t: "UPI QR" },
   { icon: IconChat, t: "WhatsApp" },
 ];
+
+/** A glass dock like the Mac's: icons grow as the pointer passes over them. */
 export function Modules() {
+  const dock = useRef<HTMLDivElement>(null);
+  const [mx, setMx] = useState<number | null>(null);
   return (
-    <section className="border-y border-line bg-surface">
-      <div className="mx-auto max-w-[1240px] px-5 py-10 lg:px-8 lg:py-12">
-        <p data-reveal className="text-center text-[13px] font-semibold uppercase tracking-[0.18em] text-muted">One login for every part of service</p>
-        <div data-reveal-group className="mt-8 grid grid-cols-3 gap-x-4 gap-y-7 sm:grid-cols-5 lg:grid-cols-9">
-          {modules.map((m) => (
-            <div key={m.t} className="group flex flex-col items-center gap-3">
-              <span className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-jade-soft text-jade transition-all duration-500 group-hover:-translate-y-1 group-hover:bg-jade group-hover:text-white group-hover:shadow-[0_14px_30px_-14px_rgb(var(--jade))]">
-                <m.icon size={30} />
-              </span>
-              <span className="text-[14.5px] font-medium">{m.t}</span>
-            </div>
-          ))}
+    <section className="relative pb-6">
+      <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
+        <p data-reveal className="text-center text-[13px] font-semibold uppercase tracking-[0.18em] text-ink/50">One login for every part of service</p>
+        <div data-reveal className="mt-7 flex justify-center">
+          <div
+            ref={dock}
+            onPointerMove={(e) => setMx(e.clientX)}
+            onPointerLeave={() => setMx(null)}
+            className="glass grid grid-cols-3 gap-4 rounded-[32px] p-4 sm:flex sm:items-end sm:gap-3 sm:rounded-[28px] sm:px-4 sm:py-3"
+          >
+            {modules.map((m, i) => (
+              <DockItem key={m.t} m={m} mx={mx} i={i} />
+            ))}
+          </div>
         </div>
       </div>
     </section>
   );
 }
+function DockItem({ m, mx }: { m: (typeof modules)[number]; mx: number | null; i: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  let s = 1;
+  if (mx !== null && ref.current) {
+    const r = ref.current.getBoundingClientRect();
+    const d = Math.abs(mx - (r.left + r.width / 2));
+    s = 1 + Math.max(0, 1 - d / 160) * 0.38;
+  }
+  return (
+    <div ref={ref} className="group flex flex-col items-center gap-2">
+      <span
+        className="flex h-[60px] w-[60px] origin-bottom items-center justify-center rounded-[18px] bg-gradient-to-b from-jade to-jade-deep text-white shadow-[0_12px_24px_-12px_rgb(var(--jade)),inset_0_1px_0_rgb(255_255_255/.35)] transition-transform duration-200 ease-out"
+        style={{ transform: `scale(${s})`, marginInline: `${(s - 1) * 14}px` }}
+      >
+        <m.icon size={28} />
+      </span>
+      <span className="text-[13px] font-medium text-ink/70">{m.t}</span>
+    </div>
+  );
+}
 
-/* ================= one app instead of five (sticky index) ================= */
-const included: { icon: Icon; t: string; d: string; art: ReactNode }[] = [
-  { icon: IconBill, t: "Billing", d: "GST bills, UPI QR for the exact amount, cash, card, discounts, KOTs.", art: <ArtBilling /> },
-  { icon: IconTable, t: "Tables and QR", d: "Live floor, waitlist, bookings, and guests ordering from their phone.", art: <ArtTables /> },
-  { icon: IconKitchen, t: "Kitchen screen", d: "Tickets by station, timers, and a ‘to cook’ count for the chef.", art: <ArtKitchen /> },
-  { icon: IconStock, t: "Stock", d: "Recipes deduct stock as you sell. Purchase orders go out on WhatsApp.", art: <ArtStock /> },
-  { icon: IconTeam, t: "Team", d: "PIN clock-in, rota, payroll from real hours, and tip sharing.", art: <ArtTeam /> },
-  { icon: IconGuests, t: "Guests", d: "Who comes back, what they order, birthdays, loyalty points.", art: <ArtGuests /> },
-  { icon: IconReports, t: "Reports and GST", d: "Profit and loss, day close, GSTR-1 and 3B files for your CA.", art: <ArtReports /> },
-];
+/* ================= statement: words light up as you scroll ================= */
+export function Statement() {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const text = "Everything your billing software, kitchen printer, stock register, attendance book and WhatsApp groups do today — in one place, talking to each other.";
+  useIsoLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const words = el.querySelectorAll<HTMLElement>(".lit-word");
+    if (reducedMotion()) {
+      words.forEach((w) => (w.style.color = "rgb(var(--ink))"));
+      return;
+    }
+    const st = ScrollTrigger.create({
+      trigger: el,
+      start: "top 80%",
+      end: "bottom 45%",
+      scrub: true,
+      onUpdate: (self) => {
+        const n = Math.round(self.progress * words.length);
+        words.forEach((w, i) => (w.style.color = i < n ? "rgb(var(--ink))" : ""));
+      },
+    });
+    return () => st.kill();
+  }, []);
+  return (
+    <section className="py-24 lg:py-36">
+      <div className="mx-auto max-w-[1100px] px-5 lg:px-8">
+        <Eyebrow>One app instead of five</Eyebrow>
+        <p ref={ref} className="mt-6 text-[34px] font-semibold leading-[1.12] tracking-[-0.035em] sm:text-[48px] lg:text-[60px]">
+          {text.split(" ").map((w, i) => (
+            <span key={i} className="lit-word">{w} </span>
+          ))}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* ================= features: glass bento ================= */
+function Tile({ className, icon: I, t, d, children, art = "bottom" }: { className?: string; icon: Icon; t: string; d: string; children: ReactNode; art?: "bottom" | "side" }) {
+  return (
+    <div className={clsx("glass glass-shine group relative flex overflow-hidden rounded-[32px]", art === "side" ? "flex-col lg:flex-row" : "flex-col", className)}>
+      <div className={clsx("relative z-10 p-7 lg:p-8", art === "side" && "lg:w-[42%] lg:self-center")}>
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-jade text-white shadow-[inset_0_1px_0_rgb(255_255_255/.3)]"><I size={26} /></span>
+        <h3 className="mt-5 text-[24px] font-semibold leading-tight tracking-[-0.03em] lg:text-[28px]">{t}</h3>
+        <p className="mt-2 max-w-sm text-[15.5px] leading-relaxed text-ink/60">{d}</p>
+      </div>
+      <div className="relative flex min-h-[260px] flex-1 items-center justify-center overflow-hidden">
+        <div className="origin-center scale-[.62] transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:scale-[.66] sm:scale-[.78] sm:group-hover:scale-[.82]">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export function Features() {
-  const [active, setActive] = useState(0);
-  const list = useRef<HTMLDivElement>(null);
-
-  useIsoLayoutEffect(() => {
-    if (!list.current) return;
-    const ctx = gsap.context(() => {
-      gsap.utils.toArray<HTMLElement>("[data-feature]").forEach((el, i) => {
-        ScrollTrigger.create({ trigger: el, start: "top 55%", end: "bottom 55%", onToggle: (st) => st.isActive && setActive(i) });
-      });
-    }, list);
-    return () => ctx.revert();
-  }, []);
-
   return (
-    <section id="features" className="relative scroll-mt-20 py-20 lg:py-28">
-      <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[1fr_1fr] lg:items-end">
-          <div>
-            <div data-reveal className="text-[13px] font-semibold uppercase tracking-[0.18em] text-jade">Everything in one place</div>
-            <RiseText as="h2" onScroll text="One app instead of *five.*" className="mt-4 text-[44px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[60px] lg:text-[76px]" />
-          </div>
-          <p data-reveal className="max-w-lg text-[17.5px] leading-relaxed text-muted lg:justify-self-end">
-            Everything your billing software, kitchen printer, stock register, attendance book and WhatsApp groups do today — in one place, talking to each other.
-          </p>
+    <section id="features" className="relative isolate scroll-mt-20 overflow-hidden py-24 lg:py-32">
+      <Mesh />
+      <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Everything in one place</Eyebrow>
+          <RiseText as="h2" onScroll text="Built for the *whole* service." className="mt-4 text-[42px] font-semibold leading-[1] tracking-[-0.045em] sm:text-[60px] lg:text-[72px]" />
         </div>
-
-        <div className="mt-12 grid gap-10 lg:mt-16 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
-          {/* sticky picture that changes with the list */}
-          <div className="hidden lg:block">
-            <div className="sticky top-28 h-[540px] overflow-hidden rounded-[36px] bg-surface ring-1 ring-line">
-              <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgb(var(--jade-soft))_0,transparent_60%)]" />
-              {included.map((f, i) => (
-                <div
-                  key={f.t}
-                  className={clsx(
-                    "absolute inset-0 flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(.2,.8,.2,1)]",
-                    i === active ? "opacity-100 [transform:none]" : i < active ? "-translate-y-8 scale-95 opacity-0" : "translate-y-8 scale-95 opacity-0",
-                  )}
-                  aria-hidden={i !== active}
-                >
-                  {f.art}
-                </div>
-              ))}
-              <div className="absolute bottom-6 left-6 flex gap-1.5">
-                {included.map((f, i) => (
-                  <span key={f.t} className={clsx("h-1.5 rounded-full transition-all duration-500", i === active ? "w-8 bg-jade" : "w-1.5 bg-line")} />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div ref={list}>
-            {included.map((f, i) => (
-              <div
-                key={f.t}
-                data-feature
-                className={clsx("group border-t border-line py-7 transition-colors duration-500 lg:py-10", i === included.length - 1 && "border-b")}
-              >
-                <div className="flex items-start gap-3 sm:gap-5">
-                  <span className={clsx("mt-1 text-[13px] font-semibold tnum transition-colors duration-500", i === active ? "text-jade" : "text-faint")}>0{i + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-4">
-                      <span className={clsx("flex h-14 w-14 items-center justify-center rounded-2xl transition-colors duration-500", i === active ? "bg-jade text-white" : "bg-surface text-ink ring-1 ring-line")}>
-                        <f.icon size={28} />
-                      </span>
-                      <h3 className={clsx("text-[26px] font-semibold leading-tight tracking-[-0.03em] transition-colors duration-500 sm:text-[32px]", i === active ? "text-ink" : "text-ink/45 lg:text-ink/35")}>{f.t}</h3>
-                    </div>
-                    <p className="mt-4 max-w-md text-[16.5px] leading-relaxed text-muted">{f.d}</p>
-                    <div className="relative mt-6 flex h-[300px] items-center justify-center overflow-hidden rounded-[28px] bg-surface ring-1 ring-line lg:hidden">
-                      <div className="absolute left-1/2 top-1/2 origin-center -translate-x-1/2 -translate-y-1/2 scale-[.66] sm:scale-[.8]">{f.art}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div data-reveal className="mt-8 rounded-[24px] bg-jade-soft px-6 py-5 text-[15.5px] font-medium text-jade-deep">
-              Plus Swiggy and Zomato orders on the same screen, multiple outlets, and English, मराठी, हिंदी.
-            </div>
-          </div>
+        <div className="mt-14 grid gap-4 lg:mt-20 lg:grid-cols-6 lg:grid-rows-[auto_auto_auto]" data-reveal-group>
+          <Tile className="lg:col-span-4" art="side" icon={IconBill} t="Billing" d="GST bills, UPI QR for the exact amount, cash, card, discounts, KOTs."><ArtBilling /></Tile>
+          <Tile className="lg:col-span-2 lg:row-span-2" icon={IconTable} t="Tables and QR" d="Live floor, waitlist, bookings, and guests ordering from their phone."><PhoneMenu /></Tile>
+          <Tile className="lg:col-span-2" icon={IconKitchen} t="Kitchen screen" d="Tickets by station, timers, and a ‘to cook’ count for the chef."><KotTicket className="scale-[1.35]" /></Tile>
+          <Tile className="lg:col-span-2" icon={IconStock} t="Stock" d="Recipes deduct stock as you sell. Purchase orders go out on WhatsApp."><ArtStock /></Tile>
+          <Tile className="lg:col-span-2" icon={IconTeam} t="Team" d="PIN clock-in, rota, payroll from real hours, and tip sharing."><ArtTeam /></Tile>
+          <Tile className="lg:col-span-2" icon={IconGuests} t="Guests" d="Who comes back, what they order, birthdays, loyalty points."><ArtGuests /></Tile>
+          <Tile className="lg:col-span-2" icon={IconReports} t="Reports and GST" d="Profit and loss, day close, GSTR-1 and 3B files for your CA."><ArtReports /></Tile>
+        </div>
+        <div data-reveal className="glass mt-4 rounded-[24px] px-7 py-5 text-center text-[15.5px] font-medium text-jade-deep">
+          Plus Swiggy and Zomato orders on the same screen, multiple outlets, and English, मराठी, हिंदी.
         </div>
       </div>
     </section>
   );
 }
 
-/* little scenes for each feature */
+/* little scenes for the tiles */
 function ArtBilling() {
   return (
     <div className="relative h-[380px] w-[400px]">
@@ -167,43 +181,6 @@ function ArtBilling() {
           <span key={m} className={clsx("rounded-full px-3 py-1.5 text-[12.5px] font-semibold shadow-float", i === 0 ? "bg-jade text-white" : "bg-surface ring-1 ring-line")}>{m}</span>
         ))}
       </div>
-    </div>
-  );
-}
-const TILE: Record<string, string> = { "bg-jade": "bg-jade/15", "bg-saffron": "bg-saffron/15", "bg-sky": "bg-sky/15", "bg-surface": "bg-canvas" };
-function ArtTables() {
-  const states = ["bg-jade", "bg-surface", "bg-saffron", "bg-surface", "bg-sky", "bg-jade", "bg-surface", "bg-surface", "bg-jade"];
-  return (
-    <div className="relative flex items-center gap-8">
-      <div className="grid grid-cols-3 gap-3">
-        {states.map((c, i) => (
-          <div key={i} className={clsx("flex h-[74px] w-[74px] flex-col justify-between rounded-2xl p-2.5 ring-1 ring-line", TILE[c])}>
-            <span className="text-[14px] font-semibold">T{i + 1}</span>
-            <span className={clsx("h-2 w-2 rounded-full", c === "bg-surface" ? "bg-line" : c)} />
-          </div>
-        ))}
-      </div>
-      <PhoneMenu className="scale-[.82]" />
-    </div>
-  );
-}
-function ArtKitchen() {
-  return (
-    <div className="flex gap-3">
-      {[["T4", "7 min", "saffron"], ["T7", "3 min", "jade"], ["Takeaway", "12 min", "rose"]].map(([t, m, tone], i) => (
-        <div key={t} className={clsx("w-[150px] rounded-[18px] bg-canvas p-3 ring-1 ring-line", i === 0 && "-translate-y-4")}>
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-bold">{t}</span>
-            <span className={clsx("rounded-full px-1.5 py-0.5 text-[10px] font-bold", tone === "saffron" ? "bg-saffron-soft text-saffron" : tone === "rose" ? "bg-rose-soft text-rose" : "bg-jade-soft text-jade-deep")}>{m}</span>
-          </div>
-          <div className="mt-2 space-y-1 text-[11.5px]">
-            <div><b>2×</b> Paneer Tikka</div>
-            <div><b>1×</b> Dal Makhani</div>
-            <div><b>3×</b> Butter Naan</div>
-          </div>
-          <div className={clsx("mt-3 rounded-lg py-1.5 text-center text-[11px] font-semibold", i === 1 ? "bg-jade text-white" : "bg-surface ring-1 ring-line")}>{i === 1 ? "Ready" : "Cooking"}</div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -275,6 +252,8 @@ function ArtReports() {
   );
 }
 
+
+
 /* ================= scan to thank-you (pinned horizontal story) ================= */
 const steps: { n: string; t: string; d: string; art: ReactNode }[] = [
   { n: "01", t: "Guests order from the table", d: "They scan the table QR, browse a menu with photos and filters, and send the order from their phone.", art: <PhoneMenu /> },
@@ -298,7 +277,6 @@ export function Story() {
         ease: "none",
         scrollTrigger: { trigger: section.current, start: "top top", end: () => `+=${distance()}`, scrub: 0.6, pin: true, invalidateOnRefresh: true, anticipatePin: 1 },
       });
-      // each picture turns toward you as it passes the middle
       gsap.utils.toArray<HTMLElement>("[data-step-art]").forEach((el) => {
         gsap.fromTo(el, { rotateY: -28, rotateX: 8, scale: 0.9 }, {
           rotateY: 0, rotateX: 0, scale: 1, ease: "none",
@@ -311,21 +289,22 @@ export function Story() {
   }, []);
 
   return (
-    <section id="story" ref={section} className="relative scroll-mt-0 overflow-hidden bg-surface lg:h-[100svh]">
-      <div className="mx-auto max-w-[1240px] px-5 pt-20 lg:absolute lg:inset-x-0 lg:top-0 lg:px-8 lg:pt-24">
-        <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-jade">How it works</div>
-        <RiseText as="h2" onScroll text="From scan to *thank-you.*" className="mt-3 text-[40px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[56px] lg:text-[64px]" />
-        <div className="mt-6 hidden h-px w-full max-w-md bg-line lg:block"><div data-story-bar className="h-px origin-left scale-x-0 bg-jade" /></div>
+    <section id="story" ref={section} className="relative isolate overflow-hidden lg:h-[100svh]">
+      <Mesh />
+      <div className="relative mx-auto max-w-[1240px] px-5 pt-24 lg:absolute lg:inset-x-0 lg:top-0 lg:px-8 lg:pt-24">
+        <Eyebrow>How it works</Eyebrow>
+        <RiseText as="h2" onScroll text="From scan to *thank-you.*" className="mt-3 text-[40px] font-semibold leading-[0.98] tracking-[-0.045em] sm:text-[56px] lg:text-[64px]" />
+        <div className="mt-6 hidden h-[3px] w-full max-w-md overflow-hidden rounded-full bg-ink/10 lg:block"><div data-story-bar className="h-full origin-left scale-x-0 rounded-full bg-jade" /></div>
       </div>
-      <div ref={track} className="flex flex-col gap-6 px-5 pb-20 pt-12 lg:h-full lg:flex-row lg:items-end lg:gap-0 lg:px-0 lg:pb-16 lg:pl-[max(32px,calc((100vw-1240px)/2+32px))] lg:pt-0">
+      <div ref={track} className="relative flex flex-col gap-5 px-5 pb-24 pt-12 lg:h-full lg:flex-row lg:items-end lg:gap-0 lg:px-0 lg:pb-14 lg:pl-[max(32px,calc((100vw-1240px)/2+32px))] lg:pt-0">
         {steps.map((s) => (
-          <article key={s.n} className="relative flex shrink-0 flex-col rounded-[32px] bg-canvas p-6 ring-1 ring-line lg:mr-8 lg:h-[64svh] lg:w-[min(560px,42vw)] lg:flex-row lg:items-stretch lg:gap-6 lg:p-8">
+          <article key={s.n} className="glass relative flex shrink-0 flex-col rounded-[32px] p-6 lg:mr-6 lg:h-[62svh] lg:w-[min(580px,44vw)] lg:flex-row lg:items-stretch lg:gap-6 lg:p-7">
             <div className="flex flex-col lg:w-[44%]">
-              <span className="text-[15px] font-semibold tnum text-jade">{s.n}</span>
-              <h3 className="mt-auto pt-6 text-[26px] font-semibold leading-tight tracking-tight">{s.t}</h3>
-              <p className="mt-3 text-[15.5px] leading-relaxed text-muted">{s.d}</p>
+              <span className="w-fit rounded-full bg-jade/10 px-3 py-1 text-[13px] font-semibold tnum text-jade">Step {s.n}</span>
+              <h3 className="mt-auto pt-6 text-[26px] font-semibold leading-tight tracking-[-0.03em]">{s.t}</h3>
+              <p className="mt-3 text-[15.5px] leading-relaxed text-ink/60">{s.d}</p>
             </div>
-            <div className="mt-6 flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-surface lg:mt-0" style={{ perspective: "1000px" }}>
+            <div className="mt-6 flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-white/50 lg:mt-0" style={{ perspective: "1000px" }}>
               <div data-step-art className="origin-center">{s.art}</div>
             </div>
           </article>
@@ -336,7 +315,7 @@ export function Story() {
   );
 }
 
-/* ================= things your current software doesn't do ================= */
+/* ================= things your current software doesn't do (dark glass) ================= */
 const only: { icon: Icon; t: string; d: string }[] = [
   { icon: IconPulse, t: "A morning note, not a dashboard", d: "Restro Pulse tells you in two sentences what happened yesterday and the three things to do today." },
   { icon: IconVoice, t: "Take orders by voice", d: "Captains say the order in Marathi, Hindi or English. Restro turns it into a KOT." },
@@ -353,7 +332,7 @@ function TiltCard({ className, children }: { className?: string; children: React
   useTilt(ref, 6);
   return (
     <div style={{ perspective: "900px" }} className={className}>
-      <div ref={ref} className="group h-full rounded-[28px] bg-white/[.05] p-6 ring-1 ring-white/10 transition-colors duration-500 hover:bg-white/[.08] lg:p-7" style={{ transformStyle: "preserve-3d" }}>
+      <div ref={ref} className="glass-dark glass-shine group h-full rounded-[28px] p-6 lg:p-7" style={{ transformStyle: "preserve-3d" }}>
         {children}
       </div>
     </div>
@@ -363,47 +342,47 @@ function TiltCard({ className, children }: { className?: string; children: React
 export function Only() {
   const [first, second, ...rest] = only;
   return (
-    <section className="py-20 lg:py-28">
-    <div className="relative overflow-hidden bg-ink py-16 text-canvas lg:rounded-[40px] lg:py-24" style={{ marginInline: "clamp(0px, 1.5vw, 24px)" }}>
-      <div aria-hidden className="absolute -right-40 -top-40 h-[560px] w-[560px] rounded-full bg-saffron/[0.12] blur-[120px]" />
-      <div aria-hidden className="absolute -bottom-40 -left-40 h-[520px] w-[520px] rounded-full bg-jade/[0.18] blur-[120px]" />
-      <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
-        <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-saffron">Only in Restro</div>
-        <RiseText as="h2" onScroll text="Things your current software *doesn't* do." className="mt-4 max-w-4xl text-[42px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[58px] lg:text-[72px] [&_.text-jade]:text-saffron" />
-
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:mt-16 lg:grid-cols-6" data-reveal-group>
-          <TiltCard className="sm:col-span-2 lg:col-span-4">
-            <div className="grid h-full gap-6 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div style={{ transform: "translateZ(30px)" }}>
-                <first.icon size={40} className="text-saffron" />
-                <h3 className="mt-5 text-[30px] font-semibold leading-[1.08] tracking-[-0.03em] lg:text-[36px]">{first.t}</h3>
-                <p className="mt-4 max-w-sm text-[16px] leading-relaxed text-canvas/65">{first.d}</p>
-              </div>
-              <div style={{ transform: "translateZ(60px)" }} className="justify-self-center">
-                <PulseNote className="!w-[270px] rotate-2 !bg-white/[.06] ring-1 ring-white/10" />
-              </div>
-            </div>
-          </TiltCard>
-          <TiltCard className="sm:col-span-2 lg:col-span-2">
-            <div className="flex h-full flex-col" style={{ transform: "translateZ(30px)" }}>
-              <second.icon size={36} className="text-saffron" />
-              <h3 className="mt-5 text-[22px] font-semibold leading-tight">{second.t}</h3>
-              <p className="mt-2 text-[15px] leading-relaxed text-canvas/65">{second.d}</p>
-              <Wave />
-            </div>
-          </TiltCard>
-          {rest.map((f, i) => (
-            <TiltCard key={f.t} className="lg:col-span-2">
-              <div style={{ transform: "translateZ(24px)" }}>
-                <f.icon size={32} className="text-saffron" />
-                <h3 className="mt-5 text-[20px] font-semibold leading-tight">{f.t}</h3>
-                <p className="mt-2 text-[15px] leading-relaxed text-canvas/65">{f.d}</p>
+    <section className="py-6 lg:py-10">
+      <div className="relative isolate overflow-hidden bg-ink py-20 text-canvas lg:rounded-[44px] lg:py-28" style={{ marginInline: "clamp(0px, 1.5vw, 24px)" }}>
+        <Mesh tone="dark" />
+        <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <Eyebrow className="!text-saffron">Only in Restro</Eyebrow>
+            <RiseText as="h2" onScroll text="Things your current software *doesn't* do." className="mt-4 text-[40px] font-semibold leading-[1] tracking-[-0.045em] sm:text-[56px] lg:text-[68px] [&_.text-jade]:text-saffron" />
+          </div>
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:mt-20 lg:grid-cols-6" data-reveal-group>
+            <TiltCard className="sm:col-span-2 lg:col-span-4">
+              <div className="grid h-full gap-6 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div style={{ transform: "translateZ(30px)" }}>
+                  <first.icon size={40} className="text-saffron" />
+                  <h3 className="mt-5 text-[30px] font-semibold leading-[1.08] tracking-[-0.035em] lg:text-[36px]">{first.t}</h3>
+                  <p className="mt-4 max-w-sm text-[16px] leading-relaxed text-canvas/65">{first.d}</p>
+                </div>
+                <div style={{ transform: "translateZ(60px)" }} className="justify-self-center">
+                  <PulseNote className="!w-[270px] rotate-2 !bg-white/[.06] ring-1 ring-white/10" />
+                </div>
               </div>
             </TiltCard>
-          ))}
+            <TiltCard className="sm:col-span-2 lg:col-span-2">
+              <div className="flex h-full flex-col" style={{ transform: "translateZ(30px)" }}>
+                <second.icon size={36} className="text-saffron" />
+                <h3 className="mt-5 text-[22px] font-semibold leading-tight">{second.t}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-canvas/65">{second.d}</p>
+                <Wave />
+              </div>
+            </TiltCard>
+            {rest.map((f) => (
+              <TiltCard key={f.t} className="lg:col-span-2">
+                <div style={{ transform: "translateZ(24px)" }}>
+                  <f.icon size={32} className="text-saffron" />
+                  <h3 className="mt-5 text-[20px] font-semibold leading-tight">{f.t}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-canvas/65">{f.d}</p>
+                </div>
+              </TiltCard>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
     </section>
   );
 }
@@ -423,35 +402,34 @@ function Wave() {
 /* ================= contact ================= */
 export function Contact() {
   return (
-    <section id="contact" className="relative scroll-mt-20 overflow-hidden pb-20 pt-4 lg:pb-28">
+    <section id="contact" className="relative scroll-mt-20 pb-20 pt-4 lg:pb-28">
       <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
-        <div className="relative overflow-hidden rounded-[40px] bg-jade px-6 py-14 text-white sm:px-12 lg:px-16 lg:py-20">
-          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgb(var(--jade-deep))_0,transparent_55%)]" />
-          <div aria-hidden className="grain absolute inset-0 opacity-[0.08] mix-blend-overlay" />
-          <div aria-hidden className="pointer-events-none absolute -right-10 top-10 hidden rotate-6 opacity-95 lg:block" data-parallax="-25">
-            <Receipt />
+        <div className="relative isolate overflow-hidden rounded-[44px] bg-jade px-6 py-16 text-white sm:px-12 lg:px-16 lg:py-24">
+          <Mesh tone="jade" />
+          <div aria-hidden className="pointer-events-none absolute right-10 top-24 hidden rotate-6 lg:block" data-parallax="-25">
+            <div className="glass-dark rounded-[22px] p-2.5"><Receipt /></div>
           </div>
-          <div aria-hidden className="pointer-events-none absolute bottom-10 right-56 hidden -rotate-6 lg:block" data-parallax="-45">
-            <UpiCard />
+          <div aria-hidden className="pointer-events-none absolute bottom-10 right-64 hidden -rotate-6 xl:block" data-parallax="-45">
+            <div className="glass-dark rounded-[30px] p-2.5"><UpiCard className="!shadow-none" /></div>
           </div>
           <div className="relative max-w-2xl">
-            <RiseText as="h2" onScroll text="Want Restro for your *restaurant?*" className="text-[44px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[60px] lg:text-[76px] [&_.text-jade]:text-saffron-soft" />
+            <RiseText as="h2" onScroll text="Want Restro for your *restaurant?*" className="text-[42px] font-semibold leading-[1] tracking-[-0.045em] sm:text-[60px] lg:text-[72px] [&_.text-jade]:text-saffron-soft" />
             <p data-reveal className="mt-6 max-w-xl text-[17.5px] leading-relaxed text-white/80">
               Talk to us. We create your account, and help you add your menu, tables and staff. You get your login the same day.
             </p>
-            <div data-reveal className="mt-9 flex flex-wrap gap-3">
+            <div data-reveal className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               {CONTACT_WA && (
-                <Magnetic>
-                  <a href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi, I'd like Restro for my restaurant.")}`} target="_blank" rel="noreferrer" className="group flex h-14 items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[16.5px] font-semibold text-jade-deep">
+                <Magnetic block>
+                  <a href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi, I'd like Restro for my restaurant.")}`} target="_blank" rel="noreferrer" className="group flex h-14 items-center justify-between gap-3 rounded-full bg-white pl-6 pr-2 text-[16.5px] font-semibold text-jade-deep">
                     Message us on WhatsApp
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow /></span>
                   </a>
                 </Magnetic>
               )}
               {CONTACT_EMAIL && (
-                <a href={`mailto:${CONTACT_EMAIL}`} className="flex h-14 items-center rounded-full px-6 text-[16.5px] font-semibold ring-1 ring-white/40 transition hover:bg-white/10">{CONTACT_EMAIL}</a>
+                <a href={`mailto:${CONTACT_EMAIL}`} className="glass-dark flex h-14 items-center justify-center rounded-full px-6 text-[16.5px] font-semibold transition hover:bg-white/10">{CONTACT_EMAIL}</a>
               )}
-              <Link href="/login" className="flex h-14 items-center rounded-full px-6 text-[16.5px] font-semibold ring-1 ring-white/40 transition hover:bg-white/10">Already with us? Sign in</Link>
+              <Link href="/login" className="glass-dark flex h-14 items-center justify-center rounded-full px-7 text-[16.5px] font-semibold transition hover:bg-white/10">Already with us? Sign in</Link>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { PricingTable } from "@/components/pricing";
 import { SiteFooter, SiteNav } from "@/components/site/chrome";
+import { Mesh } from "@/components/site/hero";
 import { RiseText, SiteMotion } from "@/components/site/motion";
 import { plans } from "@/lib/plans";
 
@@ -23,9 +24,8 @@ export default function PricingPage() {
       <div className="min-h-dvh overflow-x-clip bg-canvas">
         <SiteNav />
         <main>
-          <section className="relative overflow-hidden pb-20 pt-32 lg:pb-28 lg:pt-40">
-            <div aria-hidden className="absolute -left-40 top-0 -z-0 h-[480px] w-[480px] rounded-full bg-jade/[0.10] blur-[110px]" />
-            <div aria-hidden className="absolute -right-32 top-32 h-[380px] w-[380px] rounded-full bg-saffron/[0.10] blur-[110px]" />
+          <section className="relative isolate overflow-hidden pb-20 pt-32 lg:pb-28 lg:pt-40">
+            <Mesh top />
             <div className="relative mx-auto max-w-[1240px] px-5 text-center lg:px-8">
               <div data-reveal className="text-[13px] font-semibold uppercase tracking-[0.18em] text-jade">Pricing</div>
               <RiseText text="Pick a *plan.*" className="mt-4 text-[52px] font-semibold leading-[0.95] tracking-[-0.045em] sm:text-[76px] lg:text-[96px]" />
@@ -39,13 +39,13 @@ export default function PricingPage() {
           <section className="pb-20 lg:pb-28">
             <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
               <RiseText as="h2" onScroll text="Compare *plans.*" className="text-[40px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[56px]" />
-              <div data-reveal className="mt-10 overflow-x-auto lg:mt-12 rounded-[28px] bg-surface ring-1 ring-line">
+              <div data-reveal className="glass mt-10 overflow-x-auto rounded-[28px] lg:mt-12">
                 <table className="w-full min-w-[720px] text-left text-[14.5px]">
                   <thead>
                     <tr className="border-b border-line">
                       <th className="px-6 py-5 font-medium text-muted">What you get</th>
                       {plans.map((p) => (
-                        <th key={p.id} className={`px-4 py-5 text-center ${p.highlight ? "bg-jade-soft/60" : ""}`}>
+                        <th key={p.id} className={`px-4 py-5 text-center ${p.highlight ? "bg-jade/[0.06]" : ""}`}>
                           <div className="text-[20px] font-semibold leading-none tracking-tight">{p.name}</div>
                           <div className="mt-1 text-[12.5px] font-normal text-muted">{p.outlets}</div>
                         </th>
@@ -57,7 +57,7 @@ export default function PricingPage() {
                       <tr key={r.f} className="border-b border-line/70 last:border-0">
                         <td className="px-6 py-3.5">{r.f}</td>
                         {plans.map((p, i) => (
-                          <td key={p.id} className={`px-4 py-3.5 text-center ${p.highlight ? "bg-jade-soft/40" : ""}`}>
+                          <td key={p.id} className={`px-4 py-3.5 text-center ${p.highlight ? "bg-jade/[0.04]" : ""}`}>
                             {i >= r.from ? (
                               <svg width="20" height="20" viewBox="0 0 20 20" className="inline text-jade" aria-label="Included"><path d="M5 10.5l3.2 3.2L15 6.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                             ) : (
