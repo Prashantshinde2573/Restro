@@ -32,6 +32,7 @@ export default {
       },
       fontFamily: {
         sans: ['"Instrument Sans Variable"', "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ['"Instrument Serif"', "ui-serif", "Georgia", "serif"],
       },
       borderRadius: {
         group: "20px",
@@ -46,12 +47,16 @@ export default {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
         "pop": { "0%": { transform: "scale(.96)", opacity: "0" }, "100%": { transform: "scale(1)", opacity: "1" } },
         "pulse-ring": { "0%": { transform: "scale(1)", opacity: ".5" }, "100%": { transform: "scale(1.8)", opacity: "0" } },
+        marquee: { from: { transform: "translateX(0)" }, to: { transform: "translateX(-50%)" } },
+        float: { "0%,100%": { transform: "translate3d(0,0,var(--z,0))" }, "50%": { transform: "translate3d(0,-14px,var(--z,0))" } },
       },
       animation: {
         "sheet-up": "sheet-up .32s cubic-bezier(.2,.9,.3,1)",
         "fade-in": "fade-in .2s ease-out",
         pop: "pop .18s ease-out",
         "pulse-ring": "pulse-ring 1.4s ease-out infinite",
+        marquee: "marquee 38s linear infinite",
+        float: "float 7s ease-in-out infinite",
       },
     },
   },

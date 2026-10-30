@@ -4,7 +4,10 @@ import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { Delete } from "lucide-react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Wordmark } from "@/components/shell";
+import { KotTicket, PhoneOwner, UpiCard } from "@/components/site/mockups";
+import { RiseText } from "@/components/site/motion";
 import { Avatar, Segmented } from "@/components/ui";
 import { ChangePassword, OwnerAuth } from "@/components/owner-auth";
 import { cloudSignOut, publicInfo, publicStaff, signInStaff, useCloud } from "@/lib/cloud";
@@ -74,10 +77,22 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas lg:flex-row">
-      <div className="hidden flex-1 flex-col justify-between bg-ink p-12 text-canvas lg:flex">
-        <Wordmark className="text-[20px]" />
-        <p className="max-w-md text-[34px] font-semibold leading-tight tracking-tight">Bills, kitchen, tables, stock and staff — in one place.</p>
-        <div className="text-[14px] text-canvas/60">Restro for restaurants and cafés</div>
+      <div className="relative m-3 hidden flex-1 flex-col justify-between overflow-hidden rounded-[36px] bg-surface p-12 ring-1 ring-line lg:flex">
+        <div aria-hidden className="absolute -left-32 -top-32 h-[460px] w-[460px] rounded-full bg-jade/[0.12] blur-[100px]" />
+        <div aria-hidden className="absolute -bottom-40 right-0 h-[420px] w-[420px] rounded-full bg-saffron/[0.12] blur-[100px]" />
+        <Link href="/" className="relative w-fit" aria-label="Restro home"><Wordmark className="text-[20px]" /></Link>
+        {/* the owner's evening, floating in 3D */}
+        <div aria-hidden className="relative mx-auto h-[420px] w-full max-w-[460px]" style={{ perspective: "1400px" }}>
+          <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(14deg) rotateY(-18deg) rotateZ(4deg)" }}>
+            <div className="absolute left-[18%] top-0" style={{ transform: "translateZ(0px)" }}><div className="animate-float"><PhoneOwner /></div></div>
+            <div className="absolute right-0 top-[38%]" style={{ transform: "translateZ(120px)" }}><div className="animate-float" style={{ animationDelay: "-3s" }}><UpiCard /></div></div>
+            <div className="absolute bottom-0 left-0" style={{ transform: "translateZ(80px) rotateZ(-6deg)" }}><div className="animate-float" style={{ animationDelay: "-5s" }}><KotTicket /></div></div>
+          </div>
+        </div>
+        <div className="relative">
+          <RiseText as="p" text="Bills, kitchen, tables, stock and staff — *in one place.*" className="max-w-md text-[40px] font-semibold leading-[1.02] tracking-[-0.035em]" />
+          <div className="mt-4 text-[14px] text-muted">Restro for restaurants and cafés</div>
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-5 py-10">

@@ -162,3 +162,54 @@ body {
   border: 2px solid rgb(var(--jade));
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
 }
+
+/* ---------- public website motion ---------- */
+/* Hidden before the first paint only when motion is allowed and JS is running
+   (see the inline script in app/layout.tsx); GSAP then reveals them. */
+.motion-ok [data-reveal],
+.motion-ok [data-reveal-group] > *,
+.motion-ok [data-piece],
+.motion-ok [data-hero-fade] {
+  opacity: 0;
+}
+.motion-ok [data-w] {
+  transform: translateY(110%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-float {
+    animation: none !important;
+  }
+}
+.text-balance {
+  text-wrap: balance;
+}
+.grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+/* custom icons redraw on hover */
+.site-icon * {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .group:hover .site-icon * {
+    animation: icon-draw 0.9s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+}
+@keyframes icon-draw {
+  from {
+    stroke-dashoffset: 120;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes scrollcue {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(200%); }
+}
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}

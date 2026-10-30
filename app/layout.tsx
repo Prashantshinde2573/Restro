@@ -19,7 +19,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Public pages animate in. Hide those elements before the first paint only if motion is
+            allowed; if the page scripts never start, show everything after 3 s. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var d=document.documentElement;if(!matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('motion-ok');setTimeout(function(){if(!d.classList.contains('motion-ready'))d.classList.remove('motion-ok')},3000)}}catch(e){}",
+          }}
+        />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>
