@@ -21,7 +21,7 @@ import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_ } from "./config";
 
 let _sb: SupabaseClient | null = null;
 export function sb(): SupabaseClient {
-  if (!_sb) _sb = createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "restro.auth" } });
+  if (!_sb) _sb = createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "rastropi.auth" } });
   return _sb;
 }
 
@@ -60,7 +60,7 @@ export const getCloud = () => stateStore.get();
 /** Start listening to sign-in changes (called once from <Providers>). */
 let started = false;
 let lastUid: string | null = null;
-const RECOVERY = "restro.recovery";
+const RECOVERY = "rastropi.recovery";
 const recovering = () => {
   try {
     return sessionStorage.getItem(RECOVERY) === "1";
@@ -267,7 +267,7 @@ export function connect(rid: string, role: Role, uid: string) {
   const maps = new Map<string, Map<string, unknown>>();
   const publish = (b: RemoteBinding) => b.receive(sortLike(b.key, [...(maps.get(b.key)?.values() ?? [])]));
 
-  const ch = client.channel(`restro:${rid}:${uid}`);
+  const ch = client.channel(`rastropi:${rid}:${uid}`);
   for (const b of remoteBindings) {
     const g = b.spec.guest ?? "none";
     if (role === "guest" && g === "none") {
@@ -394,7 +394,7 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
 const check = ({ error }: { error: unknown }) => {
   if (error) report(error);
 };
-const report = (e: unknown) => console.error("[restro] cloud write failed", e);
+const report = (e: unknown) => console.error("[rastropi] cloud write failed", e);
 
 /** New order: the server trigger gives it the next order number (0 until it arrives). */
 export function createOrderInCloud(order: { id: string } & Record<string, unknown>) {

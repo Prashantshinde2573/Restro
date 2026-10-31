@@ -190,7 +190,7 @@ function PosScreen() {
         )}
       </div>
 
-      <div className="pb-safe space-y-3 border-t border-line px-4 pt-3 pb-4 lg:px-5">
+      <div className="pb-safe space-y-3 border-t border-line px-4 pt-3 [--safe-pb:16px] lg:px-5">
         <div className="flex items-baseline justify-between text-[13.5px] text-muted">
           <span>{count} items · GST 5% added at checkout</span>
           {running > 0 && <span className="tnum">Already on bill {inr(running)}</span>}
@@ -252,7 +252,7 @@ function PosScreen() {
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-36 lg:px-8 lg:pb-8">
+        <div className="flex-1 overflow-y-auto px-4 pb-36 pt-1 lg:px-8 lg:pb-8">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {items.map((m) => {
               const n = qtyOf(m.id);

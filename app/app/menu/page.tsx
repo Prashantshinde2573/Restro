@@ -425,7 +425,7 @@ function NewCategory({
           onKeyDown={(e) => e.key === "Enter" && onAdd()}
         />
       </div>
-      <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1">
+      <div className="no-scrollbar -mx-1 -my-1 flex gap-1 overflow-x-auto px-1 py-1">
         {CAT_ICONS.map((x) => (
           <button key={x} aria-pressed={value.icon === x} onClick={() => onChange({ ...value, icon: x })} className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[20px]", value.icon === x ? "bg-jade-soft ring-2 ring-jade" : "bg-sunken")}>
             {x}

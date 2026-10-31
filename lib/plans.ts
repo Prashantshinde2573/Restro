@@ -1,4 +1,4 @@
-// The plans Restro sells. Prices in ₹ per outlet per month.
+// The plans Rastropi sells. Prices in ₹ per outlet per month.
 import type { Plan } from "./types";
 
 export const plans: Plan[] = [
@@ -18,7 +18,7 @@ export const plans: Plan[] = [
     yearly: 24990,
     blurb: "For a busy restaurant that wants fewer leaks.",
     outlets: "1 outlet · unlimited staff",
-    features: ["Everything in Starter", "QR ordering with split-by-guest pay", "Inventory and recipe costing", "Restro Pulse daily briefing", "Review booster", "Staff attendance and payroll"],
+    features: ["Everything in Starter", "QR ordering with split-by-guest pay", "Stock and dish costing", "Rastropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns"],
     highlight: true,
   },
   {
@@ -28,15 +28,15 @@ export const plans: Plan[] = [
     yearly: 49990,
     blurb: "For owners who want the numbers to run themselves.",
     outlets: "Up to 3 outlets",
-    features: ["Everything in Growth", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering", "Swiggy and Zomato orders in one place"],
+    features: ["Everything in Growth", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
   },
   {
     id: "chain",
     name: "Chain",
     monthly: null,
     yearly: null,
-    blurb: "For brands with many outlets and a central kitchen.",
+    blurb: "For brands with 4 or more outlets.",
     outlets: "4+ outlets",
-    features: ["Everything in Pro", "Central kitchen and stock transfers", "Brand-wide menu control", "Dedicated onboarding", "Priority support on WhatsApp"],
+    features: ["Everything in Pro", "4 or more outlets in one login", "Dedicated onboarding", "Priority support on WhatsApp"],
   },
 ];

@@ -84,7 +84,7 @@ export function Wordmark({ className }: { className?: string }) {
         <circle cx="12" cy="12" r="11" fill="rgb(var(--jade))" />
         <path d="M8 17V7.5h4.6a3 3 0 0 1 .4 6L16 17" stroke="white" strokeWidth="2.1" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      Restro
+      Rastropi
     </span>
   );
 }
@@ -320,21 +320,21 @@ function TabBar() {
   const moreActive = moreItems.some((i) => isActive(path, i.href));
   return (
     <>
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0a0a0a] lg:hidden">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-canvas/85 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-lg">
           {myTabs.map((it) => {
             const active = isActive(path, it.href);
             const Icon = it.icon;
             return (
               <Link key={it.href} href={it.href} className="flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-[#4fd1a5]" : "text-white/45"} />
-                <span className={clsx("text-[10.5px] font-medium", active ? "text-[#4fd1a5]" : "text-white/45")}>{t(it.key)}</span>
+                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : "text-faint"} />
+                <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : "text-faint")}>{t(it.key)}</span>
               </Link>
             );
           })}
           <button onClick={() => setMore(true)} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-[#4fd1a5]" : "text-white/45"} />
-            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-[#4fd1a5]" : "text-white/45")}>{t("more")}</span>
+            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : "text-faint"} />
+            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : "text-faint")}>{t("more")}</span>
             {renew !== null && <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>}
           </button>
         </div>
@@ -382,7 +382,7 @@ function TabBar() {
 function RenewBanner() {
   const days = useRenewDays();
   const { plan, renewsAt } = useAccount();
-  const key = `restro.renewHidden.${new Date().toDateString()}`;
+  const key = `rastropi.renewHidden.${new Date().toDateString()}`;
   const [hidden, setHidden] = useState(() => {
     try {
       return localStorage.getItem(key) === "1";
@@ -510,7 +510,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <Centered>
         <h1 className="text-[22px] font-semibold">No restaurant on this login</h1>
-        <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Restro support to set up your restaurant.</p>
+        <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Rastropi support to set up your restaurant.</p>
         <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
       </Centered>
     );
@@ -520,7 +520,7 @@ function AuthGate({ children }: { children: ReactNode }) {
       <Centered>
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
         <h1 className="mt-4 text-[22px] font-semibold">{account.name || "This restaurant"} is paused</h1>
-        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Contact Restro support to turn it back on. Your data is safe.</p>
+        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Contact Rastropi support to turn it back on. Your data is safe.</p>
         <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
       </Centered>
     );
@@ -564,7 +564,7 @@ function MobileTopBar() {
     <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] text-white transition-shadow lg:hidden", scrolled && "shadow-[0_8px_20px_-12px_rgb(0_0_0/.5)]")}>
       <div className="grid h-[52px] grid-cols-[1fr_auto_1fr] items-center px-4">
         <div className="justify-self-start"><OutletSwitcher compact /></div>
-        <Link href="/app" aria-label="Restro home" className="justify-self-center">
+        <Link href="/app" aria-label="Rastropi home" className="justify-self-center">
           <Wordmark className="text-[20px] tracking-[-0.03em]" />
         </Link>
         <div className="justify-self-end"><MeButton compact /></div>
@@ -583,6 +583,7 @@ function AppFrame({ children }: { children: ReactNode }) {
         <div className="min-h-dvh lg:min-h-[calc(100dvh-24px)] lg:rounded-[28px] lg:bg-canvas">
           <ClientOnly>
             <MobileTopBar />
+            <div aria-hidden className="h-3 lg:hidden" />
             <RenewBanner />
             <RouteGate>{children}</RouteGate>
           </ClientOnly>

@@ -141,7 +141,7 @@ function OwnerHome() {
                 <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-saffron" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-saffron" />
               </span>
-              Restro Pulse · live
+              Rastropi Pulse · live
             </div>
             <p className="relative mt-3 max-w-3xl text-[19px] font-medium leading-[1.35] tracking-tight lg:text-[26px] lg:leading-[1.3]">{pulse}</p>
             {(waiting > 0 || billing > 0) && (

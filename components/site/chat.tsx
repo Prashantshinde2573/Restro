@@ -1,7 +1,7 @@
 "use client";
 
 // Website help chat: a button on the right that opens a small chat with fixed questions and answers.
-// No AI and nothing sent anywhere: tap a question, Restro "types" the answer.
+// No AI and nothing sent anywhere: tap a question, Rastropi "types" the answer.
 import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -19,8 +19,8 @@ type QA = { q: string; a: ReactNode };
 
 const faqs: QA[] = [
   {
-    q: "What is Restro?",
-    a: "One app to run your café or restaurant: billing with GST and UPI QR, kitchen tickets, tables and QR ordering, stock, staff and reports. It works on the phone, tablet or laptop you already have.",
+    q: "What is Rastropi?",
+    a: "One app to run your café or restaurant: billing with GST and UPI QR, a kitchen screen, tables and QR ordering, stock, staff and reports. It works on the phone, tablet or laptop you already have.",
   },
   {
     q: "How much does it cost?",
@@ -47,7 +47,7 @@ const faqs: QA[] = [
   },
   {
     q: "Do I need to buy new hardware?",
-    a: "No. Restro runs in the browser on any phone, tablet or laptop. Bills and KOTs print from there to the printer you already use.",
+    a: "No. Rastropi runs in the browser on any phone, tablet or laptop you already have. Bills print from the browser to your printer.",
   },
   {
     q: "How long does setup take?",
@@ -58,16 +58,8 @@ const faqs: QA[] = [
     a: "Yes. Each table gets a QR code. Guests see your menu with photos, send the order to the kitchen, and pay by UPI for the exact amount — even split by guest.",
   },
   {
-    q: "What if the internet goes down?",
-    a: "Billing keeps working. Orders and bills are saved on the device and sync when the internet is back.",
-  },
-  {
     q: "Which languages does it support?",
     a: "English, मराठी and हिंदी. Each person can pick their own language, and support is available in all three.",
-  },
-  {
-    q: "Do you take Swiggy and Zomato orders?",
-    a: "On the Pro plan and above, Swiggy and Zomato orders come onto the same screen as your dine-in orders.",
   },
   {
     q: "Is my data safe?",
@@ -90,7 +82,7 @@ export function HelpChat() {
   // greet once on first open
   useEffect(() => {
     if (open && msgs.length === 0) {
-      setMsgs([{ from: "bot", key: n.current++, body: "Hi! 👋 I’m the Restro helper. Pick a question below, or book a free demo and we’ll call you." }]);
+      setMsgs([{ from: "bot", key: n.current++, body: "Hi! 👋 I’m the Rastropi helper. Pick a question below, or book a free demo and we’ll call you." }]);
     }
   }, [open, msgs.length]);
 
@@ -135,7 +127,7 @@ export function HelpChat() {
       {/* the panel */}
       <div
         role="dialog"
-        aria-label="Restro help"
+        aria-label="Rastropi help"
         aria-hidden={!open}
         className={clsx(
           "fixed z-[55] flex flex-col overflow-hidden bg-white text-ink shadow-[0_40px_80px_-30px_rgb(16_24_20/.45)] ring-1 ring-black/[.06] transition-[opacity,transform] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
@@ -149,7 +141,7 @@ export function HelpChat() {
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#4ade80] ring-2 ring-ink" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[15.5px] font-semibold">Restro help</span>
+            <span className="block text-[15.5px] font-semibold">Rastropi help</span>
             <span className="block text-[12.5px] text-white/60">Quick answers, any time</span>
           </span>
           <button onClick={() => setOpen(false)} aria-label="Close chat" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
@@ -202,7 +194,7 @@ export function HelpChat() {
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={14} /></span>
             </a>
             {CONTACT_WA && (
-              <a href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi, I have a question about Restro.")}`} target="_blank" rel="noreferrer" className="flex h-11 items-center rounded-full bg-[#f4f5f3] px-4 text-[14px] font-semibold ring-1 ring-black/[.05] hover:bg-jade-soft">
+              <a href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi, I have a question about Rastropi.")}`} target="_blank" rel="noreferrer" className="flex h-11 items-center rounded-full bg-[#f4f5f3] px-4 text-[14px] font-semibold ring-1 ring-black/[.05] hover:bg-jade-soft">
                 WhatsApp
               </a>
             )}

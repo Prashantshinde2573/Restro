@@ -38,7 +38,7 @@ const STATEMENT_IMG = "https://images.unsplash.com/photo-1622021142947-da7dedc7c
 
 export function Statement() {
   const ref = useRef<HTMLParagraphElement>(null);
-  const text = "Everything your billing software, kitchen printer, stock register, attendance book and WhatsApp groups do today — in one place, talking to each other.";
+  const text = "Everything your billing software, kitchen printer, stock register, order notebook and WhatsApp groups do today — in one place, talking to each other.";
   useIsoLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -124,10 +124,10 @@ export function Features() {
           spans={["lg:col-span-4", "lg:col-span-4", "lg:col-span-4", "lg:col-span-5", "lg:col-span-7"]}
         >
           <Card t="Tables and QR orders" d="See every table at a glance. Guests scan, order and pay from their phone." art={<ArtTables />} />
-          <Card t="Sales, reports, GST." d="Today’s numbers the moment you close, and files ready for your CA." art={<ArtInsights />} />
+          <Card t="Sales, reports, GST." d="Today’s sales the moment you close, with GST on every bill." art={<ArtInsights />} />
           <Card t="Your whole team" d="A PIN for every captain, chef and cashier. Each sees only their part." art={<ArtTeam />} />
           <Card artFirst t="Get paid by UPI" d="Every bill carries a QR with the exact amount. No typing, no mistakes." art={<ArtUpi />} />
-          <Card artFirst t="Stock that counts itself" d="Recipes deduct stock as you sell. A buy list is ready every morning." art={<ArtStock />} />
+          <Card artFirst t="Stock and buy list" d="Track stock in, used and waste. A buy list for each supplier, ready to send on WhatsApp." art={<ArtStock />} />
         </Swipe>
       </div>
     </section>
@@ -180,7 +180,7 @@ function ArtInsights() {
               <div>
                 <div className="text-[14px] text-ink/45">Sales</div>
                 <div className="text-[30px] font-semibold tracking-tight text-jade tnum">₹18,420</div>
-                <div className="mt-1 text-[12.5px] text-ink/40">Average bill ₹642 · GST ready</div>
+                <div className="mt-1 text-[12.5px] text-ink/40">Average bill ₹642</div>
               </div>
               <div className="flex h-28 items-end gap-2">
                 {bars.map((b, i) => (
@@ -205,7 +205,7 @@ function ArtTeam() {
           <span key={r} aria-hidden className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/[.05]" style={{ width: r, height: r }} />
         ))}
         <span className="relative flex h-[118px] w-[118px] items-center justify-center rounded-full bg-gradient-to-b from-[#3fbf8f] to-jade text-[22px] font-semibold tracking-tight text-white shadow-[0_24px_40px_-14px_rgb(var(--jade)/.7),inset_0_2px_0_rgb(255_255_255/.35)] ring-4 ring-white">
-          Restro
+          Rastropi
         </span>
       </div>
       {people.map(([n, h, pos], i) => (
@@ -409,14 +409,11 @@ function StepPaid() {
 
 /* ================= things your current software doesn't do (dark glass) ================= */
 const only: { icon: Icon; t: string; d: string }[] = [
-  { icon: IconPulse, t: "A morning note, not a dashboard", d: "Restro Pulse tells you in two sentences what happened yesterday and the three things to do today." },
-  { icon: IconVoice, t: "Take orders by voice", d: "Captains say the order in Marathi, Hindi or English. Restro turns it into a KOT." },
+  { icon: IconPulse, t: "A morning note, not a dashboard", d: "Rastropi Pulse tells you in two sentences what happened yesterday and the three things to do today." },
+  { icon: IconVoice, t: "Take orders by voice", d: "Captains say the order in Marathi, Hindi or English. Rastropi turns it into a KOT." },
   { icon: IconSplit, t: "Every guest pays their own share", d: "Split-by-guest UPI from the table QR. No calculator, no arguments at the counter." },
-  { icon: IconForecast, t: "Know tomorrow's rush today", d: "A prep list and supplier orders based on your sales, the day, festivals and weather." },
-  { icon: IconShield, t: "Leak guard", d: "Flags voids after KOT, cash shortfalls, discount spikes and stock used beyond the recipe." },
-  { icon: IconStar, t: "More Google reviews, fewer bad ones", d: "Happy guests get a review link. Unhappy ones reach you privately first." },
-  { icon: IconChat, t: "WhatsApp everything", d: "E-bills, waitlist alerts, supplier orders, payslips and win-back offers." },
-  { icon: IconOffline, t: "Keeps billing when the internet drops", d: "Orders and bills keep working offline and sync when you are back." },
+  { icon: IconForecast, t: "Know tomorrow's prep today", d: "A prep list for tomorrow, based on what sold on the same day in the last four weeks." },
+  { icon: IconShield, t: "Leak guard", d: "Flags cancelled orders and discounts every week, and shows who made them." },
 ];
 
 function TiltCard({ className, children }: { className?: string; children: ReactNode }) {
@@ -437,7 +434,7 @@ export function Only() {
     <section className="px-2 py-2 sm:px-3">
       <div className="relative isolate overflow-hidden rounded-[30px] bg-[#0a0a0a] py-14 text-canvas sm:rounded-[40px] lg:py-24">
         <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
-          <SectionHead dark eyebrow="Only in Restro" title="Things your current software *doesn't* do." />
+          <SectionHead dark eyebrow="Only in Rastropi" title="Things your current software *doesn't* do." />
           <Swipe dark className="mt-8 lg:mt-12" item="w-[84%] sm:w-[46%]" grid="lg:grid lg:grid-cols-6 lg:gap-4" spans={["lg:col-span-4", ...only.slice(1).map(() => "lg:col-span-2")]}>
             <TiltCard className="h-full">
               <div className="grid h-full gap-6 sm:grid-cols-[1fr_auto] sm:items-center">

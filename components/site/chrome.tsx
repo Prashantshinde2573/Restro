@@ -74,7 +74,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
             !light && (scrolled || open ? "glass-strong" : "glass"),
           )}
         >
-          <Link href="/" className="rounded-full px-2 py-1" aria-label="Restro home">
+          <Link href="/" className="rounded-full px-2 py-1" aria-label="Rastropi home">
             <Brand className={clsx("transition-all duration-500", light ? "text-[21px]" : "text-[18px]")} />
           </Link>
           <nav className={clsx("hidden items-center gap-1 whitespace-nowrap lg:flex", light ? "mx-auto" : "ml-6")} aria-label="Main">
@@ -171,7 +171,7 @@ export function MobileCta() {
   return (
     <div
       className={clsx(
-        "pb-safe fixed inset-x-0 bottom-0 z-40 px-3 pb-3 transition-[transform,opacity] duration-500 ease-[cubic-bezier(.2,.8,.2,1)] md:hidden",
+        "pb-safe fixed inset-x-0 bottom-0 z-40 px-3 [--safe-pb:12px] transition-[transform,opacity] duration-500 ease-[cubic-bezier(.2,.8,.2,1)] md:hidden",
         show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-full opacity-0",
       )}
     >
@@ -235,7 +235,7 @@ function DemoDialog() {
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
   { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/#pricing", label: "Pricing" }, { href: "/pricing", label: "Compare plans" }] },
   { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
-  { t: "Restro", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/#contact", label: "Contact us" }] },
+  { t: "Rastropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/#contact", label: "Contact us" }] },
 ];
 
 export function SiteFooter() {
@@ -268,7 +268,7 @@ export function SiteFooter() {
               <Brand className="text-[22px]" />
               <p className="mt-7 text-[16px] font-semibold">Want a call from us?</p>
               <div className="mt-3 max-w-[440px]"><CallBack /></div>
-              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/45">We only use your number to call you about Restro. No spam, no sharing.</p>
+              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/45">We only use your number to call you about Rastropi. No spam, no sharing.</p>
             </div>
             <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
               {footerCols.map((c) => (
@@ -278,15 +278,15 @@ export function SiteFooter() {
                     {c.links.map((l) => (
                       <li key={l.label}><Link href={l.href} className="transition hover:text-jade">{l.label}</Link></li>
                     ))}
-                    {c.t === "Restro" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
-                    {c.t === "Restro" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
+                    {c.t === "Rastropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
+                    {c.t === "Rastropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
                   </ul>
                 </div>
               ))}
             </div>
           </div>
           <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/45 sm:flex-row sm:items-center">
-            <span>© {new Date().getFullYear()} Restro. All rights reserved. · UPI payments go straight to your bank.</span>
+            <span>© {new Date().getFullYear()} Rastropi. All rights reserved. · UPI payments go straight to your bank.</span>
             <span className="sm:ml-auto">Made in Pune for Indian restaurants</span>
           </div>
         </div>

@@ -1,5 +1,5 @@
 // Product pictures for the website, drawn in HTML/CSS (sharp at any size,
-// no image downloads). They show Restro's real screens in miniature.
+// no image downloads). They show Rastropi's real screens in miniature.
 import clsx from "clsx";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -15,7 +15,7 @@ export function Brand({ className }: { className?: string }) {
   return (
     <span className={clsx("inline-flex items-center gap-2 font-semibold tracking-tight", className)}>
       <Logo />
-      Restro
+      Rastropi
     </span>
   );
 }
@@ -223,7 +223,7 @@ export function PulseNote({ className, style, children }: { className?: string; 
     <div className={clsx("relative w-[250px] overflow-hidden rounded-[22px] bg-ink p-4 text-canvas shadow-[0_30px_60px_-24px_rgb(16_24_20/.6)]", className)} style={style}>
       <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-saffron/30 blur-2xl" />
       <div className="relative flex items-center gap-1.5 text-[10px] font-semibold text-saffron">
-        <span className="h-1.5 w-1.5 rounded-full bg-saffron" /> Restro Pulse
+        <span className="h-1.5 w-1.5 rounded-full bg-saffron" /> Rastropi Pulse
       </div>
       <p className="relative mt-1.5 text-[12.5px] font-medium leading-snug">
         {children ?? <>Lunch beat a normal Tuesday by 14%. Order paneer before 5 — you&apos;ll run out around 8:30.</>}

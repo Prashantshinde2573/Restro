@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
-  Restro design tokens.
+  Rastropi design tokens.
   Porcelain canvas + white grouped surfaces (iOS inset-group feel),
   jade as the single action colour, saffron reserved for Pulse/AI moments.
 */
@@ -90,11 +90,12 @@ body {
   border-radius: 8px;
 }
 
+/* safe-area padding; set --safe-pb / --safe-pt for a minimum (e.g. [--safe-pb:16px]) */
 .pt-safe {
-  padding-top: max(env(safe-area-inset-top), 0px);
+  padding-top: max(env(safe-area-inset-top), var(--safe-pt, 0px));
 }
 .pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  padding-bottom: max(env(safe-area-inset-bottom), var(--safe-pb, 0px));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -34,7 +34,10 @@ Deno.serve(async (req) => {
 
     // fresh one-time password each sign-in, then a normal session for the phone
     const password = randomPassword();
-    const { error: uErr } = await db.auth.admin.updateUserById(row.user_id, { password, app_metadata: { rid, member_id: memberId } });
+    // also moves older staff accounts (@staff.restro.app) to the current sign-in address
+    const { error: uErr } = await db.auth.admin.updateUserById(row.user_id, {
+      email: staffEmail(rid, memberId), email_confirm: true, password, app_metadata: { rid, member_id: memberId },
+    });
     if (uErr) return json({ error: uErr.message }, 500);
     const { data: s, error: sErr } = await publicClient().auth.signInWithPassword({ email: staffEmail(rid, memberId), password });
     if (sErr || !s.session) return json({ error: sErr?.message ?? "Could not sign in" }, 500);

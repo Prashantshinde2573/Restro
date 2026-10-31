@@ -388,7 +388,7 @@ export default function AccessPage() {
               />
             </Field>
             <p className="-mt-2 text-[13px] text-muted">
-              {outletDraft.businessType === "cafe" ? "Counter orders with tokens. No tables, waitlist or table sharing." : "Table service: tables, waitlist, captains and bills at the end."}
+              {outletDraft.businessType === "cafe" ? "Counter orders with tokens. No tables or table sharing." : "Table service: tables, captains and bills at the end."}
             </p>
             <Field label="UPI ID for this outlet's bills">
               <input className={clsx(inputCls, outletDraft.upi && !isValidUpi(outletDraft.upi) && "ring-2 ring-rose")} autoCapitalize="none" value={outletDraft.upi} onChange={(e) => setOutletDraft({ ...outletDraft, upi: e.target.value.replace(/\s/g, "") })} placeholder="name@bank" />

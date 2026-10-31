@@ -29,15 +29,12 @@ export type Feature =
   | "stock"
   | "pulse"
   | "team"
-  | "payroll"
   | "guests"
   | "campaigns"
-  | "reviews"
   | "voice"
   | "prepForecast"
   | "insights"
-  | "menuEngineering"
-  | "aggregators";
+  | "menuEngineering";
 
 const BOTH: BusinessType[] = ["restaurant", "cafe"];
 export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: BusinessType[] }> = {
@@ -46,23 +43,20 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   kitchen: { label: "Kitchen display", plan: "starter", types: BOTH },
   menu: { label: "Menu", plan: "starter", types: BOTH },
   reports: { label: "Reports", plan: "starter", types: BOTH },
-  tables: { label: "Tables, waitlist and bookings", plan: "starter", types: ["restaurant"] },
+  tables: { label: "Tables and bookings", plan: "starter", types: ["restaurant"] },
   tableSharing: { label: "Shared tables", plan: "starter", types: ["restaurant"] },
   splitByGuest: { label: "Split bill by guest", plan: "growth", types: ["restaurant"] },
   counterToken: { label: "Counter orders with token", plan: "starter", types: ["cafe"] },
   qrOrdering: { label: "QR ordering", plan: "growth", types: BOTH },
   stock: { label: "Stock and recipes", plan: "growth", types: BOTH },
-  pulse: { label: "Restro Pulse briefing", plan: "growth", types: BOTH },
+  pulse: { label: "Rastropi Pulse briefing", plan: "growth", types: BOTH },
   team: { label: "Team", plan: "starter", types: BOTH },
-  payroll: { label: "Attendance and payroll", plan: "growth", types: BOTH },
   guests: { label: "Guests", plan: "growth", types: BOTH },
   campaigns: { label: "Campaigns", plan: "growth", types: BOTH },
-  reviews: { label: "Review booster", plan: "growth", types: BOTH },
   voice: { label: "Voice ordering", plan: "pro", types: BOTH },
   prepForecast: { label: "Prep forecast", plan: "pro", types: BOTH },
   insights: { label: "Insights and Leak guard", plan: "pro", types: BOTH },
   menuEngineering: { label: "What's working (menu engineering)", plan: "pro", types: BOTH },
-  aggregators: { label: "Swiggy and Zomato orders", plan: "pro", types: BOTH },
 };
 
 export type FeatureState = "ok" | "plan" | "type";
@@ -100,7 +94,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "pos", label: "Take orders", feature: "pos" },
       { key: "orders", label: "See and accept orders", feature: "orders" },
       { key: "charge", label: "Charge bills", feature: "pos" },
-      { key: "tables", label: "Tables and waitlist", feature: "tables" },
+      { key: "tables", label: "Tables", feature: "tables" },
       { key: "kitchen", label: "Kitchen display", feature: "kitchen" },
     ],
   },

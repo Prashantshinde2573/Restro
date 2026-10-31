@@ -23,7 +23,7 @@ export const admin = () => createClient(URL_, SECRET, { auth: { persistSession: 
 export const publicClient = () => createClient(URL_, PUBLISHABLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
 export const staffEmail = (rid: string, memberId: string) =>
-  `s-${rid}-${memberId}`.toLowerCase().replace(/[^a-z0-9-]/g, "-") + "@staff.restro.app";
+  `s-${rid}-${memberId}`.toLowerCase().replace(/[^a-z0-9-]/g, "-") + "@staff.rastropi.app";
 
 export const randomPassword = () => {
   const b = crypto.getRandomValues(new Uint8Array(24));

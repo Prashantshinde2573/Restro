@@ -4,7 +4,7 @@
 // big white headline bottom-left, small white cards stacked on the right.
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { IconArrow, IconKitchen, IconOffline } from "./icons";
+import { IconArrow, IconKitchen, IconPulse } from "./icons";
 import { KotTicket, UpiCard } from "./mockups";
 import { SectionHead } from "./head";
 import { Swipe } from "./swipe";
@@ -141,7 +141,7 @@ export function Hero() {
             className="text-balance mt-5 text-[36px] font-medium leading-[1.04] tracking-[-0.04em] sm:text-[48px] lg:text-[56px] xl:text-[62px]"
           />
           <p data-hero-fade className="mt-5 max-w-[520px] text-[16.5px] leading-relaxed text-white/80 lg:text-[18px]">
-            Billing, kitchen, tables, stock, staff and guests in one app. Every morning Restro tells you what to fix, in plain words.
+            Billing, kitchen, tables, stock, staff and guests in one app. Every morning Rastropi tells you what to fix, in plain words.
           </p>
           <div data-hero-fade className="mt-8 flex items-center gap-2">
             <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink shadow-[0_16px_32px_-18px_rgb(0_0_0/.7)] transition hover:bg-jade-soft">
@@ -181,13 +181,13 @@ export function Hero() {
             </div>
             <div data-hero-card className="flex min-h-[124px] flex-col rounded-[20px] bg-white p-3.5 shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
               <div className="flex items-center justify-between">
-                <span className="text-jade"><IconOffline /></span>
+                <span className="text-jade"><IconPulse /></span>
                 <span className="flex items-center gap-1.5 rounded-full bg-jade-soft px-2 py-0.5 text-[10.5px] font-semibold text-jade-deep">
-                  <span className="h-1.5 w-1.5 rounded-full bg-jade" /> Live
+                  <span className="h-1.5 w-1.5 rounded-full bg-jade" /> Daily
                 </span>
               </div>
-              <div className="mt-auto border-t border-line pt-2.5 text-[20px] font-semibold leading-none tracking-[-0.03em]">Offline</div>
-              <div className="mt-1 text-[11.5px] leading-snug text-muted">Billing keeps going when the Wi-Fi drops</div>
+              <div className="mt-auto border-t border-line pt-2.5 text-[20px] font-semibold leading-none tracking-[-0.03em]">Pulse</div>
+              <div className="mt-1 text-[11.5px] leading-snug text-muted">A note each morning on what to fix</div>
             </div>
           </Swipe>
       </div>
@@ -199,9 +199,9 @@ export function Hero() {
 const u = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&q=70&w=720&h=880`;
 // Photos from Unsplash (free under the Unsplash License).
 const kinds = [
-  { t: "Cafés", d: "Quick bills, loyalty and a QR menu", img: u("photo-1759593914906-4ea0b1261ba4") },
+  { t: "Cafés", d: "Quick bills, tokens and a QR menu", img: u("photo-1759593914906-4ea0b1261ba4") },
   { t: "Restaurants", d: "Tables, captains, KOTs and split bills", img: u("photo-1742281257707-0c7f7e5ca9c6") },
-  { t: "Cloud kitchens", d: "Swiggy and Zomato orders on one screen", img: u("photo-1622021142947-da7dedc7c39a") },
+  { t: "Cloud kitchens", d: "Takeaway and delivery orders on one screen", img: u("photo-1622021142947-da7dedc7c39a") },
   { t: "Bakeries", d: "Counter billing and what to bake tomorrow", img: u("photo-1687722157890-9f58d5cd26d4") },
   { t: "Quick service", d: "Fast counter billing in a few taps", img: u("photo-1758578484459-677bfbbd00f7") },
   { t: "Bars & lounges", d: "Running tabs per table, split at the end", img: u("photo-1756522074787-c750cae5e6aa") },

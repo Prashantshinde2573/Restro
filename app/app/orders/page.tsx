@@ -157,7 +157,7 @@ export default function OrdersPage() {
               <div className="flex items-center gap-3 rounded-group bg-surface px-4 py-3">
                 <Phone size={16} className="text-muted" />
                 <span className="flex-1 text-[14.5px]">{sel.customer}{sel.guestPhone && <span className="text-muted"> · +91 {sel.guestPhone}</span>}</span>
-                {sel.guestPhone && <Pill tone="jade">OTP verified</Pill>}
+                {sel.guestPhone && <Pill tone="jade">Number given</Pill>}
               </div>
             )}
             {sel.payPreference && sel.status !== "paid" && (

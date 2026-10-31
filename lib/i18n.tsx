@@ -41,7 +41,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("restro.lang") as Lang | null;
+      const saved = localStorage.getItem("rastropi.lang") as Lang | null;
       if (saved === "en" || saved === "mr" || saved === "hi") setLangState(saved);
     } catch {}
   }, []);
@@ -49,7 +49,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
   const setLang = (l: Lang) => {
     setLangState(l);
     try {
-      localStorage.setItem("restro.lang", l);
+      localStorage.setItem("rastropi.lang", l);
     } catch {}
   };
 

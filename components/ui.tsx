@@ -345,8 +345,8 @@ export function Sheet({
             <X size={16} />
           </IconButton>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5">{children}</div>
-        {footer && <div className="pb-safe shrink-0 border-t border-line bg-canvas px-5 pt-3 pb-4">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-1.5">{children}</div>
+        {footer && <div className="pb-safe shrink-0 rounded-b-[inherit] border-t border-line bg-canvas px-5 pt-3 [--safe-pb:16px] lg:[--safe-pb:20px]">{footer}</div>}
       </div>
     </div>,
     document.body,

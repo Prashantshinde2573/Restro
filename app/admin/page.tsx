@@ -1,6 +1,6 @@
 "use client";
 
-// Super admin: every restaurant on Restro. Add a restaurant (with its owner
+// Super admin: every restaurant on Rastropi. Add a restaurant (with its owner
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
@@ -136,7 +136,7 @@ export default function AdminPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="large-title">Restaurants</h1>
-            <p className="mt-1 text-[15px] text-muted">Everyone using Restro. Add a restaurant to give its owner a login.</p>
+            <p className="mt-1 text-[15px] text-muted">Everyone using Rastropi. Add a restaurant to give its owner a login.</p>
           </div>
           <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
         </div>
@@ -257,7 +257,7 @@ export default function AdminPage() {
 function Credentials({ email, password }: { email: string; password: string }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
-  const text = `Your Restro login\n${url}\nEmail: ${email}\nTemporary password: ${password}\nYou'll be asked to set your own password the first time.`;
+  const text = `Your Rastropi login\n${url}\nEmail: ${email}\nTemporary password: ${password}\nYou'll be asked to set your own password the first time.`;
   return (
     <div className="space-y-4">
       <p className="text-[14.5px] text-muted">Send this to the owner. The password is shown only now — they&apos;ll set their own when they first sign in.</p>

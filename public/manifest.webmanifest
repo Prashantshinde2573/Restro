@@ -1,6 +1,6 @@
 {
-  "name": "Restro",
-  "short_name": "Restro",
+  "name": "Rastropi",
+  "short_name": "Rastropi",
   "start_url": "/app",
   "display": "standalone",
   "background_color": "#F3F4F1",

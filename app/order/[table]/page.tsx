@@ -109,8 +109,8 @@ export default function GuestOrder() {
     if (!cloudConfigured) return;
     let rid = new URLSearchParams(window.location.search).get("r");
     try {
-      rid = rid ?? localStorage.getItem("restro.rid") ?? process.env.NEXT_PUBLIC_DEFAULT_RID ?? null;
-      if (rid) localStorage.setItem("restro.rid", rid);
+      rid = rid ?? localStorage.getItem("rastropi.rid") ?? process.env.NEXT_PUBLIC_DEFAULT_RID ?? null;
+      if (rid) localStorage.setItem("rastropi.rid", rid);
     } catch {}
     if (!rid) {
       setCloudErr("This QR code is missing the restaurant link.");
@@ -162,16 +162,16 @@ export default function GuestOrder() {
   const [, tick] = useState(0);
 
   // ---- who is this phone? (its group for this visit to the table, guest profile) ----
-  const storeKey = t ? `restro.party.${t.name}.${t.visitId}` : "";
+  const storeKey = t ? `rastropi.party.${t.name}.${t.visitId}` : "";
   const [myParty, setMyParty] = useState<string | null>(null);
   const [mine, setMine] = useState<string[]>([]); // counter orders placed from this phone
   const [guest, setGuest] = useState<GuestProfile | null>(null);
   useEffect(() => {
     try {
       if (storeKey) setMyParty(localStorage.getItem(storeKey));
-      const g = localStorage.getItem("restro.guest");
+      const g = localStorage.getItem("rastropi.guest");
       if (g) setGuest(JSON.parse(g));
-      const m = localStorage.getItem("restro.mine.counter");
+      const m = localStorage.getItem("rastropi.mine.counter");
       if (m) setMine(JSON.parse(m));
     } catch {}
   }, [storeKey]);
@@ -189,7 +189,7 @@ export default function GuestOrder() {
     setMine((m) => {
       const next = [id, ...m].slice(0, 20);
       try {
-        localStorage.setItem("restro.mine.counter", JSON.stringify(next));
+        localStorage.setItem("rastropi.mine.counter", JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -620,7 +620,7 @@ export default function GuestOrder() {
       )}
 
       {/* ---------- bottom bar ---------- */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-4 sm:max-w-2xl">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 [--safe-pb:16px] sm:max-w-2xl">
         {count > 0 ? (
           <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-5 py-4 text-white shadow-float">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
@@ -745,7 +745,7 @@ export default function GuestOrder() {
         onVerified={(g) => {
           setGuest(g);
           try {
-            localStorage.setItem("restro.guest", JSON.stringify(g));
+            localStorage.setItem("rastropi.guest", JSON.stringify(g));
           } catch {}
           setOtpOpen(false);
           if (afterOtp.current === "pay") {

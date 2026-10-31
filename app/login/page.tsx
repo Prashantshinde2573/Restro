@@ -15,7 +15,7 @@ import { cloudSignOut, publicInfo, publicStaff, signInStaff, useCloud } from "@/
 import { sessionActions } from "@/lib/live";
 
 type StaffFace = { id: string; name: string; hue: number; outletIds: string[] };
-const RID_KEY = "restro.rid"; // which restaurant this device belongs to (for the staff PIN screen)
+const RID_KEY = "rastropi.rid"; // which restaurant this device belongs to (for the staff PIN screen)
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,7 +80,7 @@ export default function LoginPage() {
     <div className="flex min-h-dvh flex-col bg-canvas lg:flex-row">
       <div className="relative isolate m-3 hidden flex-1 flex-col justify-between overflow-hidden rounded-[36px] bg-canvas p-12 lg:flex">
         <Mesh solid />
-        <Link href="/" className="relative w-fit" aria-label="Restro home"><Wordmark className="text-[20px]" /></Link>
+        <Link href="/" className="relative w-fit" aria-label="Rastropi home"><Wordmark className="text-[20px]" /></Link>
         {/* the owner's evening, floating in 3D */}
         <div aria-hidden className="relative mx-auto h-[420px] w-full max-w-[460px]" style={{ perspective: "1400px" }}>
           <div className="absolute inset-0" style={{ transformStyle: "preserve-3d", transform: "rotateX(14deg) rotateY(-18deg) rotateZ(4deg)" }}>
@@ -91,7 +91,7 @@ export default function LoginPage() {
         </div>
         <div className="relative">
           <RiseText as="p" text="Bills, kitchen, tables, stock and staff — *in one place.*" className="max-w-md text-[40px] font-semibold leading-[1.02] tracking-[-0.035em]" />
-          <div className="mt-4 text-[14px] text-muted">Restro for restaurants and cafés</div>
+          <div className="mt-4 text-[14px] text-muted">Rastropi for restaurants and cafés</div>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export default function LoginPage() {
           {mode === "owner" ? (
             <div className="mt-6 space-y-4">
               <OwnerAuth />
-              <p className="text-center text-[13px] text-faint">Restaurant logins are given by Restro. Staff sign in with their PIN.</p>
+              <p className="text-center text-[13px] text-faint">Restaurant logins are given by Rastropi. Staff sign in with their PIN.</p>
             </div>
           ) : !rid ? (
             <p className="mt-6 rounded-group bg-surface p-4 text-[14px] text-muted">
