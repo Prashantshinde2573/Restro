@@ -5,3 +5,8 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# raw stock clips (63 MB) — the finished hero video is in public/video
+video/clips/
+video/_*.jpg
+.mac.md5

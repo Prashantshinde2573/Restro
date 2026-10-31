@@ -6,6 +6,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { UpiPayCard, isValidUpi } from "@/components/upi";
+import { openPlanSheet } from "@/components/plan-sheet";
 import { ChangePassword } from "@/components/owner-auth";
 import { useToast } from "@/components/toast";
 import {
@@ -110,8 +111,8 @@ export default function SettingsPage() {
             </div>
             <div className="mt-4 text-[13px] text-canvas/70">{days < 0 ? `Ended on ${renewDate}` : `Runs until ${renewDate}`}</div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>See plans</Button>
-              <span className="text-[12.5px] text-canvas/60">To renew or change plan, contact the Restropi team.</span>
+              <Button size="sm" className="!bg-canvas !text-ink hover:!bg-canvas/90" onClick={() => openPlanSheet()}>{days < 0 ? "Restart plan" : "Renew"}</Button>
+              <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>Change plan</Button>
             </div>
           </section>
         )}
@@ -163,12 +164,12 @@ export default function SettingsPage() {
                 <ul className="mt-2 space-y-1 text-[13.5px]">
                   {p.features.map((f) => <li key={f} className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-jade" />{f}</li>)}
                 </ul>
-                {cur && <div className="mt-3 text-center text-[13.5px] font-semibold text-jade">Your plan</div>}
+                <Button size="sm" variant={cur ? "tinted" : "primary"} className="mt-3 w-full" onClick={() => { setPlanOpen(false); openPlanSheet(p.id); }}>{cur ? "Renew this plan" : p.monthly ? `Switch to ${p.name}` : "Talk to us"}</Button>
               </div>
             );
           })}
         </div>
-        <p className="mt-4 text-center text-[13.5px] text-muted">To switch plan, contact the Restropi team.</p>
+        
       </Sheet>
 
       <Sheet

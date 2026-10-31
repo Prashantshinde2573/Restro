@@ -27,38 +27,47 @@ export function Mesh({ tone = "light", solid = tone !== "light", top = false }: 
 }
 
 
-// Background: a video if you set one, otherwise the photo.
-// To use a video later: put the file in public/ (e.g. public/hero.mp4) and set
-// HERO_VIDEO below to "/hero.mp4" (or NEXT_PUBLIC_HERO_VIDEO in .env.local).
-export const HERO_VIDEO = process.env.NEXT_PUBLIC_HERO_VIDEO || "";
-// Photo by Roman (@rm_reins) on Unsplash — free under the Unsplash License.
-export const HERO_IMAGE =
-  process.env.NEXT_PUBLIC_HERO_IMAGE ||
-  "https://images.unsplash.com/photo-1762806883627-4bcbfad98a2c?auto=format&fit=crop&q=70&w=2400";
+// Background video: public/video/hero.(mp4|webm) on desktop, hero-mobile.mp4 on phones,
+// hero-poster.jpg while it loads. Built from free stock clips by video/hero/build.sh.
+// Set NEXT_PUBLIC_HERO_VIDEO="" to turn the video off and show only the photo.
+export const HERO_VIDEO = process.env.NEXT_PUBLIC_HERO_VIDEO ?? "/video/hero";
+export const HERO_IMAGE = process.env.NEXT_PUBLIC_HERO_IMAGE || "/video/hero-poster.jpg";
 
-function BackgroundVideo({ src }: { src: string }) {
+function BackgroundVideo({ base }: { base: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
+  const [phone, setPhone] = useState<boolean | null>(null);
+  useEffect(() => setPhone(window.matchMedia("(max-width: 767px)").matches), []);
   useEffect(() => {
     const v = ref.current;
-    if (!v) return;
-    if (reducedMotion()) v.pause();
-    if (v.readyState >= 2) setReady(true);
-  }, []);
+    if (!v || phone === null) return;
+    if (reducedMotion()) return; // still frame only
+    v.play().catch(() => {});
+  }, [phone]);
+  // pick the file only on the client, so phones never download the big one
+  if (phone === null) return null;
   return (
     <video
       ref={ref}
-      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-[1.6s] ${ready ? "opacity-100" : "opacity-0"}`}
-      autoPlay
+      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-[1.2s] ${ready ? "opacity-100" : "opacity-0"}`}
       muted
       loop
       playsInline
+      autoPlay={!reducedMotion()}
       preload="auto"
       poster={HERO_IMAGE || undefined}
-      onLoadedData={() => setReady(true)}
+      onPlaying={() => setReady(true)}
+      onLoadedData={(e) => reducedMotion() && setReady(!!e.currentTarget)}
       aria-hidden
     >
-      <source src={src} />
+      {phone ? (
+        <source src={`${base}-mobile.mp4`} type="video/mp4" />
+      ) : (
+        <>
+          <source src={`${base}.webm`} type="video/webm" />
+          <source src={`${base}.mp4`} type="video/mp4" />
+        </>
+      )}
     </video>
   );
 }
@@ -120,11 +129,11 @@ export function Hero() {
   }, []);
 
   return (
-    <section ref={section} className="relative isolate flex min-h-[max(100svh,640px)] flex-col overflow-hidden text-white">
+    <section ref={section} className="relative isolate flex min-h-[max(78svh,560px)] flex-col overflow-hidden text-white md:min-h-[max(100svh,640px)]">
       <div data-hero-media className="absolute inset-0 -z-10 will-change-transform">
         <Backdrop />
         {HERO_IMAGE && <BackgroundImage src={HERO_IMAGE} />}
-        {HERO_VIDEO && <BackgroundVideo src={HERO_VIDEO} />}
+        {HERO_VIDEO && <BackgroundVideo base={HERO_VIDEO} />}
       </div>
       {/* darken for the white type: top for the nav, bottom-left for the headline */}
       <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgb(0_0_0/.72)_0%,rgb(0_0_0/.35)_16%,rgb(0_0_0/.08)_34%,rgb(0_0_0/.18)_60%,rgb(0_0_0/.72)_100%)]" />
@@ -156,7 +165,7 @@ export function Hero() {
           </div>
         </div>
           {/* white cards, bottom-right */}
-          <Swipe from="md" dark item="w-[80%]" grid="md:grid md:grid-cols-2 md:gap-2.5" spans={["md:col-span-2", "", ""]} className="w-full text-ink md:max-w-[380px] lg:w-[380px]">
+          <Swipe from="md" dark item="w-[80%]" grid="md:grid md:grid-cols-2 md:gap-2.5" spans={["md:col-span-2", "", ""]} className="hidden w-full text-ink md:block md:max-w-[380px] lg:w-[380px]">
             <a data-hero-card href="#features" className="group relative flex min-h-[150px] overflow-hidden rounded-[20px] bg-white p-4 sm:min-h-[170px] shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
               <div className="relative z-10 flex max-w-[56%] flex-col">
                 <div className="text-[16.5px] font-semibold leading-[1.1] tracking-[-0.02em]">Every bill, a UPI QR</div>

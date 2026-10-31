@@ -36,6 +36,7 @@ const TABLE: Record<string, string> = {
   guests: "guests",
   feedback: "feedback",
   stock: "stock_items",
+  coupons: "coupons",
 };
 
 /* ---------------- who is signed in on this device ---------------- */
@@ -456,3 +457,40 @@ export const adminResetOwnerPassword = (rid: string) =>
   callFn<{ ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "reset_owner_password", rid }, true);
 export const adminDelete = (rid: string, confirmName: string) =>
   callFn<{ ok: true }>("admin-restaurants", { action: "delete", rid, confirmName }, true);
+
+/* ---------------- platform (Restropi team) ---------------- */
+export interface PlatformSettings { whatsapp: string; upi: string; payee: string }
+export interface PlanCoupon { code: string; kind: "percent" | "flat"; value: number; plans: string[]; valid_to: string | null; max_uses: number | null; uses: number; active: boolean; note: string | null }
+
+/** Where owners send plan requests and pay. Any signed-in person can read it. */
+export async function getPlatformSettings(): Promise<PlatformSettings> {
+  const { data } = await sb().from("platform_settings").select("whatsapp, upi, payee").eq("id", 1).maybeSingle();
+  return { whatsapp: data?.whatsapp ?? "", upi: data?.upi ?? "", payee: data?.payee ?? "" };
+}
+export async function savePlatformSettings(p: PlatformSettings) {
+  const { error } = await sb()
+    .from("platform_settings")
+    .update({ whatsapp: p.whatsapp || null, upi: p.upi || null, payee: p.payee || null, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+/** Owner side: is this plan coupon good for this plan? Returns null when not. */
+export async function checkPlanCoupon(code: string, plan: string): Promise<{ code: string; kind: "percent" | "flat"; value: number } | null> {
+  const { data, error } = await sb().rpc("check_plan_coupon", { p_code: code, p_plan: plan });
+  if (error) throw error;
+  const r = (data as { code: string; kind: "percent" | "flat"; value: number }[] | null)?.[0];
+  return r ? { ...r, value: Number(r.value) } : null;
+}
+export async function listPlanCoupons(): Promise<PlanCoupon[]> {
+  const { data, error } = await sb().from("plan_coupons").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as PlanCoupon[]).map((c) => ({ ...c, value: Number(c.value) }));
+}
+export async function savePlanCoupon(c: Omit<PlanCoupon, "uses"> & { uses?: number }) {
+  const { error } = await sb().from("plan_coupons").upsert(c);
+  if (error) throw error;
+}
+export async function deletePlanCoupon(code: string) {
+  const { error } = await sb().from("plan_coupons").delete().eq("code", code);
+  if (error) throw error;
+}

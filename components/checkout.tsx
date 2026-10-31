@@ -1,17 +1,17 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { useCurrentOutlet, useFeature, useSettings } from "@/lib/live";
+import { couponActions, couponLabel, couponOff, couponProblem, normCode, useCoupons, useCurrentOutlet, useFeature, useSettings } from "@/lib/live";
 import { printReceipt, receiptText } from "./receipt";
 import { useToast } from "./toast";
 import { inr, GST_RATE } from "@/lib/format";
 import { PaymentSplit, paidSum } from "./payment-split";
-import type { Payment, PayMethod } from "@/lib/types";
+import type { Coupon, Payment, PayMethod } from "@/lib/types";
 
 type Method = "upi" | "cash" | "card" | "mixed" | "split";
 
@@ -37,7 +37,7 @@ export function Checkout({
   onClose: () => void;
   subtotal: number;
   label: string;
-  onPaid?: (payments: Payment[]) => void;
+  onPaid?: (payments: Payment[], extra?: { coupon?: string; discount?: number }) => void;
   preferred?: PayMethod; // what the guest asked for from their phone
   prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
   lines?: { name: string; qty: number; price: number }[]; // what's on the bill (for the receipt)
@@ -52,6 +52,11 @@ export function Checkout({
   const [done, setDone] = useState(false);
   const [phone, setPhone] = useState("");
   const [mixed, setMixed] = useState<Payment[]>([]);
+  const [code, setCode] = useState("");
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const [codeErr, setCodeErr] = useState("");
+  const coupons = useCoupons();
+  const couponsOn = useFeature("coupons") === "ok";
 
   useEffect(() => {
     if (open) {
@@ -59,6 +64,9 @@ export function Checkout({
       setPaidGuests([]);
       setCash(null);
       setDiscountPct(0);
+      setCoupon(null);
+      setCode("");
+      setCodeErr("");
       const pre = paidSum(prepaid ?? []);
       if (pre > 0) {
         // Guest paid part by UPI from their phone: open on "UPI + Cash" with that part filled in.
@@ -71,7 +79,7 @@ export function Checkout({
     }
   }, [open, preferred, prepaid, subtotal]);
 
-  const t = billTotals(subtotal, Math.round((subtotal * discountPct) / 100));
+  const t = billTotals(subtotal, coupon ? couponOff(coupon, subtotal) : Math.round((subtotal * discountPct) / 100));
   const perGuest = Math.ceil(t.total / guests);
   const settings = useSettings();
   const splitOn = useFeature("splitByGuest") === "ok";
@@ -110,7 +118,8 @@ export function Checkout({
           ? [{ method: "upi", amount: t.total }]
           : [{ method, amount: t.total }];
     setPaidWith(payments);
-    onPaid?.(payments);
+    if (coupon) couponActions.used(coupon.id);
+    onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
   };
 
   return (
@@ -174,7 +183,7 @@ export function Checkout({
             </div>
             <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
               <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
-              {t.discount > 0 && <div className="flex justify-between text-jade"><dt>Discount</dt><dd className="tnum">−{inr(t.discount, { decimals: true })}</dd></div>}
+              {t.discount > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt>CGST 2.5%</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>SGST 2.5%</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
@@ -183,14 +192,46 @@ export function Checkout({
               {[0, 5, 10].map((p) => (
                 <button
                   key={p}
-                  onClick={() => setDiscountPct(p)}
-                  className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
+                  onClick={() => { setDiscountPct(p); setCoupon(null); }}
+                  className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", !coupon && discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
                 >
                   <Percent size={13} />
                   {p === 0 ? "No discount" : `${p}% off`}
                 </button>
               ))}
             </div>
+            {couponsOn && (
+              coupon ? (
+                <div className="mt-3 flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
+                  <Ticket size={16} />
+                  <span className="flex-1"><b>{coupon.code}</b> · {couponLabel(coupon)}</span>
+                  <button aria-label="Remove coupon" onClick={() => setCoupon(null)} className="p-1"><X size={15} /></button>
+                </div>
+              ) : (
+                <form
+                  className="mt-3 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const c = coupons.find((x) => x.code === normCode(code));
+                    const why = couponProblem(c, subtotal);
+                    if (why) return setCodeErr(why);
+                    setCodeErr("");
+                    setDiscountPct(0);
+                    setCoupon(c!);
+                  }}
+                >
+                  <input
+                    className={clsx(inputCls, "!h-10 uppercase")}
+                    placeholder="Coupon code"
+                    value={code}
+                    onChange={(e) => { setCode(e.target.value); setCodeErr(""); }}
+                    aria-label="Coupon code"
+                  />
+                  <Button type="submit" variant="tinted" size="sm" className="!h-10 shrink-0" disabled={!code.trim()}>Apply</Button>
+                </form>
+              )
+            )}
+            {codeErr && <p className="mt-1.5 text-[12.5px] text-rose">{codeErr}</p>}
           </div>
 
           {/* method */}

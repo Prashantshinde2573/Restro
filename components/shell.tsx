@@ -34,6 +34,7 @@ import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
+import { PlanSheet, openPlanSheet } from "./plan-sheet";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
 
@@ -406,7 +407,7 @@ function RenewBanner() {
           <><b>{PLAN_NAME[plan]} plan ends in {days} {days === 1 ? "day" : "days"}</b> ({date}). Renew to avoid any break.</>
         )}
       </span>
-      <Link href="/app/settings#plan" className={clsx("shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold", ended ? "bg-white text-rose" : "bg-rose text-white")}>Renew</Link>
+      <button onClick={() => openPlanSheet()} className={clsx("shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold", ended ? "bg-white text-rose" : "bg-rose text-white")}>Renew</button>
       {!ended && (
         <button
           aria-label="Hide for today"
@@ -454,7 +455,7 @@ function RouteGate({ children }: { children: ReactNode }) {
         <>
           <h1 className="mt-4 text-[22px] font-semibold">{need?.label}</h1>
           <p className="mt-1 max-w-sm text-[15px] text-muted">Part of the {PLAN_NAME[need!.plan]} plan. You&apos;re on {PLAN_NAME[plan]}.</p>
-          {isOwner(me) && <Link href="/app/settings#plan" className="mt-5"><Button>See plans</Button></Link>}
+          {isOwner(me) && <Button className="mt-5" onClick={() => openPlanSheet(need!.plan)}>Upgrade to {PLAN_NAME[need!.plan]}</Button>}
           {!isOwner(me) && <Pill tone="neutral" className="mt-4">Ask your owner to upgrade</Pill>}
         </>
       )}
@@ -523,8 +524,10 @@ function AuthGate({ children }: { children: ReactNode }) {
       <Centered>
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
         <h1 className="mt-4 text-[22px] font-semibold">{account.name || "This restaurant"} is paused</h1>
-        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Contact Restropi support to turn it back on. Your data is safe.</p>
-        <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Renew the plan to turn it back on. Your data is safe.</p>
+        {cloud.role === "owner" && <Button className="mt-6" onClick={() => openPlanSheet()}>Renew plan</Button>}
+        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        {cloud.role === "owner" && <PlanSheet />}
       </Centered>
     );
   }
@@ -589,6 +592,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <div aria-hidden className="h-3 lg:hidden" />
             <RenewBanner />
             <RouteGate>{children}</RouteGate>
+            <PlanSheet />
           </ClientOnly>
         </div>
       </main>

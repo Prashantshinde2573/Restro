@@ -190,6 +190,22 @@ export interface Ingredient {
 }
 
 /** A raw material the kitchen keeps (paneer, oil, milk…). */
+/** A discount code the restaurant gives its guests (Growth plan and up). */
+export interface Coupon {
+  id: string;
+  code: string; // UPPERCASE, 3–20 letters/digits
+  kind: "percent" | "flat";
+  value: number; // % or ₹
+  maxOff?: number; // cap for % coupons, ₹
+  minBill?: number; // bill must be at least this (before discount), ₹
+  validTo?: string; // YYYY-MM-DD, last day it works
+  maxUses?: number;
+  uses: number;
+  active: boolean;
+  note?: string;
+  createdAt: string;
+}
+
 export interface StockItem {
   id: string;
   name: string;

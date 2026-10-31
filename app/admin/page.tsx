@@ -4,13 +4,14 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarClock, Check, Copy, KeyRound, LogOut, Plus, RefreshCw, Search, Store, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Check, Copy, KeyRound, LogOut, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Group, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import { ChangePassword } from "@/components/owner-auth";
+import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
 import {
   adminCreate,
   adminDelete,
@@ -53,6 +54,8 @@ export default function AdminPage() {
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [creds, setCreds] = useState<{ title: string; email: string; password: string } | null>(null);
+  const [platformOpen, setPlatformOpen] = useState(false);
+  const [couponsOpen, setCouponsOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
@@ -138,7 +141,11 @@ export default function AdminPage() {
             <h1 className="large-title">Restaurants</h1>
             <p className="mt-1 text-[15px] text-muted">Everyone using Restropi. Add a restaurant to give its owner a login.</p>
           </div>
-          <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & WhatsApp</Button>
+            <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
+            <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
@@ -245,6 +252,9 @@ export default function AdminPage() {
       <Sheet open={!!creds} onClose={() => setCreds(null)} title={creds?.title ?? ""}>
         {creds && <Credentials email={creds.email} password={creds.password} />}
       </Sheet>
+
+      <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
+      <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
 
       <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change password">
         <ChangePassword title="" onDone={() => { setPwOpen(false); toast("Password changed"); }} />

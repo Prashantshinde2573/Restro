@@ -8,7 +8,7 @@ import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
 import { featureState, hasPerm, inOutlet, type Feature, type FeatureState, type Member, type Perm } from "./access";
-import type { Account, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, Payment, PayMethod, StockItem, StockLog } from "./types";
+import type { Account, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
 export { hydrateStores };
 /* ---------------- account, outlets, members, who is signed in ---------------- */
@@ -371,3 +371,38 @@ export const stockActions = {
     );
   },
 };
+
+/* ---------------- coupons (guest discounts) ---------------- */
+const couponStore = createStore<Coupon[]>([], "coupons", { kind: "collection", coll: "coupons" });
+export const useCoupons = () => couponStore.use();
+export const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
+export const couponActions = {
+  save(c: Omit<Coupon, "id" | "uses" | "createdAt"> & { id?: string }) {
+    const list = couponStore.get();
+    const code = normCode(c.code);
+    if (c.id && list.some((x) => x.id === c.id)) couponStore.set(list.map((x) => (x.id === c.id ? { ...x, ...c, code, id: x.id } : x)));
+    else couponStore.set([{ ...c, code, id: `cp${Date.now().toString(36)}`, uses: 0, createdAt: new Date().toISOString() }, ...list]);
+  },
+  remove(id: string) {
+    couponStore.set(couponStore.get().filter((x) => x.id !== id));
+  },
+  /** Count one use (called when a bill with this coupon is paid). */
+  used(id: string) {
+    couponStore.set(couponStore.get().map((x) => (x.id === id ? { ...x, uses: (x.uses ?? 0) + 1 } : x)));
+  },
+};
+/** Why a coupon can't be used on this bill, or null when it can. */
+export function couponProblem(c: Coupon | undefined, subtotal: number): string | null {
+  if (!c) return "No coupon with this code";
+  if (!c.active) return "This coupon is turned off";
+  if (c.validTo && c.validTo < new Date().toISOString().slice(0, 10)) return "This coupon has expired";
+  if (c.maxUses && c.uses >= c.maxUses) return "This coupon has been used up";
+  if (c.minBill && subtotal < c.minBill) return `Works on bills of ₹${c.minBill} or more`;
+  return null;
+}
+export function couponOff(c: Coupon, subtotal: number) {
+  const raw = c.kind === "percent" ? (subtotal * c.value) / 100 : c.value;
+  return Math.max(0, Math.min(subtotal, Math.round(c.maxOff && c.kind === "percent" ? Math.min(raw, c.maxOff) : raw)));
+}
+export const couponLabel = (c: Pick<Coupon, "kind" | "value" | "maxOff" | "minBill">) =>
+  `${c.kind === "percent" ? `${c.value}% off` : `₹${c.value} off`}${c.kind === "percent" && c.maxOff ? ` (up to ₹${c.maxOff})` : ""}${c.minBill ? ` on ₹${c.minBill}+` : ""}`;
