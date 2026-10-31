@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
-import { FEATURES, PLAN_NAME, RENEW_WARN_DAYS, daysLeft, featureState, hasPerm, inOutlet, isOwner, routeFor } from "@/lib/access";
+import { FEATURES, PLAN_NAME, RENEW_WARN_DAYS, daysLeft, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
 import { sessionActions, useAccount, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { ChangePassword } from "./owner-auth";
@@ -112,7 +112,7 @@ function useNav() {
     const r = routeFor(href);
     if (!r) return "ok"; // home
     if (r.feature) {
-      const f = featureState(r.feature, plan, outlet.businessType);
+      const f = featureState(r.feature, plan, outletKinds(outlet));
       if (f === "type") return null; // not used in this kind of outlet — hidden
       if (f === "plan") return owner ? "locked" : null; // owners see what an upgrade adds
     }
@@ -435,7 +435,7 @@ function RouteGate({ children }: { children: ReactNode }) {
   const { plan } = useAccount();
   const r = routeFor(path);
   if (!r) return <>{children}</>;
-  const f = r.feature ? featureState(r.feature, plan, outlet.businessType) : "ok";
+  const f = r.feature ? featureState(r.feature, plan, outletKinds(outlet)) : "ok";
   const allowed = isOwner(me) || (r.perm && r.perm !== "ownerOrSettings" ? hasPerm(me, r.perm) && inOutlet(me, outlet.id) : true);
   if (f === "ok" && allowed) return <>{children}</>;
   const need = r.feature ? FEATURES[r.feature] : null;
@@ -444,8 +444,11 @@ function RouteGate({ children }: { children: ReactNode }) {
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-sunken text-muted"><Lock size={24} /></span>
       {f === "type" ? (
         <>
-          <h1 className="mt-4 text-[22px] font-semibold">Not used at cafés</h1>
-          <p className="mt-1 max-w-sm text-[15px] text-muted">{outlet.name} is set up as a café, so {need?.label.toLowerCase()} is turned off here.</p>
+          <h1 className="mt-4 text-[22px] font-semibold">{outlet.businessType === "cafe" ? "Not on for counter service" : "Not on for table service"}</h1>
+          <p className="mt-1 max-w-sm text-[15px] text-muted">
+            {outlet.name} is set up for {outlet.businessType === "cafe" ? "counter orders only" : "table service only"}, so {need?.label.toLowerCase()} is off here.
+            {isOwner(me) && <> To use both, turn on <Link href="/app/settings" className="font-semibold text-jade">{outlet.businessType === "cafe" ? "“Also serve at tables”" : "“Also take counter orders”"}</Link> in Settings → Ordering.</>}
+          </p>
         </>
       ) : !allowed ? (
         <>

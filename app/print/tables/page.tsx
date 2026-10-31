@@ -1,6 +1,7 @@
 "use client";
 
 // Printable table QR cards (A4: 2 x 3 per page). ?t=<tableId> prints one.
+import { hasCounter, hasTables } from "@/lib/access";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Printer } from "lucide-react";
@@ -31,7 +32,7 @@ export default function PrintTables() {
   const tables = only ? all.filter((t) => t.id === only) : all;
   const url = (id: string) => `${origin}/order/${id}${cloud.rid ? `?r=${cloud.rid}` : ""}`;
   const counterUrl = `${origin}/order/counter?${cloud.rid ? `r=${cloud.rid}&` : ""}o=${outlet.id}`;
-  const cafe = outlet.businessType === "cafe";
+  const cafe = hasCounter(outlet); // prints the counter QR too
 
   return (
     <div className="min-h-dvh bg-canvas print:bg-white">
@@ -49,7 +50,7 @@ export default function PrintTables() {
           <Card title="Order here" sub="Counter" brand={account.name} value={counterUrl} />
         )}
         {origin && tables.map((t) => <Card key={t.id} title={t.name} sub="Table" brand={account.name} value={url(t.id)} />)}
-        {!tables.length && !cafe && <p className="col-span-full rounded-group bg-surface p-6 text-center text-muted">No tables yet. Add them in Tables → Manage tables.</p>}
+        {!tables.length && hasTables(outlet) && <p className="col-span-full rounded-group bg-surface p-6 text-center text-muted">No tables yet. Add them in Tables → Manage tables.</p>}
       </main>
       <style>{`@media print { @page { size: A4; margin: 10mm; } }`}</style>
     </div>

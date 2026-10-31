@@ -17,6 +17,7 @@ import {
   assignableOutlets,
   canManage,
   featureState,
+  outletKinds,
   grantable,
   inOutlet,
   isOwner,
@@ -91,13 +92,15 @@ export default function AccessPage() {
   };
   const allowedPerms = grantable(me);
   const assignable = assignableOutlets(me, outlets.map((o) => o.id));
-  const draftTypes = draft ? [...new Set(outlets.filter((o) => draft.outletIds.includes(o.id)).map((o) => o.businessType))] : [];
+  // per outlet: the ways it serves guests (a mixed outlet runs both)
+  const draftKinds = draft ? outlets.filter((o) => draft.outletIds.includes(o.id)).map(outletKinds) : [];
+  const draftTypes = [...new Set(draftKinds.flat())];
   const permState = (p: Perm): { disabled: boolean; note?: string } => {
     if (!allowedPerms.includes(p)) return { disabled: true, note: "You don't have this" };
     const f = PERM_GROUPS.flatMap((g) => g.perms).find((x) => x.key === p)?.feature;
     if (f && draftTypes.length) {
-      const states = draftTypes.map((t) => featureState(f, account.plan, t));
-      if (states.every((s) => s === "type")) return { disabled: true, note: "Restaurant outlets only" };
+      const states = draftKinds.map((k) => featureState(f, account.plan, k));
+      if (states.every((s) => s === "type")) return { disabled: true, note: "Outlets with tables only" };
       if (states.every((s) => s !== "ok")) return { disabled: true, note: `${PLAN_NAME[FEATURES[f].plan]} plan` };
     }
     return { disabled: false };
@@ -171,7 +174,7 @@ export default function AccessPage() {
                       <span className={clsx("flex h-9 w-9 items-center justify-center rounded-[10px] text-white", o.businessType === "cafe" ? "bg-saffron" : "bg-jade")}>
                         {o.businessType === "cafe" ? <Coffee size={17} /> : <Store size={17} />}
                       </span>
-                      <Pill tone={o.businessType === "cafe" ? "saffron" : "jade"}>{typeLabel(o.businessType)}</Pill>
+                      <Pill tone={o.businessType === "cafe" ? "saffron" : "jade"}>{typeLabel(o.businessType)}{o.mixed ? " + " + (o.businessType === "cafe" ? "tables" : "counter") : ""}</Pill>
                     </div>
                     <div className="mt-3 text-[15.5px] font-semibold">{o.name}</div>
                     <div className="text-[13px] text-muted">{n} {n === 1 ? "person" : "people"} · {subs.length ? `Sub admin: ${subs.map((s) => s.name.split(" ")[0]).join(", ")}` : "No sub admin yet"}</div>
@@ -388,8 +391,16 @@ export default function AccessPage() {
               />
             </Field>
             <p className="-mt-2 text-[13px] text-muted">
-              {outletDraft.businessType === "cafe" ? "Counter orders with tokens. No tables or table sharing." : "Table service: tables, captains and bills at the end."}
+              {outletDraft.mixed
+                ? "Tables and counter both: table QR, dine-in and split bills, plus counter orders with tokens."
+                : outletDraft.businessType === "cafe"
+                  ? "Counter orders with tokens. Turn on tables below if some guests sit and order."
+                  : "Table service: tables, captains and bills at the end. Turn on counter orders below if you also have a counter."}
             </p>
+            <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
+              <span className="text-[15px]">{outletDraft.businessType === "cafe" ? "Also serve at tables" : "Also take counter orders"}</span>
+              <Toggle checked={!!outletDraft.mixed} onChange={(v) => setOutletDraft({ ...outletDraft, mixed: v })} label="Tables and counter both" />
+            </div>
             <Field label="UPI ID for this outlet's bills">
               <input className={clsx(inputCls, outletDraft.upi && !isValidUpi(outletDraft.upi) && "ring-2 ring-rose")} autoCapitalize="none" value={outletDraft.upi} onChange={(e) => setOutletDraft({ ...outletDraft, upi: e.target.value.replace(/\s/g, "") })} placeholder="name@bank" />
             </Field>

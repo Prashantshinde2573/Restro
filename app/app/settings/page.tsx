@@ -130,10 +130,10 @@ export default function SettingsPage() {
 
         {(owner || canOutlet) && (
           <div>
-            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}</div>
+            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}{outlet.mixed ? " · tables + counter" : ""}</div>
             <div className="overflow-hidden rounded-group bg-surface">
               <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi || "Add UPI ID"} onClick={() => setPanel("payments")} />
-              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.businessType === "cafe" ? "Café · pay first" : settings.payFirst ? "Pay first" : "Pay at the end"} onClick={() => setPanel("ordering")} />
+              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
               <Item icon={<Receipt size={16} />} tint="#DE9122" title="Details on bills" value={settings.gstin || "GSTIN, FSSAI, address"} onClick={() => setPanel("restaurant")} />
             </div>
           </div>
@@ -240,13 +240,24 @@ export default function SettingsPage() {
             </Field>
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
               <div>
+                <div className="text-[15px]">{draft.businessType === "cafe" ? "Also serve at tables" : "Also take counter orders"}</div>
+                <div className="text-[12.5px] text-muted">
+                  {draft.businessType === "cafe"
+                    ? "Some guests sit at tables: table QR codes, dine-in orders and split bills, along with the counter."
+                    : "Some guests order at the counter: a counter QR and token orders, along with your tables."}
+                </div>
+              </div>
+              <Toggle checked={!!draft.mixed} onChange={(v) => setDraft({ ...draft, mixed: v })} label="Tables and counter both" />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
+              <div>
                 <div className="text-[15px]">Guests pay before the kitchen starts</div>
                 <div className="text-[12.5px] text-muted">Order → pay (UPI, cash, or both) → token. Usual for cafés. Off: guests pay at the end.</div>
               </div>
               <Toggle checked={draft.payFirst} onChange={(v) => setDraft({ ...draft, payFirst: v })} label="Guests pay first" />
             </div>
             <Link href="/app/tables" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Tables and their QR codes →</Link>
-            {draft.businessType === "cafe" && cloud.rid && (
+            {(draft.businessType === "cafe" || draft.mixed) && cloud.rid && (
               <Link href={`/order/counter?r=${cloud.rid}`} className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu →</Link>
             )}
           </div>

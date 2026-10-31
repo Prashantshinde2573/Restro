@@ -20,7 +20,7 @@ type QA = { q: string; a: ReactNode };
 const faqs: QA[] = [
   {
     q: "What is Restropi?",
-    a: "One app to run your café or restaurant: billing with GST and UPI QR, a kitchen screen, tables and QR ordering, stock, staff and reports. It works on the phone, tablet or laptop you already have.",
+    a: "One app to run your café or restaurant: billing with GST and UPI QR, orders sent to the kitchen on a phone or tablet, tables and QR ordering, stock, staff and reports. It works on the phone, tablet or laptop you already have.",
   },
   {
     q: "How much does it cost?",

@@ -1,5 +1,6 @@
 "use client";
 
+import { hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { Check, Flame, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -26,7 +27,7 @@ export default function KitchenPage() {
   const orders = useMemo(() => all.filter((o) => ["accepted", "preparing", "ready"].includes(o.status)), [all]);
   const waiting = all.filter((o) => o.status === "new").length;
   const [station, setStation] = useState<Station>("all");
-  const cafe = useCurrentOutlet().businessType === "cafe";
+  const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
   const [col, setCol] = useState<"new" | "preparing" | "ready">("preparing");
   const [, tick] = useState(0);
   const tables = useTables();

@@ -1,5 +1,6 @@
 "use client";
 
+import { hasCounter, hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { ChevronDown, Mic, Minus, Plus, Search, Send, Trash2, X, Check } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
@@ -39,9 +40,10 @@ function PosScreen() {
   const [cat, setCat] = useState<string>("all");
   const [q, setQ] = useState("");
   const outlet = useCurrentOutlet();
-  const cafe = outlet.businessType === "cafe";
+  const cafe = !hasTables(outlet); // counter-only: no dine-in at a table
+  const counterToo = hasCounter(outlet);
   const voiceOn = useFeature("voice") === "ok";
-  const [type, setType] = useState<OrderType>(cafe ? "takeaway" : "dine-in");
+  const [type, setType] = useState<OrderType>(outlet.businessType === "cafe" ? "takeaway" : "dine-in");
   const [table, setTable] = useState(params.get("table") ?? "T3");
   const [party, setParty] = useState<string | null>(params.get("party"));
   const [lines, setLines] = useState<Line[]>([]);
@@ -138,7 +140,7 @@ function PosScreen() {
                 ]
               : [
                   { value: "dine-in", label: "Dine-in" },
-                  { value: "takeaway", label: "Takeaway" },
+                  { value: "takeaway", label: counterToo ? "Counter" : "Takeaway" },
                   { value: "delivery", label: "Delivery" },
                 ]
           }

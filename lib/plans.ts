@@ -9,7 +9,7 @@ export const plans: Plan[] = [
     yearly: 9990,
     blurb: "For a café or a single small outlet.",
     outlets: "1 outlet · 3 staff logins",
-    features: ["Billing with UPI QR and GST", "Menu and tables", "Kitchen display", "WhatsApp e-bills", "Daily sales report"],
+    features: ["Billing with UPI QR and GST", "Menu and tables", "Kitchen orders (KOT) on phone or tablet", "WhatsApp e-bills", "Daily sales report"],
   },
   {
     id: "growth",

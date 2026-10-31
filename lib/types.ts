@@ -21,6 +21,8 @@ export interface Outlet {
   name: string; // "Baner, Pune"
   address: string;
   businessType: BusinessType;
+  /** Runs both ways: a café that also serves at tables, or a restaurant that also takes counter orders with a token. */
+  mixed?: boolean;
   upi: string;
   payFirst: boolean;
   phone?: string;
@@ -45,6 +47,7 @@ export interface Account {
 export interface OutletSettings {
   name: string;
   businessType: BusinessType;
+  mixed?: boolean; // tables and counter both
   upi: string; // UPI ID every payment QR is generated for
   payFirst: boolean; // guests pay before the order goes to the kitchen (typical for cafés)
   address?: string;

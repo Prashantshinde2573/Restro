@@ -7,7 +7,7 @@
 import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
-import { featureState, hasPerm, inOutlet, type Feature, type FeatureState, type Member, type Perm } from "./access";
+import { featureState, hasPerm, inOutlet, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
 import type { Account, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
 export { hydrateStores };
@@ -83,7 +83,7 @@ const blankOutlet: Outlet = { id: "", name: "", address: "", businessType: "rest
 /** Is a feature on for this plan and this outlet's type? */
 export function useFeature(f: Feature): FeatureState {
   const { plan } = useAccount();
-  return featureState(f, plan, useCurrentOutlet().businessType);
+  return featureState(f, plan, outletKinds(useCurrentOutlet()));
 }
 /** Can the signed-in member do this, in the current outlet? */
 export function useCan(p: Perm): boolean {
@@ -97,7 +97,7 @@ export function useSettings(): OutletSettings {
   const a = useAccount();
   const o = useCurrentOutlet();
   return {
-    name: a.name, businessType: o.businessType, upi: o.upi, payFirst: o.payFirst,
+    name: a.name, businessType: o.businessType, mixed: !!o.mixed, upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
   };
 }

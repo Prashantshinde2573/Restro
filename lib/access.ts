@@ -41,7 +41,7 @@ const BOTH: BusinessType[] = ["restaurant", "cafe"];
 export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: BusinessType[] }> = {
   pos: { label: "Billing / new order", plan: "starter", types: BOTH },
   orders: { label: "Orders", plan: "starter", types: BOTH },
-  kitchen: { label: "Kitchen display", plan: "starter", types: BOTH },
+  kitchen: { label: "Kitchen orders (KOT)", plan: "starter", types: BOTH },
   menu: { label: "Menu", plan: "starter", types: BOTH },
   reports: { label: "Reports", plan: "starter", types: BOTH },
   tables: { label: "Tables and bookings", plan: "starter", types: ["restaurant"] },
@@ -61,10 +61,18 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   menuEngineering: { label: "What's working (menu engineering)", plan: "pro", types: BOTH },
 };
 
+/** The ways an outlet serves guests. `mixed` outlets run both. */
+export const outletKinds = (o: { businessType: BusinessType; mixed?: boolean }): BusinessType[] => (o.mixed ? ["restaurant", "cafe"] : [o.businessType]);
+/** Has tables (dine-in at a table, table QR, captains). */
+export const hasTables = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "restaurant" || !!o.mixed;
+/** Takes counter orders with a token (counter QR, pay first). */
+export const hasCounter = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "cafe" || !!o.mixed;
+
 export type FeatureState = "ok" | "plan" | "type";
-export function featureState(f: Feature, plan: PlanId, type: BusinessType): FeatureState {
+export function featureState(f: Feature, plan: PlanId, type: BusinessType | BusinessType[]): FeatureState {
   const m = FEATURES[f];
-  if (!m.types.includes(type)) return "type";
+  const kinds = Array.isArray(type) ? type : [type];
+  if (!kinds.some((k) => m.types.includes(k))) return "type";
   if (!planAtLeast(plan, m.plan)) return "plan";
   return "ok";
 }
@@ -97,7 +105,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "orders", label: "See and accept orders", feature: "orders" },
       { key: "charge", label: "Charge bills", feature: "pos" },
       { key: "tables", label: "Tables", feature: "tables" },
-      { key: "kitchen", label: "Kitchen display", feature: "kitchen" },
+      { key: "kitchen", label: "Kitchen orders (KOT)", feature: "kitchen" },
     ],
   },
   {

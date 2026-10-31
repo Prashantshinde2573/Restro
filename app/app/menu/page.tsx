@@ -1,5 +1,6 @@
 "use client";
 
+import { hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, FolderPlus, Plus, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -54,7 +55,7 @@ export default function MenuPage() {
   }, [menuRaw, orders]);
   const [edit, setEditRaw] = useState<MenuItem | "new" | null>(null);
   const cats = useCategories();
-  const cafe = useCurrentOutlet().businessType === "cafe";
+  const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
   const engineeringOn = useFeature("menuEngineering") === "ok";
   const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], cost: "" });
   const [draft, setDraft] = useState<Draft>(blank());

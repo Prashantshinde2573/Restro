@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ChefHat, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText } from "lucide-react";
-import { isOwner } from "@/lib/access";
+import { hasTables, isOwner } from "@/lib/access";
 import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders } from "@/lib/live";
 import { Bars, Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { UserChip } from "@/components/shell";
@@ -21,7 +21,7 @@ function StaffHome() {
     { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true },
     { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat },
     { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
-  ].filter((l) => me?.perms.includes(l.perm) && !(l.restaurantOnly && outlet.businessType === "cafe"));
+  ].filter((l) => me?.perms.includes(l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
   return (
     <>
       <PageHeader title={`Hi, ${me?.name.split(" ")[0] ?? ""}`} subtitle={outlet.name} actions={<UserChip />} />
@@ -49,7 +49,7 @@ export default function PulsePage() {
 function OwnerHome() {
   const me = useMe();
   const outlet = useCurrentOutlet();
-  const cafe = outlet.businessType === "cafe";
+  const cafe = !hasTables(outlet); // counter only
   const pulseOn = useFeature("pulse") === "ok";
   const tables = useTables();
   const menu = useMenu();

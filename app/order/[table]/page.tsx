@@ -91,7 +91,7 @@ export default function GuestOrder() {
   const counter = table === "COUNTER"; // café counter QR — no table
   const toast = useToast();
   const settings = useSettings();
-  const cafe = settings.businessType === "cafe";
+  const cafe = settings.businessType === "cafe" && !settings.mixed; // counter only, no tables
   const payNow = counter || settings.payFirst; // pay before the order goes to the kitchen
   // QR ordering is a Growth feature; on Starter the QR shows the menu only.
   const qrOn = useFeature("qrOrdering") === "ok";
