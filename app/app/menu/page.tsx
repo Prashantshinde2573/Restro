@@ -2,12 +2,13 @@
 
 import { hasTables } from "@/lib/access";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, FolderPlus, Plus, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, FolderPlus, Plus, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, LocalSegmented, Sheet, SwitchRow, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeature, useMenu, useOrders } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
+import { MenuFromPhoto } from "@/components/menu-import";
 import { OptionsEditor, PhotoUploader } from "@/components/dish-editor";
 import { inr } from "@/lib/format";
 import type { Diet, MenuItem, OptionGroup } from "@/lib/types";
@@ -104,6 +105,7 @@ export default function MenuPage() {
   const maxSold = Math.max(1, ...items.map((m) => m.soldThisWeek));
   const maxMargin = Math.max(1, ...items.map((m) => m.price - m.cost));
   const editing = edit && edit !== "new" ? edit : null;
+  const [fromPhoto, setFromPhoto] = useState(false);
 
   return (
     <>
@@ -112,13 +114,15 @@ export default function MenuPage() {
         subtitle={`${items.length} dishes · ${items.filter((m) => !m.available).length} sold out`}
         actions={
           <div className="flex gap-2">
-            <Button size="sm" variant="plain" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /> Categories</Button>
+            <Button size="sm" variant="plain" aria-label="Categories" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /><span className="hidden sm:inline">Categories</span></Button>
+            <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">From</span> photo</Button>
             <Button size="sm" onClick={() => setEdit("new")}><Plus size={16} /> Add dish</Button>
           </div>
         }
       >
         {engineeringOn && <Segmented value={tab} onChange={setTab} options={[{ value: "dishes", label: "Dishes" }, { value: "engineering", label: "What's working" }]} />}
       </PageHeader>
+      <MenuFromPhoto open={fromPhoto} onClose={() => setFromPhoto(false)} />
 
       <Page>
         {tab === "dishes" || !engineeringOn ? (

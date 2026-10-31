@@ -303,6 +303,10 @@ export const menuActions = {
   add(item: MenuItem) {
     menuStore.set([...menuStore.get(), item]);
   },
+  /** Many dishes in one go (menu read from a photo). */
+  addMany(items: MenuItem[]) {
+    if (items.length) menuStore.set([...menuStore.get(), ...items]);
+  },
 };
 
 /* ---------------- categories (owner-defined → guest filters + side bar) ---------------- */

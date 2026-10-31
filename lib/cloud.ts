@@ -494,3 +494,10 @@ export async function deletePlanCoupon(code: string) {
   const { error } = await sb().from("plan_coupons").delete().eq("code", code);
   if (error) throw error;
 }
+
+/* ---------------- menu from a photo (Gemini, edge function menu-from-photo) ---------------- */
+export interface ReadMenu {
+  categories: { name: string; items: { name: string; price: number; diet: "veg" | "nonveg" | "egg"; desc: string }[] }[];
+  left: number | null; // photos left today (null = no daily limit set up)
+}
+export const readMenuPhotos = (rid: string, photos: { mime: string; data: string }[]) => callFn<ReadMenu>("menu-from-photo", { rid, photos }, true);
