@@ -15,6 +15,38 @@ if (typeof window !== "undefined") gsap.registerPlugin(ScrollTrigger);
 export const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 export const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/* Stop the page scrolling behind a menu or dialog. body overflow:hidden alone
+   doesn't stop it on iPhones, so the body is pinned in place and put back after. */
+let locks = 0;
+let savedY = 0;
+export function lockScroll(lenis?: Lenis | null) {
+  if (locks++ === 0) {
+    savedY = window.scrollY;
+    const b = document.body.style;
+    b.position = "fixed";
+    b.top = `-${savedY}px`;
+    b.left = "0";
+    b.right = "0";
+    b.width = "100%";
+    b.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+  }
+  lenis?.stop();
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    if (--locks > 0) return;
+    const b = document.body.style;
+    b.position = b.top = b.left = b.right = b.width = b.overflow = "";
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, savedY);
+    document.documentElement.style.scrollBehavior = "";
+    lenis?.start();
+  };
+}
+
 const LenisCtx = createContext<Lenis | null>(null);
 export const useLenis = () => useContext(LenisCtx);
 

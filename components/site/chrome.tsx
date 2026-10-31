@@ -9,7 +9,7 @@ import { IconArrow, IconMenu } from "./icons";
 import { Brand } from "./mockups";
 import { SectionHead } from "./head";
 import { CallBack, LeadForm } from "./lead";
-import { gsap, reducedMotion, useLenis } from "./motion";
+import { gsap, lockScroll, reducedMotion, useLenis } from "./motion";
 
 const links = [
   { href: "/#features", label: "Features" },
@@ -44,15 +44,12 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
 
   // full-screen mobile menu: stop the page scrolling behind it
   useEffect(() => {
-    if (open) lenis?.stop();
-    else lenis?.start();
-    document.body.style.overflow = open ? "hidden" : "";
-    if (open && menu.current && !reducedMotion()) {
+    if (!open) return;
+    const unlock = lockScroll(lenis);
+    if (menu.current && !reducedMotion()) {
       gsap.fromTo(menu.current.querySelectorAll("[data-m]"), { yPercent: 120, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.8, ease: "expo.out", stagger: 0.05 });
     }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    return unlock;
   }, [open, lenis]);
 
   useEffect(() => setOpen(false), [path]);
@@ -103,7 +100,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
       </header>
 
       {open && (
-        <div ref={menu} className="fixed inset-0 z-40 flex flex-col bg-canvas/80 px-6 pb-10 pt-28 backdrop-blur-2xl lg:hidden">
+        <div ref={menu} data-lenis-prevent className="fixed inset-0 z-40 flex flex-col overflow-y-auto overscroll-contain bg-canvas/80 px-6 pb-10 pt-28 backdrop-blur-2xl lg:hidden">
           <nav className="flex flex-col" aria-label="Mobile">
             {links.map((l, i) => (
               <div key={l.href} className="overflow-hidden border-b border-line">
@@ -209,13 +206,12 @@ function DemoDialog() {
     return () => document.removeEventListener("click", onClick, true);
   }, []);
   useEffect(() => {
-    if (open) lenis?.stop();
-    else lenis?.start();
-    document.body.style.overflow = open ? "hidden" : "";
+    if (!open) return;
+    const unlock = lockScroll(lenis);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", esc);
     return () => {
-      document.body.style.overflow = "";
+      unlock();
       window.removeEventListener("keydown", esc);
     };
   }, [open, lenis]);

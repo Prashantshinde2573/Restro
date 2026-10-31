@@ -9,7 +9,7 @@ import { plans } from "@/lib/plans";
 import { CONTACT_WA } from "./chrome";
 import { IconArrow } from "./icons";
 import { Logo } from "./mockups";
-import { useLenis } from "./motion";
+import { lockScroll, useLenis } from "./motion";
 
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN");
 const priced = plans.filter((p) => p.monthly);
@@ -102,11 +102,13 @@ export function HelpChat() {
   // the page should not scroll behind the full-screen chat on phones
   useEffect(() => {
     const phone = window.matchMedia("(max-width: 639px)").matches;
-    if (open && phone) lenis?.stop();
-    else lenis?.start();
+    const unlock = open && phone ? lockScroll(lenis) : undefined;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
+    return () => {
+      unlock?.();
+      window.removeEventListener("keydown", esc);
+    };
   }, [open, lenis]);
 
   const ask = (f: QA) => {

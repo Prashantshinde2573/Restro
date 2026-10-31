@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { Delete } from "lucide-react";
+import { ArrowLeft, Delete } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Wordmark } from "@/components/shell";
@@ -95,9 +95,15 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-5 py-10">
+      <div className="relative flex flex-1 flex-col items-center justify-center px-5 pb-10 pt-20 lg:py-10">
+        <Link
+          href="/"
+          className="absolute left-4 top-4 flex h-10 items-center gap-1.5 rounded-full bg-surface pl-3 pr-4 text-[14px] font-semibold text-ink ring-1 ring-line transition hover:bg-sunken lg:left-auto lg:right-6 lg:top-6"
+        >
+          <ArrowLeft size={16} /> Back to website
+        </Link>
         <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden"><Wordmark className="h-8" /></div>
+          <Link href="/" className="mb-8 block w-fit lg:hidden" aria-label="Restropi home"><Wordmark className="h-8" /></Link>
           {mustSet ? (
             <>
               <ChangePassword

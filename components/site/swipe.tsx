@@ -1,6 +1,7 @@
 "use client";
 
 // On phones: a sideways, snapping carousel with dots (less scrolling down the page).
+// Up-and-down swipes on it still scroll the page (overflow-y hidden, pan-y allowed).
 // From `from` (lg by default) up: whatever grid you pass in `grid`.
 import clsx from "clsx";
 import { Children, useEffect, useRef, useState, type ReactNode } from "react";
@@ -58,9 +59,8 @@ export function Swipe({
     <div className={className}>
       <div
         ref={ref}
-        data-lenis-prevent-touch
         className={clsx(
-          "-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-12 pt-3 -mb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain touch-pan-x touch-pan-y scroll-px-5 px-5 pb-12 pt-3 -mb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           bp === "md" ? "md:mx-0 md:overflow-visible md:p-0" : "lg:mx-0 lg:overflow-visible lg:p-0",
           grid,
         )}
