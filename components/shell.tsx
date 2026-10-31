@@ -147,7 +147,7 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
   return (
     <>
       {compact ? (
-        <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} aria-label={`Outlet: ${current.name}`} className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-ink text-[12.5px] font-bold text-canvas">
+        <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} aria-label={`Outlet: ${current.name}`} className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white text-[12.5px] font-bold text-ink">
           {initials}
         </button>
       ) : (
@@ -320,21 +320,21 @@ function TabBar() {
   const moreActive = moreItems.some((i) => isActive(path, i.href));
   return (
     <>
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-canvas/85 backdrop-blur-xl lg:hidden">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0a0a0a] lg:hidden">
         <div className="mx-auto flex max-w-lg">
           {myTabs.map((it) => {
             const active = isActive(path, it.href);
             const Icon = it.icon;
             return (
               <Link key={it.href} href={it.href} className="flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : "text-faint"} />
-                <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : "text-faint")}>{t(it.key)}</span>
+                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-[#4fd1a5]" : "text-white/45"} />
+                <span className={clsx("text-[10.5px] font-medium", active ? "text-[#4fd1a5]" : "text-white/45")}>{t(it.key)}</span>
               </Link>
             );
           })}
           <button onClick={() => setMore(true)} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : "text-faint"} />
-            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : "text-faint")}>{t("more")}</span>
+            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-[#4fd1a5]" : "text-white/45"} />
+            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-[#4fd1a5]" : "text-white/45")}>{t("more")}</span>
             {renew !== null && <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>}
           </button>
         </div>
@@ -561,7 +561,7 @@ function MobileTopBar() {
     return () => window.removeEventListener("scroll", on);
   }, []);
   return (
-    <div className={clsx("pt-safe sticky top-0 z-30 bg-canvas/85 backdrop-blur-xl transition-[border-color] lg:hidden", scrolled ? "border-b border-line/70" : "border-b border-transparent")}>
+    <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] text-white transition-shadow lg:hidden", scrolled && "shadow-[0_8px_20px_-12px_rgb(0_0_0/.5)]")}>
       <div className="grid h-[52px] grid-cols-[1fr_auto_1fr] items-center px-4">
         <div className="justify-self-start"><OutletSwitcher compact /></div>
         <Link href="/app" aria-label="Restro home" className="justify-self-center">
