@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { CONTACT_EMAIL, CONTACT_WA, Magnetic } from "./chrome";
 import { Mesh } from "./hero";
 import {
@@ -24,73 +24,18 @@ import {
   IconVoice,
 } from "./icons";
 import { KotTicket, PhoneMenu, PhoneOwner, PulseNote, Receipt, TabletPOS, UpiCard } from "./mockups";
+import { Eyebrow, SectionHead } from "./head";
+import { Swipe } from "./swipe";
+import { sb } from "@/lib/cloud";
 import { RiseText, ScrollTrigger, gsap, reducedMotion, useIsoLayoutEffect, useTilt } from "./motion";
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 
-const Eyebrow = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <div data-reveal className={clsx("text-[13px] font-semibold uppercase tracking-[0.18em] text-jade", className)}>{children}</div>
-);
 
-/* ================= the dock: every part of service ================= */
-const modules: { icon: Icon; t: string }[] = [
-  { icon: IconBill, t: "Billing" },
-  { icon: IconKitchen, t: "Kitchen" },
-  { icon: IconTable, t: "Tables" },
-  { icon: IconStock, t: "Stock" },
-  { icon: IconTeam, t: "Team" },
-  { icon: IconGuests, t: "Guests" },
-  { icon: IconReports, t: "Reports" },
-  { icon: IconSplit, t: "UPI QR" },
-  { icon: IconChat, t: "WhatsApp" },
-];
+/* ================= statement: words light up as you scroll, on a dark photo ================= */
+// Photo from Unsplash (free under the Unsplash License).
+const STATEMENT_IMG = "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&q=70&w=2000";
 
-/** A glass dock like the Mac's: icons grow as the pointer passes over them. */
-export function Modules() {
-  const dock = useRef<HTMLDivElement>(null);
-  const [mx, setMx] = useState<number | null>(null);
-  return (
-    <section className="relative pb-6">
-      <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
-        <p data-reveal className="text-center text-[13px] font-semibold uppercase tracking-[0.18em] text-ink/50">One login for every part of service</p>
-        <div data-reveal className="mt-7 flex justify-center">
-          <div
-            ref={dock}
-            onPointerMove={(e) => setMx(e.clientX)}
-            onPointerLeave={() => setMx(null)}
-            className="glass grid grid-cols-3 gap-4 rounded-[32px] p-4 sm:flex sm:items-end sm:gap-3 sm:rounded-[28px] sm:px-4 sm:py-3"
-          >
-            {modules.map((m, i) => (
-              <DockItem key={m.t} m={m} mx={mx} i={i} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-function DockItem({ m, mx }: { m: (typeof modules)[number]; mx: number | null; i: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  let s = 1;
-  if (mx !== null && ref.current) {
-    const r = ref.current.getBoundingClientRect();
-    const d = Math.abs(mx - (r.left + r.width / 2));
-    s = 1 + Math.max(0, 1 - d / 160) * 0.38;
-  }
-  return (
-    <div ref={ref} className="group flex flex-col items-center gap-2">
-      <span
-        className="flex h-[60px] w-[60px] origin-bottom items-center justify-center rounded-[18px] bg-gradient-to-b from-jade to-jade-deep text-white shadow-[0_12px_24px_-12px_rgb(var(--jade)),inset_0_1px_0_rgb(255_255_255/.35)] transition-transform duration-200 ease-out"
-        style={{ transform: `scale(${s})`, marginInline: `${(s - 1) * 14}px` }}
-      >
-        <m.icon size={28} />
-      </span>
-      <span className="text-[13px] font-medium text-ink/70">{m.t}</span>
-    </div>
-  );
-}
-
-/* ================= statement: words light up as you scroll ================= */
 export function Statement() {
   const ref = useRef<HTMLParagraphElement>(null);
   const text = "Everything your billing software, kitchen printer, stock register, attendance book and WhatsApp groups do today — in one place, talking to each other.";
@@ -99,7 +44,7 @@ export function Statement() {
     if (!el) return;
     const words = el.querySelectorAll<HTMLElement>(".lit-word");
     if (reducedMotion()) {
-      words.forEach((w) => (w.style.color = "rgb(var(--ink))"));
+      words.forEach((w) => (w.style.color = "#fff"));
       return;
     }
     const st = ScrollTrigger.create({
@@ -109,209 +54,356 @@ export function Statement() {
       scrub: true,
       onUpdate: (self) => {
         const n = Math.round(self.progress * words.length);
-        words.forEach((w, i) => (w.style.color = i < n ? "rgb(var(--ink))" : ""));
+        words.forEach((w, i) => (w.style.color = i < n ? "#fff" : ""));
       },
     });
     return () => st.kill();
   }, []);
   return (
-    <section className="py-24 lg:py-36">
-      <div className="mx-auto max-w-[1100px] px-5 lg:px-8">
-        <Eyebrow>One app instead of five</Eyebrow>
-        <p ref={ref} className="mt-6 text-[34px] font-semibold leading-[1.12] tracking-[-0.035em] sm:text-[48px] lg:text-[60px]">
-          {text.split(" ").map((w, i) => (
-            <span key={i} className="lit-word">{w} </span>
-          ))}
-        </p>
+    <section className="px-2 py-2 sm:px-3">
+      <div className="relative isolate overflow-hidden rounded-[30px] bg-ink sm:rounded-[40px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={STATEMENT_IMG} alt="" aria-hidden loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover text-transparent opacity-45" data-parallax="-6" />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(16_22_20/.92)_0%,rgb(16_22_20/.75)_55%,rgb(16_22_20/.55)_100%)]" />
+        <div className="mx-auto max-w-[1100px] px-6 py-14 lg:px-8 lg:py-32">
+          <Eyebrow dark>One app instead of five</Eyebrow>
+          <p ref={ref} className="mt-5 text-[30px] font-semibold leading-[1.12] tracking-[-0.035em] sm:text-[46px] lg:text-[58px] [&_.lit-word]:text-white/20">
+            {text.split(" ").map((w, i) => (
+              <span key={i} className="lit-word">{w} </span>
+            ))}
+          </p>
+          <div data-reveal className="mt-10">
+            <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink transition hover:bg-jade-soft">
+              Book a free demo
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
+            </a>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-/* ================= features: glass bento ================= */
-function Tile({ className, icon: I, t, d, children, art = "bottom" }: { className?: string; icon: Icon; t: string; d: string; children: ReactNode; art?: "bottom" | "side" }) {
+/* ================= features: white bento cards with live little scenes ================= */
+function Card({ className, t, d, art, artFirst = false }: { className?: string; t: string; d: string; art: ReactNode; artFirst?: boolean }) {
+  const text = (
+    <div className={clsx("relative z-10 px-7 lg:px-9", artFirst ? "pb-8 pt-2 lg:pb-10" : "pt-8 lg:pt-10")}>
+      <h3 className="text-[26px] font-semibold leading-[1.1] tracking-[-0.035em] lg:text-[30px]">{t}</h3>
+      <p className="mt-2.5 max-w-[34ch] text-[15.5px] leading-relaxed text-ink/55 lg:text-[17px]">{d}</p>
+    </div>
+  );
   return (
-    <div className={clsx("glass glass-shine group relative flex overflow-hidden rounded-[32px]", art === "side" ? "flex-col lg:flex-row" : "flex-col", className)}>
-      <div className={clsx("relative z-10 p-7 lg:p-8", art === "side" && "lg:w-[42%] lg:self-center")}>
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-jade text-white shadow-[inset_0_1px_0_rgb(255_255_255/.3)]"><I size={26} /></span>
-        <h3 className="mt-5 text-[24px] font-semibold leading-tight tracking-[-0.03em] lg:text-[28px]">{t}</h3>
-        <p className="mt-2 max-w-sm text-[15.5px] leading-relaxed text-ink/60">{d}</p>
-      </div>
-      <div className="relative flex min-h-[260px] flex-1 items-center justify-center overflow-hidden">
-        <div className="origin-center scale-[.62] transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:scale-[.66] sm:scale-[.78] sm:group-hover:scale-[.82]">{children}</div>
-      </div>
+    <div className={clsx("bento-card group relative flex h-full min-w-0 flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_1px_0_rgb(255_255_255),0_30px_60px_-40px_rgb(16_24_20/.25)] ring-1 ring-black/[.04]", className)}>
+      {!artFirst && text}
+      <div className="relative min-h-[290px] flex-1 overflow-hidden lg:min-h-[340px]">{art}</div>
+      {artFirst && text}
     </div>
   );
 }
 
 export function Features() {
+  const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const cards = root.current?.querySelectorAll<HTMLElement>(".bento-card");
+    if (!cards) return;
+    const io = new IntersectionObserver(
+      (es) => es.forEach((e) => e.isIntersecting && (e.target.classList.add("is-in"), io.unobserve(e.target))),
+      { threshold: 0.35 },
+    );
+    cards.forEach((c) => io.observe(c));
+    return () => io.disconnect();
+  }, []);
   return (
-    <section id="features" className="relative isolate scroll-mt-20 overflow-hidden py-24 lg:py-32">
-      <Mesh />
+    <section ref={root} id="features" className="relative isolate scroll-mt-20 overflow-hidden bg-[#f4f5f3] py-14 lg:py-28">
       <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center">
-          <Eyebrow>Everything in one place</Eyebrow>
-          <RiseText as="h2" onScroll text="Built for the *whole* service." className="mt-4 text-[42px] font-semibold leading-[1] tracking-[-0.045em] sm:text-[60px] lg:text-[72px]" />
-        </div>
-        <div className="mt-14 grid gap-4 lg:mt-20 lg:grid-cols-6 lg:grid-rows-[auto_auto_auto]" data-reveal-group>
-          <Tile className="lg:col-span-4" art="side" icon={IconBill} t="Billing" d="GST bills, UPI QR for the exact amount, cash, card, discounts, KOTs."><ArtBilling /></Tile>
-          <Tile className="lg:col-span-2 lg:row-span-2" icon={IconTable} t="Tables and QR" d="Live floor, waitlist, bookings, and guests ordering from their phone."><PhoneMenu /></Tile>
-          <Tile className="lg:col-span-2" icon={IconKitchen} t="Kitchen screen" d="Tickets by station, timers, and a ‘to cook’ count for the chef."><KotTicket className="scale-[1.35]" /></Tile>
-          <Tile className="lg:col-span-2" icon={IconStock} t="Stock" d="Recipes deduct stock as you sell. Purchase orders go out on WhatsApp."><ArtStock /></Tile>
-          <Tile className="lg:col-span-2" icon={IconTeam} t="Team" d="PIN clock-in, rota, payroll from real hours, and tip sharing."><ArtTeam /></Tile>
-          <Tile className="lg:col-span-2" icon={IconGuests} t="Guests" d="Who comes back, what they order, birthdays, loyalty points."><ArtGuests /></Tile>
-          <Tile className="lg:col-span-2" icon={IconReports} t="Reports and GST" d="Profit and loss, day close, GSTR-1 and 3B files for your CA."><ArtReports /></Tile>
-        </div>
-        <div data-reveal className="glass mt-4 rounded-[24px] px-7 py-5 text-center text-[15.5px] font-medium text-jade-deep">
-          Plus Swiggy and Zomato orders on the same screen, multiple outlets, and English, मराठी, हिंदी.
-        </div>
+        <SectionHead eyebrow="Everything in one place" title="Built for the *whole* service." />
+        <Swipe
+          className="mt-8 lg:mt-12"
+          item="w-[86%] sm:w-[60%]"
+          grid="lg:grid lg:grid-cols-12 lg:gap-4"
+          spans={["lg:col-span-4", "lg:col-span-4", "lg:col-span-4", "lg:col-span-5", "lg:col-span-7"]}
+        >
+          <Card t="Tables and QR orders" d="See every table at a glance. Guests scan, order and pay from their phone." art={<ArtTables />} />
+          <Card t="Sales, reports, GST." d="Today’s numbers the moment you close, and files ready for your CA." art={<ArtInsights />} />
+          <Card t="Your whole team" d="A PIN for every captain, chef and cashier. Each sees only their part." art={<ArtTeam />} />
+          <Card artFirst t="Get paid by UPI" d="Every bill carries a QR with the exact amount. No typing, no mistakes." art={<ArtUpi />} />
+          <Card artFirst t="Stock that counts itself" d="Recipes deduct stock as you sell. A buy list is ready every morning." art={<ArtStock />} />
+        </Swipe>
       </div>
     </section>
   );
 }
 
-/* little scenes for the tiles */
-function ArtBilling() {
+/* ---- the little scenes ---- */
+function ArtTables() {
+  const rows: [string, string, string, string][] = [
+    ["T1", "Table 1", "4 guests · 32 min", "Bill ready"],
+    ["T4", "Table 4", "2 guests · 18 min", "Ordering"],
+    ["T6", "Table 6", "Just seated", "Open"],
+    ["T9", "Table 9", "Free", "Seat"],
+  ];
   return (
-    <div className="relative h-[380px] w-[400px]">
-      <Receipt className="absolute left-6 top-4 -rotate-6" />
-      <UpiCard className="absolute right-4 top-24 rotate-3" />
-      <div className="absolute bottom-6 left-24 flex gap-2">
-        {["UPI", "Cash", "Card", "UPI + Cash"].map((m, i) => (
-          <span key={m} className={clsx("rounded-full px-3 py-1.5 text-[12.5px] font-semibold shadow-float", i === 0 ? "bg-jade text-white" : "bg-surface ring-1 ring-line")}>{m}</span>
+    <div className="absolute inset-x-6 top-10 lg:inset-x-8">
+      <div className="absolute -top-6 left-[26%] z-10 flex items-center gap-2 rounded-full bg-jade px-5 py-2.5 text-[15px] font-semibold text-white shadow-[0_18px_30px_-12px_rgb(var(--jade)/.7)] transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-translate-y-1 group-hover:translate-x-2">
+        <IconTable size={20} /> Seat guests
+      </div>
+      <div className="space-y-2.5">
+        {rows.map(([n, t, d, s], i) => (
+          <div key={n} className="flex items-center gap-3 rounded-[18px] bg-white p-3 ring-1 ring-black/[.06]" style={{ opacity: 1 - i * 0.24 }}>
+            <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#f2f3f1] text-[13px] font-bold">{n}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-medium">{t}</span>
+              <span className="block text-[12.5px] text-ink/50">{d}</span>
+            </span>
+            <span className="text-[14px] font-medium text-jade">{s}</span>
+          </div>
         ))}
       </div>
     </div>
   );
 }
-function ArtStock() {
-  const rows: [string, number, string][] = [["Paneer", 0.35, "rose"], ["Basmati rice", 0.62, "saffron"], ["Cooking oil", 0.9, "jade"], ["Milk", 0.75, "jade"]];
+
+function ArtInsights() {
+  const bars = [30, 52, 44, 70, 88];
   return (
-    <div className="w-[360px] space-y-3">
-      {rows.map(([n, v, tone]) => (
-        <div key={n} className="rounded-2xl bg-canvas p-4 ring-1 ring-line">
-          <div className="flex justify-between text-[14px] font-medium"><span>{n}</span><span className={tone === "rose" ? "text-rose" : tone === "saffron" ? "text-saffron" : "text-jade"}>{tone === "rose" ? "Low" : tone === "saffron" ? "Order soon" : "OK"}</span></div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sunken"><div className={clsx("h-full rounded-full", tone === "rose" ? "bg-rose" : tone === "saffron" ? "bg-saffron" : "bg-jade")} style={{ width: `${v * 100}%` }} /></div>
+    <div className="absolute inset-0">
+      <div aria-hidden className="absolute -left-10 top-16 h-56 w-56 rounded-full bg-jade/20 blur-3xl" />
+      <div className="absolute left-8 top-6 w-[150%] origin-top-left transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] [transform:perspective(1200px)_rotateY(-18deg)_rotateX(8deg)_rotateZ(-4deg)] group-hover:[transform:perspective(1200px)_rotateY(-12deg)_rotateX(6deg)_rotateZ(-3deg)]">
+        <div className="rounded-[26px] bg-[#f6f7f5] p-3 shadow-[0_40px_60px_-30px_rgb(16_24_20/.35)] ring-1 ring-black/[.05]">
+          <div className="flex items-center gap-3 rounded-[16px] bg-white/80 px-4 py-3 ring-1 ring-black/[.04]">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <span className="text-[18px] font-semibold tracking-tight">Reports</span>
+          </div>
+          <div className="mt-3 rounded-[18px] bg-white p-5 ring-1 ring-black/[.04]">
+            <div className="text-[19px] font-semibold tracking-tight">Today so far</div>
+            <div className="mt-8 flex items-end justify-between gap-6 pr-[38%]">
+              <div>
+                <div className="text-[14px] text-ink/45">Sales</div>
+                <div className="text-[30px] font-semibold tracking-tight text-jade tnum">₹18,420</div>
+                <div className="mt-1 text-[12.5px] text-ink/40">Average bill ₹642 · GST ready</div>
+              </div>
+              <div className="flex h-28 items-end gap-2">
+                {bars.map((b, i) => (
+                  <span key={i} className="bento-bar w-4 rounded-full bg-gradient-to-t from-jade/10 to-jade/70" style={{ height: `${b}%`, animationDelay: `${i * 0.08}s` }} />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-      ))}
-      <div className="flex items-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-[13.5px] font-semibold text-white"><IconChat size={20} /> Send order to supplier</div>
+      </div>
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white to-transparent" />
     </div>
   );
 }
+
 function ArtTeam() {
+  const people: [string, number, string][] = [["K", 200, "left-1/2 top-[6%] -translate-x-1/2"], ["R", 30, "left-[10%] top-[34%]"], ["I", 330, "right-[10%] top-[34%]"]];
   return (
-    <div className="flex items-center gap-8">
-      <div className="grid grid-cols-3 gap-3">
-        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((k) => (
-          <span key={k} className="flex h-14 w-14 items-center justify-center rounded-full bg-canvas text-[20px] font-medium ring-1 ring-line">{k}</span>
+    <div className="absolute inset-0">
+      <div className="absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2">
+        {[380, 280, 180].map((r) => (
+          <span key={r} aria-hidden className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/[.05]" style={{ width: r, height: r }} />
         ))}
+        <span className="relative flex h-[118px] w-[118px] items-center justify-center rounded-full bg-gradient-to-b from-[#3fbf8f] to-jade text-[22px] font-semibold tracking-tight text-white shadow-[0_24px_40px_-14px_rgb(var(--jade)/.7),inset_0_2px_0_rgb(255_255_255/.35)] ring-4 ring-white">
+          Restro
+        </span>
       </div>
-      <div className="space-y-2">
-        {[["Kavya", "Manager", 200], ["Rohit", "Captain", 30], ["Sneha", "Captain", 330], ["Imran", "Chef", 100]].map(([n, r, h]) => (
-          <div key={n as string} className="flex w-[170px] items-center gap-2.5 rounded-2xl bg-canvas p-2.5 ring-1 ring-line">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-semibold" style={{ background: `hsl(${h} 50% 90%)`, color: `hsl(${h} 45% 30%)` }}>{(n as string)[0]}</span>
-            <span><span className="block text-[13px] font-semibold">{n}</span><span className="block text-[11px] text-muted">{r}</span></span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-function ArtGuests() {
-  return (
-    <div className="w-[360px] space-y-3">
-      {[["Neha", "6 visits · Paneer Tikka", "Regular"], ["Arjun", "Birthday on Friday", "Birthday"], ["Meera", "Not seen in 34 days", "Win back"]].map(([n, d, tag], i) => (
-        <div key={n} className={clsx("flex items-center gap-3 rounded-2xl bg-canvas p-3.5 ring-1 ring-line", i === 1 && "translate-x-6")}>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-jade-soft text-[14px] font-semibold text-jade-deep">{n[0]}</span>
-          <span className="flex-1"><span className="block text-[14.5px] font-semibold">{n}</span><span className="block text-[12px] text-muted">{d}</span></span>
-          <span className="rounded-full bg-saffron-soft px-2 py-0.5 text-[11px] font-semibold text-saffron">{tag}</span>
-        </div>
+      {people.map(([n, h, pos], i) => (
+        <span key={n} className={clsx("absolute", pos)}>
+          <span
+            className="bento-bob flex h-14 w-14 items-center justify-center rounded-full text-[18px] font-semibold ring-4 ring-white shadow-[0_12px_24px_-10px_rgb(16_24_20/.35)]"
+            style={{ background: `hsl(${h} 55% 86%)`, color: `hsl(${h} 45% 28%)`, animationDelay: `${-i * 1.3}s` }}
+          >
+            {n}
+          </span>
+        </span>
       ))}
+      <div className="absolute inset-x-6 bottom-6 flex items-center gap-3 rounded-[18px] bg-white p-3 shadow-[0_20px_40px_-24px_rgb(16_24_20/.4)] ring-1 ring-black/[.05] transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-translate-y-1 lg:inset-x-8">
+        <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-saffron/15 text-[14px] font-semibold text-saffron">S</span>
+        <span className="text-[15px] font-medium tracking-tight">Table 6 bill is ready to print</span>
+      </div>
     </div>
   );
 }
-function ArtReports() {
-  const bars = [42, 58, 51, 66, 72, 88, 96];
+
+function ArtUpi() {
   return (
-    <div className="w-[380px] rounded-[24px] bg-canvas p-5 ring-1 ring-line">
-      <div className="text-[13px] text-muted">7-day sales</div>
-      <div className="text-[30px] font-semibold tracking-tight tnum">₹2,41,380</div>
-      <div className="mt-4 flex h-36 items-stretch gap-2">
-        {bars.map((b, i) => (
-          <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
-            <div className={clsx("w-full rounded-t-lg", i === bars.length - 1 ? "bg-jade" : "bg-jade/25")} style={{ height: `${b}%` }} />
-            <span className="text-[10px] text-faint">{["M", "T", "W", "T", "F", "S", "S"][i]}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-2 text-[12px]">
-        <span className="rounded-xl bg-surface px-3 py-2 ring-1 ring-line">GSTR-1 ready</span>
-        <span className="rounded-xl bg-surface px-3 py-2 ring-1 ring-line">Day close ✓</span>
+    <div className="absolute inset-0 p-6 lg:p-8">
+      <div className="relative h-full overflow-hidden rounded-[24px] bg-gradient-to-br from-[#e6f6ee] via-[#eaf8f0] to-[#d6f1e3] p-7 shadow-[0_30px_50px_-34px_rgb(var(--jade)/.6)] ring-1 ring-jade/10 transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:scale-[1.015]">
+        <div className="text-[19px] font-semibold tracking-tight">Paid by UPI today</div>
+        <div className="mt-5 flex items-center gap-4">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-jade/15 text-jade">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>
+          </span>
+          <span className="text-[52px] font-semibold leading-none tracking-[-0.04em] text-jade-deep tnum lg:text-[64px]">₹48,250</span>
+        </div>
+        <div className="mt-8 h-2.5 overflow-hidden rounded-full bg-jade/10"><div className="bento-fill h-full w-[78%] rounded-full bg-jade/40" /></div>
+        <div className="mt-3 h-2.5 w-[60%] overflow-hidden rounded-full bg-jade/10"><div className="bento-fill h-full w-[55%] rounded-full bg-jade/25" style={{ animationDelay: ".15s" }} /></div>
+        <div className="absolute right-6 top-6 rounded-full bg-white/70 px-3 py-1 text-[12px] font-semibold text-jade-deep">42 bills</div>
       </div>
     </div>
   );
 }
 
+function ArtStock() {
+  const rows: [string, string, number, string][] = [
+    ["P", "Paneer", 35, "3 kg left"],
+    ["R", "Basmati rice", 62, "18 kg left"],
+    ["M", "Milk", 80, "24 L left"],
+  ];
+  return (
+    <div className="absolute inset-0">
+      <div aria-hidden className="absolute -right-24 -top-40 h-[520px] w-[520px] rounded-full border border-black/[.04]" />
+      {/* phone, cut off by the card */}
+      <div className="absolute left-1/2 top-8 w-[340px] -translate-x-[30%] rounded-t-[44px] border-[7px] border-b-0 border-[#0f4a3c] bg-white px-4 pb-0 pt-5 transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-translate-y-2 sm:w-[380px]">
+        <div className="flex gap-1.5 px-2">{[0, 1, 2].map((i) => <span key={i} className="h-3 w-3 rounded-full border-2 border-ink/60" />)}</div>
+        <div className="mt-4 overflow-hidden rounded-t-[20px] bg-[#f7f1ea]">
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <span className="text-[16px] font-semibold">Stock</span>
+            <span className="flex gap-1.5">
+              <span className="rounded-full bg-white px-3 py-1 text-[11.5px] text-ink/60 ring-1 ring-black/[.06]">Main kitchen</span>
+              <span className="rounded-full bg-white px-3 py-1 text-[11.5px] font-semibold text-jade ring-1 ring-black/[.06]">Today</span>
+            </span>
+          </div>
+          <div className="bg-white">
+            {rows.map(([i, n, v, d]) => (
+              <div key={n} className="flex items-center gap-3 border-b border-black/[.05] px-4 py-3.5">
+                <span className={clsx("flex h-11 w-11 items-center justify-center rounded-full text-[15px] font-semibold", v < 40 ? "bg-rose/15 text-rose" : v < 70 ? "bg-saffron/20 text-saffron" : "bg-jade/15 text-jade")}>{i}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">{n}</span>
+                  <span className="block text-[12.5px] text-ink/50">{d}</span>
+                </span>
+                <Ring v={v} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* floating sales card */}
+      <div className="absolute left-4 top-[50%] w-[230px] -rotate-[4deg] rounded-[18px] bg-white p-4 shadow-[0_30px_50px_-24px_rgb(16_24_20/.4)] ring-1 ring-black/[.05] transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-rotate-[2deg] sm:left-8 lg:w-[270px]">
+        <div className="text-[11.5px] text-ink/50">Sold today</div>
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <div className="text-[22px] font-semibold tracking-tight tnum">142 dishes</div>
+            <div className="mt-1 text-[11px] font-semibold text-jade">↑ 12% vs last Friday</div>
+          </div>
+          <svg viewBox="0 0 120 50" className="h-12 w-28 text-jade" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path className="bento-line" pathLength={1} d="M2 40 C12 40 14 22 24 26 S36 44 46 30 S58 8 68 18 S80 40 90 28 S104 6 118 14" />
+          </svg>
+        </div>
+      </div>
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+    </div>
+  );
+}
+
+function Ring({ v }: { v: number }) {
+  const c = 2 * Math.PI * 16;
+  return (
+    <span className="relative flex h-12 w-12 items-center justify-center">
+      <svg viewBox="0 0 40 40" className="absolute inset-0 -rotate-90">
+        <circle cx="20" cy="20" r="16" fill="none" stroke="rgb(0 0 0 / .06)" strokeWidth="3.5" />
+        <circle cx="20" cy="20" r="16" fill="none" stroke="rgb(var(--jade))" strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${(v / 100) * c} ${c}`} />
+      </svg>
+      <span className="text-[11.5px] font-semibold tnum">{v}%</span>
+    </span>
+  );
+}
 
 
-/* ================= scan to thank-you (pinned horizontal story) ================= */
-const steps: { n: string; t: string; d: string; art: ReactNode }[] = [
-  { n: "01", t: "Guests order from the table", d: "They scan the table QR, browse a menu with photos and filters, and send the order from their phone.", art: <PhoneMenu /> },
-  { n: "02", t: "The kitchen sees it at once", d: "Tickets by station, timers, and a ‘to cook’ count for the chef.", art: <KotTicket className="scale-[1.6]" /> },
-  { n: "03", t: "Captains run the floor", d: "Live floor, running bills per party, and orders by tap or by voice.", art: <TabletPOS className="scale-[.82]" /> },
-  { n: "04", t: "Every guest pays their own share", d: "A UPI QR for the exact amount — or cash, card, or both. No calculator, no arguments at the counter.", art: <UpiCard className="scale-[1.5]" /> },
-  { n: "05", t: "Next morning, a note", d: "Restro Pulse tells you in two sentences what happened yesterday and the three things to do today.", art: <PhoneOwner /> },
+/* ================= how it works: four steps ================= */
+const steps: { n: string; t: string; d: string; tag: string; art: ReactNode }[] = [
+  { n: "Step one", t: "Talk to us", d: "We create your account and logins.", tag: "Takes 5 minutes", art: <StepAccount /> },
+  { n: "Step two", t: "Add menu and tables", d: "Dishes, prices, photos and table QRs.", tag: "We help you", art: <StepMenu /> },
+  { n: "Step three", t: "Start billing", d: "Phone, tablet or the laptop you have.", tag: "Same day", art: <StepBill /> },
+  { n: "Step four", t: "Get paid, see it all", d: "UPI on every bill, a note each morning.", tag: "Every day", art: <StepPaid /> },
 ];
 
 export function Story() {
-  const section = useRef<HTMLElement>(null);
-  const track = useRef<HTMLDivElement>(null);
-
-  useIsoLayoutEffect(() => {
-    if (reducedMotion() || !section.current || !track.current) return;
-    const mm = gsap.matchMedia();
-    mm.add("(min-width: 1024px)", () => {
-      const distance = () => track.current!.scrollWidth - window.innerWidth;
-      const tween = gsap.to(track.current, {
-        x: () => -distance(),
-        ease: "none",
-        scrollTrigger: { trigger: section.current, start: "top top", end: () => `+=${distance()}`, scrub: 0.6, pin: true, invalidateOnRefresh: true, anticipatePin: 1 },
-      });
-      gsap.utils.toArray<HTMLElement>("[data-step-art]").forEach((el) => {
-        gsap.fromTo(el, { rotateY: -28, rotateX: 8, scale: 0.9 }, {
-          rotateY: 0, rotateX: 0, scale: 1, ease: "none",
-          scrollTrigger: { trigger: el, containerAnimation: tween, start: "left right", end: "center center", scrub: true },
-        });
-      });
-      gsap.to("[data-story-bar]", { scaleX: 1, ease: "none", scrollTrigger: { trigger: section.current, start: "top top", end: () => `+=${distance()}`, scrub: true } });
-    });
-    return () => mm.revert();
-  }, []);
-
   return (
-    <section id="story" ref={section} className="relative isolate overflow-hidden lg:h-[100svh]">
-      <Mesh />
-      <div className="relative mx-auto max-w-[1240px] px-5 pt-24 lg:absolute lg:inset-x-0 lg:top-0 lg:px-8 lg:pt-24">
-        <Eyebrow>How it works</Eyebrow>
-        <RiseText as="h2" onScroll text="From scan to *thank-you.*" className="mt-3 text-[40px] font-semibold leading-[0.98] tracking-[-0.045em] sm:text-[56px] lg:text-[64px]" />
-        <div className="mt-6 hidden h-[3px] w-full max-w-md overflow-hidden rounded-full bg-ink/10 lg:block"><div data-story-bar className="h-full origin-left scale-x-0 rounded-full bg-jade" /></div>
-      </div>
-      <div ref={track} className="relative flex flex-col gap-5 px-5 pb-24 pt-12 lg:h-full lg:flex-row lg:items-end lg:gap-0 lg:px-0 lg:pb-14 lg:pl-[max(32px,calc((100vw-1240px)/2+32px))] lg:pt-0">
-        {steps.map((s) => (
-          <article key={s.n} className="glass relative flex shrink-0 flex-col rounded-[32px] p-6 lg:mr-6 lg:h-[62svh] lg:w-[min(580px,44vw)] lg:flex-row lg:items-stretch lg:gap-6 lg:p-7">
-            <div className="flex flex-col lg:w-[44%]">
-              <span className="w-fit rounded-full bg-jade/10 px-3 py-1 text-[13px] font-semibold tnum text-jade">Step {s.n}</span>
-              <h3 className="mt-auto pt-6 text-[26px] font-semibold leading-tight tracking-[-0.03em]">{s.t}</h3>
-              <p className="mt-3 text-[15.5px] leading-relaxed text-ink/60">{s.d}</p>
-            </div>
-            <div className="mt-6 flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-white/50 lg:mt-0" style={{ perspective: "1000px" }}>
-              <div data-step-art className="origin-center">{s.art}</div>
-            </div>
-          </article>
-        ))}
-        <div className="hidden w-[10vw] shrink-0 lg:block" />
+    <section id="story" className="scroll-mt-20 bg-white py-14 lg:py-28">
+      <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
+        <SectionHead eyebrow="How it works" title="Start in four steps. *Live the same day.*" />
+        <div className="mt-8 grid grid-cols-2 gap-2.5 lg:mt-12 lg:grid-cols-4 lg:gap-3" data-reveal-group>
+          {steps.map((s, i) => (
+            <article key={s.n} className="group relative flex h-full min-h-[250px] flex-col rounded-[22px] bg-[#f4f5f3] p-4 sm:min-h-[340px] sm:p-6 lg:min-h-[420px] lg:rounded-[28px] lg:p-7">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink/45 sm:text-[12.5px]">{s.n}</div>
+              <h3 className="mt-1 text-[16px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">{s.t}</h3>
+              <p className="mt-1 hidden text-[14px] leading-snug text-ink/50 sm:block">{s.d}</p>
+              <div className="relative -mx-2 flex max-h-[130px] flex-1 items-center justify-center overflow-hidden py-3 sm:mx-0 sm:max-h-none sm:overflow-visible sm:py-6">
+                <div className="origin-center scale-[.6] sm:scale-100">{s.art}</div>
+              </div>
+              <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[12px] font-medium shadow-[0_6px_16px_-10px_rgb(16_24_20/.3)] sm:px-4 sm:py-2 sm:text-[14px]">{s.tag}</span>
+              {i < steps.length - 1 && (
+                <span aria-hidden className="absolute -right-[22px] top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-[#f4f5f3] ring-[5px] ring-white lg:flex">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-jade text-white"><IconArrow size={13} /></span>
+                </span>
+              )}
+            </article>
+          ))}
+        </div>
+        <div data-reveal className="mt-6 flex justify-center lg:mt-10">
+          <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-ink pl-6 pr-2 text-[15.5px] font-semibold text-white transition hover:bg-jade-deep">
+            Start with step one
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
+          </a>
+        </div>
       </div>
     </section>
+  );
+}
+
+const ease = "transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)]";
+function StepAccount() {
+  return (
+    <div className="relative h-[170px] w-[210px]">
+      <div className="absolute inset-0 flex flex-col items-center justify-center rounded-[20px] bg-white shadow-[0_20px_40px_-26px_rgb(16_24_20/.35)]">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-jade-soft text-[15px] font-semibold text-jade-deep">SL</span>
+        <span className="mt-3 h-2.5 w-24 rounded-full bg-ink/10" />
+        <span className="mt-2 h-2 w-32 rounded-full bg-ink/[.06]" />
+        <span className="mt-1.5 h-2 w-28 rounded-full bg-ink/[.06]" />
+      </div>
+      <div className={`absolute inset-y-[-10px] left-[52%] right-[-14px] rounded-r-[20px] border-l border-white/80 bg-gradient-to-r from-white/30 to-[#e9ebe7]/90 backdrop-blur-[3px] ${ease} group-hover:translate-x-4`} />
+    </div>
+  );
+}
+function StepMenu() {
+  return (
+    <div className="relative w-[220px]">
+      <div className={`relative z-10 flex items-center gap-3 rounded-[16px] bg-white p-3 shadow-[0_20px_40px_-24px_rgb(16_24_20/.4)] ${ease} group-hover:-translate-y-1`}>
+        <span className="h-11 w-11 shrink-0 rounded-[11px] bg-gradient-to-br from-saffron/50 to-jade/30" />
+        <span className="flex-1 space-y-1.5"><span className="block h-2.5 w-20 rounded-full bg-ink/15" /><span className="block h-2 w-28 rounded-full bg-ink/[.07]" /></span>
+        <span className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-jade text-white ring-4 ring-[#f4f5f3]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5 9-10" /></svg>
+        </span>
+      </div>
+      <div className="mx-4 -mt-2 h-10 rounded-b-[14px] bg-white/70" />
+      <div className="mx-8 -mt-2 h-8 rounded-b-[12px] bg-white/40" />
+    </div>
+  );
+}
+function StepBill() {
+  return (
+    <div className="relative h-[170px] w-[150px]">
+      <div className={`absolute inset-0 -rotate-[10deg] rounded-[18px] bg-white/60 ${ease} group-hover:-rotate-[14deg]`} />
+      <div className={`absolute inset-0 -rotate-[4deg] rounded-[18px] bg-white/80 ${ease} group-hover:-rotate-[7deg]`} />
+      <div className="absolute inset-0 flex flex-col items-center justify-center rounded-[18px] bg-white shadow-[0_20px_40px_-24px_rgb(16_24_20/.4)]">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-jade-soft text-jade">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" /></svg>
+        </span>
+        <span className="mt-4 h-2.5 w-16 rounded-full bg-ink/12 bg-ink/10" />
+        <span className="mt-2 h-2 w-24 rounded-full bg-ink/[.06]" />
+      </div>
+    </div>
+  );
+}
+function StepPaid() {
+  return (
+    <div className="relative h-[150px] w-[230px]">
+      <span className={`absolute left-6 top-3 -rotate-[8deg] rounded-[8px] bg-white px-3 py-1.5 text-[13px] font-medium shadow-[0_8px_20px_-12px_rgb(16_24_20/.4)] ${ease} group-hover:-rotate-[12deg]`}>Paid by UPI ✓</span>
+      <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-[10px] bg-ink px-4 py-2.5 text-[14px] font-semibold text-white shadow-[0_14px_30px_-12px_rgb(16_24_20/.6)]">₹18,420 today</span>
+      <span className={`absolute bottom-3 right-2 rotate-[7deg] rounded-[8px] bg-white px-3 py-1.5 text-[13px] font-medium shadow-[0_8px_20px_-12px_rgb(16_24_20/.4)] ${ease} group-hover:rotate-[11deg]`}>Day closed</span>
+    </div>
   );
 }
 
@@ -342,16 +434,12 @@ function TiltCard({ className, children }: { className?: string; children: React
 export function Only() {
   const [first, second, ...rest] = only;
   return (
-    <section className="py-6 lg:py-10">
-      <div className="relative isolate overflow-hidden bg-ink py-20 text-canvas lg:rounded-[44px] lg:py-28" style={{ marginInline: "clamp(0px, 1.5vw, 24px)" }}>
-        <Mesh tone="dark" />
+    <section className="px-2 py-2 sm:px-3">
+      <div className="relative isolate overflow-hidden rounded-[30px] bg-[#0a0a0a] py-14 text-canvas sm:rounded-[40px] lg:py-24">
         <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
-          <div className="mx-auto max-w-3xl text-center">
-            <Eyebrow className="!text-saffron">Only in Restro</Eyebrow>
-            <RiseText as="h2" onScroll text="Things your current software *doesn't* do." className="mt-4 text-[40px] font-semibold leading-[1] tracking-[-0.045em] sm:text-[56px] lg:text-[68px] [&_.text-jade]:text-saffron" />
-          </div>
-          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:mt-20 lg:grid-cols-6" data-reveal-group>
-            <TiltCard className="sm:col-span-2 lg:col-span-4">
+          <SectionHead dark eyebrow="Only in Restro" title="Things your current software *doesn't* do." />
+          <Swipe dark className="mt-8 lg:mt-12" item="w-[84%] sm:w-[46%]" grid="lg:grid lg:grid-cols-6 lg:gap-4" spans={["lg:col-span-4", ...only.slice(1).map(() => "lg:col-span-2")]}>
+            <TiltCard className="h-full">
               <div className="grid h-full gap-6 sm:grid-cols-[1fr_auto] sm:items-center">
                 <div style={{ transform: "translateZ(30px)" }}>
                   <first.icon size={40} className="text-saffron" />
@@ -363,7 +451,7 @@ export function Only() {
                 </div>
               </div>
             </TiltCard>
-            <TiltCard className="sm:col-span-2 lg:col-span-2">
+            <TiltCard className="h-full">
               <div className="flex h-full flex-col" style={{ transform: "translateZ(30px)" }}>
                 <second.icon size={36} className="text-saffron" />
                 <h3 className="mt-5 text-[22px] font-semibold leading-tight">{second.t}</h3>
@@ -372,7 +460,7 @@ export function Only() {
               </div>
             </TiltCard>
             {rest.map((f) => (
-              <TiltCard key={f.t} className="lg:col-span-2">
+              <TiltCard key={f.t} className="h-full">
                 <div style={{ transform: "translateZ(24px)" }}>
                   <f.icon size={32} className="text-saffron" />
                   <h3 className="mt-5 text-[20px] font-semibold leading-tight">{f.t}</h3>
@@ -380,7 +468,7 @@ export function Only() {
                 </div>
               </TiltCard>
             ))}
-          </div>
+          </Swipe>
         </div>
       </div>
     </section>
@@ -399,41 +487,3 @@ function Wave() {
   );
 }
 
-/* ================= contact ================= */
-export function Contact() {
-  return (
-    <section id="contact" className="relative scroll-mt-20 pb-20 pt-4 lg:pb-28">
-      <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
-        <div className="relative isolate overflow-hidden rounded-[44px] bg-jade px-6 py-16 text-white sm:px-12 lg:px-16 lg:py-24">
-          <Mesh tone="jade" />
-          <div aria-hidden className="pointer-events-none absolute right-10 top-24 hidden rotate-6 lg:block" data-parallax="-25">
-            <div className="glass-dark rounded-[22px] p-2.5"><Receipt /></div>
-          </div>
-          <div aria-hidden className="pointer-events-none absolute bottom-10 right-64 hidden -rotate-6 xl:block" data-parallax="-45">
-            <div className="glass-dark rounded-[30px] p-2.5"><UpiCard className="!shadow-none" /></div>
-          </div>
-          <div className="relative max-w-2xl">
-            <RiseText as="h2" onScroll text="Want Restro for your *restaurant?*" className="text-[42px] font-semibold leading-[1] tracking-[-0.045em] sm:text-[60px] lg:text-[72px] [&_.text-jade]:text-saffron-soft" />
-            <p data-reveal className="mt-6 max-w-xl text-[17.5px] leading-relaxed text-white/80">
-              Talk to us. We create your account, and help you add your menu, tables and staff. You get your login the same day.
-            </p>
-            <div data-reveal className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {CONTACT_WA && (
-                <Magnetic block>
-                  <a href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi, I'd like Restro for my restaurant.")}`} target="_blank" rel="noreferrer" className="group flex h-14 items-center justify-between gap-3 rounded-full bg-white pl-6 pr-2 text-[16.5px] font-semibold text-jade-deep">
-                    Message us on WhatsApp
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow /></span>
-                  </a>
-                </Magnetic>
-              )}
-              {CONTACT_EMAIL && (
-                <a href={`mailto:${CONTACT_EMAIL}`} className="glass-dark flex h-14 items-center justify-center rounded-full px-6 text-[16.5px] font-semibold transition hover:bg-white/10">{CONTACT_EMAIL}</a>
-              )}
-              <Link href="/login" className="glass-dark flex h-14 items-center justify-center rounded-full px-7 text-[16.5px] font-semibold transition hover:bg-white/10">Already with us? Sign in</Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}

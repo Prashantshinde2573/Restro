@@ -1,7 +1,9 @@
 import { PricingTable } from "@/components/pricing";
 import { SiteFooter, SiteNav } from "@/components/site/chrome";
-import { Mesh } from "@/components/site/hero";
-import { RiseText, SiteMotion } from "@/components/site/motion";
+import { HelpChat } from "@/components/site/chat";
+import { SiteMotion } from "@/components/site/motion";
+import { SectionHead } from "@/components/site/head";
+import { MobileCta } from "@/components/site/chrome";
 import { plans } from "@/lib/plans";
 
 export const metadata = { title: "Pricing" };
@@ -24,22 +26,19 @@ export default function PricingPage() {
       <div className="min-h-dvh overflow-x-clip bg-canvas">
         <SiteNav />
         <main>
-          <section className="relative isolate overflow-hidden pb-20 pt-32 lg:pb-28 lg:pt-40">
-            <Mesh top />
+          <section className="relative isolate overflow-hidden pb-14 pt-28 lg:pb-28 lg:pt-40">
             <div className="relative mx-auto max-w-[1240px] px-5 text-center lg:px-8">
-              <div data-reveal className="text-[13px] font-semibold uppercase tracking-[0.18em] text-jade">Pricing</div>
-              <RiseText text="Pick a *plan.*" className="mt-4 text-[52px] font-semibold leading-[0.95] tracking-[-0.045em] sm:text-[76px] lg:text-[96px]" />
-              <p data-reveal className="mx-auto mt-5 max-w-lg text-[17.5px] text-muted">Change or cancel any time. Prices are per outlet.</p>
-              <div className="mt-12 text-left lg:mt-16">
+              <SectionHead eyebrow="Pricing" title="Pick a *plan.*" sub="Change or cancel any time. Prices are per outlet." />
+              <div className="mt-6 text-left lg:mt-8">
                 <PricingTable />
               </div>
             </div>
           </section>
 
-          <section className="pb-20 lg:pb-28">
+          <section className="pb-14 lg:pb-28">
             <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
-              <RiseText as="h2" onScroll text="Compare *plans.*" className="text-[40px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[56px]" />
-              <div data-reveal className="glass mt-10 overflow-x-auto rounded-[28px] lg:mt-12">
+              <SectionHead eyebrow="Side by side" title="Compare *plans.*" />
+              <div data-reveal className="glass mt-8 overflow-x-auto rounded-[28px] lg:mt-12">
                 <table className="w-full min-w-[720px] text-left text-[14.5px]">
                   <thead>
                     <tr className="border-b border-line">
@@ -74,6 +73,8 @@ export default function PricingPage() {
           </section>
         </main>
         <SiteFooter />
+        <MobileCta />
+        <HelpChat />
       </div>
     </SiteMotion>
   );

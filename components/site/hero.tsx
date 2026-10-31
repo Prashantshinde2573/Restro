@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconArrow, IconKitchen, IconOffline } from "./icons";
 import { KotTicket, UpiCard } from "./mockups";
+import { SectionHead } from "./head";
+import { Swipe } from "./swipe";
 import { RiseText, gsap, reducedMotion, useIsoLayoutEffect } from "./motion";
 
 export function Mesh({ tone = "light", solid = tone !== "light", top = false }: { tone?: "light" | "dark" | "jade"; solid?: boolean; top?: boolean }) {
@@ -101,33 +103,6 @@ function Backdrop() {
   );
 }
 
-/** Pill button whose label rolls up on hover. */
-function RollButton({ href, children, className }: { href: string; children: string; className?: string }) {
-  return (
-    <a href={href} className={`btn-roll group relative inline-flex h-[52px] items-center overflow-hidden rounded-full px-7 text-[15.5px] font-semibold ${className ?? ""}`}>
-      <span className="relative block overflow-hidden">
-        <span className="block transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-translate-y-full">{children}</span>
-        <span aria-hidden className="absolute inset-0 block translate-y-full transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:translate-y-0">{children}</span>
-      </span>
-    </a>
-  );
-}
-
-/** Round arrow button: the arrow slips out to the top-right and a new one slides in. */
-function ArrowButton({ href, label, className }: { href: string; label: string; className?: string }) {
-  const arrow = "transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]";
-  return (
-    <a href={href} aria-label={label} className={`group relative flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full ${className ?? ""}`}>
-      <span className={`-rotate-45 ${arrow} group-hover:translate-x-[150%] group-hover:-translate-y-[150%]`}>
-        <IconArrow size={18} />
-      </span>
-      <span aria-hidden className={`absolute -rotate-45 -translate-x-[150%] translate-y-[150%] ${arrow} group-hover:translate-x-0 group-hover:translate-y-0`}>
-        <IconArrow size={18} />
-      </span>
-    </a>
-  );
-}
-
 export function Hero() {
   const section = useRef<HTMLElement>(null);
 
@@ -152,8 +127,8 @@ export function Hero() {
         {HERO_VIDEO && <BackgroundVideo src={HERO_VIDEO} />}
       </div>
       {/* darken for the white type: top for the nav, bottom-left for the headline */}
-      <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgb(0_0_0/.5)_0%,rgb(0_0_0/.12)_26%,rgb(0_0_0/.2)_55%,rgb(0_0_0/.75)_100%)]" />
-      <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(90%_70%_at_0%_100%,rgb(0_0_0/.5),transparent_65%)]" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgb(0_0_0/.72)_0%,rgb(0_0_0/.35)_16%,rgb(0_0_0/.08)_34%,rgb(0_0_0/.18)_60%,rgb(0_0_0/.72)_100%)]" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(0_0_0/.78)_0%,rgb(0_0_0/.5)_28%,rgb(0_0_0/.15)_55%,transparent_75%)]" />
 
       <div className="mx-auto mt-auto grid w-full max-w-[1400px] gap-8 px-5 pb-8 pt-32 sm:px-8 sm:pb-12 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-12 lg:px-14 lg:pb-16">
         <div data-hero-copy className="max-w-[680px]">
@@ -163,16 +138,16 @@ export function Hero() {
           </div>
           <RiseText
             text="Run the whole restaurant from one calm screen."
-            className="text-balance mt-5 text-[40px] font-medium leading-[1.02] tracking-[-0.04em] sm:text-[56px] lg:text-[66px] xl:text-[74px]"
+            className="text-balance mt-5 text-[36px] font-medium leading-[1.04] tracking-[-0.04em] sm:text-[48px] lg:text-[56px] xl:text-[62px]"
           />
           <p data-hero-fade className="mt-5 max-w-[520px] text-[16.5px] leading-relaxed text-white/80 lg:text-[18px]">
             Billing, kitchen, tables, stock, staff and guests in one app. Every morning Restro tells you what to fix, in plain words.
           </p>
           <div data-hero-fade className="mt-8 flex items-center gap-2">
-            <RollButton href="#contact" className="bg-white text-ink shadow-[0_16px_32px_-18px_rgb(0_0_0/.7)] transition-[background-color,transform] duration-300 hover:bg-jade-soft active:scale-[.97]">
-              Get Restro
-            </RollButton>
-            <ArrowButton href="#features" label="See features" className="bg-white text-ink transition-[background-color,transform] duration-300 hover:bg-jade-soft active:scale-[.94]" />
+            <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink shadow-[0_16px_32px_-18px_rgb(0_0_0/.7)] transition hover:bg-jade-soft">
+              Book a free demo
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
+            </a>
             <Link href="/login" className="group ml-3 hidden h-[52px] items-center text-[15px] font-semibold text-white/90 sm:flex">
               <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat pb-0.5 transition-[background-size] duration-500 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:bg-[length:100%_1px]">
                 Sign in
@@ -181,59 +156,185 @@ export function Hero() {
           </div>
         </div>
           {/* white cards, bottom-right */}
-          <div className="grid w-full grid-cols-2 gap-2.5 text-ink sm:max-w-[440px] lg:w-[440px]">
-            <a data-hero-card href="#features" className="group relative col-span-2 flex min-h-[200px] overflow-hidden rounded-[22px] bg-white p-5 shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
+          <Swipe from="md" dark item="w-[80%]" grid="md:grid md:grid-cols-2 md:gap-2.5" spans={["md:col-span-2", "", ""]} className="w-full text-ink md:max-w-[380px] lg:w-[380px]">
+            <a data-hero-card href="#features" className="group relative flex min-h-[150px] overflow-hidden rounded-[20px] bg-white p-4 sm:min-h-[170px] shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
               <div className="relative z-10 flex max-w-[56%] flex-col">
-                <div className="text-[19px] font-semibold leading-[1.1] tracking-[-0.02em]">Every bill, a UPI QR</div>
-                <p className="mt-2 text-[13px] leading-snug text-muted">With the exact amount filled in. Guests scan, you get paid.</p>
+                <div className="text-[16.5px] font-semibold leading-[1.1] tracking-[-0.02em]">Every bill, a UPI QR</div>
+                <p className="mt-1.5 text-[12px] leading-snug text-muted">With the exact amount filled in. Guests scan, you get paid.</p>
                 <span className="mt-auto flex items-center gap-2 pt-4">
                   <span className="rounded-full bg-ink px-3.5 py-2 text-[12px] font-semibold text-white transition group-hover:bg-jade">Learn more</span>
                   <span className="flex h-8 w-8 -rotate-45 items-center justify-center rounded-full ring-1 ring-line transition-transform duration-500 group-hover:rotate-0"><IconArrow size={14} /></span>
                 </span>
               </div>
               <div className="absolute -right-3 top-4 rotate-[8deg] transition-transform duration-700 group-hover:rotate-[2deg] group-hover:scale-105">
-                <UpiCard className="!w-[150px] !shadow-[0_24px_40px_-18px_rgb(16_24_20/.45)]" />
+                <UpiCard className="!w-[128px] !shadow-[0_24px_40px_-18px_rgb(16_24_20/.45)]" />
               </div>
               <div aria-hidden className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full bg-jade-soft blur-2xl" />
             </a>
-            <div data-hero-card className="relative flex min-h-[150px] flex-col overflow-hidden rounded-[22px] bg-white p-4 shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
+            <div data-hero-card className="relative flex min-h-[124px] flex-col overflow-hidden rounded-[20px] bg-white p-3.5 shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
               <div aria-hidden className="absolute -right-6 -top-4 origin-top-right rotate-[-6deg] scale-[.62] opacity-90">
                 <KotTicket className="!shadow-[0_14px_28px_-14px_rgb(16_24_20/.4)]" />
               </div>
               <span className="text-jade"><IconKitchen /></span>
-              <div className="mt-auto text-[24px] font-semibold leading-none tracking-[-0.03em]">KOT</div>
-              <div className="mt-1.5 text-[12px] leading-snug text-muted">Straight to the kitchen the moment you bill</div>
+              <div className="mt-auto text-[20px] font-semibold leading-none tracking-[-0.03em]">KOT</div>
+              <div className="mt-1 text-[11.5px] leading-snug text-muted">Straight to the kitchen the moment you bill</div>
             </div>
-            <div data-hero-card className="flex min-h-[150px] flex-col rounded-[22px] bg-white p-4 shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
+            <div data-hero-card className="flex min-h-[124px] flex-col rounded-[20px] bg-white p-3.5 shadow-[0_30px_60px_-30px_rgb(0_0_0/.6)]">
               <div className="flex items-center justify-between">
                 <span className="text-jade"><IconOffline /></span>
                 <span className="flex items-center gap-1.5 rounded-full bg-jade-soft px-2 py-0.5 text-[10.5px] font-semibold text-jade-deep">
                   <span className="h-1.5 w-1.5 rounded-full bg-jade" /> Live
                 </span>
               </div>
-              <div className="mt-auto border-t border-line pt-3 text-[24px] font-semibold leading-none tracking-[-0.03em]">Offline</div>
-              <div className="mt-1.5 text-[12px] leading-snug text-muted">Billing keeps going when the Wi-Fi drops</div>
+              <div className="mt-auto border-t border-line pt-2.5 text-[20px] font-semibold leading-none tracking-[-0.03em]">Offline</div>
+              <div className="mt-1 text-[11.5px] leading-snug text-muted">Billing keeps going when the Wi-Fi drops</div>
             </div>
-          </div>
+          </Swipe>
       </div>
     </section>
   );
 }
 
 
-const outletKinds = ["Cafés", "Restaurants", "Cloud kitchens", "Bakeries", "Quick service", "Bars & lounges"];
+const u = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&q=70&w=720&h=880`;
+// Photos from Unsplash (free under the Unsplash License).
+const kinds = [
+  { t: "Cafés", d: "Quick bills, loyalty and a QR menu", img: u("photo-1759593914906-4ea0b1261ba4") },
+  { t: "Restaurants", d: "Tables, captains, KOTs and split bills", img: u("photo-1742281257707-0c7f7e5ca9c6") },
+  { t: "Cloud kitchens", d: "Swiggy and Zomato orders on one screen", img: u("photo-1622021142947-da7dedc7c39a") },
+  { t: "Bakeries", d: "Counter billing and what to bake tomorrow", img: u("photo-1687722157890-9f58d5cd26d4") },
+  { t: "Quick service", d: "Fast counter billing in a few taps", img: u("photo-1758578484459-677bfbbd00f7") },
+  { t: "Bars & lounges", d: "Running tabs per table, split at the end", img: u("photo-1756522074787-c750cae5e6aa") },
+];
 
-/** The white strip under the hero (where the reference has "As seen in"). */
-export function MadeFor() {
+function KindCard({ k, i }: { k: (typeof kinds)[number]; i: number }) {
+  const [broken, setBroken] = useState(false);
+  const img = useRef<HTMLImageElement>(null);
+  // an image that failed before the page woke up never fires onError
+  useEffect(() => {
+    const el = img.current;
+    if (el?.complete && el.naturalWidth === 0) setBroken(true);
+  }, []);
   return (
-    <section className="relative bg-canvas pb-16 pt-14 lg:pb-20 lg:pt-20">
-      <p data-reveal className="text-center text-[17px] font-medium tracking-[-0.01em] text-ink/80">Made for every kind of kitchen</p>
-      <div data-reveal-group className="mx-auto mt-8 flex max-w-[1400px] flex-wrap items-center justify-center gap-x-9 gap-y-3 px-5 sm:gap-x-12">
-        {outletKinds.map((k) => (
-          <span key={k} className="whitespace-nowrap text-[21px] font-semibold tracking-[-0.03em] text-ink/30 transition-colors hover:text-jade sm:text-[24px] xl:text-[27px]">
-            {k}
+    <div className={`kind-card group w-[250px] shrink-0 sm:w-[290px] ${i % 2 ? "translate-y-8" : ""}`}>
+      <div className="glass glass-shine rounded-[30px] p-2.5 transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-translate-y-2 group-hover:shadow-[0_40px_70px_-35px_rgb(16_24_20/.45)]">
+        <div className="relative h-[300px] overflow-hidden rounded-[22px] bg-gradient-to-br from-jade-soft to-saffron/30 sm:h-[340px]">
+          {!broken && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              ref={img}
+              src={k.img}
+              alt={k.t}
+              loading="lazy"
+              decoding="async"
+              onError={() => setBroken(true)}
+              className="h-full w-full object-cover text-transparent transition-transform duration-[1.2s] ease-[cubic-bezier(.2,.8,.2,1)] group-hover:scale-[1.07]"
+            />
+          )}
+          <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent" />
+          <span className="absolute left-3 top-3 rounded-full border border-white/40 bg-white/25 px-2.5 py-1 text-[11.5px] font-semibold text-white backdrop-blur-md">0{(i % kinds.length) + 1}</span>
+        </div>
+        <div className="flex items-end justify-between gap-3 px-3 pb-2 pt-4">
+          <div className="min-w-0">
+            <div className="text-[20px] font-semibold leading-tight tracking-[-0.02em]">{k.t}</div>
+            <div className="mt-1 text-[13.5px] leading-snug text-ink/55">{k.d}</div>
+          </div>
+          <span className="flex h-9 w-9 shrink-0 -rotate-45 items-center justify-center rounded-full bg-white/70 ring-1 ring-line transition-[transform,background-color,color] duration-500 group-hover:rotate-0 group-hover:bg-jade group-hover:text-white">
+            <IconArrow size={15} />
           </span>
-        ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KindTile({ k }: { k: (typeof kinds)[number] }) {
+  const [broken, setBroken] = useState(false);
+  const img = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const el = img.current;
+    if (el?.complete && el.naturalWidth === 0) setBroken(true);
+  }, []);
+  return (
+    <div className="glass rounded-[22px] p-1.5">
+      <div className="relative aspect-[4/3.4] overflow-hidden rounded-[17px] bg-gradient-to-br from-jade-soft to-saffron/30">
+        {!broken && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img ref={img} src={k.img} alt={k.t} loading="lazy" decoding="async" onError={() => setBroken(true)} className="h-full w-full object-cover text-transparent" />
+        )}
+      </div>
+      <div className="px-2 pb-2 pt-2.5">
+        <div className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">{k.t}</div>
+        <div className="mt-0.5 text-[12px] leading-snug text-ink/55">{k.d}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Made for every kind of kitchen": glass cards drifting by on their own, forever.
+ * Scrolling the page pushes them faster (and leans them a little); hovering slows them down.
+ */
+export function MadeFor() {
+  const track = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = track.current;
+    const box = wrap.current;
+    if (!el || !box || reducedMotion()) return;
+    let x = 0;
+    let boost = 0;
+    let slow = 1;
+    let slowTo = 1;
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const dy = Math.abs(window.scrollY - lastY);
+      lastY = window.scrollY;
+      boost = Math.min(boost + dy * 0.08, 14);
+    };
+    const enter = () => (slowTo = 0.15);
+    const leave = () => (slowTo = 1);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    box.addEventListener("pointerenter", enter);
+    box.addEventListener("pointerleave", leave);
+    const tick = (_t: number, dt: number) => {
+      const f = Math.min(dt, 50) / 16.67;
+      slow += (slowTo - slow) * 0.08 * f;
+      boost *= Math.pow(0.92, f);
+      x -= (0.7 + boost) * slow * f;
+      const half = el.scrollWidth / 2;
+      if (half > 0 && -x >= half) x += half;
+      gsap.set(el, { x, skewX: -Math.min(boost, 10) * 0.35 });
+    };
+    gsap.ticker.add(tick);
+    return () => {
+      gsap.ticker.remove(tick);
+      window.removeEventListener("scroll", onScroll);
+      box.removeEventListener("pointerenter", enter);
+      box.removeEventListener("pointerleave", leave);
+    };
+  }, []);
+
+  return (
+    <section id="kinds" className="relative isolate scroll-mt-20 overflow-hidden bg-canvas py-14 lg:pb-4 lg:pt-28">
+      <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
+        <SectionHead eyebrow="Who it’s for" title="Made for every kind of *kitchen.*" />
+        {/* phones and tablets: a simple grid */}
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:hidden" data-reveal-group>
+          {kinds.map((k) => (
+            <KindTile key={k.t} k={k} />
+          ))}
+        </div>
+      </div>
+      <div
+        ref={wrap}
+        className="kinds-mask relative mt-2 hidden overflow-x-auto lg:block overflow-y-hidden pb-24 pt-10 [scrollbar-width:none] motion-safe:overflow-x-hidden lg:mt-4 [&::-webkit-scrollbar]:hidden"
+      >
+        <div ref={track} className="flex w-max gap-5 px-5 will-change-transform">
+          {[...kinds, ...kinds].map((k, i) => (
+            <KindCard key={i} k={k} i={i} />
+          ))}
+        </div>
       </div>
     </section>
   );

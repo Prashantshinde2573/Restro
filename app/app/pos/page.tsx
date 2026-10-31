@@ -215,7 +215,7 @@ function PosScreen() {
     <div className="flex min-h-dvh lg:h-[calc(100dvh-24px)] lg:min-h-0">
       {/* Menu side */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-20 space-y-3 bg-canvas/90 px-4 pb-3 pt-3 backdrop-blur-xl lg:static lg:bg-transparent lg:px-8 lg:pt-8">
+        <div className="sticky top-[52px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:static lg:bg-transparent lg:px-8 lg:pt-8">
           <div className="flex items-center justify-between gap-3">
             <h1 className="large-title">{t("pos")}</h1>
             {voiceOn && (

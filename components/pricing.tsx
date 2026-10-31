@@ -97,7 +97,7 @@ export function PricingTable() {
           ))}
         </div>
       </div>
-      <div className="mt-10 grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-4" data-reveal-group>
+      <div className="mt-6 grid items-stretch gap-4 md:grid-cols-2 lg:mt-8 lg:grid-cols-4" data-reveal-group>
         {allPlans.map((p) => (
           <PlanCard key={p.id} p={p} cycle={cycle} />
         ))}

@@ -137,7 +137,7 @@ function Badge({ n }: { n: number }) {
   );
 }
 
-function OutletSwitcher() {
+function OutletSwitcher({ compact }: { compact?: boolean }) {
   const account = useAccount();
   const me = useMe();
   const outlets = useOutlets().filter((o) => inOutlet(me, o.id));
@@ -146,6 +146,11 @@ function OutletSwitcher() {
   const initials = account.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
     <>
+      {compact ? (
+        <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} aria-label={`Outlet: ${current.name}`} className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-ink text-[12.5px] font-bold text-canvas">
+          {initials}
+        </button>
+      ) : (
       <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} className="flex w-full items-center gap-3 rounded-ctl px-2 py-2 text-left hover:bg-surface/60 disabled:hover:bg-transparent">
         <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink text-[13px] font-bold text-canvas">{initials}</span>
         <span className="min-w-0 flex-1">
@@ -154,6 +159,7 @@ function OutletSwitcher() {
         </span>
         {(outlets.length > 1 || isOwner(me)) && <ChevronsUpDown size={15} className="text-faint" />}
       </button>
+      )}
       <Sheet open={open} onClose={() => setOpen(false)} title="Outlet">
         <div className="overflow-hidden rounded-group bg-surface">
           {outlets.map((o) => (
@@ -545,6 +551,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Phone only: app name in the middle (like Instagram), outlet on the left, you on the right. */
+function MobileTopBar() {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 4);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  return (
+    <div className={clsx("pt-safe sticky top-0 z-30 bg-canvas/85 backdrop-blur-xl transition-[border-color] lg:hidden", scrolled ? "border-b border-line/70" : "border-b border-transparent")}>
+      <div className="grid h-[52px] grid-cols-[1fr_auto_1fr] items-center px-4">
+        <div className="justify-self-start"><OutletSwitcher compact /></div>
+        <Link href="/app" aria-label="Restro home" className="justify-self-center">
+          <Wordmark className="text-[20px] tracking-[-0.03em]" />
+        </Link>
+        <div className="justify-self-end"><MeButton compact /></div>
+      </div>
+    </div>
+  );
+}
+
 function AppFrame({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh lg:bg-sunken">
@@ -554,6 +582,7 @@ function AppFrame({ children }: { children: ReactNode }) {
       <main className="min-w-0 flex-1 lg:py-3 lg:pr-3">
         <div className="min-h-dvh lg:min-h-[calc(100dvh-24px)] lg:rounded-[28px] lg:bg-canvas">
           <ClientOnly>
+            <MobileTopBar />
             <RenewBanner />
             <RouteGate>{children}</RouteGate>
           </ClientOnly>
@@ -566,12 +595,7 @@ function AppFrame({ children }: { children: ReactNode }) {
   );
 }
 
+/** Kept for old imports: the phone top bar now shows who is signed in. */
 export function UserChip() {
-  return (
-    <ClientOnly fallback={null}>
-      <span className="lg:hidden">
-        <MeButton compact />
-      </span>
-    </ClientOnly>
-  );
+  return null;
 }
