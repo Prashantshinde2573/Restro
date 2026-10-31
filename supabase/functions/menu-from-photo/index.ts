@@ -28,7 +28,15 @@ type MemberData = { id: string; role?: string; active?: boolean; perms?: string[
 const DAILY_PHOTOS = 20; // per restaurant per day
 const MAX_PHOTOS = 6; // per request
 const MAX_B64 = 6_000_000; // ~4.5 MB per photo after base64
-const MODELS = [Deno.env.get("GEMINI_MODEL"), "gemini-flash-latest", "gemini-2.5-flash"].filter(Boolean) as string[];
+// Fast, non-"thinking" settings first: reading a menu doesn't need long reasoning,
+// and the function has to answer within Supabase's 150 s limit.
+const MODELS: { name: string; thinking?: Record<string, unknown> }[] = [
+  ...(Deno.env.get("GEMINI_MODEL") ? [{ name: Deno.env.get("GEMINI_MODEL")! }] : []),
+  { name: "gemini-2.5-flash", thinking: { thinkingBudget: 0 } },
+  { name: "gemini-flash-latest", thinking: { thinkingLevel: "low" } },
+  { name: "gemini-2.5-flash-lite", thinking: { thinkingBudget: 0 } },
+];
+const DEADLINE_MS = 135_000; // stop trying before Supabase's 150 s limit
 const KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 
 const PROMPT = `You are reading photos of one restaurant or café menu in India.
@@ -75,35 +83,57 @@ const SCHEMA = {
 type Photo = { mime: string; data: string };
 
 async function gemini(photos: Photo[]) {
+  const started = Date.now();
+  const parts = [{ text: PROMPT }, ...photos.map((p) => ({ inline_data: { mime_type: p.mime, data: p.data } }))];
   let last = "";
-  for (const model of MODELS) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": KEY },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: PROMPT }, ...photos.map((p) => ({ inline_data: { mime_type: p.mime, data: p.data } }))] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0 },
-      }),
-    });
-    if (r.status === 404) {
-      last = `model ${model} not found`;
-      continue; // try the next model name
-    }
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const msg = j?.error?.message ?? `Gemini error ${r.status}`;
-      if (r.status === 429) throw new Error("The menu reader is busy (Gemini limit reached). Try again in a minute.");
-      if (r.status === 400 && /API key/i.test(msg)) throw new Error("The Gemini key isn't working. Check GEMINI_API_KEY in Supabase.");
-      throw new Error(msg);
-    }
-    const text = j?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
-    try {
-      return { model, data: JSON.parse(text) };
-    } catch {
-      throw new Error("Couldn't read this photo. Try a clearer, straight photo in good light.");
+  for (const m of MODELS) {
+    for (const thinking of m.thinking ? [m.thinking, undefined] : [undefined]) {
+      const left = DEADLINE_MS - (Date.now() - started);
+      if (left < 15_000) throw new Error("Reading took too long. Try fewer photos at a time (1–2 pages).");
+      const t0 = Date.now();
+      let r: Response;
+      try {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m.name}:generateContent`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": KEY },
+          signal: AbortSignal.timeout(Math.min(left - 5_000, 90_000)),
+          body: JSON.stringify({
+            contents: [{ role: "user", parts }],
+            generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0, maxOutputTokens: 16_000, ...(thinking ? { thinkingConfig: thinking } : {}) },
+          }),
+        });
+      } catch (e) {
+        console.log(`gemini ${m.name}: no answer after ${Date.now() - t0} ms`, String(e));
+        last = `${m.name} timed out`;
+        break; // next model
+      }
+      const j = await r.json().catch(() => ({}));
+      console.log(`gemini ${m.name}${thinking ? " (fast)" : ""}: ${r.status} in ${Date.now() - t0} ms`, r.ok ? "" : JSON.stringify(j?.error ?? {}).slice(0, 300));
+      if (r.status === 404) {
+        last = `model ${m.name} not found`;
+        break; // next model
+      }
+      if (r.status === 400 && thinking && /think/i.test(j?.error?.message ?? "")) continue; // same model, without the setting
+      if (!r.ok) {
+        const msg = j?.error?.message ?? `Gemini error ${r.status}`;
+        if (r.status === 429) throw new Error("The menu reader is busy (Gemini limit reached). Try again in a minute.");
+        if ((r.status === 400 || r.status === 403) && /API key|permission|PERMISSION/i.test(msg)) throw new Error("The Gemini key isn't working. Check GEMINI_API_KEY in Supabase.");
+        if (r.status >= 500) {
+          last = `${m.name}: ${msg}`;
+          break; // next model
+        }
+        throw new Error(msg);
+      }
+      const text = j?.candidates?.[0]?.content?.parts?.map((p: { text?: string; thought?: boolean }) => (p.thought ? "" : p.text ?? "")).join("") ?? "";
+      try {
+        return { model: m.name, data: JSON.parse(text) };
+      } catch {
+        console.log(`gemini ${m.name}: not JSON`, j?.candidates?.[0]?.finishReason, text.slice(0, 200));
+        throw new Error("Couldn't read this photo. Try a clearer, straight photo in good light, or fewer pages at a time.");
+      }
     }
   }
-  throw new Error(`No Gemini model available (${last})`);
+  throw new Error(`The menu reader isn't answering right now (${last}). Try again in a minute.`);
 }
 
 const clean = (s: unknown, max = 80) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -139,6 +169,7 @@ Deno.serve(async (req) => {
       allowed = !!me && me.active !== false && (me.role === "owner" || (me.perms ?? []).includes("menu"));
     }
     if (!allowed) return json({ error: "You can't edit this menu" }, 403);
+    console.log(`read ${photos.length} photo(s), ${Math.round(photos.reduce((n, p) => n + p.data.length, 0) / 1024)} KB, rid ${rid}`);
 
     // daily limit (India date)
     const day = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);

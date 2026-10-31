@@ -29,7 +29,7 @@ async function prepare(file: File): Promise<Shot> {
     i.onerror = () => bad(new Error("This photo can't be opened. Use a JPG or PNG."));
     i.src = url;
   });
-  const max = 2000;
+  const max = 1600;
   const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
   const c = document.createElement("canvas");
   c.width = Math.round(img.naturalWidth * k);
