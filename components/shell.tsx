@@ -34,6 +34,7 @@ import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
+import { FullLoader } from "./loader";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
@@ -474,9 +475,7 @@ function Centered({ children }: { children: ReactNode }) {
 
 export function Spinner() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-canvas" aria-busy="true">
-      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-jade" />
-    </div>
+    <FullLoader />
   );
 }
 

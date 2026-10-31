@@ -22,11 +22,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Public pages animate in. Hide those elements before the first paint only if motion is
-            allowed; if the page scripts never start, show everything after 3 s. */}
+            allowed; if the page scripts never start, show everything after 3 s.
+            First visit to the home or pricing page in a tab: show the loader for one turn (1.5 s). */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var d=document.documentElement;if(!matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('motion-ok');setTimeout(function(){if(!d.classList.contains('motion-ready'))d.classList.remove('motion-ok')},3000)}}catch(e){}",
+              "try{var d=document.documentElement;if(!matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('motion-ok');setTimeout(function(){if(!d.classList.contains('motion-ready'))d.classList.remove('motion-ok')},3000);var p=location.pathname;if((p==='/'||p==='/pricing')&&!sessionStorage.getItem('restropi.splash')){sessionStorage.setItem('restropi.splash','1');d.classList.add('splash');window.__splashUntil=performance.now()+1500}}}catch(e){}",
           }}
         />
       </head>

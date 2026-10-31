@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
 import {
   Banknote,
@@ -414,9 +415,7 @@ export default function GuestOrder() {
 
   if (cloudLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-canvas" aria-busy="true">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-line border-t-jade" />
-      </div>
+      <FullLoader label="Loading menu" />
     );
   }
   if (cloudErr || !account.name || (!t && !counter)) {

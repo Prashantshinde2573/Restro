@@ -354,3 +354,45 @@ body {
   from { opacity: 0; transform: translateY(24px) scale(.98); }
   to { opacity: 1; transform: none; }
 }
+
+/* ---------- Loader: spoon ⇄ fork (components/loader.tsx) ---------- */
+.ck { --ck-d: 1.5s; overflow: visible; }
+.ck-spoon { fill: rgb(var(--ink)); stroke: rgb(var(--ink)); }
+.ck-fork { stroke: rgb(var(--ink)); }
+.ck-swoosh { stroke: rgb(var(--jade)); }
+.ck-spin { animation: ck-spin var(--ck-d) infinite; }
+.ck-spoon { animation: ck-spoon var(--ck-d) linear infinite; }
+.ck-fork { opacity: 0; animation: ck-fork var(--ck-d) linear infinite; }
+.ck-swoosh path { stroke-dasharray: 0 200; opacity: 0; animation: ck-swoosh var(--ck-d) cubic-bezier(0.3, 0, 0.3, 1) infinite; }
+@keyframes ck-spin {
+  0% { transform: rotate(0deg); animation-timing-function: cubic-bezier(0.4, 0, 0.7, 1); }
+  26.5% { transform: rotate(183deg); animation-timing-function: cubic-bezier(0.4, 0, 0.5, 1); }
+  44% { transform: rotate(180deg); }
+  50% { transform: rotate(180deg); animation-timing-function: cubic-bezier(0.4, 0, 0.7, 1); }
+  76.5% { transform: rotate(363deg); animation-timing-function: cubic-bezier(0.4, 0, 0.5, 1); }
+  94%, 100% { transform: rotate(360deg); }
+}
+@keyframes ck-spoon { 0%, 14.6% { opacity: 1; } 14.7%, 64.6% { opacity: 0; } 64.7%, 100% { opacity: 1; } }
+@keyframes ck-fork { 0%, 14.6% { opacity: 0; } 14.7%, 64.6% { opacity: 1; } 64.7%, 100% { opacity: 0; } }
+@keyframes ck-swoosh {
+  0%, 5.9% { stroke-dasharray: 0 200; stroke-dashoffset: 0; opacity: 0; }
+  6% { opacity: 1; }
+  21.6% { stroke-dasharray: 80 200; stroke-dashoffset: 0; }
+  41.1% { opacity: 1; }
+  41.2% { stroke-dasharray: 0 200; stroke-dashoffset: -80; opacity: 0; }
+  55.9% { stroke-dasharray: 0 200; stroke-dashoffset: 0; opacity: 0; }
+  56% { opacity: 1; }
+  71.6% { stroke-dasharray: 80 200; stroke-dashoffset: 0; }
+  91.1% { opacity: 1; }
+  91.2%, 100% { stroke-dasharray: 0 200; stroke-dashoffset: -80; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ck-spin, .ck-fork, .ck-swoosh path { animation: none; }
+  .ck-spoon { animation: ck-breathe 1.6s ease-in-out infinite; }
+  @keyframes ck-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+}
+
+/* website first-load screen: shown by the head script, fades by itself (no JS needed) */
+#site-splash { display: none; }
+html.splash #site-splash { display: flex; animation: splash-out 0.4s ease 1.5s forwards; }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; } }

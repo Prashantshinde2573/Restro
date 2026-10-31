@@ -8,6 +8,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
+import { CookingLoader } from "../loader";
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 if (typeof window !== "undefined") gsap.registerPlugin(ScrollTrigger);
@@ -116,7 +117,36 @@ export function SiteMotion({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <LenisCtx.Provider value={lenis}>{children}</LenisCtx.Provider>;
+  // First visit in a tab: the loader shows for one turn (the head script in
+  // app/layout.tsx decides; CSS fades it out by itself). Hold the page's entrance
+  // animations until then so they play in view, not under the loader.
+  useIsoLayoutEffect(() => {
+    const d = document.documentElement;
+    const until = (window as Window & { __splashUntil?: number }).__splashUntil;
+    if (!d.classList.contains("splash") || !until) return;
+    const left = until - performance.now();
+    if (left <= 0) {
+      d.classList.remove("splash");
+      return;
+    }
+    gsap.globalTimeline.pause();
+    const t1 = setTimeout(() => gsap.globalTimeline.resume(), Math.max(0, left - 150));
+    const t2 = setTimeout(() => d.classList.remove("splash"), left + 500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      gsap.globalTimeline.resume();
+    };
+  }, []);
+
+  return (
+    <LenisCtx.Provider value={lenis}>
+      <div id="site-splash" aria-hidden className="fixed inset-0 z-[100] items-center justify-center bg-canvas">
+        <CookingLoader size={80} label="Restropi" />
+      </div>
+      {children}
+    </LenisCtx.Provider>
+  );
 }
 
 /** Headline that rises in word by word (on load, or when scrolled to). */
