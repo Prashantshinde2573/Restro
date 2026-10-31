@@ -1,9 +1,9 @@
-# Supabase backend (project: Rastropi-in, ref rzzhslbotgumhfvkfgvo)
+# Supabase backend (project: Restropi-in, ref rzzhslbotgumhfvkfgvo)
 
 Already applied to the live project — nothing to run here. Kept for the record.
 
 ## Who signs in
-- **Super admin** (the Rastropi team): email + password. Listed in `platform_admins`.
+- **Super admin** (the Restropi team): email + password. Listed in `platform_admins`.
   Opens `/admin`: adds restaurants (creates the owner login with a temporary
   password), changes plan and renewal date, suspends, resets owner passwords, deletes.
 - **Owner**: email + password made by the super admin. Must set their own password

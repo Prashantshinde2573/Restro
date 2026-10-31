@@ -1,22 +1,25 @@
 // Product pictures for the website, drawn in HTML/CSS (sharp at any size,
-// no image downloads). They show Rastropi's real screens in miniature.
+// no image downloads). They show Restropi's real screens in miniature.
 import clsx from "clsx";
 import type { CSSProperties, ReactNode } from "react";
 
+/** The Restropi "R" mark on its own. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className={className}>
-      <circle cx="12" cy="12" r="11" fill="rgb(var(--jade))" />
-      <path d="M8 17V7.5h4.6a3 3 0 0 1 .4 6L16 17" stroke="white" strokeWidth="2.1" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/restropi-mark.png" alt="" aria-hidden width={Math.round(size * 0.976)} height={size} className={clsx("shrink-0 object-contain", className)} style={{ height: size, width: "auto" }} />;
 }
-export function Brand({ className }: { className?: string }) {
+/** Full logo. `light` = white letters, for dark backgrounds. Size it with a height class (h-7 …). */
+export function Brand({ className, light = false }: { className?: string; light?: boolean }) {
   return (
-    <span className={clsx("inline-flex items-center gap-2 font-semibold tracking-tight", className)}>
-      <Logo />
-      Rastropi
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={light ? "/brand/restropi-logo-light.png" : "/brand/restropi-logo-dark.png"}
+      alt="Restropi"
+      width={597}
+      height={180}
+      className={clsx("block h-7 w-auto select-none", className)}
+      draggable={false}
+    />
   );
 }
 
@@ -223,7 +226,7 @@ export function PulseNote({ className, style, children }: { className?: string; 
     <div className={clsx("relative w-[250px] overflow-hidden rounded-[22px] bg-ink p-4 text-canvas shadow-[0_30px_60px_-24px_rgb(16_24_20/.6)]", className)} style={style}>
       <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-saffron/30 blur-2xl" />
       <div className="relative flex items-center gap-1.5 text-[10px] font-semibold text-saffron">
-        <span className="h-1.5 w-1.5 rounded-full bg-saffron" /> Rastropi Pulse
+        <span className="h-1.5 w-1.5 rounded-full bg-saffron" /> Restropi Pulse
       </div>
       <p className="relative mt-1.5 text-[12.5px] font-medium leading-snug">
         {children ?? <>Lunch beat a normal Tuesday by 14%. Order paneer before 5 — you&apos;ll run out around 8:30.</>}

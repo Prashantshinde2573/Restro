@@ -77,15 +77,18 @@ const tabs: NavItem[] = [
 
 const isActive = (path: string, href: string) => (href === "/app" ? path === "/app" : path.startsWith(href));
 
-export function Wordmark({ className }: { className?: string }) {
+/** Restropi logo for the app. `light` = white letters, for dark backgrounds. Size it with a height class. */
+export function Wordmark({ className, light = false }: { className?: string; light?: boolean }) {
   return (
-    <span className={clsx("inline-flex items-center gap-2 font-semibold tracking-tight", className)}>
-      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
-        <circle cx="12" cy="12" r="11" fill="rgb(var(--jade))" />
-        <path d="M8 17V7.5h4.6a3 3 0 0 1 .4 6L16 17" stroke="white" strokeWidth="2.1" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      Rastropi
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={light ? "/brand/restropi-logo-light.png" : "/brand/restropi-logo-dark.png"}
+      alt="Restropi"
+      width={597}
+      height={180}
+      className={clsx("block h-7 w-auto select-none", className)}
+      draggable={false}
+    />
   );
 }
 
@@ -249,7 +252,7 @@ function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col px-3 py-5 lg:flex">
       <Link href="/app" className="px-2 pb-5">
-        <Wordmark className="text-[19px]" />
+        <Wordmark className="h-[30px]" />
       </Link>
       <OutletSwitcher />
       <nav className="mt-4 flex-1 space-y-5 overflow-y-auto">
@@ -382,7 +385,7 @@ function TabBar() {
 function RenewBanner() {
   const days = useRenewDays();
   const { plan, renewsAt } = useAccount();
-  const key = `rastropi.renewHidden.${new Date().toDateString()}`;
+  const key = `restropi.renewHidden.${new Date().toDateString()}`;
   const [hidden, setHidden] = useState(() => {
     try {
       return localStorage.getItem(key) === "1";
@@ -462,7 +465,7 @@ function RouteGate({ children }: { children: ReactNode }) {
 function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-6 text-center">
-      <Wordmark className="mb-8 text-[20px]" />
+      <Wordmark className="mb-8 h-8" />
       <div className="max-w-sm">{children}</div>
     </div>
   );
@@ -510,7 +513,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <Centered>
         <h1 className="text-[22px] font-semibold">No restaurant on this login</h1>
-        <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Rastropi support to set up your restaurant.</p>
+        <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Restropi support to set up your restaurant.</p>
         <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
       </Centered>
     );
@@ -520,7 +523,7 @@ function AuthGate({ children }: { children: ReactNode }) {
       <Centered>
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
         <h1 className="mt-4 text-[22px] font-semibold">{account.name || "This restaurant"} is paused</h1>
-        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Contact Rastropi support to turn it back on. Your data is safe.</p>
+        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Contact Restropi support to turn it back on. Your data is safe.</p>
         <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
       </Centered>
     );
@@ -564,8 +567,8 @@ function MobileTopBar() {
     <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] text-white transition-shadow lg:hidden", scrolled && "shadow-[0_8px_20px_-12px_rgb(0_0_0/.5)]")}>
       <div className="grid h-[52px] grid-cols-[1fr_auto_1fr] items-center px-4">
         <div className="justify-self-start"><OutletSwitcher compact /></div>
-        <Link href="/app" aria-label="Rastropi home" className="justify-self-center">
-          <Wordmark className="text-[20px] tracking-[-0.03em]" />
+        <Link href="/app" aria-label="Restropi home" className="justify-self-center">
+          <Wordmark light className="h-[26px]" />
         </Link>
         <div className="justify-self-end"><MeButton compact /></div>
       </div>

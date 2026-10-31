@@ -1,6 +1,6 @@
 "use client";
 
-// Super admin: every restaurant on Rastropi. Add a restaurant (with its owner
+// Super admin: every restaurant on Restropi. Add a restaurant (with its owner
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
@@ -115,7 +115,7 @@ export default function AdminPage() {
     <div className="min-h-dvh bg-canvas">
       <header className="sticky top-0 z-30 border-b border-line/60 bg-canvas/85 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 lg:px-6">
-          <Wordmark className="text-[18px]" />
+          <Wordmark className="h-7" />
           <Pill tone="saffron">Super admin</Pill>
           <div className="ml-auto flex items-center gap-1">
             <span className="mr-2 hidden text-[13.5px] text-muted sm:inline">{cloud.email}</span>
@@ -136,7 +136,7 @@ export default function AdminPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="large-title">Restaurants</h1>
-            <p className="mt-1 text-[15px] text-muted">Everyone using Rastropi. Add a restaurant to give its owner a login.</p>
+            <p className="mt-1 text-[15px] text-muted">Everyone using Restropi. Add a restaurant to give its owner a login.</p>
           </div>
           <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
         </div>
@@ -257,7 +257,7 @@ export default function AdminPage() {
 function Credentials({ email, password }: { email: string; password: string }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
-  const text = `Your Rastropi login\n${url}\nEmail: ${email}\nTemporary password: ${password}\nYou'll be asked to set your own password the first time.`;
+  const text = `Your Restropi login\n${url}\nEmail: ${email}\nTemporary password: ${password}\nYou'll be asked to set your own password the first time.`;
   return (
     <div className="space-y-4">
       <p className="text-[14.5px] text-muted">Send this to the owner. The password is shown only now — they&apos;ll set their own when they first sign in.</p>

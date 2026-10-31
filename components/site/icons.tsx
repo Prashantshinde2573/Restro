@@ -1,4 +1,4 @@
-// Rastropi's own line icons for the public website: 32px grid, 1.6 stroke,
+// Restropi's own line icons for the public website: 32px grid, 1.6 stroke,
 // round caps. Inside a `.group` they redraw themselves on hover.
 import type { SVGProps } from "react";
 

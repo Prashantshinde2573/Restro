@@ -11,7 +11,7 @@
 import { useSyncExternalStore } from "react";
 import { SUPABASE_KEY, SUPABASE_URL } from "./config";
 
-export const PREFIX = "rastropi.v1.";
+export const PREFIX = "restropi.v1.";
 export const cloudConfigured = !!SUPABASE_URL && !!SUPABASE_KEY;
 
 /** Where a store lives in Supabase (a table filtered by rid, or the restaurants row). */

@@ -141,7 +141,7 @@ export function Hero() {
             className="text-balance mt-5 text-[36px] font-medium leading-[1.04] tracking-[-0.04em] sm:text-[48px] lg:text-[56px] xl:text-[62px]"
           />
           <p data-hero-fade className="mt-5 max-w-[520px] text-[16.5px] leading-relaxed text-white/80 lg:text-[18px]">
-            Billing, kitchen, tables, stock, staff and guests in one app. Every morning Rastropi tells you what to fix, in plain words.
+            Billing, kitchen, tables, stock, staff and guests in one app. Every morning Restropi tells you what to fix, in plain words.
           </p>
           <div data-hero-fade className="mt-8 flex items-center gap-2">
             <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink shadow-[0_16px_32px_-18px_rgb(0_0_0/.7)] transition hover:bg-jade-soft">

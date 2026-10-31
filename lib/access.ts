@@ -49,7 +49,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   counterToken: { label: "Counter orders with token", plan: "starter", types: ["cafe"] },
   qrOrdering: { label: "QR ordering", plan: "growth", types: BOTH },
   stock: { label: "Stock and recipes", plan: "growth", types: BOTH },
-  pulse: { label: "Rastropi Pulse briefing", plan: "growth", types: BOTH },
+  pulse: { label: "Restropi Pulse briefing", plan: "growth", types: BOTH },
   team: { label: "Team", plan: "starter", types: BOTH },
   guests: { label: "Guests", plan: "growth", types: BOTH },
   campaigns: { label: "Campaigns", plan: "growth", types: BOTH },

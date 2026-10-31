@@ -63,7 +63,7 @@ export default function InventoryPage() {
             <div className="flex flex-col items-center rounded-group bg-surface px-6 py-12 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade"><Package size={26} /></span>
               <h2 className="mt-4 text-[18px] font-semibold">Track your stock</h2>
-              <p className="mt-1 max-w-sm text-[14.5px] text-muted">Add raw materials like paneer, oil or milk with a minimum level. Rastropi tells you what to order.</p>
+              <p className="mt-1 max-w-sm text-[14.5px] text-muted">Add raw materials like paneer, oil or milk with a minimum level. Restropi tells you what to order.</p>
               <Button className="mt-5" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={17} /> Add first item</Button>
             </div>
           ) : (

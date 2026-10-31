@@ -1,4 +1,4 @@
-// The plans Rastropi sells. Prices in ₹ per outlet per month.
+// The plans Restropi sells. Prices in ₹ per outlet per month.
 import type { Plan } from "./types";
 
 export const plans: Plan[] = [
@@ -18,7 +18,7 @@ export const plans: Plan[] = [
     yearly: 24990,
     blurb: "For a busy restaurant that wants fewer leaks.",
     outlets: "1 outlet · unlimited staff",
-    features: ["Everything in Starter", "QR ordering with split-by-guest pay", "Stock and dish costing", "Rastropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns"],
+    features: ["Everything in Starter", "QR ordering with split-by-guest pay", "Stock and dish costing", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns"],
     highlight: true,
   },
   {

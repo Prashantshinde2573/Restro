@@ -17,7 +17,7 @@ export async function sendLead(row: Lead): Promise<boolean> {
     return true;
   } catch {
     if (CONTACT_WA) {
-      const msg = `Hi, I'd like a Rastropi demo.\nName: ${row.name}\nPhone: ${row.phone}${row.restaurant ? `\nRestaurant: ${row.restaurant}` : ""}${row.city ? `\nCity: ${row.city}` : ""}\nType: ${row.kind}`;
+      const msg = `Hi, I'd like a Restropi demo.\nName: ${row.name}\nPhone: ${row.phone}${row.restaurant ? `\nRestaurant: ${row.restaurant}` : ""}${row.city ? `\nCity: ${row.city}` : ""}\nType: ${row.kind}`;
       window.open(`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(msg)}`, "_blank");
       return true;
     }
@@ -77,7 +77,7 @@ export function LeadForm({ flat = false }: { flat?: boolean }) {
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
       </button>
       {state === "error" && <p className="mt-3 text-center text-[13.5px] text-rose">Could not send right now. Please try again in a minute.</p>}
-      <p className="mt-3 text-center text-[12.5px] text-ink/45">We only use your number to call you about Rastropi.</p>
+      <p className="mt-3 text-center text-[12.5px] text-ink/45">We only use your number to call you about Restropi.</p>
     </form>
   );
 }

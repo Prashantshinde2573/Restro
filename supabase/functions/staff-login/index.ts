@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     // fresh one-time password each sign-in, then a normal session for the phone
     const password = randomPassword();
-    // also moves older staff accounts (@staff.restro.app) to the current sign-in address
+    // also moves older staff accounts (@staff.restro.app, @staff.rastropi.app) to the current address
     const { error: uErr } = await db.auth.admin.updateUserById(row.user_id, {
       email: staffEmail(rid, memberId), email_confirm: true, password, app_metadata: { rid, member_id: memberId },
     });

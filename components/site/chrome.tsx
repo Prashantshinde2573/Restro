@@ -74,8 +74,8 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
             !light && (scrolled || open ? "glass-strong" : "glass"),
           )}
         >
-          <Link href="/" className="rounded-full px-2 py-1" aria-label="Rastropi home">
-            <Brand className={clsx("transition-all duration-500", light ? "text-[21px]" : "text-[18px]")} />
+          <Link href="/" className="rounded-full px-2 py-1" aria-label="Restropi home">
+            <Brand light={light} className={clsx("transition-all duration-500", light ? "h-[34px]" : "h-[28px]")} />
           </Link>
           <nav className={clsx("hidden items-center gap-1 whitespace-nowrap lg:flex", light ? "mx-auto" : "ml-6")} aria-label="Main">
             {links.map((l) => (
@@ -235,7 +235,7 @@ function DemoDialog() {
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
   { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/#pricing", label: "Pricing" }, { href: "/pricing", label: "Compare plans" }] },
   { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
-  { t: "Rastropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/#contact", label: "Contact us" }] },
+  { t: "Restropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/#contact", label: "Contact us" }] },
 ];
 
 export function SiteFooter() {
@@ -265,10 +265,10 @@ export function SiteFooter() {
         <div className="rounded-[24px] bg-white px-6 py-10 ring-1 ring-black/[.04] sm:rounded-[30px] sm:px-10 lg:px-14 lg:py-14">
           <div className="grid gap-10 lg:grid-cols-[1.1fr_1.6fr] lg:gap-16">
             <div>
-              <Brand className="text-[22px]" />
+              <Brand className="h-9" />
               <p className="mt-7 text-[16px] font-semibold">Want a call from us?</p>
               <div className="mt-3 max-w-[440px]"><CallBack /></div>
-              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/45">We only use your number to call you about Rastropi. No spam, no sharing.</p>
+              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/45">We only use your number to call you about Restropi. No spam, no sharing.</p>
             </div>
             <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
               {footerCols.map((c) => (
@@ -278,15 +278,15 @@ export function SiteFooter() {
                     {c.links.map((l) => (
                       <li key={l.label}><Link href={l.href} className="transition hover:text-jade">{l.label}</Link></li>
                     ))}
-                    {c.t === "Rastropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
-                    {c.t === "Rastropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
+                    {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
+                    {c.t === "Restropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
                   </ul>
                 </div>
               ))}
             </div>
           </div>
           <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/45 sm:flex-row sm:items-center">
-            <span>© {new Date().getFullYear()} Rastropi. All rights reserved. · UPI payments go straight to your bank.</span>
+            <span>© {new Date().getFullYear()} Restropi. All rights reserved. · UPI payments go straight to your bank.</span>
             <span className="sm:ml-auto">Made in Pune for Indian restaurants</span>
           </div>
         </div>

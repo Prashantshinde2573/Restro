@@ -4,10 +4,10 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: { default: "Rastropi", template: "%s · Rastropi" },
+  title: { default: "Restropi", template: "%s · Restropi" },
   description: "Run your restaurant or café from one calm screen — billing, kitchen, stock, team and guests.",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Rastropi", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Restropi", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

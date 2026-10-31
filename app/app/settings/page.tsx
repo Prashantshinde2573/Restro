@@ -97,7 +97,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Subscription: set by the Rastropi team; owner sees it */}
+        {/* Subscription: set by the Restropi team; owner sees it */}
         {owner && (
           <section id="plan" className="overflow-hidden rounded-group bg-ink p-5 text-canvas">
             <div className="flex items-start justify-between gap-3">
@@ -111,7 +111,7 @@ export default function SettingsPage() {
             <div className="mt-4 text-[13px] text-canvas/70">{days < 0 ? `Ended on ${renewDate}` : `Runs until ${renewDate}`}</div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>See plans</Button>
-              <span className="text-[12.5px] text-canvas/60">To renew or change plan, contact the Rastropi team.</span>
+              <span className="text-[12.5px] text-canvas/60">To renew or change plan, contact the Restropi team.</span>
             </div>
           </section>
         )}
@@ -168,7 +168,7 @@ export default function SettingsPage() {
             );
           })}
         </div>
-        <p className="mt-4 text-center text-[13.5px] text-muted">To switch plan, contact the Rastropi team.</p>
+        <p className="mt-4 text-center text-[13.5px] text-muted">To switch plan, contact the Restropi team.</p>
       </Sheet>
 
       <Sheet
@@ -215,7 +215,7 @@ export default function SettingsPage() {
             {upiOk && (
               <div className="rounded-group bg-surface p-4">
                 <div className="mb-2 text-center text-[13.5px] font-semibold">Test QR · scan with your UPI app</div>
-                <UpiPayCard upi={draft.upi} payee={draft.name} amount={1} note="Rastropi test" size={140} compact />
+                <UpiPayCard upi={draft.upi} payee={draft.name} amount={1} note="Restropi test" size={140} compact />
               </div>
             )}
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
@@ -310,7 +310,7 @@ function Export() {
   const feedback = useFeedback();
   const tables = useAllTables();
   const stamp = new Date().toISOString().slice(0, 10);
-  const slug = (account.name || "rastropi").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const slug = (account.name || "restropi").toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
   return (
     <div className="space-y-4">

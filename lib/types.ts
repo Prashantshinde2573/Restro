@@ -1,4 +1,4 @@
-// Domain types for Rastropi. These mirror the Firestore documents planned in
+// Domain types for Restropi. These mirror the Firestore documents planned in
 // WORKFLOW.md, so swapping the mock repository for Firebase keeps every
 // screen unchanged.
 
