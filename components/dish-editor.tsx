@@ -117,7 +117,7 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
               aria-label="Choice type"
               value={g.type === "single" ? (g.required ? "one" : "one-opt") : "any"}
               onChange={(e) => setGroup(i, { type: e.target.value === "any" ? "multi" : "single", required: e.target.value === "one" })}
-              className="h-10 rounded-[10px] bg-sunken/60 px-2 text-[13px] outline-none"
+              className="h-10 rounded-[10px] bg-sunken/60 pl-3 text-[13px] outline-none"
             >
               <option value="one">Must pick one</option>
               <option value="one-opt">Pick one (optional)</option>

@@ -396,3 +396,18 @@ body {
 #site-splash { display: none; }
 html.splash #site-splash { display: flex; animation: splash-out 0.4s ease 1.5s forwards; }
 @keyframes splash-out { to { opacity: 0; visibility: hidden; } }
+
+/* Dropdowns: our own chevron with room on the right (the browser's arrow sat on the edge) */
+select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2368716D' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 16px 16px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+/* small dropdowns (h-10 and below) */
+select.h-10:not([multiple]), select.h-9:not([multiple]) { padding-right: 2.1rem; background-position: right 0.7rem center; background-size: 14px 14px; }

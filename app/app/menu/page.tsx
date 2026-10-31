@@ -375,7 +375,7 @@ export default function MenuPage() {
                     aria-label={`Icon for ${c.name}`}
                     value={c.icon ?? ""}
                     onChange={(e) => categoryActions.update(c.id, { icon: e.target.value })}
-                    className="h-10 w-14 rounded-[10px] bg-sunken text-center text-[20px] outline-none"
+                    className="h-10 w-[4.25rem] rounded-[10px] bg-sunken pl-3 text-[20px] outline-none"
                   >
                     {[...new Set([c.icon ?? "🍽️", ...CAT_ICONS])].map((x) => <option key={x} value={x}>{x}</option>)}
                   </select>

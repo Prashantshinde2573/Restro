@@ -95,15 +95,28 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center px-5 pb-10 pt-20 lg:py-10">
+      <div className="relative flex flex-1 flex-col lg:items-center lg:justify-center lg:py-10">
+        {/* phones: a photo on top, the form slides up over it */}
+        <div className="relative h-[36svh] min-h-[230px] max-h-[360px] shrink-0 overflow-hidden bg-ink lg:hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/video/hero-poster.jpg" alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/10 to-black/55" />
+          <Link href="/" aria-label="Back to website" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-ink shadow-sm backdrop-blur transition active:scale-95">
+            <ArrowLeft size={20} />
+          </Link>
+          <div className="absolute inset-x-5 bottom-12 text-white">
+            <Link href="/" aria-label="Restropi home" className="block w-fit"><Wordmark light className="h-8" /></Link>
+            <p className="mt-2 max-w-[18rem] text-[14px] leading-snug text-white/85">Bills, kitchen, tables and stock, in one place.</p>
+          </div>
+        </div>
         <Link
           href="/"
-          className="absolute left-4 top-4 flex h-10 items-center gap-1.5 rounded-full bg-surface pl-3 pr-4 text-[14px] font-semibold text-ink ring-1 ring-line transition hover:bg-sunken lg:left-auto lg:right-6 lg:top-6"
+          className="absolute right-6 top-6 hidden h-10 items-center gap-1.5 rounded-full bg-surface pl-3 pr-4 text-[14px] font-semibold text-ink ring-1 ring-line transition hover:bg-sunken lg:flex"
         >
           <ArrowLeft size={16} /> Back to website
         </Link>
+        <div className="relative z-10 -mt-7 flex flex-1 justify-center rounded-t-[28px] bg-canvas px-5 pb-10 pt-8 lg:mt-0 lg:flex-none lg:rounded-none lg:p-0">
         <div className="w-full max-w-sm">
-          <Link href="/" className="mb-8 block w-fit lg:hidden" aria-label="Restropi home"><Wordmark className="h-8" /></Link>
           {mustSet ? (
             <>
               <ChangePassword
@@ -180,6 +193,7 @@ export default function LoginPage() {
           {error && <p className="mt-4 text-center text-[14px] font-medium text-rose">{error}</p>}
           </>
           )}
+        </div>
         </div>
       </div>
     </div>
