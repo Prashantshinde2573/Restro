@@ -20,6 +20,12 @@ export const reducedMotion = () => typeof window !== "undefined" && window.match
    doesn't stop it on iPhones, so the body is pinned in place and put back after. */
 let locks = 0;
 let savedY = 0;
+/** Where the page really is, also while a menu or chat has it pinned (window.scrollY reads 0 then). */
+export const pageScrollY = () => (locks > 0 ? savedY : window.scrollY);
+/** True while a menu, dialog or chat has the page pinned. */
+export const scrollLocked = () => locks > 0;
+/** Fired on window when the page gets pinned or let go. */
+export const SCROLL_LOCK_EVENT = "restropi:scroll-lock";
 export function lockScroll(lenis?: Lenis | null) {
   if (locks++ === 0) {
     savedY = window.scrollY;
@@ -31,20 +37,26 @@ export function lockScroll(lenis?: Lenis | null) {
     b.width = "100%";
     b.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
+    window.dispatchEvent(new Event(SCROLL_LOCK_EVENT));
   }
   lenis?.stop();
   let done = false;
   return () => {
     if (done) return;
     done = true;
-    if (--locks > 0) return;
+    if (locks - 1 > 0) {
+      locks--;
+      return;
+    }
     const b = document.body.style;
     b.position = b.top = b.left = b.right = b.width = b.overflow = "";
     document.documentElement.style.overflow = "";
     document.documentElement.style.scrollBehavior = "auto";
     window.scrollTo(0, savedY);
     document.documentElement.style.scrollBehavior = "";
+    locks = 0; // only now: scroll handlers read the real position again
     lenis?.start();
+    window.dispatchEvent(new Event(SCROLL_LOCK_EVENT));
   };
 }
 

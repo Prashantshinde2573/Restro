@@ -9,7 +9,7 @@ import { IconArrow, IconMenu } from "./icons";
 import { Brand } from "./mockups";
 import { SectionHead } from "./head";
 import { CallBack, LeadForm } from "./lead";
-import { gsap, lockScroll, reducedMotion, useLenis } from "./motion";
+import { SCROLL_LOCK_EVENT, gsap, lockScroll, pageScrollY, reducedMotion, scrollLocked, useLenis } from "./motion";
 
 const links = [
   { href: "/#features", label: "Features" },
@@ -29,9 +29,11 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
 
   // condense after the hero; slide away while scrolling down, back when scrolling up
   useEffect(() => {
-    let last = window.scrollY;
+    // pageScrollY: a pinned page (menu / chat open) keeps its real position, so the nav doesn't jump
+    let last = pageScrollY();
     const on = () => {
-      const y = window.scrollY;
+      if (scrollLocked()) return;
+      const y = pageScrollY();
       setScrolled(y > 24);
       setHidden(y > 400 && y > last + 2);
       if (y < last - 2) setHidden(false);
@@ -153,16 +155,20 @@ export function MobileCta() {
   const [show, setShow] = useState(false);
   useEffect(() => {
     const on = () => {
+      // hidden while the chat, menu or demo form covers the page
+      if (scrollLocked()) return setShow(false);
       const form = document.getElementById("contact");
       const atForm = form ? form.getBoundingClientRect().top < window.innerHeight * 0.9 : false;
-      setShow(window.scrollY > window.innerHeight * 0.85 && !atForm);
+      setShow(pageScrollY() > window.innerHeight * 0.85 && !atForm);
     };
     on();
     window.addEventListener("scroll", on, { passive: true });
     window.addEventListener("resize", on);
+    window.addEventListener(SCROLL_LOCK_EVENT, on);
     return () => {
       window.removeEventListener("scroll", on);
       window.removeEventListener("resize", on);
+      window.removeEventListener(SCROLL_LOCK_EVENT, on);
     };
   }, []);
   return (

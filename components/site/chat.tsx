@@ -9,7 +9,7 @@ import { plans } from "@/lib/plans";
 import { CONTACT_WA } from "./chrome";
 import { IconArrow } from "./icons";
 import { Logo } from "./mockups";
-import { lockScroll, useLenis } from "./motion";
+import { lockScroll, pageScrollY, useLenis } from "./motion";
 
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN");
 const priced = plans.filter((p) => p.monthly);
@@ -93,7 +93,7 @@ export function HelpChat() {
 
   // phones: sit above the "Book demo" bar when it shows
   useEffect(() => {
-    const on = () => setLifted(window.scrollY > window.innerHeight * 0.85);
+    const on = () => setLifted(pageScrollY() > window.innerHeight * 0.85);
     on();
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
@@ -132,12 +132,13 @@ export function HelpChat() {
         aria-label="Restropi help"
         aria-hidden={!open}
         className={clsx(
-          "fixed z-[55] flex flex-col overflow-hidden bg-white text-ink shadow-[0_40px_80px_-30px_rgb(16_24_20/.45)] ring-1 ring-black/[.06] transition-[opacity,transform] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
-          "inset-x-2 bottom-2 top-16 rounded-[26px] sm:inset-x-auto sm:bottom-24 sm:right-5 sm:top-auto sm:h-[min(620px,calc(100dvh-140px))] sm:w-[380px]",
+          "fixed flex flex-col overflow-hidden bg-white text-ink shadow-[0_40px_80px_-30px_rgb(16_24_20/.45)] ring-1 ring-black/[.06] transition-[opacity,transform] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
+          // phones: full screen, over the nav and the "Book demo" bar; larger screens: a panel above the button
+          "inset-0 z-[70] sm:inset-auto sm:bottom-24 sm:right-5 sm:z-[55] sm:h-[min(620px,calc(100dvh-140px))] sm:w-[380px] sm:rounded-[26px]",
           open ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
         )}
       >
-        <div className="flex items-center gap-3 bg-ink px-5 py-4 text-white">
+        <div className="pt-safe flex items-center gap-3 bg-ink px-5 py-4 text-white [--safe-pt:16px] sm:[--safe-pt:16px]">
           <span className="relative">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white"><Logo size={24} /></span>
             <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#4ade80] ring-2 ring-ink" />
@@ -175,7 +176,7 @@ export function HelpChat() {
           )}
         </div>
 
-        <div className="border-t border-black/[.06] bg-white p-3">
+        <div className="pb-safe border-t border-black/[.06] bg-white p-3 [--safe-pb:12px]">
           {left.length > 0 && (
             <div data-lenis-prevent className="flex max-h-[132px] flex-wrap gap-2 overflow-y-auto pb-3">
               {left.map((f) => (
