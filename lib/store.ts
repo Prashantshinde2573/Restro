@@ -109,6 +109,26 @@ export function createStore<T>(initial: T, key?: string, remote?: RemoteSpec): S
   };
 }
 
+/* ---- has a cloud list finished its first load? (so screens show "loading", not "empty") ---- */
+const ready = new Map<string, boolean>();
+const readyListeners = new Set<() => void>();
+export function setReady(key: string, v: boolean) {
+  if (ready.get(key) === v) return;
+  ready.set(key, v);
+  readyListeners.forEach((l) => l());
+}
+/** True once the list behind `key` has loaded from the server (always true in demo mode). */
+export function useReady(key: string) {
+  return useSyncExternalStore(
+    (l) => {
+      readyListeners.add(l);
+      return () => readyListeners.delete(l);
+    },
+    () => !cloudConfigured || ready.get(key) === true,
+    () => true,
+  );
+}
+
 let hydrated = false;
 /** Load what this browser saved, once, after the first paint. */
 export function hydrateStores() {

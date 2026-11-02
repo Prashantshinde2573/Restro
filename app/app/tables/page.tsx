@@ -9,10 +9,12 @@ import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet, Field, inputCl
 import { ScanQr } from "@/components/qr";
 import { Checkout } from "@/components/checkout";
 import { useToast } from "@/components/toast";
-import { inr, minutesSince, timeAgo } from "@/lib/format";
+import { gstRate, inr, minutesSince, timeAgo } from "@/lib/format";
 import { getOrders, orderActions, useCan, useCurrentOutlet, useMe } from "@/lib/live";
 import { isShared, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useTables } from "@/lib/tables";
 import { TableManager } from "@/components/table-manager";
+import { CookingLoader } from "@/components/loader";
+import { useReady } from "@/lib/store";
 import type { Party, Table, TableStatus } from "@/lib/types";
 
 const statusStyle: Record<TableStatus, { label: string; tile: string; dot: string; tone: "neutral" | "jade" | "saffron" | "sky" }> = {
@@ -37,6 +39,7 @@ export default function TablesPage() {
   const cloud = useCloud();
   const toast = useToast();
   const tables = useTables();
+  const tablesReady = useReady("tables");
   const [zone, setZone] = useState("all");
   const [selId, setSelId] = useState<string | null>(null);
   const [qr, setQr] = useState(false);
@@ -97,7 +100,9 @@ export default function TablesPage() {
           </div>
         )}
 
-        {tables.length === 0 ? (
+        {tables.length === 0 && !tablesReady ? (
+          <div className="flex justify-center py-20"><CookingLoader size={56} label="Loading tables" /></div>
+        ) : tables.length === 0 ? (
           <Empty
             icon={<LayoutGrid size={26} />}
             title="No tables yet"
@@ -211,7 +216,7 @@ export default function TablesPage() {
                       <Link href={`/app/pos?table=${sel.name}&party=${p.id}`}><Button size="sm"><Plus size={15} /> Add to order</Button></Link>
                     )}
                     {p.total ? (
-                      <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * 1.05))}</Button>
+                      <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
                     <Button size="sm" variant="plain" onClick={() => setMove({ tableId: sel.id, partyId: p.id })}><ArrowLeftRight size={15} /> Move</Button>
                     {others.map((o) => (

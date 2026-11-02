@@ -4,7 +4,7 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { useState } from "react";
-import { plans as allPlans } from "@/lib/plans";
+import { CYCLES, cyclePrice, plans as allPlans, type Cycle } from "@/lib/plans";
 import { inr } from "@/lib/format";
 import { IconArrow } from "./site/icons";
 
@@ -17,8 +17,8 @@ function Tick({ light }: { light?: boolean }) {
   );
 }
 
-function PlanCard({ p, cycle }: { p: (typeof allPlans)[number]; cycle: "monthly" | "yearly" }) {
-  const price = cycle === "monthly" ? p.monthly : p.yearly;
+function PlanCard({ p, cycle }: { p: (typeof allPlans)[number]; cycle: Cycle }) {
+  const price = cyclePrice(p, cycle);
   const dark = !!p.highlight;
   return (
     <div
@@ -41,7 +41,7 @@ function PlanCard({ p, cycle }: { p: (typeof allPlans)[number]; cycle: "monthly"
         {price ? (
           <>
             <span className="text-[38px] font-semibold leading-none tracking-[-0.03em] tnum">{inr(price)}</span>
-            <span className={clsx("pb-1 text-[14px]", dark ? "text-canvas/60" : "text-muted")}>/{cycle === "monthly" ? "month" : "year"}</span>
+            <span className={clsx("pb-1 text-[14px]", dark ? "text-canvas/60" : "text-muted")}>/{CYCLES.find((c) => c.id === cycle)!.per}</span>
           </>
         ) : (
           <span className="text-[34px] font-semibold leading-none tracking-tight">Let&apos;s talk</span>
@@ -74,25 +74,26 @@ function PlanCard({ p, cycle }: { p: (typeof allPlans)[number]; cycle: "monthly"
 }
 
 export function PricingTable() {
-  const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
+  const [cycle, setCycle] = useState<Cycle>("monthly");
+  const idx = CYCLES.findIndex((c) => c.id === cycle);
   return (
     <div>
       <div className="flex justify-center">
         <div role="tablist" aria-label="Billing cycle" className="glass relative inline-flex rounded-full p-1">
           <span
             aria-hidden
-            className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-ink transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]"
-            style={{ transform: cycle === "yearly" ? "translateX(100%)" : "none" }}
+            className="absolute inset-y-1 left-1 w-[calc((100%-8px)/3)] rounded-full bg-ink transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]"
+            style={{ transform: `translateX(${idx * 100}%)` }}
           />
-          {(["monthly", "yearly"] as const).map((c) => (
+          {CYCLES.map((c) => (
             <button
-              key={c}
+              key={c.id}
               role="tab"
-              aria-selected={cycle === c}
-              onClick={() => setCycle(c)}
-              className={clsx("relative z-10 w-40 rounded-full py-2.5 text-[14px] font-semibold transition-colors duration-300 sm:w-48", cycle === c ? "text-canvas" : "text-muted")}
+              aria-selected={cycle === c.id}
+              onClick={() => setCycle(c.id)}
+              className={clsx("relative z-10 w-[104px] rounded-full px-1 py-2.5 text-[12.5px] font-semibold leading-tight transition-colors duration-300 sm:w-40 sm:text-[14px]", cycle === c.id ? "text-canvas" : "text-muted")}
             >
-              {c === "monthly" ? "Monthly" : "Yearly · 2 months free"}
+              {c.label}
             </button>
           ))}
         </div>

@@ -4,6 +4,7 @@
 //
 // Every store mirrors a Supabase table for this restaurant (rid), so all
 // phones and tablets see the same data live. A new restaurant starts empty.
+import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
@@ -76,8 +77,11 @@ export function useCurrentOutlet(): Outlet {
   const { outletId } = useSession();
   const outlets = useOutlets();
   const me = useMe();
-  const mine = outlets.filter((o) => inOutlet(me, o.id));
-  return mine.find((o) => o.id === outletId) ?? mine[0] ?? outlets[0] ?? blankOutlet;
+  // guests (no member): the outlet their QR belongs to
+  const mine = me ? outlets.filter((o) => inOutlet(me, o.id)) : outlets;
+  const o = mine.find((o) => o.id === outletId) ?? mine[0] ?? outlets[0] ?? blankOutlet;
+  setGstRate(o.gstRate); // bills, reports and the guest page use this outlet's GST rate
+  return o;
 }
 const blankOutlet: Outlet = { id: "", name: "", address: "", businessType: "restaurant", upi: "", payFirst: false };
 /** Is a feature on for this plan and this outlet's type? */
@@ -99,6 +103,7 @@ export function useSettings(): OutletSettings {
   return {
     name: a.name, businessType: o.businessType, mixed: !!o.mixed, upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
+    orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, gstRate: o.gstRate ?? 0.05,
   };
 }
 export const settingsActions = {
@@ -115,7 +120,7 @@ export const settingsActions = {
 export const methodLabel: Record<PayMethod, string> = { upi: "UPI", cash: "Cash", card: "Card" };
 export const paymentsText = (p?: Payment[]) => (p?.length ? p.map((x) => `${methodLabel[x.method]} ₹${x.amount.toLocaleString("en-IN")}`).join(" + ") : "—");
 
-export const billOf = (o: Order) => Math.round(o.lines.reduce((s, l) => s + l.qty * l.price, 0) * 1.05);
+export const billOf = (o: Order) => Math.round(o.lines.reduce((s, l) => s + l.qty * l.price, 0) * (1 + gstRate()));
 const orderStore = createStore<Order[]>([], "orders", { kind: "collection", coll: "orders", guest: "own" });
 export const useOrders = () => orderStore.use();
 export const getOrders = () => orderStore.get();
@@ -281,6 +286,43 @@ export const guestActions = {
     guestStore.set([nc, ...list]);
     return nc;
   },
+  /** Staff typed the guest's number at billing (walk-in / counter): add them to the guest book with this bill. */
+  fromBill(name: string, phone: string, bill: { orderNo: number; amount: number; method: string }) {
+    const key = normPhone(phone);
+    if (key.length !== 10) return;
+    const list = guestStore.get();
+    const found = list.find((c) => normPhone(c.phone) === key);
+    const now = new Date().toISOString();
+    const entry = { ...bill, at: now };
+    if (found) {
+      guestStore.set(
+        list.map((c) =>
+          c.id === found.id
+            ? { ...c, name: c.name || name.trim(), visits: c.visits + 1, lastVisit: now, spend: c.spend + bill.amount, points: c.points + Math.floor(bill.amount / 10), bills: [entry, ...(c.bills ?? [])] }
+            : c,
+        ),
+      );
+      return;
+    }
+    guestStore.set([
+      {
+        id: key,
+        name: name.trim() || "Guest",
+        phone: `${key.slice(0, 5)} ${key.slice(5)}`,
+        visits: 1,
+        spend: bill.amount,
+        lastVisit: now,
+        points: Math.floor(bill.amount / 10),
+        tier: "New",
+        favourite: "—",
+        verified: false,
+        source: "pos",
+        optIn: false,
+        bills: [entry],
+      },
+      ...list,
+    ]);
+  },
   addBill(phone: string, bill: { orderNo: number; amount: number; method: string }) {
     const key = normPhone(phone);
     guestStore.set(
@@ -410,3 +452,25 @@ export function couponOff(c: Coupon, subtotal: number) {
 }
 export const couponLabel = (c: Pick<Coupon, "kind" | "value" | "maxOff" | "minBill">) =>
   `${c.kind === "percent" ? `${c.value}% off` : `₹${c.value} off`}${c.kind === "percent" && c.maxOff ? ` (up to ₹${c.maxOff})` : ""}${c.minBill ? ` on ₹${c.minBill}+` : ""}`;
+
+/* ---------------- QR ordering hours ---------------- */
+const toMin = (hhmm?: string) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+/** "21:00" → "9:00 pm" */
+export const niceTime = (hhmm?: string) => {
+  const m = toMin(hhmm);
+  if (m === null) return "";
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${((h + 11) % 12) + 1}:${String(mm).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+};
+/** Can guests order from the QR right now? Paused by hand, or outside the set hours = no. */
+export function orderingOpen(s: { orderFrom?: string; orderTo?: string; ordersPaused?: boolean }, now = new Date()) {
+  if (s.ordersPaused) return { open: false as const, why: "paused" as const };
+  const a = toMin(s.orderFrom), b = toMin(s.orderTo);
+  if (a === null || b === null || a === b) return { open: true as const };
+  const t = now.getHours() * 60 + now.getMinutes();
+  const inside = a < b ? t >= a && t < b : t >= a || t < b; // b < a: open past midnight
+  return inside ? { open: true as const } : { open: false as const, why: "hours" as const, opensAt: niceTime(s.orderFrom) };
+}

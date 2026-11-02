@@ -1,10 +1,10 @@
 import { PricingTable } from "@/components/pricing";
-import { MobileCta, SiteFooter, SiteNav } from "@/components/site/chrome";
+import { MobileCta, SiteFooter, SiteNav, WhatsAppTab } from "@/components/site/chrome";
 import { Hero, MadeFor } from "@/components/site/hero";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
 import { SectionHead } from "@/components/site/head";
-import { Features, Only, Statement, Story } from "@/components/site/sections";
+import { Features, Only, Statement, Story, WhyRestropi } from "@/components/site/sections";
 
 export default function Landing() {
   return (
@@ -15,6 +15,7 @@ export default function Landing() {
           <Hero />
           <MadeFor />
           <Statement />
+          <WhyRestropi />
           <Features />
           <Story />
           <Only />
@@ -32,6 +33,7 @@ export default function Landing() {
         <SiteFooter />
         <MobileCta />
         <HelpChat />
+        <WhatsAppTab />
       </div>
     </SiteMotion>
   );

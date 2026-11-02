@@ -288,7 +288,7 @@ export function CategoryRail({ groups, active, onPick, lang }: { groups: { c: Ca
     railRef.current?.querySelector<HTMLElement>(`[data-cat="${active}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [active]);
   return (
-    <nav ref={railRef} aria-label={tx(lang, "Menu categories", "मेनू प्रकार")} className="no-scrollbar flex max-h-full flex-col gap-0.5 overflow-y-auto rounded-[18px] bg-surface p-1 pb-5 [mask-image:linear-gradient(to_bottom,black_calc(100%-22px),transparent)]">
+    <nav ref={railRef} aria-label={tx(lang, "Menu categories", "मेनू प्रकार")} className="no-scrollbar flex min-h-0 max-h-full flex-col gap-0.5 overflow-y-auto rounded-[18px] bg-surface p-1 pb-5 [mask-image:linear-gradient(to_bottom,black_calc(100%-22px),transparent)]">
       {groups.map(({ c, n }) => {
         const on = active === c.id;
         return (

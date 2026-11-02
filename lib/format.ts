@@ -40,4 +40,15 @@ export const initials = (name: string) =>
 export const orderTotal = (lines: { qty: number; price: number }[]) =>
   lines.reduce((s, l) => s + l.qty * l.price, 0);
 
-export const GST_RATE = 0.05; // restaurant GST (non-AC/AC without ITC)
+/** Restaurant GST rate (5% by default; the owner can change it per outlet in Settings → Details on bills). */
+let currentGst = 0.05;
+export const gstRate = () => currentGst;
+export function setGstRate(r: number | undefined) {
+  currentGst = typeof r === "number" && r >= 0 && r < 1 ? r : 0.05;
+}
+/** "2.5%" — half the rate, for the CGST / SGST lines. */
+export const halfGstLabel = () => `${+((currentGst * 100) / 2).toFixed(2)}%`;
+/** "5%" */
+export const gstLabel = () => `${+(currentGst * 100).toFixed(2)}%`;
+/** @deprecated use gstRate() */
+export const GST_RATE = 0.05;

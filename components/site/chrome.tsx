@@ -1,6 +1,7 @@
 "use client";
 
 // Website navigation and footer (home, pricing).
+import { DEFAULT_CONTACT_EMAIL, DEFAULT_CONTACT_WHATSAPP } from "@/lib/config";
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -70,7 +71,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           className={clsx(
             "mx-3 mt-3 flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:mx-6 sm:px-4",
             light ? "max-w-[1400px] border border-transparent sm:mx-8 sm:px-6 lg:mx-auto lg:px-10" : "max-w-6xl lg:mx-auto",
-            !light && (scrolled || open ? "glass-strong" : "glass"),
+            !light && (scrolled || open ? "nav-solid" : "glass"),
           )}
         >
           <Link href="/" className="rounded-full px-2 py-1" aria-label="Restropi home">
@@ -190,8 +191,26 @@ export function MobileCta() {
 }
 
 // Set these in .env.local to show your contact details on the home page.
-export const CONTACT_WA = (process.env.NEXT_PUBLIC_CONTACT_WHATSAPP ?? "").replace(/\D/g, "");
-export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
+export const CONTACT_WA = (process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || DEFAULT_CONTACT_WHATSAPP).replace(/\D/g, "");
+export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL;
+
+/** Square WhatsApp button stuck to the right edge, halfway down the screen. */
+export function WhatsAppTab() {
+  if (!CONTACT_WA) return null;
+  return (
+    <a
+      href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi Restropi, I'd like to know more.")}`}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Chat with Restropi on WhatsApp"
+      className="group fixed right-0 top-1/2 z-[45] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-l-[14px] bg-[#25D366] text-white shadow-[0_12px_30px_-12px_rgb(16_24_20/.55)] transition-[width] duration-300 hover:w-14 sm:h-14 sm:w-14 sm:hover:w-16"
+    >
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="currentColor" aria-hidden>
+        <path d="M16.04 3C9.0 3 3.3 8.7 3.3 15.74c0 2.25.6 4.45 1.72 6.38L3.2 29l7.05-1.78a12.7 12.7 0 0 0 5.79 1.4h.01c7.04 0 12.75-5.7 12.75-12.74C28.8 8.7 23.08 3 16.04 3zm0 23.4h-.01a10.6 10.6 0 0 1-5.4-1.48l-.39-.23-4.18 1.06 1.12-4.07-.25-.42a10.6 10.6 0 0 1-1.62-5.62c0-5.86 4.77-10.63 10.64-10.63 5.86 0 10.63 4.77 10.63 10.64 0 5.86-4.77 10.62-10.54 10.62zm5.83-7.96c-.32-.16-1.89-.93-2.18-1.04-.29-.1-.5-.16-.72.16-.21.32-.82 1.04-1 1.25-.19.21-.37.24-.69.08-.32-.16-1.35-.5-2.57-1.59-.95-.85-1.59-1.9-1.78-2.22-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.56.16-.19.21-.32.32-.53.1-.21.05-.4-.03-.56-.08-.16-.72-1.73-.98-2.37-.26-.62-.52-.54-.72-.55h-.61c-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.57 1.14 3.08 1.3 3.29.16.21 2.24 3.42 5.43 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.89-.77 2.15-1.52.27-.75.27-1.39.19-1.52-.08-.13-.29-.21-.61-.37z" />
+      </svg>
+    </a>
+  );
+}
 
 /** "Book a free demo" dialog. Any link to #contact opens it. */
 function DemoDialog() {
@@ -258,7 +277,7 @@ export function SiteFooter() {
               Book a free demo
             </a>
             <Link href="/#pricing" className="flex h-14 w-full items-center justify-center rounded-[16px] bg-white px-7 text-[16px] font-semibold ring-1 ring-black/[.06] transition hover:bg-jade-soft sm:w-auto">
-              See plans (from ₹999/mo)
+              See plans (from ₹699/mo)
             </Link>
           </div>
         </div>
@@ -282,6 +301,7 @@ export function SiteFooter() {
                     ))}
                     {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
                     {c.t === "Restropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
+                    {c.t === "Restropi" && <li className="text-ink/45">Pune · Satara · Kolhapur</li>}
                   </ul>
                 </div>
               ))}

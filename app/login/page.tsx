@@ -39,7 +39,8 @@ export default function LoginPage() {
     } catch {}
     if (!r) return;
     setRid(r);
-    setMode("staff");
+    // opens on Owner; only the staff sign-in link (…/login?r=…) opens on Staff PIN
+    if (fromUrl) setMode("staff");
     publicInfo(r).then((i) => setPlace(i?.name ?? "")).catch(() => {});
     publicStaff(r).then(setFaces).catch(() => {});
   }, []);
@@ -135,7 +136,7 @@ export default function LoginPage() {
           )}
           {place && <p className="mt-1 text-[15px] text-muted">{place}</p>}
           <Segmented
-            className="mt-6 w-full"
+            className="mt-6 w-full !rounded-[14px] !p-1 [&_button]:!rounded-[11px] [&_button]:!py-3 [&_button]:!text-[15.5px]"
             value={mode}
             onChange={(v) => { setMode(v); setPin(""); setWho(null); setError(""); }}
             options={[{ value: "owner", label: "Owner" }, { value: "staff", label: "Staff PIN" }]}

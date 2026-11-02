@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { checkPlanCoupon, getPlatformSettings, useCloud, type PlatformSettings } from "@/lib/cloud";
 import { createStore } from "@/lib/store";
 import { useAccount, useOutlets } from "@/lib/live";
-import { plans } from "@/lib/plans";
+import { CYCLES, cyclePrice, plans, type Cycle } from "@/lib/plans";
 import { PLAN_NAME } from "@/lib/access";
 import { inr } from "@/lib/format";
 import { Button, Sheet, inputCls } from "./ui";
@@ -46,7 +46,8 @@ export function PlanSheet() {
   const cloud = useCloud();
   const platform = usePlatform();
   const [plan, setPlan] = useState<PlanId>(account.plan);
-  const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
+  const [cycle, setCycle] = useState<Cycle>("monthly");
+  const cyc = CYCLES.find((c) => c.id === cycle)!;
   const [code, setCode] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; kind: "percent" | "flat"; value: number } | null>(null);
   const [codeMsg, setCodeMsg] = useState("");
@@ -65,7 +66,7 @@ export function PlanSheet() {
 
   const p = plans.find((x) => x.id === plan)!;
   const count = Math.max(1, outlets.length);
-  const each = cycle === "monthly" ? p.monthly : p.yearly;
+  const each = cyclePrice(p, cycle);
   const base = each ? each * count : 0;
   const off = coupon ? Math.min(base, Math.round(coupon.kind === "percent" ? (base * coupon.value) / 100 : coupon.value)) : 0;
   const gst = Math.round((base - off) * PLAN_GST);
@@ -82,7 +83,7 @@ export function PlanSheet() {
     `Restaurant ID: ${cloud.rid ?? "-"}`,
     `Login: ${cloud.email ?? "-"}`,
     `Current plan: ${PLAN_NAME[account.plan]} (runs until ${new Date(account.renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})`,
-    `New plan: ${p.name}${custom ? "" : `, ${cycle}`}, ${count} outlet${count === 1 ? "" : "s"}`,
+    `New plan: ${p.name}${custom ? "" : `, ${cyc.short}`}, ${count} outlet${count === 1 ? "" : "s"}`,
     ...(coupon ? [`Coupon: ${coupon.code} (−${inr(off)})`] : []),
     ...(custom ? ["Please share the price."] : [`Amount: ${inr(total)} incl. GST`, platform?.upi ? "I have paid by UPI. Screenshot attached." : "Please share how to pay."]),
   ].join("\n");
@@ -147,14 +148,14 @@ export function PlanSheet() {
         {!custom && (
           <>
             {/* 2. how long */}
-            <div className="grid grid-cols-2 gap-2">
-              {(["monthly", "yearly"] as const).map((c) => (
+            <div className="grid grid-cols-3 gap-2">
+              {CYCLES.map(({ id: c, short }) => (
                 <button
                   key={c}
                   onClick={() => setCycle(c)}
-                  className={clsx("rounded-ctl py-3 text-[14px] font-semibold", cycle === c ? "bg-ink text-canvas" : "bg-surface text-ink")}
+                  className={clsx("rounded-ctl px-1 py-3 text-[13px] font-semibold leading-tight", cycle === c ? "bg-ink text-canvas" : "bg-surface text-ink")}
                 >
-                  {c === "monthly" ? "1 month" : "1 year · 2 months free"}
+                  {short}
                 </button>
               ))}
             </div>
@@ -178,7 +179,7 @@ export function PlanSheet() {
 
             {/* 4. total */}
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14px]">
-              <div className="flex justify-between"><dt className="text-muted">{p.name} · {count} outlet{count === 1 ? "" : "s"} · {cycle === "monthly" ? "1 month" : "1 year"}</dt><dd className="tnum">{inr(base)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">{p.name} · {count} outlet{count === 1 ? "" : "s"} · {cyc.short}</dt><dd className="tnum">{inr(base)}</dd></div>
               {off > 0 && <div className="flex justify-between text-jade"><dt>Coupon {coupon?.code}</dt><dd className="tnum">−{inr(off)}</dd></div>}
               <div className="flex justify-between"><dt className="text-muted">GST 18%</dt><dd className="tnum">{inr(gst)}</dd></div>
               <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>To pay</dt><dd className="tnum">{inr(total)}</dd></div>
@@ -187,7 +188,7 @@ export function PlanSheet() {
             {/* 5. pay */}
             {platform?.upi && isValidUpi(platform.upi) ? (
               <div className="rounded-group bg-surface p-5">
-                <UpiPayCard upi={platform.upi} payee={platform.payee || "Restropi"} amount={total} note={`Restropi ${p.name} ${cycle}`} size={180} />
+                <UpiPayCard upi={platform.upi} payee={platform.payee || "Restropi"} amount={total} note={`Restropi ${p.name} ${cyc.short}`} size={180} />
               </div>
             ) : null}
           </>

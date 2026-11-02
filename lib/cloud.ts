@@ -13,7 +13,7 @@
 //   staff  → 4-digit PIN, checked by the `staff-login` edge function
 //   guest  → anonymous sign-in, no screen
 import { createClient, type RealtimeChannel, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import { cloudConfigured, createStore, remoteBindings, setRemoteWriter, type RemoteBinding } from "./store";
+import { cloudConfigured, createStore, remoteBindings, setReady, setRemoteWriter, type RemoteBinding } from "./store";
 
 export { cloudConfigured };
 
@@ -167,6 +167,19 @@ export async function signInOwner(email: string, password: string) {
   const { error } = await sb().auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw new Error(friendly(error.message));
 }
+/** Check the signed-in person's password again (before risky admin changes). */
+export async function verifyMyPassword(password: string) {
+  const { data } = await sb().auth.getUser();
+  const email = data.user?.email;
+  if (!email) throw new Error("Sign in again");
+  const { error } = await sb().auth.signInWithPassword({ email, password });
+  if (error) throw new Error("Wrong password");
+}
+/** "Continue with Google" (needs the Google provider switched on in Supabase → Authentication → Providers). */
+export async function signInWithGoogle() {
+  const { error } = await sb().auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/login` } });
+  if (error) throw new Error(friendly(error.message));
+}
 export async function sendPasswordReset(email: string) {
   const { error } = await sb().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/login` });
   if (error) throw new Error(friendly(error.message));
@@ -291,6 +304,7 @@ export function connect(rid: string, role: Role, uid: string) {
     if (!table) continue;
     const map = new Map<string, unknown>();
     maps.set(b.key, map);
+    setReady(b.key, false);
     b.receive([]);
     ch.on("postgres_changes", { event: "INSERT", schema: "public", table, filter: `rid=eq.${rid}` }, (p) => {
       const r = p.new as Row;
@@ -311,9 +325,13 @@ export function connect(rid: string, role: Role, uid: string) {
     if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
     if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
     void q.then(({ data, error }) => {
-      if (error) return report(error);
+      if (error) {
+        setReady(b.key, true);
+        return report(error);
+      }
       for (const r of (data as unknown as Row[]) ?? []) if (!map.has(r.id)) map.set(r.id, fromRow(b.key, r));
       publish(b);
+      setReady(b.key, true);
     });
   }
   ch.subscribe();
@@ -433,6 +451,12 @@ export async function adminList(): Promise<AdminRestaurant[]> {
   const { data, error } = await sb().rpc("admin_restaurants");
   if (error) throw new Error(error.message);
   return (data as AdminRestaurant[]) ?? [];
+}
+/** Super admin: paid sales per restaurant between two times. */
+export async function adminSales(from: Date, to: Date): Promise<{ rid: string; bills: number; sales: number }[]> {
+  const { data, error } = await sb().rpc("admin_sales", { p_from: from.toISOString(), p_to: to.toISOString() });
+  if (error) throw new Error(error.message);
+  return ((data as { rid: string; bills: number; sales: number | string }[]) ?? []).map((r) => ({ rid: r.rid, bills: Number(r.bills), sales: Number(r.sales) }));
 }
 export async function adminUpdate(rid: string, patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">>) {
   const { error } = await sb().rpc("admin_update_restaurant", { r: rid, patch });

@@ -39,9 +39,9 @@ import {
   type MenuFilters,
 } from "@/components/guest-menu";
 import { PayPanel, ThankYou } from "@/components/guest-pay";
-import { GST_RATE, inr, minutesSince } from "@/lib/format";
+import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
-import { cloudConfigured, feedbackActions, guestActions, orderActions, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { cloudConfigured, feedbackActions, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { ensureGuest, useCloud } from "@/lib/cloud";
 import type { MenuItem, Order, Payment } from "@/lib/types";
 
@@ -259,19 +259,30 @@ export default function GuestOrder() {
   // side bar follows the scroll
   useEffect(() => {
     if (view !== "menu") return;
-    const els = grouped.map((g) => document.getElementById(`cat-${g.c.id}`)).filter(Boolean) as HTMLElement[];
-    if (!els.length) return;
-    setActiveCat((a) => (a && grouped.some((g) => g.c.id === a) ? a : grouped[0].c.id));
-    const io = new IntersectionObserver(
-      (entries) => {
-        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (top) setActiveCat(top.target.id.replace("cat-", ""));
-      },
-      { rootMargin: `-${barH + 14}px 0px -55% 0px` },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [grouped, view, barH]);
+    if (!grouped.length) return;
+    // the last section whose heading has reached the search bar; the last one at the very bottom
+    // (sections are looked up each time: they appear only after the page finishes loading)
+    let raf = 0;
+    const pick = () => {
+      raf = 0;
+      const els = grouped.map((g) => document.getElementById(`cat-${g.c.id}`)).filter(Boolean) as HTMLElement[];
+      if (!els.length) return;
+      const line = barH + 24;
+      let cur = els[0];
+      for (const el of els) if (el.getBoundingClientRect().top <= line) cur = el;
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = els[els.length - 1];
+      setActiveCat(cur.id.replace("cat-", ""));
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(pick); };
+    pick();
+    const again = window.setTimeout(pick, 400); // after the menu shows
+    window.addEventListener("scroll", on, { passive: true });
+    return () => {
+      window.clearTimeout(again);
+      window.removeEventListener("scroll", on);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [grouped, view, barH, cloudLoading]);
   const jumpTo = (id: string) => {
     setActiveCat(id);
     document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -292,7 +303,7 @@ export default function GuestOrder() {
 
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const itemTotal = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-  const gst = Math.round(itemTotal * GST_RATE * 100) / 100;
+  const gst = Math.round(itemTotal * gstRate() * 100) / 100;
   const payable = Math.round(itemTotal + gst);
 
   const pairing = useMemo(() => {
@@ -348,12 +359,21 @@ export default function GuestOrder() {
     return order;
   };
 
-  // QR ordering only during opening hours (11:00 am – 11:30 pm, from Settings).
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const isOpen = mins >= 11 * 60 && mins <= 23 * 60 + 30;
+  // QR ordering only in the hours the owner set (Settings → Ordering), and not while paused.
+  const [, tickHours] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => tickHours((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const hours = orderingOpen(settings);
+  const isOpen = hours.open;
+  const closedText = hours.open
+    ? ""
+    : hours.why === "paused"
+      ? tx(lang, "Ordering from the phone is paused right now. Please order with our staff.", "आत्ता फोनवरून ऑर्डर बंद आहे. कृपया स्टाफकडे ऑर्डर द्या.")
+      : tx(lang, `You can browse the menu — ordering opens at ${hours.opensAt}.`, `मेनू पाहू शकता — ऑर्डर ${hours.opensAt} पासून.`);
   const placeOrder = () => {
-    if (!isOpen) return toast(tx(lang, "Ordering opens at 11 am", "आत्ता ऑर्डर बंद आहे"));
+    if (!isOpen) return toast(closedText);
     if (payNow) {
       if (!guest) {
         afterOtp.current = "pay";
@@ -390,7 +410,7 @@ export default function GuestOrder() {
 
   // ---- the group's bill (restaurant flow) ----
   const billItems = unbilled.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
-  const billGst = Math.round(billItems * GST_RATE * 100) / 100;
+  const billGst = Math.round(billItems * gstRate() * 100) / 100;
   const tip = Math.round((billItems * tipPct) / 100);
   const billTotal = Math.round(billItems + billGst + tip);
   const billIds = unbilled.map((o) => o.id);
@@ -500,7 +520,7 @@ export default function GuestOrder() {
 
       {qrOn && !isOpen && (
         <div className="mx-4 mb-3 rounded-[18px] bg-saffron-soft px-4 py-3 text-[14px]">
-          <b>{tx(lang, "We're closed right now.", "आत्ता ऑर्डर बंद आहे.")}</b> {tx(lang, "You can browse the menu — ordering opens at 11 am.", "मेनू पाहू शकता. ऑर्डर सकाळी 11 पासून.")}
+          <b>{hours.open ? "" : hours.why === "paused" ? tx(lang, "Orders paused.", "ऑर्डर थांबवल्या आहेत.") : tx(lang, "We're closed right now.", "आत्ता ऑर्डर बंद आहे.")}</b> {closedText}
         </div>
       )}
 
@@ -541,7 +561,7 @@ export default function GuestOrder() {
 
           <div className="flex items-start gap-2.5 px-3 pt-3">
             {grouped.length > 1 && (
-              <aside className="sticky w-[66px] shrink-0 sm:w-[84px]" style={{ top: barH + 12, height: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
+              <aside className="sticky z-10 flex w-[66px] shrink-0 self-start flex-col sm:w-[84px]" style={{ top: barH + 12, maxHeight: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
                 <CategoryRail groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />
               </aside>
             )}
@@ -563,7 +583,7 @@ export default function GuestOrder() {
                   </h2>
                   <div className="overflow-hidden rounded-[18px] bg-surface">
                     {items.map((m) => (
-                      <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn} />
+                      <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
                     ))}
                   </div>
                 </section>
@@ -607,7 +627,7 @@ export default function GuestOrder() {
           {!payNow && unbilled.length > 0 && (
             <div className="flex items-baseline justify-between px-1 pt-1 text-[15px]">
               <span className="text-muted">{tx(lang, "Bill so far", "आतापर्यंतचं बिल")} · incl. GST</span>
-              <span className="text-[20px] font-semibold tnum">{inr(Math.round(billItems * (1 + GST_RATE)))}</span>
+              <span className="text-[20px] font-semibold tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span>
             </div>
           )}
           {!counter && (
@@ -641,7 +661,7 @@ export default function GuestOrder() {
       </div>
 
       {/* ---------- dish detail / photos ---------- */}
-      <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={qrOn ? addLine : undefined} photosOnly={!qrOn} />
+      <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={qrOn && isOpen ? addLine : undefined} photosOnly={!qrOn || !isOpen} />
       <ItemSheet item={photosOf} onClose={() => setPhotosOf(null)} photosOnly />
 
       {/* ---------- filters ---------- */}
@@ -708,7 +728,7 @@ export default function GuestOrder() {
 
           <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(itemTotal, { decimals: true })}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted">CGST 2.5% + SGST 2.5%</dt><dd className="tnum">{inr(gst, { decimals: true })}</dd></div>
+            <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(gst, { decimals: true })}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
             <div className="flex justify-between border-t border-line pt-2 text-[16px] font-semibold"><dt>{tx(lang, "To pay", "एकूण")}</dt><dd className="tnum">{inr(payable)}</dd></div>
             <p className="pt-1 text-[12.5px] text-faint">
@@ -949,7 +969,7 @@ export default function GuestOrder() {
             </div>
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(billItems, { decimals: true })}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">CGST 2.5% + SGST 2.5%</dt><dd className="tnum">{inr(billGst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(billGst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
               {tip > 0 && <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Tip", "टिप")}</dt><dd className="tnum">{inr(tip)}</dd></div>}
               <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>{tx(lang, "Total payable", "भरायचे")}</dt><dd className="tnum">{inr(billTotal)}</dd></div>

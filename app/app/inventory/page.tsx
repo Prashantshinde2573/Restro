@@ -258,15 +258,17 @@ function MoveSheet({ value, onClose, onSave }: { value: { item: StockItem; kind:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   const n = Number(qty.replace(",", "."));
-  const ok = qty !== "" && n >= 0 && (kind === "count" || n > 0);
   const i = value?.item;
+  // can't use or waste more than is in stock (do a Count first if the real amount is higher)
+  const tooMuch = !!i && (kind === "used" || kind === "waste") && n > i.stock + 1e-9;
+  const ok = qty !== "" && Number.isFinite(n) && n >= 0 && (kind === "count" || n > 0) && !tooMuch;
 
   return (
     <Sheet
       open={!!value}
       onClose={onClose}
       title={i ? i.name : ""}
-      footer={<Button size="lg" className="w-full" disabled={!ok} onClick={() => onSave(n, note.trim(), kind)}>Save</Button>}
+      footer={<Button size="lg" className="w-full" disabled={!ok} onClick={() => onSave(n, note.trim(), kind)}>{tooMuch ? `Only ${fmt(i!.stock)} ${i!.unit} in stock` : "Save"}</Button>}
     >
       {i && (
         <div className="space-y-4">
@@ -280,6 +282,11 @@ function MoveSheet({ value, onClose, onSave }: { value: { item: StockItem; kind:
           <Field label={kind === "count" ? `Counted now (${i.unit})` : `How much (${i.unit})`}>
             <input className={inputCls} inputMode="decimal" autoFocus value={qty} onChange={(e) => setQty(e.target.value)} />
           </Field>
+          {tooMuch && (
+            <p className="-mt-2 rounded-ctl bg-saffron-soft px-3 py-2 text-[13px]">
+              That&apos;s more than the {fmt(i.stock)} {i.unit} in stock. If you really have more, use <b>Count</b> to set the right amount first.
+            </p>
+          )}
           <Field label="Note" hint="Optional, e.g. bill number or why it was wasted"><input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
         </div>
       )}

@@ -11,6 +11,7 @@ import { ChangePassword } from "@/components/owner-auth";
 import { useToast } from "@/components/toast";
 import {
   billOf,
+  niceTime,
   paymentsText,
   settingsActions,
   useAccount,
@@ -133,7 +134,7 @@ export default function SettingsPage() {
             <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}{outlet.mixed ? " · tables + counter" : ""}</div>
             <div className="overflow-hidden rounded-group bg-surface">
               <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi || "Add UPI ID"} onClick={() => setPanel("payments")} />
-              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
+              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo ? `QR orders ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
               <Item icon={<Receipt size={16} />} tint="#DE9122" title="Details on bills" value={settings.gstin || "GSTIN, FSSAI, address"} onClick={() => setPanel("restaurant")} />
             </div>
           </div>
@@ -204,7 +205,14 @@ export default function SettingsPage() {
               <Field label="FSSAI licence"><input className={inputCls} inputMode="numeric" value={draft.fssai ?? ""} onChange={(e) => setDraft({ ...draft, fssai: e.target.value })} /></Field>
             </div>
             <Field label="Message at the bottom of the bill"><input className={inputCls} placeholder="Thank you! Visit again" value={draft.billFooter ?? ""} onChange={(e) => setDraft({ ...draft, billFooter: e.target.value })} /></Field>
-            <p className="text-[13px] text-muted">GST of 5% is added to every bill.</p>
+            <Field label="GST on bills" hint="Most restaurants and cafés charge 5%. Choose 0% if this outlet isn't GST-registered.">
+              <Segmented
+                className="w-full"
+                value={String(draft.gstRate ?? 0.05)}
+                onChange={(v) => setDraft({ ...draft, gstRate: Number(v) })}
+                options={[{ value: "0", label: "0%" }, { value: "0.05", label: "5%" }, { value: "0.12", label: "12%" }, { value: "0.18", label: "18%" }]}
+              />
+            </Field>
           </div>
         )}
         {panel === "payments" && (
@@ -256,6 +264,34 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={draft.payFirst} onChange={(v) => setDraft({ ...draft, payFirst: v })} label="Guests pay first" />
             </div>
+            <div className="overflow-hidden rounded-group bg-surface">
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <div>
+                  <div className="text-[15px]">Pause QR orders now</div>
+                  <div className="text-[12.5px] text-muted">Guests can still see the menu but can&apos;t order from their phone. Staff can still take orders.</div>
+                </div>
+                <Toggle checked={!!draft.ordersPaused} onChange={(v) => setDraft({ ...draft, ordersPaused: v })} label="Pause QR orders" />
+              </div>
+              <div className="flex items-center justify-between gap-4 border-t border-line/80 px-4 py-3">
+                <div>
+                  <div className="text-[15px]">Take QR orders only in these hours</div>
+                  <div className="text-[12.5px] text-muted">Outside these times guests see &ldquo;closed&rdquo; and when ordering opens.</div>
+                </div>
+                <Toggle
+                  checked={!!(draft.orderFrom && draft.orderTo)}
+                  onChange={(v) => setDraft({ ...draft, orderFrom: v ? draft.orderFrom || "09:00" : "", orderTo: v ? draft.orderTo || "22:00" : "" })}
+                  label="Ordering hours"
+                />
+              </div>
+              {!!(draft.orderFrom && draft.orderTo) && (
+                <div className="grid grid-cols-2 gap-3 border-t border-line/80 px-4 py-3">
+                  <Field label="Opens at"><input type="time" className={inputCls} value={draft.orderFrom ?? ""} onChange={(e) => setDraft({ ...draft, orderFrom: e.target.value })} /></Field>
+                  <Field label="Closes at"><input type="time" className={inputCls} value={draft.orderTo ?? ""} onChange={(e) => setDraft({ ...draft, orderTo: e.target.value })} /></Field>
+                  {draft.orderFrom === draft.orderTo && <p className="col-span-2 text-[12.5px] text-saffron">Opening and closing are the same, so guests can order any time.</p>}
+                  {!!draft.orderFrom && !!draft.orderTo && draft.orderTo < draft.orderFrom && <p className="col-span-2 text-[12.5px] text-muted">Closes after midnight, the next day.</p>}
+                </div>
+              )}
+            </div>
             <Link href="/app/tables" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Tables and their QR codes →</Link>
             {(draft.businessType === "cafe" || draft.mixed) && cloud.rid && (
               <Link href={`/order/counter?r=${cloud.rid}`} className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu →</Link>
@@ -300,7 +336,8 @@ function Security({ onDone }: { onDone: () => void }) {
 }
 
 const download = (name: string, text: string, type: string) => {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+  // CSV: start with a byte-order mark so Excel reads ₹ and Marathi/Hindi text correctly
+  const url = URL.createObjectURL(new Blob([type === "text/csv" ? "\uFEFF" + text : text], { type: type === "text/csv" ? "text/csv;charset=utf-8" : type }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
@@ -339,7 +376,7 @@ function Export() {
           const head = ["Order", "Date", "Type", "Table", "Status", "Items", "Bill (₹, with GST)", "Paid by", "Staff"];
           const rows = orders.map((o) => [
             o.number, new Date(o.createdAt).toLocaleString("en-IN"), o.type, o.tableName ?? "", o.status,
-            o.lines.map((l) => `${l.qty} × ${l.name}`).join("; "), billOf(o), paymentsText(o.payments), o.staff,
+            o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), billOf(o), paymentsText(o.payments).replace(/₹/g, "Rs "), o.staff,
           ]);
           download(`${slug}-orders-${stamp}.csv`, [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), "text/csv");
         }}

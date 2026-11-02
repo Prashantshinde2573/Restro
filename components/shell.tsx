@@ -35,6 +35,7 @@ import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
+import { OrderAlerts } from "./order-alerts";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
@@ -595,6 +596,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <RenewBanner />
             <RouteGate>{children}</RouteGate>
             <PlanSheet />
+            <OrderAlerts />
           </ClientOnly>
         </div>
       </main>

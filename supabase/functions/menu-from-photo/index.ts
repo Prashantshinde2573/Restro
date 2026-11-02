@@ -28,15 +28,18 @@ type MemberData = { id: string; role?: string; active?: boolean; perms?: string[
 const DAILY_PHOTOS = 20; // per restaurant per day
 const MAX_PHOTOS = 6; // per request
 const MAX_B64 = 6_000_000; // ~4.5 MB per photo after base64
-// Fast, non-"thinking" settings first: reading a menu doesn't need long reasoning,
-// and the function has to answer within Supabase's 150 s limit.
-const MODELS: { name: string; thinking?: Record<string, unknown> }[] = [
+// Fast settings first: reading a menu doesn't need long "thinking", and the
+// function has to answer within Supabase's 150 s limit. Google retires model
+// names often; when one is gone, the model Google suggests in its reply is tried next.
+type Model = { name: string; thinking?: Record<string, unknown> };
+const MODELS: Model[] = [
   ...(Deno.env.get("GEMINI_MODEL") ? [{ name: Deno.env.get("GEMINI_MODEL")! }] : []),
-  { name: "gemini-2.5-flash", thinking: { thinkingBudget: 0 } },
+  { name: "gemini-3.8-flash", thinking: { thinkingLevel: "low" } },
+  { name: "gemini-3.5-flash-lite", thinking: { thinkingLevel: "low" } },
   { name: "gemini-flash-latest", thinking: { thinkingLevel: "low" } },
-  { name: "gemini-2.5-flash-lite", thinking: { thinkingBudget: 0 } },
+  { name: "gemini-flash-lite-latest", thinking: { thinkingLevel: "low" } },
 ];
-const DEADLINE_MS = 135_000; // stop trying before Supabase's 150 s limit
+const DEADLINE_MS = 140_000; // stop trying before Supabase's 150 s limit
 const KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 
 const PROMPT = `You are reading photos of one restaurant or café menu in India.
@@ -86,7 +89,12 @@ async function gemini(photos: Photo[]) {
   const started = Date.now();
   const parts = [{ text: PROMPT }, ...photos.map((p) => ({ inline_data: { mime_type: p.mime, data: p.data } }))];
   let last = "";
-  for (const m of MODELS) {
+  const queue = [...MODELS];
+  const tried = new Set<string>();
+  while (queue.length) {
+    const m = queue.shift()!;
+    if (tried.has(m.name)) continue;
+    tried.add(m.name);
     for (const thinking of m.thinking ? [m.thinking, undefined] : [undefined]) {
       const left = DEADLINE_MS - (Date.now() - started);
       if (left < 15_000) throw new Error("Reading took too long. Try fewer photos at a time (1–2 pages).");
@@ -96,7 +104,7 @@ async function gemini(photos: Photo[]) {
         r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m.name}:generateContent`, {
           method: "POST",
           headers: { "content-type": "application/json", "x-goog-api-key": KEY },
-          signal: AbortSignal.timeout(Math.min(left - 5_000, 90_000)),
+          signal: AbortSignal.timeout(Math.min(left - 5_000, 75_000)),
           body: JSON.stringify({
             contents: [{ role: "user", parts }],
             generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0, maxOutputTokens: 16_000, ...(thinking ? { thinkingConfig: thinking } : {}) },
@@ -111,6 +119,10 @@ async function gemini(photos: Photo[]) {
       console.log(`gemini ${m.name}${thinking ? " (fast)" : ""}: ${r.status} in ${Date.now() - t0} ms`, r.ok ? "" : JSON.stringify(j?.error ?? {}).slice(0, 300));
       if (r.status === 404) {
         last = `model ${m.name} not found`;
+        // "...no longer available... use models/gemini-x.y-flash" → try that one next
+        const hint = /models\/(gemini-[\w.-]+)/g;
+        const named = [...String(j?.error?.message ?? "").matchAll(hint)].map((x) => x[1]).filter((n) => n !== m.name && !tried.has(n));
+        if (named.length) queue.unshift(...named.map((name) => ({ name, thinking: { thinkingLevel: "low" } })));
         break; // next model
       }
       if (r.status === 400 && thinking && /think/i.test(j?.error?.message ?? "")) continue; // same model, without the setting
@@ -133,7 +145,8 @@ async function gemini(photos: Photo[]) {
       }
     }
   }
-  throw new Error(`The menu reader isn't answering right now (${last}). Try again in a minute.`);
+  console.log("no model answered:", last);
+  throw new Error("The menu reader isn't answering right now. Try again in a minute, with one clear photo.");
 }
 
 const clean = (s: unknown, max = 80) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);

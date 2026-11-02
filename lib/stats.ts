@@ -1,4 +1,5 @@
 // Numbers for the dashboard and reports, worked out from real orders.
+import { gstRate } from "./format";
 import { billOf } from "./live";
 import type { MenuItem, Order, PayMethod } from "./types";
 
@@ -26,17 +27,25 @@ export interface Totals {
   gst: number;
   open: number; // value of bills not paid yet
 }
+/** GST inside an amount that already includes GST (works with discounts and coupons too). */
+export const gstIn = (amountWithGst: number) => Math.round((amountWithGst - amountWithGst / (1 + gstRate())) * 100) / 100;
+/** One bill split for GST: taxable value, CGST, SGST, total with GST. */
+export function taxSplit(o: Order) {
+  const total = o.status === "paid" ? paidAmount(o) : billOf(o);
+  const gst = gstIn(total);
+  const cgst = Math.round((gst / 2) * 100) / 100;
+  return { taxable: Math.round((total - gst) * 100) / 100, cgst, sgst: Math.round((gst - cgst) * 100) / 100, gst, total };
+}
 export function totals(orders: Order[]): Totals {
   const l = live(orders);
   const p = paid(l);
   const sales = p.reduce((s, o) => s + paidAmount(o), 0);
-  const net = p.reduce((s, o) => s + o.lines.reduce((a, x) => a + x.qty * x.price, 0), 0);
   return {
     orders: l.length,
     paidOrders: p.length,
     sales,
     avgBill: p.length ? Math.round(sales / p.length) : 0,
-    gst: Math.max(0, Math.round(sales - net)),
+    gst: Math.round(p.reduce((s, o) => s + taxSplit(o).gst, 0)),
     open: l.filter((o) => o.status !== "paid").reduce((s, o) => s + billOf(o), 0),
   };
 }

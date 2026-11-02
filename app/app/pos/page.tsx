@@ -14,7 +14,7 @@ import { getOrders, orderActions, useOrders, useMenu, useCategories, useCurrentO
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
 import { getTable, isShared, seatsFree, tableActions, tableState, useTables } from "@/lib/tables";
-import { inr } from "@/lib/format";
+import { inr, gstLabel } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
 
 type Line = { item: MenuItem; qty: number; note?: string; unitPrice?: number };
@@ -194,7 +194,7 @@ function PosScreen() {
 
       <div className="pb-safe space-y-3 border-t border-line px-4 pt-3 [--safe-pb:16px] lg:px-5">
         <div className="flex items-baseline justify-between text-[13.5px] text-muted">
-          <span>{count} items · GST 5% added at checkout</span>
+          <span>{count} items · GST {gstLabel()} added at checkout</span>
           {running > 0 && <span className="tnum">Already on bill {inr(running)}</span>}
         </div>
         <div className="flex items-baseline justify-between">

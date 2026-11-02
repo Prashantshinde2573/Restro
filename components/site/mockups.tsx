@@ -10,16 +10,14 @@ export function Logo({ size = 22, className }: { size?: number; className?: stri
 }
 /** Full logo. `light` = white letters, for dark backgrounds. Size it with a height class (h-7 …). */
 export function Brand({ className, light = false }: { className?: string; light?: boolean }) {
+  // both logos are always loaded and cross-fade, so the dark one never flashes on the video
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={light ? "/brand/restropi-logo-light.png" : "/brand/restropi-logo-dark.png"}
-      alt="Restropi"
-      width={597}
-      height={180}
-      className={clsx("block h-7 w-auto select-none", className)}
-      draggable={false}
-    />
+    <span className={clsx("relative inline-block h-7 select-none", className)} role="img" aria-label="Restropi">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/restropi-logo-dark.png" alt="" aria-hidden width={597} height={180} draggable={false} className={clsx("block h-full w-auto transition-opacity duration-300", light ? "opacity-0" : "opacity-100")} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/restropi-logo-light.png" alt="" aria-hidden width={597} height={180} draggable={false} className={clsx("absolute inset-0 block h-full w-auto transition-opacity duration-300", light ? "opacity-100" : "opacity-0")} />
+    </span>
   );
 }
 

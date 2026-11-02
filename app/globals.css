@@ -411,3 +411,11 @@ select:not([multiple]) {
 }
 /* small dropdowns (h-10 and below) */
 select.h-10:not([multiple]), select.h-9:not([multiple]) { padding-right: 2.1rem; background-position: right 0.7rem center; background-size: 14px 14px; }
+
+/* website nav after scrolling: a clear white bar over any section (dark ones too) */
+.nav-solid {
+  background: rgb(255 255 255 / 0.94);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 10px 30px -18px rgb(16 24 20 / 0.35), inset 0 0 0 1px rgb(16 24 20 / 0.06);
+}

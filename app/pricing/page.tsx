@@ -1,5 +1,5 @@
 import { PricingTable } from "@/components/pricing";
-import { SiteFooter, SiteNav } from "@/components/site/chrome";
+import { SiteFooter, SiteNav, WhatsAppTab } from "@/components/site/chrome";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
 import { SectionHead } from "@/components/site/head";
@@ -75,6 +75,7 @@ export default function PricingPage() {
         <SiteFooter />
         <MobileCta />
         <HelpChat />
+        <WhatsAppTab />
       </div>
     </SiteMotion>
   );

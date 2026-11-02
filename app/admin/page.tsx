@@ -4,14 +4,15 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarClock, Check, Copy, KeyRound, LogOut, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Group, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
-import { ChangePassword } from "@/components/owner-auth";
+import { ChangePassword, PasswordInput } from "@/components/owner-auth";
 import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
+import { RevenueSheet } from "@/components/admin-revenue";
 import {
   adminCreate,
   adminDelete,
@@ -20,6 +21,7 @@ import {
   adminUpdate,
   cloudSignOut,
   useCloud,
+  verifyMyPassword,
   type AdminRestaurant,
 } from "@/lib/cloud";
 import { plans } from "@/lib/plans";
@@ -56,6 +58,7 @@ export default function AdminPage() {
   const [creds, setCreds] = useState<{ title: string; email: string; password: string } | null>(null);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [couponsOpen, setCouponsOpen] = useState(false);
+  const [revenueOpen, setRevenueOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
@@ -142,6 +145,7 @@ export default function AdminPage() {
             <p className="mt-1 text-[15px] text-muted">Everyone using Restropi. Add a restaurant to give its owner a login.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
             <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & WhatsApp</Button>
             <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
             <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
@@ -255,6 +259,7 @@ export default function AdminPage() {
 
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
       <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
+      <RevenueSheet open={revenueOpen} onClose={() => setRevenueOpen(false)} list={list ?? []} />
 
       <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change password">
         <ChangePassword title="" onDone={() => { setPwOpen(false); toast("Password changed"); }} />
@@ -491,18 +496,28 @@ function RestaurantSheet({
     setDate(r.renewsAt.slice(0, 10));
   }, [r]);
 
-  const run = async (fn: () => Promise<unknown>, msg: string) => {
-    setBusy(true);
-    setErr("");
-    try {
-      await fn();
-      onChanged(msg);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  // every change to a client asks "are you sure?" and the super admin's password first
+  const [pending, setPending] = useState<{ what: string; go: () => Promise<void> } | null>(null);
+  const [pw, setPw] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const confirmThen = (what: string, go: () => Promise<void>) => {
+    setPw("");
+    setPwErr("");
+    setPending({ what, go });
   };
+  const run = (fn: () => Promise<unknown>, msg: string) =>
+    confirmThen(msg, async () => {
+      setBusy(true);
+      setErr("");
+      try {
+        await fn();
+        onChanged(msg);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    });
   const extend = (months: number) => {
     const from = Math.max(Date.now(), new Date(r.renewsAt).getTime());
     const iso = new Date(from + months * 30 * DAY).toISOString();
@@ -512,6 +527,7 @@ function RestaurantSheet({
   const infoChanged = info.name !== r.name || info.owner !== r.owner || info.phone !== r.phone || info.city !== r.city || info.notes !== r.notes;
 
   return (
+    <>
     <Sheet open onClose={onClose} title={r.name} wide>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-2">
@@ -592,18 +608,20 @@ function RestaurantSheet({
             </div>
             <button
               disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setErr("");
-                try {
-                  const res = await adminResetOwnerPassword(r.id);
-                  onCreds(res.ownerEmail, res.tempPassword);
-                } catch (e) {
-                  setErr((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
+              onClick={() =>
+                confirmThen(`Reset ${r.name}'s owner password`, async () => {
+                  setBusy(true);
+                  setErr("");
+                  try {
+                    const res = await adminResetOwnerPassword(r.id);
+                    onCreds(res.ownerEmail, res.tempPassword);
+                  } catch (e) {
+                    setErr((e as Error).message);
+                  } finally {
+                    setBusy(false);
+                  }
+                })
+              }
               className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] font-medium"
             >
               <KeyRound size={18} className="text-jade" /> Reset owner password
@@ -647,6 +665,37 @@ function RestaurantSheet({
         </Section>
       </div>
     </Sheet>
+      <Sheet
+        open={!!pending}
+        onClose={() => setPending(null)}
+        title="Confirm the change"
+        footer={
+          <Button
+            size="lg"
+            className="w-full"
+            disabled={!pw || busy}
+            onClick={async () => {
+              try {
+                await verifyMyPassword(pw);
+              } catch (e) {
+                return setPwErr((e as Error).message);
+              }
+              const p = pending;
+              setPending(null);
+              await p?.go();
+            }}
+          >
+            Confirm
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[15px]"><b>{pending?.what}</b> for <b>{r.name}</b>?</p>
+          <Field label="Your super admin password"><PasswordInput value={pw} onChange={(v) => { setPw(v); setPwErr(""); }} autoComplete="current-password" autoFocus /></Field>
+          {pwErr && <p className="text-[13.5px] text-rose">{pwErr}</p>}
+        </div>
+      </Sheet>
+    </>
   );
 }
 

@@ -5,8 +5,8 @@ export const plans: Plan[] = [
   {
     id: "starter",
     name: "Starter",
-    monthly: 999,
-    yearly: 9990,
+    monthly: 699,
+    yearly: 6990,
     blurb: "For a café or a single small outlet.",
     outlets: "1 outlet · 3 staff logins",
     features: ["Billing with UPI QR and GST", "Menu and tables", "Kitchen orders (KOT) on phone or tablet", "WhatsApp e-bills", "Daily sales report"],
@@ -14,8 +14,8 @@ export const plans: Plan[] = [
   {
     id: "growth",
     name: "Growth",
-    monthly: 2499,
-    yearly: 24990,
+    monthly: 1999,
+    yearly: 19990,
     blurb: "For a busy restaurant that wants fewer leaks.",
     outlets: "1 outlet · unlimited staff",
     features: ["Everything in Starter", "QR ordering with split-by-guest pay", "Stock and dish costing", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests"],
@@ -24,8 +24,8 @@ export const plans: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    monthly: 4999,
-    yearly: 49990,
+    monthly: 2999,
+    yearly: 29990,
     blurb: "For owners who want the numbers to run themselves.",
     outlets: "Up to 3 outlets",
     features: ["Everything in Growth", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
@@ -40,3 +40,16 @@ export const plans: Plan[] = [
     features: ["Everything in Pro", "4 or more outlets in one login", "Dedicated onboarding", "Priority support on WhatsApp"],
   },
 ];
+
+/** How long a plan is paid for. 6 months = 1 month free, 1 year = 2 months free. */
+export type Cycle = "monthly" | "half" | "yearly";
+export const CYCLES: { id: Cycle; label: string; short: string; per: string; months: number }[] = [
+  { id: "monthly", label: "Monthly", short: "1 month", per: "month", months: 1 },
+  { id: "half", label: "6 months · 1 free", short: "6 months · 1 month free", per: "6 months", months: 6 },
+  { id: "yearly", label: "Yearly · 2 free", short: "1 year · 2 months free", per: "year", months: 12 },
+];
+/** Price of a plan for a cycle (per outlet), or null for "let's talk". */
+export function cyclePrice(p: Pick<Plan, "monthly" | "yearly">, c: Cycle): number | null {
+  if (!p.monthly) return null;
+  return c === "monthly" ? p.monthly : c === "half" ? p.monthly * 5 : p.yearly ?? p.monthly * 10;
+}

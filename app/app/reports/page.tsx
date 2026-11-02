@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 import { Bars, Button, Group, Page, PageHeader, Segmented, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { billOf, paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu, useOrders } from "@/lib/live";
-import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, paidAmount, startOfDay, topDishes, totals } from "@/lib/stats";
-import { inr } from "@/lib/format";
+import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, paidAmount, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
+import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import type { Order } from "@/lib/types";
 
 type Period = "today" | "7d" | "30d" | "custom";
@@ -24,7 +24,7 @@ const csvCell = (v: unknown) => {
   const s = String(v ?? "");
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
-const csvBlob = (rows: unknown[][]) => new Blob(["﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\n")], { type: "text/csv" });
+const csvBlob = (rows: unknown[][]) => new Blob(["\uFEFF" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
 function downloadBlob(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -85,40 +85,86 @@ export default function ReportsPage() {
   const rangeText = days === 1 ? niceDay(from) : `${niceDay(from)} – ${niceDay(end)}`;
   const chartDays = Math.min(Math.max(days, 7), CHART_MAX);
 
+  // Excel files: every one starts with who / which dates, and carries Date + Day and CGST + SGST
+  const dateText = (t: number) => {
+    const d = new Date(t);
+    return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+  };
+  const dayName = (t: number) => new Date(t).toLocaleDateString("en-IN", { weekday: "long" });
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const head = (title: string): unknown[][] => [[`${title} - ${account.name || "Restropi"}${outlet.name ? ` (${outlet.name})` : ""}`], ["From", dateText(from), "To", dateText(end)], []];
+  const paidList = live(orders).filter((o) => o.status === "paid");
+  const dayRows = Array.from({ length: days }, (_, i) => {
+    const d0 = startOfDay(from) + i * DAY_MS;
+    const list = paidList.filter((o) => {
+      const t = new Date(o.createdAt).getTime();
+      return t >= d0 && t < d0 + DAY_MS;
+    });
+    const sp = list.map(taxSplit);
+    return { d0, bills: list.length, taxable: r2(sp.reduce((s, x) => s + x.taxable, 0)), cgst: r2(sp.reduce((s, x) => s + x.cgst, 0)), sgst: r2(sp.reduce((s, x) => s + x.sgst, 0)), total: r2(sp.reduce((s, x) => s + x.total, 0)) };
+  });
+  const sum = (k: "bills" | "taxable" | "cgst" | "sgst" | "total") => r2(dayRows.reduce((s, x) => s + x[k], 0));
+
   const reports: { name: string; file: () => [string, unknown[][]] }[] = [
     {
       name: "Bills",
       file: () => [
-          `bills-${label}-${stamp}.csv`,
-          [
-          ["Bill no.", "Date", "Time", "Type", "Table", "Status", "Items", "Amount before GST", "GST", "Total", "Paid by", "Staff"],
+        `bills-${label}-${stamp}.csv`,
+        [
+          ...head("Bills"),
+          ["Bill no.", "Date", "Day", "Time", "Type", "Table", "Status", "Items", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total (Rs)", "Paid by", "Staff"],
           ...live(orders).map((o: Order) => {
-            const sub = o.lines.reduce((s, l) => s + l.qty * l.price, 0);
-            const d = new Date(o.createdAt);
-            return [o.number, d.toLocaleDateString("en-IN"), d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.type, o.tableName ?? "", o.status,
-              o.lines.map((l) => `${l.qty} × ${l.name}`).join("; "), sub, billOf(o) - sub, billOf(o), paymentsText(o.payments), o.staff];
+            const t0 = new Date(o.createdAt).getTime();
+            const x = taxSplit(o);
+            return [o.number, dateText(t0), dayName(t0), new Date(t0).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.type, o.tableName ?? "", o.status,
+              o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), x.taxable, x.cgst, x.sgst, x.total, paymentsText(o.payments).replace(/₹/g, "Rs "), o.staff];
           }),
         ],
       ],
     },
     {
       name: "Item-wise sales",
-      file: () => [`items-${label}-${stamp}.csv`, [["Dish", "Qty sold", "Sales (₹, before GST)"], ...topDishes(orders, 1000).map((d) => [d.name, d.qty, d.sales])]],
+      file: () => [
+        `items-${label}-${stamp}.csv`,
+        [
+          ...head("Item-wise sales"),
+          ["Dish", "Category", "Qty sold", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
+          ...topDishes(orders, 1000).map((d) => {
+            const g = r2(d.sales * gstRate());
+            const cat = catName(menu.find((m) => m.id === d.id)?.categoryId ?? "");
+            return [d.name, cat, d.qty, d.sales, r2(g / 2), r2(g - r2(g / 2)), r2(d.sales + g)];
+          }),
+        ],
+      ],
     },
     {
       name: "Day-wise sales",
-      file: () => [`days-${label}-${stamp}.csv`, [["Day", "Sales (₹, with GST)"], ...byDay(all, days, end).map((d, i, arr) => [new Date(startOfDay(end) - (arr.length - 1 - i) * DAY_MS).toLocaleDateString("en-IN"), d.value])]],
+      file: () => [
+        `days-${label}-${stamp}.csv`,
+        [
+          ...head("Day-wise sales"),
+          ["Date", "Day", "Paid bills", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
+          ...dayRows.map((d) => [dateText(d.d0), dayName(d.d0), d.bills, d.taxable, d.cgst, d.sgst, d.total]),
+          ["Total", "", sum("bills"), sum("taxable"), sum("cgst"), sum("sgst"), sum("total")],
+        ],
+      ],
     },
     {
       name: "GST summary",
       file: () => [
         `gst-${label}-${stamp}.csv`,
         [
-          ["", "Amount (₹)"],
-          ["Taxable sales", net],
-          ["CGST 2.5%", Math.round(t.gst / 2)],
-          ["SGST 2.5%", t.gst - Math.round(t.gst / 2)],
-          ["Total with GST", t.sales],
+          ...head("GST summary"),
+          ["", "Amount (Rs)"],
+          ["Paid bills", sum("bills")],
+          ["Taxable value", sum("taxable")],
+          [`CGST ${halfGstLabel()}`, sum("cgst")],
+          [`SGST ${halfGstLabel()}`, sum("sgst")],
+          ["Total GST", r2(sum("cgst") + sum("sgst"))],
+          ["Total with GST", sum("total")],
+          [],
+          ["Date", "Day", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
+          ...dayRows.filter((d) => d.bills).map((d) => [dateText(d.d0), dayName(d.d0), d.taxable, d.cgst, d.sgst, d.total]),
         ],
       ],
     },
@@ -182,7 +228,7 @@ export default function ReportsPage() {
         <div><span>Average bill</span><b>${esc(t.avgBill ? inr(t.avgBill) : "—")}</b></div><div><span>GST collected</span><b>${esc(inr(t.gst))}</b></div>
       </div>
       <h2>How guests paid</h2><table>${row("UPI", inr(methods.upi))}${row("Cash", inr(methods.cash))}${row("Card", inr(methods.card))}</table>
-      <h2>GST</h2><table>${row("Taxable sales", inr(net))}${row("CGST 2.5%", inr(Math.round(t.gst / 2)))}${row("SGST 2.5%", inr(t.gst - Math.round(t.gst / 2)))}${row("Total with GST", inr(t.sales))}</table>
+      <h2>GST</h2><table>${row("Taxable sales", inr(net))}${row(`CGST ${halfGstLabel()}`, inr(Math.round(t.gst / 2)))}${row(`SGST ${halfGstLabel()}`, inr(t.gst - Math.round(t.gst / 2)))}${row("Total with GST", inr(t.sales))}</table>
       <h2>Top dishes</h2><table>${top.length ? top.map((d, i) => `<tr><td>${i + 1}. ${esc(d.name)}</td><td class="n">${d.qty} sold</td><td class="n">${esc(inr(d.sales))}</td></tr>`).join("") : "<tr><td>No dishes sold.</td></tr>"}</table>
       <h2>Sales by category</h2><table>${categories.length ? categories.map((c) => row(c.label, inr(c.value))).join("") : "<tr><td>Nothing yet.</td></tr>"}</table>
       <h2>Sales by day</h2><table>${byDay(all, days, end).map((d, i, arr) => row(new Date(startOfDay(end) - (arr.length - 1 - i) * DAY_MS).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }), inr(d.value))).join("")}</table>
@@ -304,8 +350,8 @@ export default function ReportsPage() {
             <div className="space-y-1.5 text-[14px]">
               {[
                 ["Taxable sales", inr(net)],
-                ["CGST 2.5%", inr(Math.round(t.gst / 2))],
-                ["SGST 2.5%", inr(t.gst - Math.round(t.gst / 2))],
+                [`CGST ${halfGstLabel()}`, inr(Math.round(t.gst / 2))],
+                [`SGST ${halfGstLabel()}`, inr(t.gst - Math.round(t.gst / 2))],
                 ["Total with GST", inr(t.sales)],
               ].map(([l, v]) => (
                 <div key={l} className="flex justify-between"><span className="text-muted">{l}</span><span className="font-medium tnum">{v}</span></div>

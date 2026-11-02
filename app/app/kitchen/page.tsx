@@ -2,8 +2,9 @@
 
 import { hasTables } from "@/lib/access";
 import clsx from "clsx";
-import { Check, Flame, Volume2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, Flame, Volume2, VolumeX } from "lucide-react";
+import { chime } from "@/components/order-alerts";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChannelIcon } from "@/components/channel";
 import { useToast } from "@/components/toast";
 import { orderActions, useCurrentOutlet, useOrders } from "@/lib/live";
@@ -37,6 +38,44 @@ export default function KitchenPage() {
     return () => window.clearInterval(id);
   }, []);
 
+  // new ticket: chime, and (when on) read it aloud — "Table T5. 2 Paneer Tikka, 1 Butter Naan"
+  const [voice, setVoiceRaw] = useState(false);
+  useEffect(() => {
+    try {
+      setVoiceRaw(localStorage.getItem("restropi.kotVoice") === "1");
+    } catch {}
+  }, []);
+  const setVoice = (f: (v: boolean) => boolean) =>
+    setVoiceRaw((v) => {
+      const n = f(v);
+      try {
+        localStorage.setItem("restropi.kotVoice", n ? "1" : "0");
+      } catch {}
+      if (n && "speechSynthesis" in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance("Orders will be read aloud"));
+      return n;
+    });
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const live = orders.filter((o) => o.status === "accepted" || o.status === "preparing");
+    if (!seen.current) {
+      seen.current = new Set(live.map((o) => o.id));
+      return;
+    }
+    const fresh = live.filter((o) => !seen.current!.has(o.id));
+    fresh.forEach((o) => seen.current!.add(o.id));
+    if (!fresh.length) return;
+    chime();
+    if (!voice || !("speechSynthesis" in window)) return;
+    for (const o of fresh) {
+      const where = o.tableName ? `Table ${o.tableName}` : o.type === "takeaway" ? `Parcel, token ${o.number || ""}` : `Order ${o.number || ""}`;
+      const items = o.lines.map((l) => `${l.qty} ${l.name}${l.note ? `, ${l.note}` : ""}`).join(". ");
+      const u = new SpeechSynthesisUtterance(`New order. ${where}. ${items}`);
+      u.lang = "en-IN";
+      u.rate = 0.95;
+      window.speechSynthesis.speak(u);
+    }
+  }, [orders, voice]);
+
   const visible = useMemo(
     () =>
       orders
@@ -68,9 +107,13 @@ export default function KitchenPage() {
       <div className="sticky top-[52px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:rounded-t-[28px] lg:px-8 lg:pt-8">
         <div className="flex items-center justify-between">
           <h1 className="large-title">Kitchen</h1>
-          <div className="flex items-center gap-2 text-[13px] text-muted">
-            <Volume2 size={16} /> <span className="hidden sm:inline">Chime on new tickets</span>
-          </div>
+          <button
+            onClick={() => setVoice((v) => !v)}
+            aria-pressed={voice}
+            className={clsx("flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold", voice ? "bg-jade text-white" : "bg-surface text-muted")}
+          >
+            {voice ? <Volume2 size={16} /> : <VolumeX size={16} />} {voice ? "Reading orders aloud" : "Read orders aloud"}
+          </button>
         </div>
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
           {stations.filter((s) => !(cafe && s.v === "tandoor")).map((s) => (

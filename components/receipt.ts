@@ -1,5 +1,6 @@
 // The bill: printed receipt (browser print, 80 mm friendly) and WhatsApp e-bill text.
-import { inr } from "@/lib/format";
+import { halfGstLabel, inr } from "@/lib/format";
+import { receiptPdf, type PdfLine } from "./pdf";
 import type { OutletSettings, Payment } from "@/lib/types";
 
 export interface ReceiptData {
@@ -36,8 +37,8 @@ export function printReceipt(r: ReceiptData) {
     <table>
       <tr><td>Subtotal</td><td class=r>${money(r.totals.subtotal)}</td></tr>
       ${r.totals.discount ? `<tr><td>Discount</td><td class=r>-${money(r.totals.discount)}</td></tr>` : ""}
-      <tr><td>CGST 2.5%</td><td class=r>${money(r.totals.cgst)}</td></tr>
-      <tr><td>SGST 2.5%</td><td class=r>${money(r.totals.sgst)}</td></tr>
+      <tr><td>CGST ${halfGstLabel()}</td><td class=r>${money(r.totals.cgst)}</td></tr>
+      <tr><td>SGST ${halfGstLabel()}</td><td class=r>${money(r.totals.sgst)}</td></tr>
       ${Math.abs(r.totals.roundOff) >= 0.01 ? `<tr><td>Round off</td><td class=r>${money(r.totals.roundOff)}</td></tr>` : ""}
       <tr class=t><td>Total</td><td class=r>₹${money(r.totals.total)}</td></tr>
     </table>
@@ -69,4 +70,34 @@ export function receiptText(r: ReceiptData) {
   ]
     .filter((x, i, a) => x !== "" || (a[i - 1] ?? "") !== "")
     .join("\n");
+}
+
+/** The same bill as a small PDF file (to share on WhatsApp or save). */
+export function receiptPdfBlob(r: ReceiptData) {
+  const s = r.settings;
+  const now = new Date();
+  const m = (n: number) => money(n);
+  const L: PdfLine[] = [
+    { text: s.name || r.outletName, bold: true, center: true },
+    ...(s.address ? [{ text: s.address, center: true }] : []),
+    ...(s.phone ? [{ text: `Ph: ${s.phone}`, center: true }] : []),
+    ...(s.gstin ? [{ text: `GSTIN: ${s.gstin}`, center: true }] : []),
+    ...(s.fssai ? [{ text: `FSSAI: ${s.fssai}`, center: true }] : []),
+    { text: "-".repeat(36) },
+    { text: `${r.billNo ? `Bill #${r.billNo}  ` : ""}${r.label}` },
+    { text: `${now.toLocaleDateString("en-IN")} ${now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` },
+    { text: "-".repeat(36) },
+    ...r.lines.map((l) => ({ text: `${l.qty} x ${l.name}`, right: m(l.qty * l.price) })),
+    { text: "-".repeat(36) },
+    { text: "Subtotal", right: m(r.totals.subtotal) },
+    ...(r.totals.discount ? [{ text: "Discount", right: `-${m(r.totals.discount)}` }] : []),
+    { text: `CGST ${halfGstLabel()}`, right: m(r.totals.cgst) },
+    { text: `SGST ${halfGstLabel()}`, right: m(r.totals.sgst) },
+    ...(Math.abs(r.totals.roundOff) >= 0.01 ? [{ text: "Round off", right: m(r.totals.roundOff) }] : []),
+    { text: "TOTAL", right: `Rs ${m(r.totals.total)}`, bold: true },
+    ...(r.payments.length ? [{ text: `Paid: ${r.payments.map((p) => `${methodName(p.method)} Rs ${m(p.amount)}`).join(" + ")}` }] : []),
+    { text: "-".repeat(36) },
+    { text: s.billFooter || "Thank you! Visit again", center: true },
+  ];
+  return receiptPdf(L);
 }

@@ -28,7 +28,14 @@ export interface Outlet {
   phone?: string;
   gstin?: string;
   fssai?: string;
-  hours?: string; // "11:00 am – 11:30 pm"
+  hours?: string; // "11:00 am – 11:30 pm" (text printed on bills)
+  /** QR ordering window, "HH:MM" 24h. Both empty = guests can order any time. Close before open = past midnight. */
+  orderFrom?: string;
+  orderTo?: string;
+  /** Owner paused QR orders by hand (busy, closed for the day). */
+  ordersPaused?: boolean;
+  /** GST on bills: 0.05 (default), 0 when not registered, 0.12 or 0.18. */
+  gstRate?: number;
   billFooter?: string; // message at the bottom of the bill
   acceptCard?: boolean; // card machine at the counter
   sort?: number;
@@ -55,6 +62,10 @@ export interface OutletSettings {
   gstin?: string;
   fssai?: string;
   hours?: string;
+  orderFrom?: string;
+  orderTo?: string;
+  ordersPaused?: boolean;
+  gstRate?: number;
   billFooter?: string; // printed at the bottom of the bill
   acceptCard?: boolean;
 }

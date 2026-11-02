@@ -1,15 +1,15 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, CreditCard, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { couponActions, couponLabel, couponOff, couponProblem, normCode, useCoupons, useCurrentOutlet, useFeature, useSettings } from "@/lib/live";
-import { printReceipt, receiptText } from "./receipt";
+import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, useCoupons, useCurrentOutlet, useFeature, useSettings } from "@/lib/live";
+import { printReceipt, receiptPdfBlob, receiptText } from "./receipt";
 import { useToast } from "./toast";
-import { inr, GST_RATE } from "@/lib/format";
+import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import { PaymentSplit, paidSum } from "./payment-split";
 import type { Coupon, Payment, PayMethod } from "@/lib/types";
 
@@ -17,7 +17,7 @@ type Method = "upi" | "cash" | "card" | "mixed" | "split";
 
 export function billTotals(subtotal: number, discount = 0) {
   const taxable = Math.max(0, subtotal - discount);
-  const gst = Math.round(taxable * GST_RATE * 100) / 100;
+  const gst = Math.round(taxable * gstRate() * 100) / 100;
   const total = Math.round(taxable + gst);
   return { subtotal, discount, taxable, cgst: gst / 2, sgst: gst / 2, roundOff: total - (taxable + gst), total };
 }
@@ -51,6 +51,8 @@ export function Checkout({
   const [paidGuests, setPaidGuests] = useState<number[]>([]);
   const [done, setDone] = useState(false);
   const [phone, setPhone] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [custom, setCustom] = useState<{ on: boolean; kind: "pct" | "flat"; value: string }>({ on: false, kind: "pct", value: "" });
   const [mixed, setMixed] = useState<Payment[]>([]);
   const [code, setCode] = useState("");
   const [coupon, setCoupon] = useState<Coupon | null>(null);
@@ -64,6 +66,9 @@ export function Checkout({
       setPaidGuests([]);
       setCash(null);
       setDiscountPct(0);
+      setCustom({ on: false, kind: "pct", value: "" });
+      setPhone("");
+      setGuestName("");
       setCoupon(null);
       setCode("");
       setCodeErr("");
@@ -79,7 +84,11 @@ export function Checkout({
     }
   }, [open, preferred, prepaid, subtotal]);
 
-  const t = billTotals(subtotal, coupon ? couponOff(coupon, subtotal) : Math.round((subtotal * discountPct) / 100));
+  const customOff = (() => {
+    const v = Math.max(0, Number(custom.value) || 0);
+    return Math.min(subtotal, Math.round(custom.kind === "pct" ? (subtotal * Math.min(v, 100)) / 100 : v));
+  })();
+  const t = billTotals(subtotal, coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100));
   const perGuest = Math.ceil(t.total / guests);
   const settings = useSettings();
   const splitOn = useFeature("splitByGuest") === "ok";
@@ -119,6 +128,9 @@ export function Checkout({
           : [{ method, amount: t.total }];
     setPaidWith(payments);
     if (coupon) couponActions.used(coupon.id);
+    // a number typed at billing puts this guest (and the bill) in the guest book
+    if (phone.replace(/\D/g, "").length >= 10)
+      guestActions.fromBill(guestName, phone, { orderNo: billNo ?? 0, amount: t.total, method: payments.map((p) => p.method.toUpperCase()).join(" + ") });
     onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
   };
 
@@ -168,6 +180,33 @@ export function Checkout({
                 </Button>
               </div>
             </Field>
+            <Button
+              variant="tinted"
+              className="w-full"
+              onClick={async () => {
+                const r = receipt();
+                const name = `bill-${billNo ?? "receipt"}.pdf`;
+                const file = new File([receiptPdfBlob(r)], name, { type: "application/pdf" });
+                // phones: share sheet → pick WhatsApp and the guest; computers: download it
+                if (navigator.canShare?.({ files: [file] })) {
+                  try {
+                    await navigator.share({ files: [file], text: `Bill from ${r.settings.name || r.outletName}` });
+                  } catch {
+                    /* closed */
+                  }
+                  return;
+                }
+                const url = URL.createObjectURL(file);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = name;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+                toast("PDF saved. Attach it in WhatsApp to send.");
+              }}
+            >
+              <FileText size={17} /> Share bill as PDF
+            </Button>
             <Button variant="plain" className="w-full" onClick={() => { if (!printReceipt(receipt())) toast("Allow pop-ups for this site to print"); }}>
               Print receipt
             </Button>
@@ -175,6 +214,11 @@ export function Checkout({
         </div>
       ) : (
         <div className="space-y-5">
+          {/* guest (optional): saved to the guest book and used for the WhatsApp e-bill */}
+          <div className="grid grid-cols-[1fr_1.15fr] gap-2">
+            <input className={clsx(inputCls, "!h-11 !text-[15px]")} placeholder="Customer name" value={guestName} onChange={(e) => setGuestName(e.target.value)} aria-label="Customer name (optional)" autoComplete="off" />
+            <input className={clsx(inputCls, "!h-11 !text-[15px]")} inputMode="tel" placeholder="Mobile (optional)" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d +]/g, ""))} aria-label="Customer mobile number (optional)" autoComplete="off" />
+          </div>
           {/* totals */}
           <div className="rounded-group bg-surface p-4">
             <div className="flex items-baseline justify-between">
@@ -184,22 +228,49 @@ export function Checkout({
             <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
               <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
               {t.discount > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount, { decimals: true })}</dd></div>}
-              <div className="flex justify-between"><dt>CGST 2.5%</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
-              <div className="flex justify-between"><dt>SGST 2.5%</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt>CGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt>SGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
             </dl>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
               {[0, 5, 10].map((p) => (
                 <button
                   key={p}
-                  onClick={() => { setDiscountPct(p); setCoupon(null); }}
-                  className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", !coupon && discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
+                  onClick={() => { setDiscountPct(p); setCoupon(null); setCustom((c) => ({ ...c, on: false })); }}
+                  className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", !coupon && !custom.on && discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
                 >
                   <Percent size={13} />
                   {p === 0 ? "No discount" : `${p}% off`}
                 </button>
               ))}
+              <button
+                onClick={() => { setCoupon(null); setCustom((c) => ({ ...c, on: true })); }}
+                className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", custom.on && !coupon ? "bg-ink text-canvas" : "bg-sunken text-muted")}
+              >
+                Custom
+              </button>
             </div>
+            {custom.on && !coupon && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="inline-flex shrink-0 rounded-ctl bg-sunken p-[3px]" role="tablist" aria-label="Discount in % or ₹">
+                  {(["pct", "flat"] as const).map((k) => (
+                    <button key={k} role="tab" aria-selected={custom.kind === k} onClick={() => setCustom((c) => ({ ...c, kind: k }))} className={clsx("rounded-[9px] px-3 py-1.5 text-[13px] font-semibold", custom.kind === k ? "bg-surface text-ink shadow-float" : "text-muted")}>
+                      {k === "pct" ? "%" : "₹"}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  autoFocus
+                  className={clsx(inputCls, "!h-10")}
+                  inputMode="decimal"
+                  placeholder={custom.kind === "pct" ? "e.g. 15" : "e.g. 50"}
+                  value={custom.value}
+                  onChange={(e) => setCustom((c) => ({ ...c, value: e.target.value.replace(/[^\d.]/g, "") }))}
+                  aria-label={custom.kind === "pct" ? "Discount percent" : "Discount in rupees"}
+                />
+                <span className="shrink-0 text-[13px] font-semibold text-jade tnum">−{inr(customOff)}</span>
+              </div>
+            )}
             {couponsOn && (
               coupon ? (
                 <div className="mt-3 flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
@@ -217,6 +288,7 @@ export function Checkout({
                     if (why) return setCodeErr(why);
                     setCodeErr("");
                     setDiscountPct(0);
+                    setCustom((x) => ({ ...x, on: false }));
                     setCoupon(c!);
                   }}
                 >

@@ -326,7 +326,8 @@ export function Story() {
         <SectionHead eyebrow="How it works" title="Start in four steps. *Live the same day.*" />
         <div className="mt-8 grid grid-cols-2 gap-2.5 lg:mt-12 lg:grid-cols-4 lg:gap-3" data-reveal-group>
           {steps.map((s, i) => (
-            <article key={s.n} className="group relative flex h-full min-h-[250px] flex-col rounded-[22px] bg-[#f4f5f3] p-4 sm:min-h-[340px] sm:p-6 lg:min-h-[420px] lg:rounded-[28px] lg:p-7">
+            // earlier cards sit above later ones, so the arrow between two cards isn't covered
+            <article key={s.n} style={{ zIndex: steps.length - i }} className="group relative flex h-full min-h-[250px] flex-col rounded-[22px] bg-[#f4f5f3] p-4 sm:min-h-[340px] sm:p-6 lg:min-h-[420px] lg:rounded-[28px] lg:p-7">
               <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink/45 sm:text-[12.5px]">{s.n}</div>
               <h3 className="mt-1 text-[16px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">{s.t}</h3>
               <p className="mt-1 hidden text-[14px] leading-snug text-ink/50 sm:block">{s.d}</p>
@@ -484,3 +485,42 @@ function Wave() {
   );
 }
 
+
+/* ---------------- Why Restropi: real problems at Indian restaurants and cafés ---------------- */
+const problems: { pain: string; who: string; fix: string; icon: ComponentType<{ size?: number }> }[] = [
+  { pain: "Rush hour, and the waiter's KOT slip went missing.", who: "Every busy Sunday", fix: "Orders reach the kitchen on a phone or tablet the moment they're taken. Nothing to lose, nothing to read wrong.", icon: IconKitchen },
+  { pain: "Cash in the drawer never matches the bills.", who: "Every night at closing", fix: "Each bill is closed as UPI, cash, card or a mix. The day-end report shows exactly what should be in the drawer.", icon: IconBill },
+  { pain: "Table 6 wants to split the bill five ways.", who: "Every group dinner", fix: "Each guest scans the table QR and pays their own share by UPI. No calculator at the counter.", icon: IconSplit },
+  { pain: "Paneer finished at 8 pm on a Saturday.", who: "Again", fix: "Log stock in, used and wasted in seconds. The buy list and tomorrow's prep list show what to order before it runs out.", icon: IconStock },
+  { pain: "Guests come once and never return.", who: "Most new guests", fix: "A guest book from their phone numbers, coupons and WhatsApp offers bring them back.", icon: IconGuests },
+  { pain: "You find out about leaks a month later.", who: "When the accounts are done", fix: "Voids, discounts and refunds are logged with the staff name, and you see the numbers every day.", icon: IconShield },
+];
+
+export function WhyRestropi() {
+  return (
+    <section id="why" className="scroll-mt-20 bg-canvas py-14 lg:py-28">
+      <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
+        <SectionHead eyebrow="Why Restropi" title="Sound *familiar?*" sub="Real problems we hear from restaurant and café owners every week, and how Restropi fixes each one." />
+        <Swipe className="mt-8 lg:mt-12" grid="md:grid md:grid-cols-2 md:gap-3 lg:grid-cols-3 lg:gap-4" from="md" item="w-[84%] sm:w-[60%]">
+          {problems.map(({ pain, who, fix, icon: I }) => (
+            <article key={pain} className="flex h-full flex-col rounded-[22px] bg-white p-5 ring-1 ring-black/[.05] lg:rounded-[26px] lg:p-6">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-rose/10 text-rose"><I size={20} /></span>
+                <div>
+                  <p className="text-[16.5px] font-semibold leading-snug tracking-[-0.01em] lg:text-[18px]">&ldquo;{pain}&rdquo;</p>
+                  <p className="mt-0.5 text-[12.5px] text-ink/45">{who}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-1 gap-3 border-t border-dashed border-ink/10 pt-4">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-jade text-white">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                <p className="text-[14.5px] leading-relaxed text-ink/70">{fix}</p>
+              </div>
+            </article>
+          ))}
+        </Swipe>
+      </div>
+    </section>
+  );
+}
