@@ -150,10 +150,7 @@ export default function GuestOrder() {
   const [otpOpen, setOtpOpen] = useState(false);
   const afterOtp = useRef<"order" | "pay">("order");
   const [confirmed, setConfirmed] = useState<string | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [joinCode, setJoinCode] = useState("");
-  const [joinError, setJoinError] = useState("");
+  const [ownBill, setOwnBill] = useState(false); // "we're a separate group" picked on a shared table
   const [billOpen, setBillOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false); // pay-first: pay for the cart
   const [tipPct, setTipPct] = useState(0);
@@ -201,14 +198,21 @@ export default function GuestOrder() {
   const unclaimed = !party ? t?.parties.find((p) => p.source === "captain" && !p.phoneClaimed) : undefined;
 
   const myOrders = useMemo(() => {
-    if (counter) return allOrders.filter((o) => mine.includes(o.id) && o.status !== "cancelled" && minutesSince(o.createdAt) < 240);
+    // cancelled orders stay visible for an hour, so the guest knows what happened
+    const keep = (o: Order) => o.status !== "cancelled" || minutesSince(o.createdAt) < 60;
+    if (counter) return allOrders.filter((o) => mine.includes(o.id) && keep(o) && minutesSince(o.createdAt) < 240);
     return t && myParty
-      ? allOrders.filter((o) => o.tableName === t.name && (o.partyId ?? "A") === myParty && o.status !== "cancelled" && (o.status !== "paid" || o.guestPhone))
+      ? allOrders.filter((o) => o.tableName === t.name && (o.partyId ?? "A") === myParty && keep(o) && (o.status !== "paid" || o.guestPhone))
       : [];
   }, [allOrders, t, myParty, counter, mine]);
-  const openOrders = useMemo(() => myOrders.filter((o) => o.status !== "paid"), [myOrders]);
+  const openOrders = useMemo(() => myOrders.filter((o) => o.status !== "paid" && o.status !== "cancelled"), [myOrders]);
   // Restaurant flow: the running bill. Pay-first orders are already settled from the phone.
-  const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !(payNow && o.payPreference)), [openOrders, payNow]);
+  const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !o.payClaim && !(payNow && o.payPreference)), [openOrders, payNow]);
+  // where this phone's bill stands: nothing to pay / payment sent (restaurant confirms) / paid
+  const sentClaim = openOrders.find((o) => o.payClaim)?.payClaim;
+  const paidOrders = myOrders.filter((o) => o.status === "paid");
+  const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
+  const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
 
   // ---- settling: show the thank-you once staff have the money ----
   useEffect(() => {
@@ -220,9 +224,10 @@ export default function GuestOrder() {
         ? [{ method: "upi", amount: waiting.upiPart ?? 0 }, { method: "cash", amount: waiting.amount - (waiting.upiPart ?? 0) }]
         : [{ method: waiting.kind, amount: waiting.amount }];
     // Pay-first: staff accept the order once they have the cash/card payment at the counter.
-    const settled = waiting.payFirst ? os.every((o) => o.status !== "new") : os.every((o) => o.status === "paid");
+    // staff took the money (paid, or marked paid and waiting for the owner's OK)
+    const settled = waiting.payFirst ? os.every((o) => o.status !== "new") : os.every((o) => o.status === "paid" || !!o.payClaim);
     if (settled) {
-      setThanks({ payments: waiting.payFirst ? payments : os[0].payments ?? payments, orderNo: os[0].number, orderId: os[0].id, token: waiting.payFirst });
+      setThanks({ payments: waiting.payFirst ? payments : os[0].payments ?? os[0].payClaim?.payments ?? payments, orderNo: os[0].number, orderId: os[0].id, token: waiting.payFirst });
       setWaiting(null);
       setConfirmed(null);
       setBillOpen(false);
@@ -231,11 +236,6 @@ export default function GuestOrder() {
   }, [waiting, allOrders]);
 
 
-  useEffect(() => {
-    if (!shareOpen) return;
-    const id = window.setInterval(() => tick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [shareOpen]);
 
   // ---- menu: search + filters ----
   const shownItems = useMemo(() => applyFilters(menu, filters, q, cats), [menu, filters, q, cats]);
@@ -418,8 +418,9 @@ export default function GuestOrder() {
 
   const billUpi = () => {
     orderActions.setPreference(billIds, "upi");
-    orderActions.pay(billIds, [{ method: "upi", amount: billTotal }], who);
-    if (t && party) tableActions.update(t.id, party.id, { status: "billing", total: 0 });
+    // The restaurant checks the money came in and confirms; the table closes then.
+    orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, { source: "guest" });
+    if (t && party) tableActions.update(t.id, party.id, { status: "billing", paymentPending: true });
     setBillOpen(false);
     setThanks({ payments: [{ method: "upi", amount: billTotal }], orderNo: unbilled[0]?.number, orderId: unbilled[0]?.id });
   };
@@ -469,11 +470,15 @@ export default function GuestOrder() {
       {/* ---------- header ---------- */}
       <header className="px-5 pb-3 pt-6">
         <div className="flex items-center justify-between gap-2">
-          <span className="rounded-full bg-surface px-3 py-1 text-[13px] font-semibold">
-            {placeLabel}
-            {party && shared && <> · {groupName}</>}
-          </span>
-          <button onClick={() => setLang(mr ? "en" : "mr")} className="rounded-full bg-surface px-3 py-1 text-[13px] font-semibold">{mr ? "English" : "मराठी"}</button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[22px] w-auto select-none" draggable={false} />
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-ink px-3 py-1.5 text-[13px] font-semibold text-canvas">
+              {placeLabel}
+              {party && shared && <> · {groupName}</>}
+            </span>
+            <button onClick={() => setLang(mr ? "en" : "mr")} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">{mr ? "English" : "मराठी"}</button>
+          </div>
         </div>
         <h1 className="mt-4 text-[30px] font-semibold leading-tight tracking-tight">{settings.name}</h1>
         <p className="text-[14px] text-muted">
@@ -483,31 +488,35 @@ export default function GuestOrder() {
         </p>
 
         {t && qrOn && !payNow && !cafe && (party ? (
-          <div className="mt-4 flex items-center gap-3 rounded-[18px] bg-surface px-4 py-3">
-            <Users size={18} className="shrink-0 text-jade" />
-            <div className="min-w-0 flex-1 text-[13.5px]">
-              <div className="font-semibold">{groupName}{guest ? ` · ${guest.name}` : ""}</div>
-              <div className="text-muted">{tx(lang, "Friends can join this bill and order too", "मित्रांना याच बिलात जोडा")}</div>
-            </div>
-            <Button size="sm" variant="tinted" onClick={() => { tableActions.shareCode(t.id, party.id); setShareOpen(true); }}>
-              {tx(lang, "Share access", "शेअर करा")}
-            </Button>
-          </div>
-        ) : t.parties.length > 0 ? (
-          <div className="mt-4 overflow-hidden rounded-[18px] bg-surface">
-            {unclaimed && (
-              <button
-                onClick={() => { tableActions.update(t.id, unclaimed.id, { phoneClaimed: true }); remember(unclaimed.id); toast(tx(lang, "Linked to your table's bill", "तुमच्या टेबलशी जोडलं")); }}
-                className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left"
-              >
-                <ClipboardCheck size={18} className="shrink-0 text-jade" />
-                <span className="flex-1 text-[13.5px]"><b>{tx(lang, "Just seated by our staff?", "स्टाफने तुम्हाला आत्ता बसवलं?")}</b> <span className="text-muted">{tx(lang, `Tap to use that bill (${unclaimed.guests} ${unclaimed.guests > 1 ? "guests" : "guest"})`, "त्या बिलाशी जोडा")}</span></span>
-              </button>
-            )}
-            <button onClick={() => { setJoinCode(""); setJoinError(""); setJoinOpen(true); }} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+          shared ? (
+            <div className="mt-4 flex items-center gap-3 rounded-[18px] bg-surface px-4 py-3 text-[13.5px]">
               <Users size={18} className="shrink-0 text-jade" />
-              <span className="flex-1 text-[13.5px]"><b>{tx(lang, "Friends already ordered?", "मित्रांनी आधीच ऑर्डर केली आहे?")}</b> <span className="text-muted">{tx(lang, "Enter their group code to share one bill", "त्यांचा ग्रुप कोड टाका")}</span></span>
-            </button>
+              <span><b>{groupName}</b>{guest ? ` · ${guest.name}` : ""} <span className="text-muted">· {tx(lang, "your own bill at this table", "या टेबलवर तुमचं स्वतंत्र बिल")}</span></span>
+            </div>
+          ) : null
+        ) : t.parties.length > 0 && !ownBill ? (
+          <div className="mt-4 rounded-[18px] bg-surface p-4">
+            <div className="text-[15px] font-semibold">{tx(lang, "Someone is already at this table", "या टेबलवर आधीच कोणी बसलं आहे")}</div>
+            <p className="mt-0.5 text-[13.5px] text-muted">{tx(lang, "Are you with them? Then you share one bill.", "तुम्ही त्यांच्यासोबत आहात का? मग एकच बिल.")}</p>
+            <div className="mt-3 grid gap-2">
+              {t.parties.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { tableActions.update(t.id, p.id, { phoneClaimed: true }); remember(p.id); toast(tx(lang, "Joined · you're on the same bill", "जोडलं · एकच बिल")); }}
+                  className="flex items-center gap-3 rounded-[14px] bg-jade px-4 py-3 text-left text-white active:scale-[.99]"
+                >
+                  <Users size={18} className="shrink-0" />
+                  <span className="flex-1 text-[14.5px] font-semibold">
+                    {t.parties.length > 1 ? tx(lang, `Yes, join Group ${p.id}`, `हो, ग्रुप ${p.id} मध्ये जोडा`) : tx(lang, "Yes, we're together", "हो, आम्ही सोबत आहोत")}
+                    <span className="block text-[12.5px] font-normal opacity-80">{p.guests} {p.guests > 1 ? tx(lang, "guests", "जण") : tx(lang, "guest", "जण")}{p.total ? ` · ${inr(Math.round(p.total * (1 + gstRate())))}` : ""}</span>
+                  </span>
+                </button>
+              ))}
+              <button onClick={() => setOwnBill(true)} className="rounded-[14px] bg-sunken px-4 py-3 text-left text-[14.5px] font-semibold">
+                {tx(lang, "No, we're a separate group", "नाही, आम्ही वेगळे आहोत")}
+                <span className="block text-[12.5px] font-normal text-muted">{tx(lang, "You get your own bill", "तुमचं स्वतंत्र बिल")}</span>
+              </button>
+            </div>
           </div>
         ) : null)}
       </header>
@@ -561,7 +570,7 @@ export default function GuestOrder() {
 
           <div className="flex items-start gap-2.5 px-3 pt-3">
             {grouped.length > 1 && (
-              <aside className="sticky z-10 flex w-[66px] shrink-0 self-start flex-col sm:w-[84px]" style={{ top: barH + 12, maxHeight: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
+              <aside className="sticky z-10 flex w-[76px] shrink-0 self-start flex-col sm:w-[92px]" style={{ top: barH + 12, maxHeight: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
                 <CategoryRail groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />
               </aside>
             )}
@@ -588,12 +597,16 @@ export default function GuestOrder() {
                   </div>
                 </section>
               ))}
+              <PoweredBy />
             </main>
           </div>
         </>
       ) : (
         /* ---------- my orders ---------- */
         <main className="space-y-3 px-4 pt-3">
+          {(billState === "sent" || billState === "paid") && (
+            <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} compact />
+          )}
           {myOrders.map((o) => (
             <section key={o.id} className="rounded-[22px] bg-surface p-4">
               <div className="flex items-baseline justify-between">
@@ -612,8 +625,12 @@ export default function GuestOrder() {
                 ))}
               </ul>
               <div className="mt-3">
-                {o.status === "paid" ? (
-                  <span className="text-[13px] font-semibold text-jade">{tx(lang, "Paid", "पैसे भरले")}</span>
+                {o.status === "cancelled" ? (
+                  <span className="inline-flex rounded-full bg-rose-soft px-2.5 py-1 text-[12.5px] font-semibold text-rose">{tx(lang, "Not accepted by the restaurant · please ask our staff", "रेस्टॉरंटने स्वीकारली नाही · स्टाफला विचारा")}</span>
+                ) : o.status === "paid" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12.5px] font-semibold text-jade-deep"><Check size={13} /> {tx(lang, "Paid", "पैसे भरले")}</span>
+                ) : o.payClaim ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-saffron-soft px-2.5 py-1 text-[12.5px] font-semibold text-saffron">{tx(lang, "Payment sent · being confirmed", "पैसे पाठवले · खात्री होत आहे")}</span>
                 ) : (
                   <>
                     {(o.prepaid ?? []).length > 0 && <div className="mb-2 text-[12.5px] font-semibold text-jade">{tx(lang, `UPI ${inr(sumOf(o.prepaid!))} paid`, `UPI ${inr(sumOf(o.prepaid!))} भरले`)}</div>}
@@ -842,89 +859,6 @@ export default function GuestOrder() {
         </ThankYou>
       )}
 
-      {/* ---------- share group access ---------- */}
-      <Sheet open={shareOpen} onClose={() => setShareOpen(false)} title={tx(lang, "Share group access", "ग्रुप ॲक्सेस शेअर करा")}>
-        {party && t && (
-          <div className="flex flex-col items-center text-center">
-            <p className="text-[15px] text-muted">{tx(lang, "Friends at this table scan the QR and enter this code. They'll order on the same bill.", "मित्रांनी टेबलचा QR scan करून हा कोड टाकावा. ते याच बिलात ऑर्डर करू शकतील.")}</p>
-            <div className="mt-5 flex gap-2">
-              {party.code.split("").map((d, i) => (
-                <span key={i} className="flex h-16 w-14 items-center justify-center rounded-[14px] bg-surface text-[32px] font-semibold tnum">{d}</span>
-              ))}
-            </div>
-            {party.codeExpiresAt && (
-              <div className="mt-3 text-[13.5px] text-muted tnum">
-                {(() => {
-                  const s = Math.max(0, Math.round((new Date(party.codeExpiresAt).getTime() - Date.now()) / 1000));
-                  return s > 0 ? `${tx(lang, "Works for", "वैध")} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : tx(lang, "Code expired", "कोड संपला");
-                })()}
-              </div>
-            )}
-            <div className="mt-6 grid w-full grid-cols-2 gap-2">
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(`Join our table ${t.name} at ${settings.name}: scan the table QR and enter code ${party.code}`)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-12 items-center justify-center gap-2 rounded-ctl bg-[#25D366] text-[15px] font-semibold text-white"
-              >
-                <MessageCircle size={17} /> WhatsApp
-              </a>
-              <Button
-                variant="plain"
-                className="!h-12"
-                onClick={() => {
-                  navigator.clipboard?.writeText(party.code).catch(() => {});
-                  toast(tx(lang, "Code copied", "कोड कॉपी केला"));
-                }}
-              >
-                <Copy size={16} /> {tx(lang, "Copy code", "कॉपी")}
-              </Button>
-            </div>
-            <button onClick={() => tableActions.shareCode(t.id, party.id)} className="mt-4 text-[14px] font-semibold text-jade">{tx(lang, "Get a new code", "नवीन कोड")}</button>
-          </div>
-        )}
-      </Sheet>
-
-      {/* ---------- join a group ---------- */}
-      <Sheet
-        open={joinOpen}
-        onClose={() => setJoinOpen(false)}
-        title={tx(lang, "Join your friends", "ग्रुप कोड टाका")}
-        footer={
-          <Button
-            size="lg"
-            className="w-full"
-            disabled={joinCode.length !== 4}
-            onClick={() => {
-              if (!t) return;
-              const p = tableActions.findByCode(t.id, joinCode);
-              if (!p) {
-                setJoinError(tx(lang, "That code doesn't match or has expired. Ask your friend to tap “Share access” for a new one.", "कोड जुळत नाही किंवा संपला आहे. मित्रांना 'शेअर करा' दाबायला सांगा."));
-                return;
-              }
-              tableActions.update(t.id, p.id, { phoneClaimed: true });
-              remember(p.id);
-              setJoinOpen(false);
-              toast(tx(lang, "You're in — ordering on the same bill", "ग्रुपमध्ये जोडलं"));
-            }}
-          >
-            {tx(lang, "Join", "जोडा")}
-          </Button>
-        }
-      >
-        <p className="text-[15px] text-muted">{tx(lang, "Your friend finds it under “Share access” on their phone.", "हा कोड मित्रांच्या फोनवर 'शेअर करा' मध्ये दिसतो.")}</p>
-        <input
-          aria-label="Group code"
-          inputMode="numeric"
-          maxLength={4}
-          value={joinCode}
-          onChange={(e) => { setJoinError(""); setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 4)); }}
-          className={clsx("mt-4 h-16 w-full rounded-[16px] bg-surface text-center text-[30px] font-semibold tracking-[0.6em] outline-none ring-1 tnum focus:ring-2 focus:ring-jade", joinError ? "ring-rose" : "ring-line")}
-        />
-        {joinError && <p className="mt-3 text-[14px] font-medium text-rose">{joinError}</p>}
-        <p className="mt-4 text-[13px] text-faint">{tx(lang, "No code? Just order — you'll get your own bill.", "कोड नसेल तर फक्त ऑर्डर करा — तुमचं स्वतंत्र बिल सुरू होईल.")}</p>
-      </Sheet>
-
       {/* ---------- final bill (restaurant flow) ---------- */}
       <Sheet
         open={billOpen}
@@ -944,7 +878,7 @@ export default function GuestOrder() {
             <p className="mt-3 text-[13px] text-faint">{tx(lang, "This screen says thank you once it's done.", "झालं की इथे धन्यवाद दिसेल.")}</p>
           </div>
         ) : unbilled.length === 0 ? (
-          <p className="py-8 text-center text-[15px] text-muted">{tx(lang, "Nothing to pay right now.", "आत्ता भरायचं काही नाही.")}</p>
+          <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} />
         ) : (
           <div className="space-y-4">
             <div className="overflow-hidden rounded-group bg-surface">
@@ -991,5 +925,39 @@ export default function GuestOrder() {
         )}
       </Sheet>
     </div>
+  );
+}
+
+/** The bill is settled (or sent): no pay buttons, just where it stands. */
+function BillDone({ state, claimTotal, paidTotal, lang, compact = false }: { state: "open" | "sent" | "paid" | "none"; claimTotal: number; paidTotal: number; lang: "en" | "mr"; compact?: boolean }) {
+  if (state === "none" || state === "open") {
+    return compact ? null : <p className="py-8 text-center text-[15px] text-muted">{tx(lang, "Nothing to pay yet. Your bill shows here once you order.", "अजून भरायचं काही नाही. ऑर्डर केल्यावर बिल इथे दिसेल.")}</p>;
+  }
+  const paid = state === "paid";
+  return (
+    <div className={clsx("flex items-center gap-3 rounded-[20px] p-4", paid ? "bg-jade text-white" : "bg-saffron-soft", !compact && "mt-2 flex-col py-8 text-center")}>
+      <span className={clsx("flex shrink-0 items-center justify-center rounded-full", compact ? "h-10 w-10" : "h-16 w-16", paid ? "bg-white/20" : "bg-white text-saffron")}>
+        <Check size={compact ? 20 : 30} strokeWidth={2.5} />
+      </span>
+      <div className={compact ? "min-w-0 flex-1" : ""}>
+        <div className={clsx("font-semibold", compact ? "text-[15.5px]" : "text-[20px]")}>
+          {paid ? tx(lang, "Bill paid", "बिल भरलं") : tx(lang, "Payment sent", "पैसे पाठवले")} · <span className="tnum">{inr(paid ? paidTotal : claimTotal)}</span>
+        </div>
+        <div className={clsx("text-[13.5px]", paid ? "text-white/85" : "text-ink/70")}>
+          {paid ? tx(lang, "All settled. Thank you!", "सगळं झालं. धन्यवाद!") : tx(lang, "The restaurant is confirming it. Nothing more to pay.", "रेस्टॉरंट खात्री करत आहे. आणखी काही भरायचं नाही.")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Small "Powered by Restropi" line at the end of the menu. */
+function PoweredBy() {
+  return (
+    <a href="https://restropi.com" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 pb-2 pt-4 text-[12px] text-faint">
+      <span>Ordering powered by</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-4 w-auto opacity-80" />
+    </a>
   );
 }

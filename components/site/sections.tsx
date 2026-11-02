@@ -410,9 +410,9 @@ function StepPaid() {
 
 /* ================= things your current software doesn't do (dark glass) ================= */
 const only: { icon: Icon; t: string; d: string }[] = [
-  { icon: IconPulse, t: "A morning note, not a dashboard", d: "Restropi Pulse tells you in two sentences what happened yesterday and the three things to do today." },
-  { icon: IconVoice, t: "Take orders by voice", d: "Captains say the order in Marathi, Hindi or English. Restropi turns it into a KOT." },
-  { icon: IconSplit, t: "Every guest pays their own share", d: "Split-by-guest UPI from the table QR. No calculator, no arguments at the counter." },
+  { icon: IconPulse, t: "A live note, not a dashboard", d: "Restropi Pulse tells you in one line what you've collected, what's cooking and what's still unpaid." },
+  { icon: IconVoice, t: "Take orders by voice", d: "Captains say the order out loud, like “two masala dosa, one cold coffee”. Restropi adds the dishes to the order." },
+  { icon: IconSplit, t: "Every group pays its own bill", d: "Strangers sharing a table get separate bills, and each group pays by UPI from the table QR. No calculator at the counter." },
   { icon: IconForecast, t: "Know tomorrow's prep today", d: "A prep list for tomorrow, based on what sold on the same day in the last four weeks." },
   { icon: IconShield, t: "Leak guard", d: "Flags cancelled orders and discounts every week, and shows who made them." },
 ];

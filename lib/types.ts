@@ -123,6 +123,7 @@ export interface Party {
   source: "captain" | "qr"; // who opened the party
   phoneClaimed?: boolean; // a guest phone has joined this party via QR
   pendingApproval?: boolean; // opened from QR, captain has not confirmed yet
+  paymentPending?: boolean; // staff or guest says it's paid; waiting for the owner's OK
 }
 
 export interface Table {
@@ -149,6 +150,28 @@ export type PayMethod = "upi" | "cash" | "card";
 export interface Payment {
   method: PayMethod;
   amount: number;
+}
+
+/** "It's paid" from someone who can't close bills alone: waits for the owner (or a trusted manager). */
+export interface PayClaim {
+  id: string; // same id on every order of the bill
+  payments: Payment[];
+  by: string;
+  at: string; // ISO
+  source: "staff" | "guest";
+  discount?: number;
+  coupon?: string;
+}
+
+/** One line in the activity log: who did what, when. */
+export interface ActivityEntry {
+  id: string;
+  at: string; // ISO
+  by: string;
+  kind: "order" | "payment" | "table" | "menu" | "stock" | "settings" | "team" | "coupon" | "guest";
+  text: string;
+  outletId?: string;
+  source?: "team" | "guest";
 }
 
 export interface PaymentLogEntry {
@@ -187,6 +210,8 @@ export interface Order {
   guestPhone?: string; // OTP-verified number of the guest who ordered (QR)
   guestUid?: string; // Supabase user id of the guest's phone (cloud mode)
   prepaid?: Payment[]; // part the guest already paid from their phone (e.g. UPI half of "Cash + UPI")
+  payClaim?: PayClaim; // marked paid by staff or the guest, not confirmed yet
+  confirmedBy?: string; // who confirmed the payment
   priority?: boolean;
   outletId?: string; // which outlet took the order
 }

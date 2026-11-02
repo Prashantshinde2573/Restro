@@ -18,7 +18,7 @@ export const plans: Plan[] = [
     yearly: 19990,
     blurb: "For a busy restaurant that wants fewer leaks.",
     outlets: "1 outlet · unlimited staff",
-    features: ["Everything in Starter", "QR ordering with split-by-guest pay", "Stock and dish costing", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests"],
+    features: ["Everything in Starter", "QR ordering and payment from the table", "Split the bill equally by guest", "Stock and dish costing", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests"],
     highlight: true,
   },
   {

@@ -124,7 +124,16 @@ export default function InventoryPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               {Object.entries(bySupplier).map(([sup, list]) => {
                 const total = list.reduce((s, i) => s + i.need * i.costPerUnit, 0);
-                const msg = `Order from ${outlet.name}:\n` + list.map((i) => `• ${i.name} — ${fmt(i.need)} ${i.unit}`).join("\n");
+                const msg = [
+                  `Hello ${sup},`,
+                  "",
+                  `Please send the following to *${outlet.name}*${outlet.address ? ` (${outlet.address})` : ""}:`,
+                  "",
+                  ...list.map((i, n) => `${n + 1}. ${i.name} — *${fmt(i.need)} ${i.unit}*`),
+                  "",
+                  `Delivery: ${new Date(Date.now() + 86_400_000).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}, before 10 am if possible.`,
+                  "Please confirm the rates and total. Thank you!",
+                ].join("\n");
                 return (
                   <Group key={sup} title={sup} flush>
                     {list.map((i) => (

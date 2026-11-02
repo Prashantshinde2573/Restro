@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Check, ChefHat, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText } from "lucide-react";
+import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText } from "lucide-react";
 import { hasTables, isOwner } from "@/lib/access";
 import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders } from "@/lib/live";
-import { Bars, Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
+import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
+import { BarChart, TrendChart } from "@/components/charts";
 import { UserChip } from "@/components/shell";
 import { DAY_MS, between, byChannel, byDay, byHour, change, inOutlet, startOfDay, topDishes, totals } from "@/lib/stats";
 import { isShared, useTables } from "@/lib/tables";
 import { inr, minutesSince } from "@/lib/format";
+import { NeedsYou } from "@/components/notifications";
 
 /** Staff without reports see a simple start screen with only their own tools. */
 function StaffHome() {
@@ -21,11 +23,13 @@ function StaffHome() {
     { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true },
     { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat },
     { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
+    { href: "/app/activity", label: "Activity", perm: "activity" as const, icon: History },
   ].filter((l) => me?.perms.includes(l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
   return (
     <>
       <PageHeader title={`Hi, ${me?.name.split(" ")[0] ?? ""}`} subtitle={outlet.name} actions={<UserChip />} />
-      <Page>
+      <Page className="space-y-4">
+        <NeedsYou />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {links.map((l) => (
             <Link key={l.href} href={l.href} className="flex flex-col gap-3 rounded-group bg-surface p-5 hover:shadow-float">
@@ -110,6 +114,7 @@ function OwnerHome() {
         actions={<UserChip />}
       />
       <Page className="space-y-6">
+        <NeedsYou />
         {doneSteps < steps.length && (
           <section className="rounded-[24px] bg-surface p-5 lg:p-6">
             <div className="flex items-center justify-between gap-3">
@@ -144,24 +149,6 @@ function OwnerHome() {
               Restropi Pulse · live
             </div>
             <p className="relative mt-3 max-w-3xl text-[19px] font-medium leading-[1.35] tracking-tight lg:text-[26px] lg:leading-[1.3]">{pulse}</p>
-            {(waiting > 0 || billing > 0) && (
-              <div className="relative mt-5 grid gap-2 sm:grid-cols-2">
-                {waiting > 0 && (
-                  <Link href="/app/orders" className="group flex items-center gap-3 rounded-[14px] bg-white/[.07] px-3.5 py-3 text-[14px] font-medium hover:bg-white/[.12]">
-                    <ReceiptText size={17} className="shrink-0 text-saffron" />
-                    <span className="flex-1">{waiting} new order{waiting === 1 ? "" : "s"} waiting to be accepted</span>
-                    <ArrowUpRight size={15} className="text-canvas/40 group-hover:text-canvas" />
-                  </Link>
-                )}
-                {billing > 0 && !cafe && (
-                  <Link href="/app/tables" className="group flex items-center gap-3 rounded-[14px] bg-white/[.07] px-3.5 py-3 text-[14px] font-medium hover:bg-white/[.12]">
-                    <LayoutGrid size={17} className="shrink-0 text-saffron" />
-                    <span className="flex-1">{billing} table{billing === 1 ? "" : "s"} asked for the bill</span>
-                    <ArrowUpRight size={15} className="text-canvas/40 group-hover:text-canvas" />
-                  </Link>
-                )}
-              </div>
-            )}
           </section>
         )}
 
@@ -191,7 +178,7 @@ function OwnerHome() {
               </span>
             }
           >
-            <Bars data={hourly} height={170} />
+            <BarChart data={hourly} height={190} format={(n) => `${n} order${n === 1 ? "" : "s"}`} />
           </Group>
 
           <Group title="Right now" flush>
@@ -223,7 +210,7 @@ function OwnerHome() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Group title="Last 7 days">
-            <Bars data={week} height={130} highlightLast format={(n) => inr(n)} />
+            <TrendChart data={week} height={170} format={(n) => inr(n)} />
             <div className="mt-4 flex items-baseline justify-between">
               <span className="text-[13px] text-muted">7-day sales</span>
               <span className="text-[17px] font-semibold tnum">{inr(week.reduce((s, w) => s + w.value, 0))}</span>

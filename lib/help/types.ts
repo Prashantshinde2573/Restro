@@ -1,0 +1,45 @@
+// Help center content: the user manual and common problems, in English, Marathi and Hindi.
+// The in-app Help center, the help button and the downloadable PDF manuals all read this.
+export type HelpLang = "en" | "mr" | "hi";
+
+export type Block =
+  | { p: string } // paragraph (**bold** allowed)
+  | { steps: string[] } // numbered steps
+  | { list: string[] } // bullet points
+  | { tip: string } // green "good to know" box
+  | { warn: string } // amber "careful" box
+  | { table: { head: string[]; rows: string[][] } }
+  | { h: string }; // small sub-heading
+
+export interface Section {
+  id: string;
+  title: string;
+  summary: string; // one line under the title in the contents
+  blocks: Block[];
+}
+
+export interface Faq {
+  id: string;
+  q: string;
+  a: string; // **bold** allowed, new lines become separate lines
+  area: "start" | "orders" | "billing" | "tables" | "qr" | "kitchen" | "menu" | "stock" | "team" | "reports" | "plans" | "account";
+  /** screens where this question is shown first in the help button */
+  pages?: string[];
+}
+
+export interface Manual {
+  lang: HelpLang;
+  langName: string;
+  title: string;
+  subtitle: string;
+  updated: string;
+  ui: Record<
+    | "help" | "helpCenter" | "searchPlaceholder" | "commonProblems" | "manual" | "readManual" | "download" | "downloadPdf" | "print"
+    | "contents" | "contact" | "contactBody" | "email" | "whatsapp" | "noResults" | "allTopics" | "back" | "goodToKnow" | "careful" | "step"
+    | "openHelpCenter" | "forThisScreen" | "manuals" | "page",
+    string
+  >;
+  areas: Record<Faq["area"], string>;
+  sections: Section[];
+  faq: Faq[];
+}

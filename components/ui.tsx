@@ -21,12 +21,12 @@ export function PageHeader({
 }) {
   return (
     <header className="px-4 pt-3 pb-4 lg:px-10 lg:pt-10 lg:pb-6">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <h1 className="large-title text-balance">{title}</h1>
           {subtitle && <p className="mt-1 text-[15px] text-muted">{subtitle}</p>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {children && <div className="mt-4">{children}</div>}
     </header>
@@ -120,12 +120,13 @@ export function Button({ variant = "primary", size = "md", className, ...rest }:
       {...rest}
       className={clsx(
         "inline-flex select-none items-center justify-center gap-2 rounded-ctl font-semibold transition active:scale-[.98] disabled:opacity-40 disabled:active:scale-100",
-        size === "sm" && "h-9 px-3 text-[14px]",
-        size === "md" && "h-11 px-4 text-[15px]",
+        size === "sm" && "h-10 px-4 text-[14px]",
+        size === "md" && "h-11 px-5 text-[15px]",
         size === "lg" && "h-14 px-6 text-[17px]",
-        variant === "primary" && "bg-jade text-white hover:bg-jade-deep dark:text-canvas",
-        variant === "tinted" && "bg-jade-soft text-jade-deep hover:brightness-95",
-        variant === "plain" && "bg-surface text-ink hover:bg-sunken",
+        variant === "primary" && "bg-jade text-white shadow-[0_6px_16px_-10px_rgb(15_122_85/.9)] hover:bg-jade-deep dark:text-canvas",
+        // secondary: dark outline on white (was a pale mint that looked washed out)
+        variant === "tinted" && "bg-surface text-ink ring-1 ring-inset ring-ink/15 shadow-[0_1px_2px_rgb(16_24_20/.06)] hover:bg-sunken hover:ring-ink/25",
+        variant === "plain" && "bg-surface text-ink ring-1 ring-inset ring-line hover:bg-sunken",
         variant === "ghost" && "text-jade hover:bg-jade-soft/60",
         variant === "danger" && "bg-rose-soft text-rose hover:brightness-95",
         className,
@@ -319,11 +320,28 @@ export function Sheet({
     };
     window.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
+    // Phone back button / swipe-back closes the sheet instead of leaving the page.
+    // The extra history entry keeps the router's own state so going back stays on this page.
+    let mine = false;
+    try {
+      window.history.pushState({ ...(window.history.state ?? {}), __sheet: id }, "", window.location.href);
+      mine = true;
+    } catch {}
+    const onPop = () => {
+      if ((window.history.state as { __sheet?: number } | null)?.__sheet !== id && sheetStack.includes(id)) {
+        mine = false;
+        closeRef.current();
+      }
+    };
+    window.addEventListener("popstate", onPop);
     return () => {
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("popstate", onPop);
       const i = sheetStack.indexOf(id);
       if (i >= 0) sheetStack.splice(i, 1);
       if (sheetStack.length === 0) document.body.style.overflow = "";
+      // closed by a button: take our history entry back off (only if it's still on top)
+      if (mine && (window.history.state as { __sheet?: number } | null)?.__sheet === id) window.history.back();
     };
   }, [open, setLayer]);
 

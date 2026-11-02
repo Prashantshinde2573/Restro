@@ -24,7 +24,15 @@ export function couponState(c: Coupon): { label: string; tone: "jade" | "muted" 
 /** Message a guest receives with the coupon. */
 export function couponMessage(c: Coupon, restaurant: string) {
   const until = c.validTo ? ` till ${new Date(c.validTo).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "";
-  return `🎁 ${couponLabel(c)} at ${restaurant || "our restaurant"}!\nUse code *${c.code}* on your bill${until}.`;
+  return [
+    `🎁 *A treat from ${restaurant || "us"}*`,
+    "",
+    `Enjoy *${couponLabel(c)}* on your next visit.`,
+    `Code: *${c.code}*`,
+    `Show this code when you pay${until}.`,
+    "",
+    "See you soon! 🙏",
+  ].join("\n");
 }
 
 export function CouponsPanel() {

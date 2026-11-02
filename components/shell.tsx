@@ -25,6 +25,8 @@ import {
   BellRing,
   X,
   Plus,
+  History,
+  CircleHelp,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
@@ -36,6 +38,8 @@ import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
+import { NoticeBell } from "./notifications";
+import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
@@ -67,6 +71,7 @@ const groups: { key: TKey; items: NavItem[] }[] = [
       { href: "/app/campaigns", key: "marketing", icon: Megaphone },
       { href: "/app/insights", key: "insights", icon: Sparkles },
       { href: "/app/reports", key: "reports", icon: BarChart3 },
+      { href: "/app/activity", key: "activity", icon: History },
     ],
   },
 ];
@@ -149,6 +154,8 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
   const outlets = useOutlets().filter((o) => inOutlet(me, o.id));
   const current = useCurrentOutlet();
   const [open, setOpen] = useState(false);
+  const path = usePathname();
+  useEffect(() => setOpen(false), [path]);
   const initials = account.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
     <>
@@ -186,7 +193,7 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
           ))}
         </div>
         {isOwner(me) && (
-          <Link href="/app/access" onClick={() => setOpen(false)} className="mt-3 flex items-center gap-2 px-1 text-[14px] font-semibold text-jade">
+          <Link href="/app/access" className="mt-3 flex items-center gap-2 px-1 text-[14px] font-semibold text-jade">
             <Plus size={16} /> Add or edit outlets
           </Link>
         )}
@@ -198,6 +205,7 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
 /** Signed-in person: profile, change password, sign out. */
 function MeButton({ compact }: { compact?: boolean }) {
   const me = useMe();
+  const { lang, setLang } = useT();
   const cloud = useCloud();
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState(false);
@@ -225,6 +233,13 @@ function MeButton({ compact }: { compact?: boolean }) {
                 <div className="truncate text-[13px] text-muted">{me.role === "owner" ? `Owner · ${cloud.email ?? ""}` : me.title}</div>
               </div>
             </div>
+            <div className="mt-3 flex gap-1 rounded-ctl bg-sunken p-1" role="radiogroup" aria-label="Language">
+              {langs.map((l) => (
+                <button key={l.v} role="radio" aria-checked={lang === l.v} onClick={() => setLang(l.v)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", lang === l.v ? "bg-surface shadow-float" : "text-muted")}>
+                  {l.label}
+                </button>
+              ))}
+            </div>
             {cloud.role === "owner" && (
               <button onClick={() => setPw(true)} className="mt-3 flex w-full items-center gap-2 rounded-group bg-surface px-4 py-3 text-left text-[15px] font-medium">
                 <KeyRound size={17} className="text-jade" /> Change password
@@ -249,16 +264,19 @@ function MeButton({ compact }: { compact?: boolean }) {
 
 function Sidebar() {
   const path = usePathname();
-  const { t, lang, setLang } = useT();
+  const { t } = useT();
   const { navGroups } = useNav();
   const renew = useRenewDays();
   return (
     <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col px-3 py-5 lg:flex">
-      <Link href="/app" className="px-2 pb-5">
-        <Wordmark className="h-[30px]" />
-      </Link>
+      <div className="flex items-center justify-between px-2 pb-5">
+        <Link href="/app">
+          <Wordmark className="h-[30px]" />
+        </Link>
+        <div className="flex items-center gap-1.5"><HelpButton /><NoticeBell /></div>
+      </div>
       <OutletSwitcher />
-      <nav className="mt-4 flex-1 space-y-5 overflow-y-auto">
+      <nav className="no-scrollbar mt-3 flex-1 space-y-3.5 overflow-y-auto">
         {navGroups.map((g) => (
           <div key={g.key}>
             <div className="px-3 pb-1 text-[12px] font-medium text-faint">{t(g.key)}</div>
@@ -270,7 +288,7 @@ function Sidebar() {
                   key={it.href}
                   href={it.href}
                   className={clsx(
-                    "flex items-center gap-3 rounded-[10px] px-3 py-2 text-[14.5px] font-medium transition-colors",
+                    "flex items-center gap-3 rounded-[10px] px-3 py-[7px] text-[14.5px] font-medium transition-colors",
                     active ? "bg-surface text-ink shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
                     it.state === "locked" && "opacity-60",
                   )}
@@ -286,6 +304,16 @@ function Sidebar() {
       </nav>
       <div className="mt-3 space-y-1 border-t border-line pt-3">
         <Link
+          href="/app/help"
+          className={clsx(
+            "flex items-center gap-3 rounded-[10px] px-3 py-2 text-[14.5px] font-medium",
+            path.startsWith("/app/help") ? "bg-surface shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
+          )}
+        >
+          <CircleHelp size={18} strokeWidth={1.8} />
+          <span className="flex-1">{t("help")}</span>
+        </Link>
+        <Link
           href="/app/settings"
           className={clsx(
             "flex items-center gap-3 rounded-[10px] px-3 py-2 text-[14.5px] font-medium",
@@ -297,17 +325,6 @@ function Sidebar() {
           {renew !== null && <Badge n={renew} />}
         </Link>
         <MeButton />
-        <div className="flex items-center gap-1 px-2 pt-2">
-          {langs.map((l) => (
-            <button
-              key={l.v}
-              onClick={() => setLang(l.v)}
-              className={clsx("flex-1 rounded-[8px] py-1 text-[12px] font-semibold", lang === l.v ? "bg-ink text-canvas" : "text-muted hover:bg-surface/60")}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
       </div>
     </aside>
   );
@@ -320,10 +337,12 @@ function TabBar() {
   const { navGroups, state } = useNav();
   const renew = useRenewDays();
   const myTabs = tabs.filter((tb) => state(tb.href) === "ok");
-  const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }].filter(
+  const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }, { href: "/app/help", key: "help" as TKey, icon: CircleHelp, state: "ok" as NavState }].filter(
     (i) => !myTabs.some((tb) => tb.href === i.href),
   );
   const moreActive = moreItems.some((i) => isActive(path, i.href));
+  // a link in "More" was tapped: close it once the new page is showing
+  useEffect(() => setMore(false), [path]);
   return (
     <>
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-canvas/85 backdrop-blur-xl lg:hidden">
@@ -357,7 +376,7 @@ function TabBar() {
               <Link
                 key={it.href}
                 href={it.href}
-                onClick={() => setMore(false)}
+                onClick={() => { if (isActive(path, it.href)) setMore(false); }}
                 className={clsx("relative flex flex-col items-center gap-2 rounded-group bg-surface px-2 py-4 active:scale-[.97]", it.state === "locked" && "opacity-60")}
               >
                 <Icon size={22} className="text-jade" />
@@ -576,7 +595,7 @@ function MobileTopBar() {
         <Link href="/app" aria-label="Restropi home" className="justify-self-center">
           <Wordmark light className="h-[26px]" />
         </Link>
-        <div className="justify-self-end"><MeButton compact /></div>
+        <div className="flex items-center gap-1 justify-self-end"><HelpButton dark /><NoticeBell dark /><MeButton compact /></div>
       </div>
     </div>
   );
@@ -597,6 +616,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <RouteGate>{children}</RouteGate>
             <PlanSheet />
             <OrderAlerts />
+            <HelpSheet />
           </ClientOnly>
         </div>
       </main>

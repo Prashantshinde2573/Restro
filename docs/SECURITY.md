@@ -8,9 +8,9 @@ Status words: **Fixed** (done in code / database), **Needs you** (a switch or SQ
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
-| 1 | Guests (QR) could change dish prices or items in an order they send | High | Needs you: run `supabase/security_guest_orders.sql` |
+| 1 | Guests (QR) could change dish prices or items in an order they send | High | Fixed (2 Nov): `supabase/security_guest_orders.sql` applied, trigger `guard_guest_order` is live |
 | 2 | A guest can mark their own bill "paid by UPI" from the phone; staff don't confirm the money arrived | High (business) | Open: decide if UPI from the phone needs staff confirmation |
-| 3 | Menu photo reading (Gemini) has no daily limit until the SQL is run, so it could be used to run up your Gemini bill | Medium | Needs you: run `supabase/menu_scans.sql` |
+| 3 | Menu photo reading (Gemini) has no daily limit until the SQL is run, so it could be used to run up your Gemini bill | Medium | Fixed (2 Nov): `supabase/menu_scans.sql` applied (20 photos per restaurant per day) |
 | 4 | Leaked-password protection is off in Supabase Auth | Medium | Needs you: Supabase → Authentication → Settings → turn on "Leaked password protection" |
 | 5 | No security headers (clickjacking, sniffing, referrer) | Medium | Fixed (`next.config.ts`) |
 | 6 | Staff PIN: 5 wrong tries lock that person for 5 minutes. A 4-digit PIN can still be guessed over several days | Medium | Open: longer lock after repeated locks, or 6-digit PINs |
@@ -30,13 +30,13 @@ Status words: **Fixed** (done in code / database), **Needs you** (a switch or SQ
 ## Details and fixes
 
 ### 1. Guest order tampering (High)
-A guest's phone talks to the database directly. A technical user could send an order with a lower price (₹1 Biryani) or change items after sending. `supabase/security_guest_orders.sql` adds a database check: every line must be a real, available dish of that restaurant, quantity 1–50, price between the dish price and dish price + its add-ons; after sending, guests can't change items or amounts, and can only move the status to "paid". **Run it once in Supabase → SQL editor.** I tried to apply it from here, but the approval question timed out.
+A guest's phone talks to the database directly. A technical user could send an order with a lower price (₹1 Biryani) or change items after sending. `supabase/security_guest_orders.sql` adds a database check: every line must be a real, available dish of that restaurant, quantity 1–50, price between the dish price and dish price + its add-ons; after sending, guests can't change items or amounts, and can only move the status to "paid". **Applied on 2 Nov 2026** (checked: trigger `guard_guest_order` exists on `orders`).
 
 ### 2. "Paid by UPI" from the guest's phone (High, business)
 Today the guest taps "I've paid" and the bill closes. Nothing checks the money arrived. Options: (a) keep as is and ask cashiers to check the UPI app; (b) UPI from the phone goes to "Payment to check" and the cashier taps "Received". Option (b) is safer. Tell me which.
 
 ### 3–4. Settings to switch on
-- Run `supabase/menu_scans.sql` (20 menu photos per restaurant per day).
+- `supabase/menu_scans.sql` applied on 2 Nov 2026 (20 menu photos per restaurant per day).
 - Turn on leaked-password protection in Supabase Auth.
 
 ### 5. Security headers (Fixed)
@@ -46,4 +46,4 @@ Today the guest taps "I've paid" and the bill closes. Nothing checks the money a
 Changing a client's plan, renewal date, details or status, or resetting the owner's password, now shows "Confirm the change" and needs the super admin password.
 
 ## Not production-ready until
-Items 1 and 3 are run, item 4 is switched on, and item 2 is decided.
+Item 4 is switched on and item 2 is decided (items 1 and 3 are done).

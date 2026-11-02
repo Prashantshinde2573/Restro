@@ -3,17 +3,18 @@
 import { hasCounter, hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { ChevronDown, Mic, Minus, Plus, Search, Send, Trash2, X, Check } from "lucide-react";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Chips, DietMark, Segmented, Sheet } from "@/components/ui";
 import { PhotoSlide } from "@/components/menu-bits";
 import { Checkout, billTotals } from "@/components/checkout";
 import { VoiceOrder } from "@/components/voice";
 import { ItemSheet } from "@/components/item-sheet";
-import { getOrders, orderActions, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
+import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
 import { getTable, isShared, seatsFree, tableActions, tableState, useTables } from "@/lib/tables";
+import { closeBill, partyOpenOrders } from "@/lib/billing";
 import { inr, gstLabel } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
 
@@ -43,8 +44,14 @@ function PosScreen() {
   const cafe = !hasTables(outlet); // counter-only: no dine-in at a table
   const counterToo = hasCounter(outlet);
   const voiceOn = useFeature("voice") === "ok";
+  const canCharge = useCan("charge");
   const [type, setType] = useState<OrderType>(outlet.businessType === "cafe" ? "takeaway" : "dine-in");
-  const [table, setTable] = useState(params.get("table") ?? "T3");
+  const [table, setTable] = useState(params.get("table") ?? "");
+  const [cust, setCust] = useState(""); // counter / delivery: guest name or phone
+  // no table picked yet (or it was removed): start on the first free one
+  useEffect(() => {
+    if (tables.length && !tables.some((x) => x.name === table)) setTable((tables.find((x) => tableState(x) === "free") ?? tables[0]).name);
+  }, [tables, table]);
   const [party, setParty] = useState<string | null>(params.get("party"));
   const [lines, setLines] = useState<Line[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -83,7 +90,9 @@ function PosScreen() {
   const tbShared = tb ? isShared(tb) : false;
   const pty = tb?.parties.find((p) => p.id === party);
   const label =
-    type === "dine-in" ? (pty && tbShared ? `${table} · Party ${party}` : `Table ${table}`) : type === "takeaway" ? "Takeaway" : "Delivery";
+    type === "dine-in" ? (pty && tbShared ? `${table} · Party ${party}` : `Table ${table}`) : cust.trim() ? `${type === "delivery" ? "Delivery" : counterToo || cafe ? "Counter" : "Takeaway"} · ${cust.trim()}` : type === "takeaway" ? (counterToo || cafe ? "Counter" : "Takeaway") : "Delivery";
+  const noTable = type === "dine-in" && !tb;
+  const waitingPay = type === "dine-in" && !!pty?.paymentPending;
 
   const [sentIds, setSentIds] = useState<string[]>([]); // takeaway/delivery orders sent but not paid yet
   const allOrders = useOrders();
@@ -100,7 +109,7 @@ function PosScreen() {
     return p.id;
   };
 
-  const sendKitchen = (): string => {
+  const sendKitchen = (): { id: string; pid: string | null } => {
     const pid = ensureParty();
     if (tb && pid) {
       const cur = getTable(tb.id)!.parties.find((p) => p.id === pid);
@@ -122,7 +131,7 @@ function PosScreen() {
     const kot = type === "dine-in" ? (tb && getTable(tb.id)!.parties.length > 1 ? `${table} · ${pid}` : table) : label;
     toast(`KOT sent · ${count} items for ${kot}`);
     if (type !== "dine-in") setSentIds((x) => [...x, order.id]);
-    return order.id;
+    return { id: order.id, pid };
   };
 
   const Cart = (
@@ -157,7 +166,7 @@ function PosScreen() {
             <ChevronDown size={18} className="text-muted" />
           </button>
         ) : (
-          <input className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder={type === "delivery" ? "Guest phone or address" : "Guest name or phone (optional)"} />
+          <input value={cust} onChange={(e) => setCust(e.target.value)} className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder={type === "delivery" ? "Guest name, phone or address" : "Guest name (optional, shows on the order)"} />
         )}
       </div>
 
@@ -201,13 +210,17 @@ function PosScreen() {
           <span className="text-[15px] font-medium">{running > 0 ? "Bill so far" : "Total"}</span>
           <span className="text-[26px] font-semibold tracking-tight tnum">{inr(billTotals(chargeAmount).total)}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent} onClick={() => sendKitchen()}>
+        <div className={clsx("grid gap-2", canCharge ? "grid-cols-2" : "grid-cols-1")}>
+          {noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">Pick a table first</p>}
+          {waitingPay && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">This bill is marked paid · waiting for the owner&apos;s OK</p>}
+          <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent || noTable} onClick={() => sendKitchen()}>
             {sent ? <><Check size={18} /> Sent</> : <><Send size={17} /> {t("sendKitchen")}</>}
           </Button>
-          <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0} onClick={() => { setCartOpen(false); setPay(true); }}>
-            {t("charge")}
-          </Button>
+          {canCharge && (
+            <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0 || noTable || waitingPay} onClick={() => { setCartOpen(false); setPay(true); }}>
+              {t("charge")}
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -386,22 +399,32 @@ function PosScreen() {
             .flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))),
           ...(sent ? [] : lines.map((l) => ({ name: l.item.name, qty: l.qty, price: priceOf(l) }))),
         ]}
-        onPaid={(payments) => {
+        onPaid={(payments, extra) => {
           // Anything still in the cart becomes an order first, so the sale is saved.
           const ids = [...sentIds];
-          if (!sent && lines.length) ids.push(sendKitchen());
-          if (type === "dine-in" && tb) {
-            const pid = pty?.id ?? party;
-            getOrders()
-              .filter((o) => o.tableId === tb.id && (o.partyId ?? "A") === (pid ?? "A") && o.status !== "paid" && o.status !== "cancelled")
-              .forEach((o) => ids.includes(o.id) || ids.push(o.id));
+          let pid: string | null = pty?.id ?? party;
+          if (!sent && lines.length) {
+            const r = sendKitchen();
+            ids.push(r.id);
+            pid = r.pid ?? pid;
           }
-          if (ids.length) orderActions.pay(ids, payments, me?.name ?? "Staff");
-          if (type === "dine-in" && tb && (pty || party)) tableActions.close(tb.id, (pty?.id ?? party)!);
+          const dineIn = type === "dine-in" && !!tb && !!pid;
+          if (dineIn) partyOpenOrders(tb!.id, pid!).forEach((o) => ids.includes(o.id) || ids.push(o.id));
+          const result = closeBill({
+            ids,
+            payments,
+            by: me ? (me.role === "owner" ? `${me.name} (Owner)` : me.name) : "Staff",
+            tableId: dineIn ? tb!.id : undefined,
+            partyId: dineIn ? pid! : undefined,
+            discount: extra?.discount,
+            coupon: extra?.coupon,
+          });
           setSentIds([]);
           setLines([]);
           setSent(false);
           setParty(null);
+          setCust("");
+          return result;
         }}
       />
 

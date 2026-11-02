@@ -37,6 +37,7 @@ const TABLE: Record<string, string> = {
   feedback: "feedback",
   stock: "stock_items",
   coupons: "coupons",
+  activity: "activity",
 };
 
 /* ---------------- who is signed in on this device ---------------- */
@@ -98,12 +99,28 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
     // token refreshes fire too; only re-resolve when the person changes
     if (session.user.id === lastUid && stateStore.get().status !== "loading") return;
     lastUid = session.user.id;
+    // Same person as last time on this device: open their restaurant straight away,
+    // then check with the server in the background.
+    const known = !session.user.is_anonymous && !recovering() ? readWho(session.user.id) : null;
+    if (known) {
+      stateStore.set(known);
+      if (known.rid && (known.role === "owner" || known.role === "staff")) {
+        connect(known.rid, known.role, session.user.id);
+        onSignedIn(known);
+      }
+    }
     let s: CloudState;
     try {
       s = await resolveUser(session);
     } catch {
+      if (known) return; // offline for a moment: keep working with what we know
       lastUid = null;
       stateStore.set({ status: "signedOut" });
+      return;
+    }
+    saveWho(session.user.id, s);
+    if (known && known.rid === s.rid && known.role === s.role && known.status === s.status && known.memberId === s.memberId && !s.mustChangePassword) {
+      stateStore.set({ ...known, ...s });
       return;
     }
     stateStore.set(s);
@@ -128,6 +145,22 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
       }
     }, 0);
   });
+}
+
+function readWho(uid: string): CloudState | null {
+  try {
+    const raw = localStorage.getItem(WHO + uid);
+    const s = raw ? (JSON.parse(raw) as CloudState) : null;
+    return s && s.status === "ready" && (s.role === "owner" || s.role === "staff") && !s.mustChangePassword ? s : null;
+  } catch {
+    return null;
+  }
+}
+function saveWho(uid: string, s: CloudState) {
+  try {
+    if (s.status === "ready" && (s.role === "owner" || s.role === "staff") && !s.mustChangePassword) localStorage.setItem(WHO + uid, JSON.stringify(s));
+    else localStorage.removeItem(WHO + uid);
+  } catch {}
 }
 
 async function resolveUser(session: Session): Promise<CloudState> {
@@ -221,11 +254,13 @@ export async function ensureGuest(rid: string) {
 }
 /** Sign this login out on every phone and computer. */
 export async function signOutEverywhere() {
+  clearDeviceCache();
   disconnect();
   await sb().auth.signOut({ scope: "global" });
 }
 export async function cloudSignOut() {
   setRecovering(false);
+  clearDeviceCache();
   disconnect();
   await sb().auth.signOut();
 }
@@ -254,10 +289,48 @@ export async function publicInfo(rid: string): Promise<{ name: string } | null> 
   return (data as { name: string } | null) ?? null;
 }
 
+/* ---------------- this device's copy (screens open instantly, then refresh) ---------------- */
+// Only for the owner's and staff's own restaurant, on their own device. Cleared on sign-out.
+const CACHE = "restropi.cache.";
+const CACHE_MAX: Record<string, number> = { orders: 300, activity: 200 };
+const cacheKey = (rid: string, key: string) => `${CACHE}${rid}.${key}`;
+function readCache<T>(rid: string, key: string): T | null {
+  try {
+    const raw = localStorage.getItem(cacheKey(rid, key));
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+const cacheTimers = new Map<string, number>();
+function writeCache(rid: string, key: string, value: unknown) {
+  // a short wait so a burst of live changes is saved once
+  window.clearTimeout(cacheTimers.get(key));
+  cacheTimers.set(
+    key,
+    window.setTimeout(() => {
+      try {
+        const v = Array.isArray(value) && CACHE_MAX[key] ? value.slice(0, CACHE_MAX[key]) : value;
+        localStorage.setItem(cacheKey(rid, key), JSON.stringify(v));
+      } catch {
+        /* storage full or off: the app still works, it just loads from the server */
+      }
+    }, 400),
+  );
+}
+const WHO = "restropi.who.";
+function clearDeviceCache() {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(CACHE) || k.startsWith(WHO)) localStorage.removeItem(k);
+  } catch {}
+}
+
 /* ---------------- live sync ---------------- */
 let channel: RealtimeChannel | null = null;
 let connected: { rid: string; role: Role; uid: string } | null = null;
 const pending = new Set<Promise<unknown>>();
+/** Rows this device just wrote (kept even if the first load doesn't have them yet). */
+const pendingIds = new Set<string>();
 
 function disconnect() {
   if (channel) void sb().removeChannel(channel);
@@ -277,9 +350,15 @@ export function connect(rid: string, role: Role, uid: string) {
   disconnect();
   connected = { rid, role, uid };
   const client = sb();
+  const cached = role === "owner" || role === "staff";
+  const scope = `${uid}.${rid}`; // per person: staff never see the owner's copy on a shared device
   // Keep each list as a map so live changes can be applied one row at a time.
   const maps = new Map<string, Map<string, unknown>>();
-  const publish = (b: RemoteBinding) => b.receive(sortLike(b.key, [...(maps.get(b.key)?.values() ?? [])]));
+  const publish = (b: RemoteBinding) => {
+    const list = sortLike(b.key, [...(maps.get(b.key)?.values() ?? [])]);
+    b.receive(list);
+    if (cached) writeCache(scope, b.key, list);
+  };
 
   const ch = client.channel(`restropi:${rid}:${uid}`);
   for (const b of remoteBindings) {
@@ -289,47 +368,75 @@ export function connect(rid: string, role: Role, uid: string) {
       continue;
     }
     if (b.spec.kind === "doc") {
-      ch.on("postgres_changes", { event: "UPDATE", schema: "public", table: "restaurants", filter: `id=eq.${rid}` }, (p) =>
-        b.receive({ ...(b.empty as object), ...fromAccount(p.new as AccountRow) }),
-      );
+      const saved = cached ? readCache<Record<string, unknown>>(scope, b.key) : null;
+      if (saved) b.receive({ ...(b.empty as object), ...saved });
+      const got = (v: Record<string, unknown>) => {
+        b.receive({ ...(b.empty as object), ...v });
+        if (cached) writeCache(scope, b.key, v);
+      };
+      ch.on("postgres_changes", { event: "UPDATE", schema: "public", table: "restaurants", filter: `id=eq.${rid}` }, (p) => got(fromAccount(p.new as AccountRow)));
       void client
         .from("restaurants")
         .select("name, owner, plan, renews_at, status")
         .eq("id", rid)
         .maybeSingle()
-        .then(({ data }) => data && b.receive({ ...(b.empty as object), ...fromAccount(data as AccountRow) }));
+        .then(({ data }) => data && got(fromAccount(data as AccountRow)));
       continue;
     }
     const table = TABLE[b.key];
     if (!table) continue;
     const map = new Map<string, unknown>();
     maps.set(b.key, map);
-    setReady(b.key, false);
-    b.receive([]);
+    // Show this device's last copy at once; the server's answer replaces it a moment later.
+    const saved = cached ? readCache<{ id: string }[]>(scope, b.key) : null;
+    if (saved?.length) {
+      for (const x of saved) map.set(x.id, x);
+      b.receive(sortLike(b.key, [...map.values()]));
+      setReady(b.key, true);
+    } else {
+      setReady(b.key, false);
+      b.receive([]);
+    }
+    const touched = new Set<string>(); // changed live since we connected: newer than the first load
     ch.on("postgres_changes", { event: "INSERT", schema: "public", table, filter: `rid=eq.${rid}` }, (p) => {
       const r = p.new as Row;
+      touched.add(r.id);
       map.set(r.id, fromRow(b.key, r));
       publish(b);
     });
     ch.on("postgres_changes", { event: "UPDATE", schema: "public", table, filter: `rid=eq.${rid}` }, (p) => {
       const r = p.new as Row;
+      touched.add(r.id);
       map.set(r.id, fromRow(b.key, r));
       publish(b);
     });
     // deletes can't be filtered server-side; the old row carries its key (rid, id)
     ch.on("postgres_changes", { event: "DELETE", schema: "public", table }, (p) => {
       const o = p.old as { rid?: string; id?: string };
-      if (o.rid === rid && o.id && map.delete(o.id)) publish(b);
+      if (o.rid === rid && o.id) {
+        touched.add(o.id);
+        if (map.delete(o.id)) publish(b);
+      }
     });
     let q = client.from(table).select(b.key === "orders" ? "id, data, number" : "id, data").eq("rid", rid);
     if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
     if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
+    if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
     void q.then(({ data, error }) => {
       if (error) {
+        // not allowed (or the table isn't there yet): don't keep showing an old copy
+        if (map.size) {
+          map.clear();
+          publish(b);
+        }
         setReady(b.key, true);
         return report(error);
       }
-      for (const r of (data as unknown as Row[]) ?? []) if (!map.has(r.id)) map.set(r.id, fromRow(b.key, r));
+      const rows = (data as unknown as Row[]) ?? [];
+      const onServer = new Set(rows.map((r) => r.id));
+      // the server wins over this device's old copy; live changes win over both
+      for (const r of rows) if (!touched.has(r.id)) map.set(r.id, fromRow(b.key, r));
+      for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id)) map.delete(id);
       publish(b);
       setReady(b.key, true);
     });
@@ -396,6 +503,17 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
     return;
   }
 
+  changed.forEach((d) => {
+    const id = String(d.id);
+    pendingIds.add(id);
+    window.setTimeout(() => pendingIds.delete(id), 15_000);
+  });
+  if (b.key === "activity") {
+    // the log only grows: new lines are added, nothing is changed or removed
+    const fresh = changed.filter((d) => !before.has(String(d.id)));
+    if (fresh.length) track(client.from(table).insert(fresh.map((d) => ({ rid, id: String(d.id), data: d }))).then(check));
+    return;
+  }
   if (b.key === "orders") {
     // insert new ones and update the rest separately, so an update never uses up an order number
     const fresh = changed.filter((o) => !before.has(String(o.id)));
@@ -423,9 +541,9 @@ export function createOrderInCloud(order: { id: string } & Record<string, unknow
 export const isConnected = () => !!connected;
 
 /** Guests add/update only their own customer record (name, phone), or leave feedback. */
-export function guestUpsert(rid: string, id: string, data: Record<string, unknown>, coll: "guests" | "feedback" = "guests") {
+export function guestUpsert(rid: string, id: string, data: Record<string, unknown>, coll: "guests" | "feedback" | "activity" = "guests") {
   if (coll === "guests") track(sb().rpc("guest_touch", { r: rid, rec: { ...data, id } }).then(check));
-  else track(sb().from("feedback").insert({ rid, id, data }).then(check));
+  else track(sb().from(coll).insert({ rid, id, data }).then(check));
 }
 
 /* ---------------- super admin ---------------- */

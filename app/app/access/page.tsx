@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, Check, Coffee, Lock, Plus, Store, UserPlus } from "lucide-react";
+import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Plus, Store, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -111,6 +111,10 @@ export default function AccessPage() {
   const pinOk = !cloud.rid || (draft?.isNew ? /^\d{4}$/.test(pin) : pin === "" || /^\d{4}$/.test(pin));
   const draftOk = !!draft && draft.name.trim().length > 1 && phoneOk && draft.outletIds.length > 0 && (draft.role === "subadmin" || draft.perms.length > 0) && pinOk;
 
+  const staffLink = typeof window !== "undefined" && cloud.rid ? `${window.location.origin}/login?r=${cloud.rid}` : "";
+  const inviteText = (name?: string) =>
+    [`Hi${name ? ` ${name.split(" ")[0]}` : ""},`, "", `Sign in to *${account.name || "our restaurant"}* on Restropi:`, staffLink, "", "Open the link, tap your name and enter your 4-digit PIN. Save the page to your home screen for next time."].join("\n");
+  const [inviteFor, setInviteFor] = useState<{ name: string; phone: string } | null>(null);
   const save = () => {
     if (!draft || !draftOk) return;
     const { isNew, ...m } = draft;
@@ -124,7 +128,8 @@ export default function AccessPage() {
     setPin("");
     memberActions.save({ ...m, name: m.name.trim(), phone: `${digits.slice(0, 5)} ${digits.slice(5)}`, title: m.title.trim() || (m.role === "subadmin" ? "Outlet manager" : "Staff"), perms: m.perms.filter((p) => !permState(p).disabled) });
     setDraft(null);
-    toast(isNew ? `${m.name.trim()} added` : "Access saved");
+    toast(isNew ? `${m.name.trim()} added · send them the sign-in link` : "Access saved");
+    if (isNew && staffLink && digits.length === 10) setInviteFor({ name: m.name.trim(), phone: digits });
   };
 
   /* ---------------- outlet editor ---------------- */
@@ -157,6 +162,21 @@ export default function AccessPage() {
         actions={<Button size="sm" onClick={openNew}><UserPlus size={16} /> Add member</Button>}
       />
       <Page className="space-y-6">
+        {/* ---------- how staff sign in ---------- */}
+        {cloud.rid && (
+          <section className="flex flex-col gap-3 rounded-group bg-surface p-4 ring-1 ring-line/70 sm:flex-row sm:items-center">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-jade-soft text-jade"><Link2 size={19} /></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-semibold">Staff sign-in link</div>
+              <p className="text-[13px] text-muted">Send it to your staff once. They open it on their phone or tablet, tap their name and enter their 4-digit PIN.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Button size="sm" variant="tinted" onClick={() => { navigator.clipboard?.writeText(staffLink).then(() => toast("Link copied"), () => toast(staffLink)); }}><Copy size={15} /> Copy</Button>
+              <a href={`https://wa.me/?text=${encodeURIComponent(inviteText())}`} target="_blank" rel="noreferrer"><Button size="sm" className="w-full"><MessageCircle size={15} /> WhatsApp</Button></a>
+            </div>
+          </section>
+        )}
+
         {/* ---------- outlets (owner) ---------- */}
         {owner && (
           <section>
@@ -244,7 +264,7 @@ export default function AccessPage() {
         wide
         footer={
           <Button size="lg" className="w-full" disabled={!draftOk} onClick={save}>
-            {!draft ? "" : !draft.name.trim() || !phoneOk ? "Add name and 10-digit mobile" : !pinOk ? "Set a 4-digit PIN" : !draft.outletIds.length ? "Pick at least one outlet" : draft.role === "staff" && !draft.perms.length ? "Tick at least one box" : draft.isNew ? "Add and send invite" : "Save access"}
+            {!draft ? "" : !draft.name.trim() || !phoneOk ? "Add name and 10-digit mobile" : !pinOk ? "Set a 4-digit PIN" : !draft.outletIds.length ? "Pick at least one outlet" : draft.role === "staff" && !draft.perms.length ? "Tick at least one box" : draft.isNew ? "Add member" : "Save access"}
           </Button>
         }
       >
@@ -408,6 +428,17 @@ export default function AccessPage() {
               <span className="text-[15px]">Guests pay before the kitchen starts</span>
               <Toggle checked={outletDraft.payFirst} onChange={(payFirst) => setOutletDraft({ ...outletDraft, payFirst })} label="Guests pay first" />
             </div>
+          </div>
+        )}
+      </Sheet>
+      <Sheet open={!!inviteFor} onClose={() => setInviteFor(null)} title="Send the sign-in link">
+        {inviteFor && (
+          <div className="space-y-4">
+            <p className="text-[14.5px] text-muted">{inviteFor.name} needs this link once to sign in. Tell them their PIN yourself (it isn&apos;t in the message).</p>
+            <pre className="whitespace-pre-wrap rounded-group bg-surface p-4 text-[13.5px] leading-relaxed">{inviteText(inviteFor.name)}</pre>
+            <a href={`https://wa.me/91${inviteFor.phone}?text=${encodeURIComponent(inviteText(inviteFor.name))}`} target="_blank" rel="noreferrer" onClick={() => setInviteFor(null)}>
+              <Button size="lg" className="w-full"><MessageCircle size={18} /> Send on WhatsApp</Button>
+            </a>
           </div>
         )}
       </Sheet>

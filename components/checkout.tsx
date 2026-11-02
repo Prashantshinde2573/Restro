@@ -1,12 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Banknote, CheckCircle2, Clock3, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, useCoupons, useCurrentOutlet, useFeature, useSettings } from "@/lib/live";
+import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, useCan, useCoupons, useCurrentOutlet, useFeature, useMe, useSettings } from "@/lib/live";
 import { printReceipt, receiptPdfBlob, receiptText } from "./receipt";
 import { useToast } from "./toast";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
@@ -37,7 +37,8 @@ export function Checkout({
   onClose: () => void;
   subtotal: number;
   label: string;
-  onPaid?: (payments: Payment[], extra?: { coupon?: string; discount?: number }) => void;
+  /** Return "waiting" when the bill needs the owner's OK before it closes. */
+  onPaid?: (payments: Payment[], extra?: { coupon?: string; discount?: number }) => "paid" | "waiting" | void;
   preferred?: PayMethod; // what the guest asked for from their phone
   prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
   lines?: { name: string; qty: number; price: number }[]; // what's on the bill (for the receipt)
@@ -50,6 +51,7 @@ export function Checkout({
   const [guests, setGuests] = useState(3);
   const [paidGuests, setPaidGuests] = useState<number[]>([]);
   const [done, setDone] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const [phone, setPhone] = useState("");
   const [guestName, setGuestName] = useState("");
   const [custom, setCustom] = useState<{ on: boolean; kind: "pct" | "flat"; value: string }>({ on: false, kind: "pct", value: "" });
@@ -58,11 +60,18 @@ export function Checkout({
   const [coupon, setCoupon] = useState<Coupon | null>(null);
   const [codeErr, setCodeErr] = useState("");
   const coupons = useCoupons();
-  const couponsOn = useFeature("coupons") === "ok";
+  const canDiscount = useCan("discount");
+  const couponsOn = useFeature("coupons") === "ok" && canDiscount;
 
+  // Start fresh each time the sheet opens — not when the bill behind it changes
+  // (paying changes it, and that used to throw the "Paid" screen back to "Charge").
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
+    const opening = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (opening) {
       setDone(false);
+      setWaiting(false);
       setPaidGuests([]);
       setCash(null);
       setDiscountPct(0);
@@ -82,7 +91,8 @@ export function Checkout({
         setMixed([]);
       }
     }
-  }, [open, preferred, prepaid, subtotal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const customOff = (() => {
     const v = Math.max(0, Number(custom.value) || 0);
@@ -109,7 +119,10 @@ export function Checkout({
 
   const [paidWith, setPaidWith] = useState<Payment[]>([]);
   const outlet = useCurrentOutlet();
+  const me = useMe();
   const receipt = () => ({
+    by: me?.name,
+    customer: guestName.trim() || undefined,
     settings,
     outletName: outlet.name,
     label,
@@ -131,14 +144,15 @@ export function Checkout({
     // a number typed at billing puts this guest (and the bill) in the guest book
     if (phone.replace(/\D/g, "").length >= 10)
       guestActions.fromBill(guestName, phone, { orderNo: billNo ?? 0, amount: t.total, method: payments.map((p) => p.method.toUpperCase()).join(" + ") });
-    onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
+    const r = onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
+    setWaiting(r === "waiting");
   };
 
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title={done ? "Paid" : `Charge ${label}`}
+      title={done ? (waiting ? "Sent for confirmation" : "Paid") : `Charge ${label}`}
       wide
       footer={
         done ? (
@@ -158,11 +172,15 @@ export function Checkout({
     >
       {done ? (
         <div className="flex flex-col items-center pt-6 text-center">
-          <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-jade-soft">
-            <CheckCircle2 size={44} className="text-jade" />
+          <div className={clsx("flex h-20 w-20 animate-pop items-center justify-center rounded-full", waiting ? "bg-saffron-soft" : "bg-jade-soft")}>
+            {waiting ? <Clock3 size={42} className="text-saffron" /> : <CheckCircle2 size={44} className="text-jade" />}
           </div>
           <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</div>
-          <p className="text-[15px] text-muted">{label} is paid and closed. Other parties at a shared table keep their own bills.</p>
+          <p className="max-w-sm text-[15px] text-muted">
+            {waiting
+              ? `${label} is marked paid. The owner confirms it once the money is in; until then the bill stays open.`
+              : `${label} is paid and closed.`}
+          </p>
           <div className="mt-8 w-full max-w-sm space-y-3 text-left">
             <Field label="Send e-bill on WhatsApp" hint="No paper needed. Opens WhatsApp with the bill typed in.">
               <div className="flex gap-2">
@@ -232,7 +250,7 @@ export function Checkout({
               <div className="flex justify-between"><dt>SGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
             </dl>
-            <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+            {canDiscount && <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
               {[0, 5, 10].map((p) => (
                 <button
                   key={p}
@@ -249,8 +267,8 @@ export function Checkout({
               >
                 Custom
               </button>
-            </div>
-            {custom.on && !coupon && (
+            </div>}
+            {canDiscount && custom.on && !coupon && (
               <div className="mt-2 flex items-center gap-2">
                 <div className="inline-flex shrink-0 rounded-ctl bg-sunken p-[3px]" role="tablist" aria-label="Discount in % or ₹">
                   {(["pct", "flat"] as const).map((k) => (
@@ -335,10 +353,15 @@ export function Checkout({
 
           {method === "upi" && (
             <div className="flex flex-col items-center rounded-group bg-surface p-5 text-center">
-              <ScanQr value={upiUri({ upi, payee: settings.name, amount: t.total, note: label })} size={190} label={`UPI QR for ${inr(t.total)}`} />
-              <div className="mt-3 text-[15px] font-semibold">Scan with any UPI app — {inr(t.total)} fills in by itself</div>
-              <div className="text-[13px] text-muted">{upi} · exact amount {inr(t.total)}</div>
-              <Pill tone="jade" className="mt-3">Also showing on the guest screen</Pill>
+              {upi ? (
+                <>
+                  <ScanQr value={upiUri({ upi, payee: settings.name, amount: t.total, note: label })} size={190} label={`UPI QR for ${inr(t.total)}`} />
+                  <div className="mt-3 text-[15px] font-semibold">Scan with any UPI app — {inr(t.total)} fills in by itself</div>
+                </>
+              ) : (
+                <div className="text-[15px] font-semibold">Collect {inr(t.total)} by UPI</div>
+              )}
+              <div className="text-[13px] text-muted">{upi ? `${upi} · exact amount ${inr(t.total)}` : "Add your UPI ID in Settings to show a QR"}</div>
             </div>
           )}
 

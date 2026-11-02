@@ -44,7 +44,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   kitchen: { label: "Kitchen orders (KOT)", plan: "starter", types: BOTH },
   menu: { label: "Menu", plan: "starter", types: BOTH },
   reports: { label: "Reports", plan: "starter", types: BOTH },
-  tables: { label: "Tables and bookings", plan: "starter", types: ["restaurant"] },
+  tables: { label: "Tables", plan: "starter", types: ["restaurant"] },
   tableSharing: { label: "Shared tables", plan: "starter", types: ["restaurant"] },
   splitByGuest: { label: "Split bill by guest", plan: "growth", types: ["restaurant"] },
   counterToken: { label: "Counter orders with token", plan: "starter", types: ["cafe"] },
@@ -87,6 +87,7 @@ export type Perm =
   | "discount"
   | "refund"
   | "editPayment"
+  | "confirmPay"
   | "dayClose"
   | "menu"
   | "stock"
@@ -95,6 +96,7 @@ export type Perm =
   | "campaigns"
   | "insights"
   | "reports"
+  | "activity"
   | "outletSettings";
 
 export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; feature?: Feature }[] }[] = [
@@ -112,9 +114,9 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
     title: "Money",
     perms: [
       { key: "discount", label: "Give discounts" },
-      { key: "refund", label: "Refunds and voids" },
+      { key: "refund", label: "Cancel orders after they are accepted" },
       { key: "editPayment", label: "Change how a bill was paid" },
-      { key: "dayClose", label: "Day close (cash count)" },
+      { key: "confirmPay", label: "Confirm payments (bills close without the owner's OK)" },
     ],
   },
   {
@@ -123,7 +125,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "menu", label: "Edit menu and prices", feature: "menu" },
       { key: "stock", label: "Stock and purchases", feature: "stock" },
       { key: "team", label: "Manage staff and their access", feature: "team" },
-      { key: "outletSettings", label: "Outlet settings (UPI, printers, ordering)" },
+      { key: "outletSettings", label: "Outlet settings (UPI, GST, QR ordering)" },
     ],
   },
   {
@@ -133,6 +135,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "campaigns", label: "Campaigns", feature: "campaigns" },
       { key: "insights", label: "Insights", feature: "insights" },
       { key: "reports", label: "Reports", feature: "reports" },
+      { key: "activity", label: "Activity log (who did what)" },
     ],
   },
 ];
@@ -143,7 +146,7 @@ export const permMeta = (p: Perm) => PERM_GROUPS.flatMap((g) => g.perms).find((x
 export const PRESETS: { name: string; types: BusinessType[]; perms: Perm[] }[] = [
   { name: "Outlet manager", types: BOTH, perms: ALL_PERMS },
   { name: "Captain", types: ["restaurant"], perms: ["pos", "orders", "tables", "kitchen"] },
-  { name: "Cashier", types: BOTH, perms: ["pos", "orders", "charge", "discount", "dayClose"] },
+  { name: "Cashier", types: BOTH, perms: ["pos", "orders", "charge", "discount"] },
   { name: "Counter staff", types: ["cafe"], perms: ["pos", "orders", "charge", "kitchen"] },
   { name: "Chef", types: BOTH, perms: ["kitchen", "stock"] },
 ];
@@ -164,6 +167,8 @@ export interface Member {
 
 export const isOwner = (m?: Member | null) => m?.role === "owner";
 export const hasPerm = (m: Member | null | undefined, p: Perm) => !!m && m.active && (m.role === "owner" || m.perms.includes(p));
+/** Owner, or staff the owner trusts to confirm payments. Everyone else's "paid" waits for them. */
+export const canConfirmPay = (m: Member | null | undefined) => hasPerm(m, "confirmPay");
 export const inOutlet = (m: Member | null | undefined, outletId: string) => !!m && (m.role === "owner" || m.outletIds.includes(outletId));
 
 /**
@@ -198,6 +203,7 @@ export const ROUTES: { href: string; feature?: Feature; perm?: Perm | "ownerOrSe
   { href: "/app/campaigns", feature: "campaigns", perm: "campaigns" },
   { href: "/app/insights", feature: "insights", perm: "insights" },
   { href: "/app/reports", feature: "reports", perm: "reports" },
+  { href: "/app/activity", perm: "activity" },
 ];
 export const routeFor = (path: string) => ROUTES.find((r) => path === r.href || path.startsWith(r.href + "/"));
 

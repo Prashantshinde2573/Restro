@@ -297,12 +297,11 @@ export function CategoryRail({ groups, active, onPick, lang }: { groups: { c: Ca
             data-cat={c.id}
             onClick={() => onPick(c.id)}
             aria-current={on ? "true" : undefined}
-            className={clsx("relative flex flex-col items-center gap-0.5 rounded-[14px] px-1 py-1.5 text-center transition", on ? "bg-jade-soft" : "lg:hover:bg-sunken/60")}
+            className={clsx("relative flex flex-col items-center gap-1 rounded-[14px] px-1 py-2 text-center transition", on ? "bg-jade text-white shadow-[0_6px_16px_-8px_rgb(15_122_85/.7)]" : "lg:hover:bg-sunken/60")}
           >
-            {on && <span className="absolute left-0 top-1/2 h-8 w-[3px] -translate-y-1/2 rounded-r-full bg-jade" aria-hidden />}
-            <span className={clsx("flex h-8 w-8 items-center justify-center rounded-full text-[17px]", on ? "bg-jade text-white" : "bg-sunken")}>{c.icon ?? c.name[0]}</span>
-            <span className={clsx("w-full break-words text-[11px] font-semibold leading-[1.2]", on ? "text-jade-deep" : "text-ink")}>{c.name}</span>
-            <span className="text-[10.5px] leading-none text-faint tnum">{n}</span>
+            <span className={clsx("flex h-9 w-9 items-center justify-center rounded-full text-[18px]", on ? "bg-white/20 text-white" : "bg-sunken")}>{c.icon ?? c.name[0]}</span>
+            <span className={clsx("w-full break-words text-[11.5px] font-semibold leading-[1.2]", on ? "text-white" : "text-ink")}>{c.name}</span>
+            <span className={clsx("text-[10.5px] leading-none tnum", on ? "text-white/75" : "text-faint")}>{n}</span>
           </button>
         );
       })}

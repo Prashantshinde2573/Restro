@@ -8,8 +8,8 @@ import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
-import { featureState, hasPerm, inOutlet, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
-import type { Account, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
+import { canConfirmPay, featureState, hasPerm, inOutlet, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
+import type { Account, ActivityEntry, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
 export { hydrateStores };
 /* ---------------- account, outlets, members, who is signed in ---------------- */
@@ -32,6 +32,7 @@ export const outletActions = {
     for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
     const outlet = { ...o, id };
     outletStore.set([...outletStore.get(), outlet]);
+    logActivity("settings", `Added outlet ${o.name}`, id);
     // the owner works everywhere
     memberStore.set(memberStore.get().map((m) => (m.role === "owner" ? { ...m, outletIds: [...m.outletIds, id] } : m)));
     return outlet;
@@ -47,10 +48,14 @@ export const getMembers = () => memberStore.get();
 export const memberActions = {
   save(m: Member) {
     const list = memberStore.get();
-    memberStore.set(list.some((x) => x.id === m.id) ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m]);
+    const old = list.find((x) => x.id === m.id);
+    memberStore.set(old ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m]);
+    logActivity("team", old ? (old.active && !m.active ? `Turned off access for ${m.name}` : !old.active && m.active ? `Turned on access for ${m.name}` : `Changed access for ${m.name}`) : `Added ${m.name} (${m.title || "staff"}) to the team`);
   },
   remove(id: string) {
+    const m = memberStore.get().find((x) => x.id === id);
     memberStore.set(memberStore.get().filter((m) => m.id !== id));
+    if (m) logActivity("team", `Removed ${m.name} from the team`);
   },
 };
 
@@ -72,6 +77,40 @@ export function useMe(): Member | null {
   const { memberId } = useSession();
   return useMembers().find((m) => m.id === memberId) ?? null;
 }
+/** The signed-in member, outside React. */
+export const currentMember = (): Member | null => memberStore.get().find((m) => m.id === sessionStore.get().memberId) ?? null;
+const myName = () => {
+  const c = getCloud();
+  if (c.role === "guest") return "Guest (QR)";
+  const m = currentMember();
+  return m ? (m.role === "owner" ? `${m.name} (Owner)` : m.name) : "Staff";
+};
+
+/* ---------------- activity log: who did what ---------------- */
+const activityStore = createStore<ActivityEntry[]>([], "activity", { kind: "collection", coll: "activity" });
+export const useActivity = () => activityStore.use();
+/** Add a line to the activity log (owner sees it in Activity). */
+export function logActivity(kind: ActivityEntry["kind"], text: string, outletId?: string) {
+  const c = getCloud();
+  const e: ActivityEntry = {
+    id: `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    at: new Date().toISOString(),
+    by: myName(),
+    kind,
+    text,
+    outletId: outletId ?? (sessionStore.get().outletId || outletStore.get()[0]?.id),
+    source: c.role === "guest" ? "guest" : "team",
+  };
+  if (c.role === "guest") {
+    if (c.rid) guestUpsert(c.rid, e.id, { ...e }, "activity");
+    return;
+  }
+  activityStore.set([e, ...activityStore.get()]);
+}
+const where = (o: Pick<Order, "tableName" | "partyId" | "type" | "customer">) =>
+  o.tableName && o.tableName !== "Counter" ? `Table ${o.tableName}${o.partyId && o.partyId !== "A" ? ` · ${o.partyId}` : ""}` : o.type === "delivery" ? "Delivery" : o.customer && o.type !== "dine-in" ? o.customer : "Counter";
+const rs = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
 /** The outlet on screen (falls back to the first one the member may see). */
 export function useCurrentOutlet(): Outlet {
   const { outletId } = useSession();
@@ -113,6 +152,9 @@ export const settingsActions = {
     if (name !== undefined) accountActions.rename(name);
     const id = sessionStore.get().outletId || outletStore.get()[0]?.id;
     if (Object.keys(rest).length) outletActions.update(id, rest);
+    const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
+    const what = [...new Set([...(name !== undefined ? ["name"] : []), ...Object.keys(rest).map((k) => names[k] ?? k)])];
+    if (what.length) logActivity("settings", `Changed settings: ${what.join(", ")}${rest.gstRate !== undefined ? ` (GST ${Math.round(rest.gstRate * 100)}%)` : ""}${rest.ordersPaused !== undefined ? (rest.ordersPaused ? " (paused)" : " (back on)") : ""}`, id);
   },
 };
 
@@ -156,6 +198,27 @@ function splitPayments(orders: Order[], payments: Payment[]): Map<string, Paymen
   return out;
 }
 
+/** Orders made on this device (no "new order" ping for your own orders). */
+export const createdHere = new Set<string>();
+function logOrder(o: Order) {
+  createdHere.add(o.id);
+  const items = o.lines.reduce((s, l) => s + l.qty, 0);
+  logActivity("order", `New order · ${where(o)} · ${items} item${items === 1 ? "" : "s"} · ${rs(o.lines.reduce((s, l) => s + l.qty * l.price, 0))}${o.channel === "qr" ? " · from QR" : ""}`, o.outletId);
+}
+/** Bills waiting for the owner's OK, one entry per bill. */
+export function pendingClaims(orders: Order[]) {
+  const map = new Map<string, { claim: PayClaim; orders: Order[] }>();
+  for (const o of orders) {
+    if (!o.payClaim || o.status === "paid" || o.status === "cancelled") continue;
+    const cur = map.get(o.payClaim.id) ?? { claim: o.payClaim, orders: [] };
+    cur.orders.push(o);
+    map.set(o.payClaim.id, cur);
+  }
+  return [...map.values()].sort((a, b) => a.claim.at.localeCompare(b.claim.at));
+}
+/** Can the person on this device confirm payments? */
+export const useCanConfirm = () => canConfirmPay(useMe());
+
 export const orderActions = {
   add(o: Omit<Order, "id" | "number">): Order {
     if (isConnected()) {
@@ -163,31 +226,123 @@ export const orderActions = {
       const id = `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const order: Order = { ...o, id, number: 0, outletId: o.outletId ?? currentOutletId(), guestUid: getCloud().role === "guest" ? getCloud().uid : undefined };
       orderStore.set([order, ...orderStore.get()]);
+      logOrder(order);
       return order;
     }
     const number = Math.max(1000, ...orderStore.get().map((x) => x.number)) + 1;
     const order = { ...o, id: `o${number}`, number };
     orderStore.set([order, ...orderStore.get()]);
+    logOrder(order);
     return order;
   },
   setStatus(id: string, status: OrderStatus) {
     const o = orderStore.get().find((x) => x.id === id);
-    // Paid in full from the guest's phone (café pay-first): closes itself once served.
+    // Paid in full from the guest's phone (café pay-first): closes itself once served
+    // (or waits for the owner's OK when the person serving can't confirm payments).
     const pre = (o?.prepaid ?? []).reduce((a, p) => a + p.amount, 0);
     if (o && status === "served" && pre > 0 && pre >= billOf(o)) {
-      orderActions.pay([id], o.prepaid!, o.customer ?? "Guest");
+      patchOrder(id, (x) => ({ ...x, status }));
+      orderActions.settle([id], o.prepaid!, o.customer ?? "Guest", { source: "guest" });
       return;
     }
     patchOrder(id, (x) => ({ ...x, status }));
+    if (o && o.status !== status && (status === "accepted" || status === "cancelled"))
+      logActivity("order", `${status === "accepted" ? "Accepted" : "Cancelled"} order #${o.number || "new"} · ${where(o)}`, o.outletId);
   },
   toggleLine(id: string, idx: number) {
     patchOrder(id, (o) => ({ ...o, lines: o.lines.map((l, i) => (i === idx ? { ...l, done: !l.done } : l)) }));
   },
+  /** A party moved table (or joined another party): its orders follow it. */
+  moveParty(fromTableId: string, fromPartyId: string, to: { tableId: string; tableName: string; partyId: string }) {
+    orderStore.set(
+      orderStore.get().map((o) =>
+        o.tableId === fromTableId && (o.partyId ?? "A") === fromPartyId && o.status !== "paid" && o.status !== "cancelled"
+          ? { ...o, tableId: to.tableId, tableName: to.tableName, partyId: to.partyId }
+          : o,
+      ),
+    );
+  },
   setPreference(ids: string[], pref: PayMethod) {
     orderStore.set(orderStore.get().map((o) => (ids.includes(o.id) ? { ...o, payPreference: pref } : o)));
   },
+  /**
+   * Someone says the bill is paid. The owner (or a member with "Confirm payments")
+   * closes it straight away; anyone else's "paid" waits for their OK.
+   * Returns "paid" or "waiting".
+   */
+  settle(ids: string[], payments: Payment[], by: string, opts: { source?: PayClaim["source"]; discount?: number; coupon?: string } = {}): "paid" | "waiting" {
+    const c = getCloud();
+    const trusted = c.role !== "guest" && opts.source !== "guest" && canConfirmPay(currentMember());
+    if (trusted) {
+      orderActions.pay(ids, payments, by);
+      return "paid";
+    }
+    const claim: PayClaim = {
+      id: `pc${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+      payments,
+      by,
+      at: new Date().toISOString(),
+      source: opts.source ?? (c.role === "guest" ? "guest" : "staff"),
+      ...(opts.discount ? { discount: opts.discount } : {}),
+      ...(opts.coupon ? { coupon: opts.coupon } : {}),
+    };
+    const at = claim.at;
+    const list = orderStore.get().filter((o) => ids.includes(o.id));
+    orderStore.set(
+      orderStore.get().map((o) =>
+        ids.includes(o.id)
+          ? { ...o, payClaim: claim, paymentLog: [...(o.paymentLog ?? []), { at, by, text: `Marked paid · ${paymentsText(payments)} · waiting for confirmation` }] }
+          : o,
+      ),
+    );
+    if (list[0]) logActivity("payment", `${by} marked ${where(list[0])} paid · ${paymentsText(payments)} · waiting for confirmation`, list[0].outletId);
+    return "waiting";
+  },
+  /** Owner / trusted manager: the money is in. Closes the bill. */
+  confirm(claimId: string) {
+    const list = orderStore.get().filter((o) => o.payClaim?.id === claimId && o.status !== "paid" && o.status !== "cancelled");
+    const claim = list[0]?.payClaim;
+    if (!claim) return [];
+    const who = myName();
+    orderActions.pay(list.map((o) => o.id), claim.payments, claim.by, who);
+    logActivity("payment", `Confirmed ${where(list[0])} · ${paymentsText(claim.payments)} (marked by ${claim.by})`, list[0].outletId);
+    return list;
+  },
+  /** Owner / trusted manager: the money did not come. The bill opens again. */
+  rejectClaim(claimId: string) {
+    const list = orderStore.get().filter((o) => o.payClaim?.id === claimId);
+    const claim = list[0]?.payClaim;
+    if (!claim) return [];
+    const at = new Date().toISOString();
+    const who = myName();
+    orderStore.set(
+      orderStore.get().map((o) =>
+        o.payClaim?.id === claimId
+          ? { ...o, payClaim: undefined, prepaid: undefined, paymentLog: [...(o.paymentLog ?? []), { at, by: who, text: `Not received · ${paymentsText(claim.payments)} (marked by ${claim.by})` }] }
+          : o,
+      ),
+    );
+    logActivity("payment", `Payment not received for ${where(list[0])} · ${paymentsText(claim.payments)} (marked by ${claim.by})`, list[0].outletId);
+    return list;
+  },
+  /** Owner only (after typing the password): a bill marked paid by mistake goes back to unpaid. */
+  unpay(ids: string[]) {
+    const at = new Date().toISOString();
+    const who = myName();
+    const list = orderStore.get().filter((o) => ids.includes(o.id) && o.status === "paid");
+    if (!list.length) return [];
+    orderStore.set(
+      orderStore.get().map((o) =>
+        ids.includes(o.id) && o.status === "paid"
+          ? { ...o, status: "served", payments: undefined, payment: undefined, payClaim: undefined, confirmedBy: undefined, paymentLog: [...(o.paymentLog ?? []), { at, by: who, text: `Marked unpaid (was ${paymentsText(o.payments)})` }] }
+          : o,
+      ),
+    );
+    logActivity("payment", `Marked unpaid: ${list.map((o) => `#${o.number}`).join(", ")} · ${where(list[0])} (was ${paymentsText(list.flatMap((o) => o.payments ?? []))})`, list[0].outletId);
+    return list;
+  },
   /** Settle one or more orders (a party's bill) with one or more payments. */
-  pay(ids: string[], payments: Payment[], by: string) {
+  pay(ids: string[], payments: Payment[], by: string, confirmedBy?: string) {
     const at = new Date().toISOString();
     // Save the bill on the guest's record (one entry per bill, not per order).
     const first = orderStore.get().find((o) => ids.includes(o.id) && o.guestPhone);
@@ -206,11 +361,15 @@ export const orderActions = {
               status: "paid",
               payments: share.get(o.id) ?? payments,
               payment: payments.length > 1 ? "split" : payments[0]?.method,
-              paymentLog: [...(o.paymentLog ?? []), { at, by, text: `Paid · ${paymentsText(payments)}${ids.length > 1 ? ` (bill for ${ids.length} orders)` : ""}` }],
+              payClaim: undefined,
+              confirmedBy: confirmedBy ?? by,
+              paymentLog: [...(o.paymentLog ?? []), { at, by: confirmedBy ?? by, text: `Paid · ${paymentsText(payments)}${ids.length > 1 ? ` (bill for ${ids.length} orders)` : ""}${confirmedBy ? ` · marked by ${by}, confirmed` : ""}` }],
             }
           : o,
       ),
     );
+    const o0 = orderStore.get().find((o) => ids.includes(o.id));
+    if (o0 && !confirmedBy) logActivity("payment", `Bill paid · ${where(o0)} · ${paymentsText(payments)}`, o0.outletId);
   },
   /** The guest paid part of the bill from their phone (e.g. the UPI half of
    *  "Cash + UPI"). The order stays open; the cashier collects the rest. */
@@ -232,6 +391,8 @@ export const orderActions = {
   },
   /** Correct how a bill was paid after the fact — logged for the owner. */
   editPayment(id: string, payments: Payment[], by: string) {
+    const was = orderStore.get().find((o) => o.id === id);
+    if (was) logActivity("payment", `Changed how #${was.number} was paid: ${paymentsText(was.payments)} → ${paymentsText(payments)}`, was.outletId);
     patchOrder(id, (o) => ({
       ...o,
       payments,
@@ -340,14 +501,21 @@ const menuStore = createStore<MenuItem[]>([], "menu", { kind: "collection", coll
 export const useMenu = () => menuStore.use();
 export const menuActions = {
   update(id: string, patch: Partial<MenuItem>) {
+    const old = menuStore.get().find((m) => m.id === id);
     menuStore.set(menuStore.get().map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    if (!old) return;
+    if (patch.price !== undefined && patch.price !== old.price) logActivity("menu", `Price of ${old.name}: ${rs(old.price)} → ${rs(patch.price)}`);
+    if (patch.available !== undefined && patch.available !== old.available) logActivity("menu", `${old.name} marked ${patch.available ? "available" : "sold out"}`);
+    if (patch.name && patch.name !== old.name) logActivity("menu", `Renamed ${old.name} to ${patch.name}`);
   },
   add(item: MenuItem) {
     menuStore.set([...menuStore.get(), item]);
+    logActivity("menu", `Added dish ${item.name} · ${rs(item.price)}`);
   },
   /** Many dishes in one go (menu read from a photo). */
   addMany(items: MenuItem[]) {
     if (items.length) menuStore.set([...menuStore.get(), ...items]);
+    if (items.length) logActivity("menu", `Added ${items.length} dishes from a menu photo`);
   },
 };
 
@@ -403,7 +571,9 @@ export const stockActions = {
     else stockStore.set([...list, { ...item, id: stockId() }]);
   },
   remove(id: string) {
+    const x = stockStore.get().find((i) => i.id === id);
     stockStore.set(stockStore.get().filter((x) => x.id !== id));
+    if (x) logActivity("stock", `Removed stock item ${x.name}`);
   },
   /** Stock in, used, wasted, or a fresh count. */
   move(id: string, kind: StockLog["kind"], qty: number, by: string, note?: string) {
@@ -415,6 +585,8 @@ export const stockActions = {
         return { ...x, stock: Math.round(stock * 1000) / 1000, log: [entry, ...(x.log ?? [])].slice(0, 50) };
       }),
     );
+    const it = stockStore.get().find((x) => x.id === id);
+    if (it) logActivity("stock", `${{ in: "Stock in", used: "Used", waste: "Wasted", count: "Counted" }[kind]} ${it.name}: ${qty} ${it.unit}${kind === "count" ? " in stock" : ""}${note ? ` · ${note}` : ""}`, it.outletId);
   },
 };
 
@@ -428,9 +600,12 @@ export const couponActions = {
     const code = normCode(c.code);
     if (c.id && list.some((x) => x.id === c.id)) couponStore.set(list.map((x) => (x.id === c.id ? { ...x, ...c, code, id: x.id } : x)));
     else couponStore.set([{ ...c, code, id: `cp${Date.now().toString(36)}`, uses: 0, createdAt: new Date().toISOString() }, ...list]);
+    logActivity("coupon", `${c.id ? "Changed" : "Made"} coupon ${code} · ${couponLabel(c)}${c.active === false ? " (off)" : ""}`);
   },
   remove(id: string) {
+    const x = couponStore.get().find((c) => c.id === id);
     couponStore.set(couponStore.get().filter((x) => x.id !== id));
+    if (x) logActivity("coupon", `Deleted coupon ${x.code}`);
   },
   /** Count one use (called when a bill with this coupon is paid). */
   used(id: string) {

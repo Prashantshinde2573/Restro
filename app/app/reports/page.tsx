@@ -1,8 +1,10 @@
 "use client";
 
-import { CalendarRange, FileSpreadsheet, FileText, MessageCircle, Share2 } from "lucide-react";
+import { CalendarRange, FileSpreadsheet, FileText, MessageCircle, Share2, SlidersHorizontal } from "lucide-react";
+import { ReportBuilder } from "@/components/report-builder";
 import { useMemo, useState } from "react";
-import { Bars, Button, Group, Page, PageHeader, Segmented, inputCls } from "@/components/ui";
+import { Button, Group, Page, PageHeader, Segmented, inputCls } from "@/components/ui";
+import { Donut, TrendChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
 import { billOf, paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu, useOrders } from "@/lib/live";
 import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, paidAmount, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
@@ -76,7 +78,10 @@ export default function ReportsPage() {
   const orders = useMemo(() => between(all, from, to), [all, from, to]);
   const t = totals(orders);
   const methods = byMethod(orders);
-  const methodTotal = methods.upi + methods.cash + methods.card;
+  // the same length of time just before, to compare
+  const span = to - from;
+  const prevSales = totals(between(all, from - span, from)).sales;
+  const prevChange = prevSales > 0 ? Math.round(((t.sales - prevSales) / prevSales) * 100) : null;
   const top = topDishes(orders, 10);
   const categories = byCategory(orders, menu, catName);
   const net = Math.max(0, t.sales - t.gst);
@@ -173,15 +178,19 @@ export default function ReportsPage() {
   const who = `${account.name || "Restropi"}${outlet.name ? ` · ${outlet.name}` : ""}`;
   // short text for WhatsApp
   const summary = [
-    `*${who}* — sales report`,
-    rangeText,
+    `📊 *Sales report · ${account.name || "Restropi"}*`,
+    `${outlet.name ? `${outlet.name} · ` : ""}${rangeText}`,
+    "━━━━━━━━━━━━━━━",
+    `💰 Sales: *${inr(t.sales)}*${prevChange !== null ? ` (${prevChange >= 0 ? "▲" : "▼"} ${Math.abs(prevChange)}% vs previous)` : ""}`,
+    `🧾 Paid bills: ${t.paidOrders}`,
+    `📈 Average bill: ${t.avgBill ? inr(t.avgBill) : "—"}`,
+    `🏛️ GST collected: ${inr(t.gst)}`,
     "",
-    `Sales: ${inr(t.sales)}`,
-    `Paid bills: ${t.paidOrders}`,
-    `Average bill: ${t.avgBill ? inr(t.avgBill) : "—"}`,
-    `GST collected: ${inr(t.gst)}`,
+    "*How guests paid*",
     `UPI ${inr(methods.upi)} · Cash ${inr(methods.cash)} · Card ${inr(methods.card)}`,
-    ...(top.length ? ["", "Top dishes:", ...top.slice(0, 5).map((d, i) => `${i + 1}. ${d.name} — ${d.qty} sold`)] : []),
+    ...(top.length ? ["", "*Top dishes*", ...top.slice(0, 5).map((d, i) => `${i + 1}. ${d.name} — ${d.qty} sold · ${inr(d.sales)}`)] : []),
+    "",
+    "_Report from Restropi_",
   ].join("\n");
 
   const shareSummary = async () => {
@@ -205,38 +214,8 @@ export default function ReportsPage() {
     }
   };
 
-  // A clean one-page report; the browser's print box saves it as PDF.
-  const printPdf = () => {
-    const w = window.open("", "_blank");
-    if (!w) {
-      toast("Allow pop-ups to save the PDF");
-      return;
-    }
-    const row = (l: string, v: string) => `<tr><td>${esc(l)}</td><td class="n">${esc(v)}</td></tr>`;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sales report ${esc(rangeText)}</title><style>
-      body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#18211e;margin:32px;max-width:720px}
-      h1{font-size:22px;margin:0}.sub{color:#68716d;margin:4px 0 22px}
-      .k{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}.k div{border:1px solid #e3e6e3;border-radius:10px;padding:10px 12px}
-      .k b{display:block;font-size:18px;margin-top:2px}.k span{color:#68716d;font-size:12px}
-      h2{font-size:14px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.04em;color:#68716d}
-      table{width:100%;border-collapse:collapse;font-size:13.5px}td{padding:6px 0;border-bottom:1px solid #eef0ee}.n{text-align:right;font-variant-numeric:tabular-nums}
-      .f{margin-top:28px;color:#9aa19e;font-size:11px}@media print{body{margin:12mm}}
-    </style></head><body>
-      <h1>${esc(who)}</h1><div class="sub">Sales report · ${esc(rangeText)}</div>
-      <div class="k">
-        <div><span>Sales</span><b>${esc(inr(t.sales))}</b></div><div><span>Paid bills</span><b>${t.paidOrders}</b></div>
-        <div><span>Average bill</span><b>${esc(t.avgBill ? inr(t.avgBill) : "—")}</b></div><div><span>GST collected</span><b>${esc(inr(t.gst))}</b></div>
-      </div>
-      <h2>How guests paid</h2><table>${row("UPI", inr(methods.upi))}${row("Cash", inr(methods.cash))}${row("Card", inr(methods.card))}</table>
-      <h2>GST</h2><table>${row("Taxable sales", inr(net))}${row(`CGST ${halfGstLabel()}`, inr(Math.round(t.gst / 2)))}${row(`SGST ${halfGstLabel()}`, inr(t.gst - Math.round(t.gst / 2)))}${row("Total with GST", inr(t.sales))}</table>
-      <h2>Top dishes</h2><table>${top.length ? top.map((d, i) => `<tr><td>${i + 1}. ${esc(d.name)}</td><td class="n">${d.qty} sold</td><td class="n">${esc(inr(d.sales))}</td></tr>`).join("") : "<tr><td>No dishes sold.</td></tr>"}</table>
-      <h2>Sales by category</h2><table>${categories.length ? categories.map((c) => row(c.label, inr(c.value))).join("") : "<tr><td>Nothing yet.</td></tr>"}</table>
-      <h2>Sales by day</h2><table>${byDay(all, days, end).map((d, i, arr) => row(new Date(startOfDay(end) - (arr.length - 1 - i) * DAY_MS).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }), inr(d.value))).join("")}</table>
-      <div class="f">Made with Restropi · ${esc(new Date().toLocaleString("en-IN"))}</div>
-      <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
-    </body></html>`);
-    w.document.close();
-  };
+  const [builder, setBuilder] = useState(false);
+  const printPdf = () => setBuilder(true);
 
   return (
     <>
@@ -245,7 +224,7 @@ export default function ReportsPage() {
         subtitle={`${outlet.name} · ${rangeText}`}
         actions={
           <div className="hidden gap-2 sm:flex">
-            <Button size="sm" variant="tinted" onClick={printPdf}><FileText size={16} /> PDF</Button>
+            <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> Build report</Button>
             <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> Share</Button>
           </div>
         }
@@ -270,7 +249,7 @@ export default function ReportsPage() {
           )}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
-          <Button size="sm" variant="tinted" onClick={printPdf}><FileText size={16} /> Save PDF</Button>
+          <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> Build report</Button>
           <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> WhatsApp</Button>
         </div>
       </PageHeader>
@@ -298,22 +277,31 @@ export default function ReportsPage() {
 
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
           <Group title={days === 1 ? "Sales · last 7 days" : days > CHART_MAX ? `Sales by day · last ${CHART_MAX} days of the range` : "Sales by day"}>
-            <Bars data={byDay(all, chartDays, end)} height={180} highlightLast format={(n) => inr(n)} />
-          </Group>
-          <Group title="How guests paid" flush>
-            {(["upi", "cash", "card"] as const).map((k) => (
-              <div key={k} className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5">
-                <span className="w-14 text-[14.5px] font-medium">{k === "upi" ? "UPI" : k === "cash" ? "Cash" : "Card"}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-sunken">
-                  <span className="block h-full rounded-full bg-jade" style={{ width: `${methodTotal ? (methods[k] / methodTotal) * 100 : 0}%` }} />
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-[26px] font-semibold tracking-tight tnum">{inr(t.sales)}</span>
+              {prevChange !== null && (
+                <span className={prevChange >= 0 ? "rounded-full bg-jade-soft px-2 py-0.5 text-[12.5px] font-semibold text-jade-deep" : "rounded-full bg-rose-soft px-2 py-0.5 text-[12.5px] font-semibold text-rose"}>
+                  {prevChange >= 0 ? "▲" : "▼"} {Math.abs(prevChange)}% vs previous {days === 1 ? "day" : `${days} days`}
                 </span>
-                <span className="w-24 text-right text-[14.5px] font-semibold tnum">{inr(methods[k])}</span>
-              </div>
-            ))}
-            <div className="flex justify-between bg-jade-soft px-4 py-3 text-[15px] font-semibold text-jade-deep lg:px-5">
-              <span>Collected</span>
-              <span className="tnum">{inr(paid(orders).reduce((s, o) => s + paidAmount(o), 0))}</span>
+              )}
             </div>
+            <TrendChart
+              data={byDay(all, chartDays, end).map((d, i, arr) => ({ ...d, hint: new Date(startOfDay(end) - (arr.length - 1 - i) * DAY_MS).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) }))}
+              height={230}
+              format={(n) => inr(n)}
+              avgLabel="Daily avg"
+            />
+          </Group>
+          <Group title="How guests paid">
+            <Donut
+              centerLabel="Collected"
+              format={(n) => inr(n)}
+              parts={[
+                { label: "UPI", value: methods.upi, color: "rgb(var(--jade))" },
+                { label: "Cash", value: methods.cash, color: "rgb(var(--saffron))" },
+                { label: "Card", value: methods.card, color: "rgb(var(--sky))" },
+              ]}
+            />
           </Group>
         </div>
 
@@ -381,11 +369,23 @@ export default function ReportsPage() {
           ))}
           <button onClick={printPdf} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40 lg:px-5">
             <FileText size={17} className="text-jade" />
-            <span className="flex-1 text-[15px]">Summary report</span>
-            <span className="text-[13px] text-muted">PDF</span>
+            <span className="flex-1 text-[15px]">Build your own report</span>
+            <span className="text-[13px] text-muted">PDF or Excel</span>
           </button>
         </Group>
       </Page>
+      <ReportBuilder
+        open={builder}
+        onClose={() => setBuilder(false)}
+        orders={orders}
+        from={from}
+        end={end}
+        rangeText={rangeText}
+        business={account.name}
+        outletName={outlet.name}
+        menu={menu}
+        cats={cats}
+      />
     </>
   );
 }

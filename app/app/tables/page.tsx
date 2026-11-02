@@ -10,7 +10,8 @@ import { ScanQr } from "@/components/qr";
 import { Checkout } from "@/components/checkout";
 import { useToast } from "@/components/toast";
 import { gstRate, inr, minutesSince, timeAgo } from "@/lib/format";
-import { getOrders, orderActions, useCan, useCurrentOutlet, useMe } from "@/lib/live";
+import { getOrders, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";
+import { closeBill, confirmPayment, rejectPayment } from "@/lib/billing";
 import { isShared, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useTables } from "@/lib/tables";
 import { TableManager } from "@/components/table-manager";
 import { CookingLoader } from "@/components/loader";
@@ -50,7 +51,10 @@ export default function TablesPage() {
   const me = useMe();
   const outlet = useCurrentOutlet();
   const canManage = useCan("outletSettings");
-  const myName = me?.name ?? "Staff";
+  const myName = me ? (me.role === "owner" ? `${me.name} (Owner)` : me.name) : "Staff";
+  const canConfirm = useCanConfirm();
+  const canCharge = useCan("charge");
+  useOrders(); // re-draw when orders change (payment claims)
   const qrUrl = (t: Table | null) => `${typeof window !== "undefined" ? window.location.origin : ""}/order/${t?.id ?? ""}${cloud.rid ? `?r=${cloud.rid}` : ""}`;
 
   const sel = tables.find((t) => t.id === selId) ?? null;
@@ -90,11 +94,15 @@ export default function TablesPage() {
         {pending.length > 0 && (
           <div className="mb-5 space-y-2">
             {pending.map(({ t, p }) => (
-              <div key={t.id + p.id} className="flex animate-pop items-center gap-3 rounded-group bg-saffron-soft p-3.5">
-                <Smartphone size={18} className="shrink-0 text-saffron" />
-                <p className="flex-1 text-[14px]"><b>New group at {t.name}</b> ordered from the QR. Check they are seated, then accept — their order goes to the kitchen.</p>
-                <Button size="sm" variant="plain" onClick={() => { rejectParty(t.id, t.name, p.id); toast("Rejected · guest told to call a captain"); }}>Reject</Button>
-                <Button size="sm" onClick={() => { acceptParty(t.id, t.name, p.id); toast(`${t.name} · Group ${p.id} accepted · KOT sent`); }}>Accept</Button>
+              <div key={t.id + p.id} className="flex animate-pop flex-col gap-3 rounded-group bg-saffron-soft p-4 sm:flex-row sm:items-center">
+                <div className="flex flex-1 items-start gap-3">
+                  <Smartphone size={18} className="mt-0.5 shrink-0 text-saffron" />
+                  <p className="text-[14px]"><b>New group at {t.name}</b> ordered from the QR. Check they are seated, then accept — their order goes to the kitchen.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <Button size="sm" variant="plain" onClick={() => { rejectParty(t.id, t.name, p.id); toast("Rejected"); }}>Reject</Button>
+                  <Button size="sm" onClick={() => { acceptParty(t.id, t.name, p.id); toast(`${t.name} · Group ${p.id} accepted · KOT sent`); }}>Accept</Button>
+                </div>
               </div>
             ))}
           </div>
@@ -120,6 +128,7 @@ export default function TablesPage() {
                 const long = t.parties.length > 0 && mins > 60;
                 const total = tableTotal(t);
                 const hasPending = t.parties.some((p) => p.pendingApproval);
+                const toConfirm = t.parties.some((p) => p.paymentPending);
                 return (
                   <button
                     key={t.id}
@@ -129,7 +138,7 @@ export default function TablesPage() {
                       s.tile,
                       t.seats >= 6 ? "col-span-2 aspect-[2.1/1]" : "aspect-square",
                       st === "reserved" && "outline-dashed outline-2 -outline-offset-2 outline-line",
-                      hasPending && "ring-2 ring-saffron",
+                      (hasPending || toConfirm) && "ring-2 ring-saffron",
                     )}
                   >
                     <div className="flex items-start justify-between gap-1">
@@ -152,7 +161,7 @@ export default function TablesPage() {
                           <span className={clsx("flex items-center gap-1", long && "font-semibold text-rose")}>
                             <Clock size={12} /> {mins} min · {seatsTaken(t)}/{t.seats}
                           </span>
-                          {total ? <span className="font-semibold text-ink tnum">{inr(total)}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} bills</span>}</span> : <span>Not ordered</span>}
+                          {toConfirm ? <span className="font-semibold text-saffron">Paid? Confirm</span> : total ? <span className="font-semibold text-ink tnum">{inr(total)}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} bills</span>}</span> : <span>Not ordered</span>}
                         </>
                       )}
                     </div>
@@ -188,6 +197,7 @@ export default function TablesPage() {
             {sel.parties.map((p) => {
               const label = isShared(sel) ? `Party ${p.id}` : "Guests";
               const others = sel.parties.filter((x) => x.id !== p.id);
+              const claim = partyOrders(sel.id, p.id).find((o) => o.payClaim)?.payClaim;
               return (
                 <div key={p.id} className={clsx("overflow-hidden rounded-group bg-surface", p.pendingApproval && "ring-2 ring-saffron")}>
                   <div className="flex items-start gap-3 p-4">
@@ -209,18 +219,30 @@ export default function TablesPage() {
                       <div className="text-[12px] text-muted">{p.total ? "before GST" : "no order yet"}</div>
                     </div>
                   </div>
+                  {claim && (
+                    <div className="border-t border-line/80 bg-saffron-soft/60 px-4 py-3 text-[13.5px]">
+                      <b>{claim.by}</b> marked this paid · {paymentsText(claim.payments)} · {minutesSince(claim.at)} min ago.
+                      {canConfirm ? " Check the money came in, then confirm." : " Waiting for the owner to confirm."}
+                      {canConfirm && (
+                        <div className="mt-2 flex gap-2">
+                          <Button size="sm" onClick={() => { confirmPayment(claim.id); toast(`Payment confirmed · ${label} closed`); }}><Check size={15} /> Money received</Button>
+                          <Button size="sm" variant="plain" onClick={() => { rejectPayment(claim.id); toast("Marked not received · the bill is open again"); }}>Not received</Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2 border-t border-line/80 bg-sunken/30 p-3">
                     {p.pendingApproval ? (
                       <Button size="sm" onClick={() => { acceptParty(sel.id, sel.name, p.id); toast(`Party ${p.id} accepted · their order went to the kitchen`); }}><Check size={15} /> Accept order</Button>
                     ) : (
                       <Link href={`/app/pos?table=${sel.name}&party=${p.id}`}><Button size="sm"><Plus size={15} /> Add to order</Button></Link>
                     )}
-                    {p.total ? (
+                    {p.total && !claim && canCharge ? (
                       <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
                     <Button size="sm" variant="plain" onClick={() => setMove({ tableId: sel.id, partyId: p.id })}><ArrowLeftRight size={15} /> Move</Button>
                     {others.map((o) => (
-                      <Button key={o.id} size="sm" variant="plain" onClick={() => { tableActions.merge(sel.id, p.id, o.id); toast(`Party ${p.id} joined Party ${o.id} · one bill now`); }}>
+                      <Button key={o.id} size="sm" variant="plain" onClick={() => { tableActions.merge(sel.id, p.id, o.id); orderActions.moveParty(sel.id, p.id, { tableId: sel.id, tableName: sel.name, partyId: o.id }); toast(`Party ${p.id} joined Party ${o.id} · one bill now`); }}>
                         <Merge size={15} /> Merge with {o.id}
                       </Button>
                     ))}
@@ -304,6 +326,7 @@ export default function TablesPage() {
                   onClick={() => {
                     const from = tables.find((x) => x.id === move.tableId)!;
                     const p = tableActions.move(move.tableId, move.partyId, t.id);
+                    orderActions.moveParty(move.tableId, move.partyId, { tableId: t.id, tableName: t.name, partyId: p.id });
                     setMove(null);
                     setSelId(t.id);
                     toast(`Moved from ${from.name} to ${t.name}${t.parties.length ? ` · Party ${p.id}` : ""} · order moved too`);
@@ -345,11 +368,10 @@ export default function TablesPage() {
         prepaid={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.prepaid ?? []) : undefined}
         lines={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))) : undefined}
         billNo={pay ? partyOrders(pay.tableId, pay.party.id)[0]?.number : undefined}
-        onPaid={(payments) => {
+        onPaid={(payments, extra) => {
           if (!pay) return;
           const ids = partyOrders(pay.tableId, pay.party.id).map((o) => o.id);
-          if (ids.length) orderActions.pay(ids, payments, myName);
-          tableActions.close(pay.tableId, pay.party.id);
+          return closeBill({ ids, payments, by: myName, tableId: pay.tableId, partyId: pay.party.id, discount: extra?.discount, coupon: extra?.coupon });
         }}
       />
     </>

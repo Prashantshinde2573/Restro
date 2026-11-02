@@ -3,7 +3,7 @@
 // Table + party helpers and the shared tables store (Tables screen, POS and
 // the guest QR page all read the same live state).
 import { createStore } from "./store";
-import { useCurrentOutlet } from "./live";
+import { logActivity, useCurrentOutlet } from "./live";
 import type { Party, Table, TableStatus } from "./types";
 
 const rank: Record<Party["status"], number> = { seated: 1, ordered: 2, billing: 3 };
@@ -71,6 +71,7 @@ export const tableActions = {
       visitId: `v-${Date.now().toString(36)}`,
     };
     tableStore.set([...all(), table]);
+    logActivity("table", `Added table ${table.name}`, table.outletId);
     return table;
   },
   /** Add many at once: "T11" to "T20". */
@@ -80,6 +81,7 @@ export const tableActions = {
     for (let n = from; n <= to; n++)
       made.push({ id: `t${stamp}${n}`, name: `${prefix}${n}`, zone: zone.trim() || "Indoor", seats: Math.max(1, seats), outletId, parties: [], visitId: `v-${stamp}-${n}` });
     tableStore.set([...all(), ...made]);
+    if (made.length) logActivity("table", `Added tables ${made[0].name}–${made[made.length - 1].name}`, outletId);
     return made.length;
   },
   edit(tableId: string, changes: { name?: string; zone?: string; seats?: number }) {
@@ -87,7 +89,9 @@ export const tableActions = {
   },
   /** Only an empty table can be removed. */
   remove(tableId: string) {
+    const t = all().find((x) => x.id === tableId);
     tableStore.set(all().filter((t) => t.id !== tableId));
+    if (t) logActivity("table", `Removed table ${t.name}`, t.outletId);
   },
   /** Seat a new party. On a busy table this is "share table". */
   seat(tableId: string, guests: number, opts: Partial<Party> = {}): Party {
@@ -102,6 +106,7 @@ export const tableActions = {
       ...opts,
     };
     patch(tableId, (x) => ({ ...x, reservedAt: undefined, parties: [...x.parties, p] }));
+    logActivity("table", p.source === "qr" ? `New group at ${t.name} from the QR` : `Seated ${guests} guest${guests > 1 ? "s" : ""} at ${t.name}${t.parties.length ? ` (party ${p.id})` : ""}`, t.outletId);
     return p;
   },
   update(tableId: string, partyId: string, changes: Partial<Party>) {
@@ -119,7 +124,10 @@ export const tableActions = {
     return t?.parties.find((p) => p.code === code && (!p.codeExpiresAt || new Date(p.codeExpiresAt).getTime() > Date.now()));
   },
   /** Party paid and left. When the last party leaves, the next guests start a new visit. */
-  close(tableId: string, partyId: string) {
+  close(tableId: string, partyId: string, why = "") {
+    const t = all().find((x) => x.id === tableId);
+    if (t?.parties.some((p) => p.id === partyId))
+      logActivity("table", `${t.name}${t.parties.length > 1 ? ` · party ${partyId}` : ""} is free${t.parties.length > 1 ? "d" : ""}${why ? ` · ${why}` : ""}`, t.outletId);
     patch(tableId, (x) => {
       const parties = x.parties.filter((p) => p.id !== partyId);
       return { ...x, parties, visitId: parties.length ? x.visitId : `${x.id}-${Date.now().toString(36)}` };
@@ -127,6 +135,8 @@ export const tableActions = {
   },
   /** Two parties turn out to be together: one bill. */
   merge(tableId: string, fromId: string, intoId: string) {
+    const t = all().find((x) => x.id === tableId);
+    if (t) logActivity("table", `${t.name}: party ${fromId} joined party ${intoId}`, t.outletId);
     patch(tableId, (x) => {
       const from = x.parties.find((p) => p.id === fromId)!;
       return {
@@ -141,10 +151,14 @@ export const tableActions = {
   move(fromTableId: string, partyId: string, toTableId: string) {
     const from = all().find((x) => x.id === fromTableId)!;
     const p = from.parties.find((x) => x.id === partyId)!;
-    tableActions.close(fromTableId, partyId);
+    patch(fromTableId, (x) => {
+      const parties = x.parties.filter((q) => q.id !== partyId);
+      return { ...x, parties, visitId: parties.length ? x.visitId : `${x.id}-${Date.now().toString(36)}` };
+    });
     const to = all().find((x) => x.id === toTableId)!;
     const moved = { ...p, id: nextPartyId(to) };
     patch(toTableId, (x) => ({ ...x, reservedAt: undefined, parties: [...x.parties, moved] }));
+    logActivity("table", `Moved guests from ${from.name} to ${to.name}`, from.outletId);
     return moved;
   },
 };

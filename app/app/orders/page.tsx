@@ -1,19 +1,24 @@
 "use client";
 
-import { Banknote, CreditCard, History, PenLine, Phone, Printer, QrCode, XCircle } from "lucide-react";
+import { Banknote, Check, Clock3, CreditCard, History, PenLine, Phone, Printer, QrCode, RotateCcw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Chips, Group, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
-import { ChannelIcon, StatusPill, channelLabel } from "@/components/channel";
+import { StatusPill, channelLabel } from "@/components/channel";
+import { OrderCard } from "@/components/order-card";
+import { startOfDay } from "@/lib/stats";
 import { Checkout, billTotals } from "@/components/checkout";
 import { printReceipt } from "@/components/receipt";
 import { PaymentSplit, paidSum } from "@/components/payment-split";
 import { useToast } from "@/components/toast";
 import { orderWhere, tableActions, useTables } from "@/lib/tables";
-import { billOf, guestActions, methodLabel, orderActions, paymentsText, useCurrentOutlet, useMe, useMenu, useOrders, useSettings } from "@/lib/live";
+import { billOf, methodLabel, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOrders, useSettings } from "@/lib/live";
+import { closeBill, confirmPayment, markUnpaid, partyOpenOrders, rejectPayment } from "@/lib/billing";
+import { PasswordCheck } from "@/components/password-check";
+import { isOwner } from "@/lib/access";
 import { clock, inr, minutesSince, orderTotal, timeAgo } from "@/lib/format";
 import type { Order, OrderStatus, Payment } from "@/lib/types";
 
-type Filter = "open" | "online" | "ready" | "paid";
+type Filter = "open" | "confirm" | "online" | "ready" | "paid";
 const prefIcon = { upi: QrCode, cash: Banknote, card: CreditCard };
 
 export default function OrdersPage() {
@@ -21,7 +26,7 @@ export default function OrdersPage() {
   const list = useOrders();
   const [filter, setFilter] = useState<Filter>("open");
   const [selId, setSelId] = useState<string | null>(null);
-  const [pay, setPay] = useState<Order | null>(null);
+  const [pay, setPay] = useState<Order[] | null>(null); // one bill: a table party's open orders, or one order
   const [edit, setEdit] = useState<{ order: Order; rows: Payment[] } | null>(null);
   const menu = useMenu();
   const me = useMe();
@@ -31,10 +36,19 @@ export default function OrdersPage() {
   const myName = me ? (me.role === "owner" ? `${me.name} (Owner)` : me.name) : "Staff";
   const tables = useTables();
   const sel = list.find((o) => o.id === selId) ?? null;
+  const canConfirm = useCanConfirm();
+  const canEditPay = useCan("editPayment");
+  const canCharge = useCan("charge");
+  const canCancel = useCan("refund");
+  const owner = isOwner(me);
+  const [unpayAsk, setUnpayAsk] = useState<Order | null>(null);
+  const claims = pendingClaims(list);
+  /** Charging an order at a table charges the party's whole bill. */
+  const billFor = (o: Order) => (o.tableId ? partyOpenOrders(o.tableId, o.partyId ?? "A").filter((x) => !x.payClaim) : [o]);
 
   const isOnline = (o: Order) => ["whatsapp", "swiggy", "zomato", "qr"].includes(o.channel);
   const match = (o: Order, f: Filter) =>
-    f === "open" ? !["paid", "cancelled"].includes(o.status) : f === "online" ? isOnline(o) && !["paid", "cancelled"].includes(o.status) : f === "ready" ? o.status === "ready" : o.status === "paid";
+    f === "open" ? !["paid", "cancelled"].includes(o.status) : f === "confirm" ? !!o.payClaim && !["paid", "cancelled"].includes(o.status) : f === "online" ? isOnline(o) && !["paid", "cancelled"].includes(o.status) : f === "ready" ? o.status === "ready" : o.status === "paid" && new Date(o.createdAt).getTime() >= startOfDay();
   const shown = useMemo(
     () => list.filter((o) => match(o, filter)).sort((a, b) => Number(b.status === "new") - Number(a.status === "new") || b.number - a.number),
     [list, filter],
@@ -48,11 +62,25 @@ export default function OrdersPage() {
     toast(msg);
   };
 
-  const paidToday = list.filter((o) => o.status === "paid").reduce((s, o) => s + paidSum(o.payments ?? []), 0);
+  // "today" really is today (it used to add up every paid bill ever)
+  const today0 = startOfDay();
+  const paidTodayList = list.filter((o) => o.status === "paid" && new Date(o.createdAt).getTime() >= today0);
+  const paidToday = paidTodayList.reduce((s, o) => s + paidSum(o.payments ?? []), 0);
   const byMethod = (["upi", "cash", "card"] as const).map((m) => ({
     m,
-    amt: list.filter((o) => o.status === "paid").reduce((s, o) => s + (o.payments ?? []).filter((p) => p.method === m).reduce((a, p) => a + p.amount, 0), 0),
+    amt: paidTodayList.reduce((s, o) => s + (o.payments ?? []).filter((p) => p.method === m).reduce((a, p) => a + p.amount, 0), 0),
   }));
+  /** The one next step for a card. */
+  const nextStep = (o: Order): { label: string; onClick: () => void; tone?: "primary" | "dark" } | null => {
+    if (o.payClaim && o.status !== "paid" && o.status !== "cancelled")
+      return canConfirm ? { label: "Money received", onClick: () => { confirmPayment(o.payClaim!.id); toast(`Payment confirmed · #${o.number} closed`); } } : null;
+    if (o.status === "new") return { label: "Accept & send to kitchen", onClick: () => setStatus(o, "accepted", "Accepted · KOT sent to kitchen") };
+    if (o.status === "accepted") return { label: "Mark cooking", onClick: () => setStatus(o, "preparing", "Kitchen started"), tone: "dark" };
+    if (o.status === "preparing") return { label: "Mark ready", onClick: () => setStatus(o, "ready", "Marked ready"), tone: "dark" };
+    if (o.status === "ready") return { label: "Mark served", onClick: () => setStatus(o, "served", "Marked served"), tone: "dark" };
+    if (o.status === "served" && canCharge) return { label: `Charge ${inr(billFor(o).reduce((s, x) => s + billOf(x), 0))}`, onClick: () => setPay(billFor(o)) };
+    return null;
+  };
 
   return (
     <>
@@ -62,9 +90,10 @@ export default function OrdersPage() {
           onChange={setFilter}
           options={[
             { value: "open", label: "Open", count: count("open") },
+            ...(claims.length ? [{ value: "confirm" as Filter, label: "To confirm", count: claims.length }] : []),
             { value: "online", label: "Online & QR", count: count("online") },
             { value: "ready", label: "Ready to serve", count: count("ready") },
-            { value: "paid", label: "Paid", count: count("paid") },
+            { value: "paid", label: "Paid today", count: count("paid") },
           ]}
         />
       </PageHeader>
@@ -79,41 +108,25 @@ export default function OrdersPage() {
             ))}
           </div>
         )}
-        <Group flush>
-          {shown.length === 0 && <div className="px-5 py-14 text-center text-[14px] text-muted">Nothing here right now.</div>}
-          {shown.map((o) => {
-            const mins = minutesSince(o.createdAt);
-            const late = mins > 20 && ["new", "accepted", "preparing"].includes(o.status);
-            const Pref = o.payPreference ? prefIcon[o.payPreference] : null;
-            return (
-              <button key={o.id} onClick={() => setSelId(o.id)} className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3.5 text-left last:border-0 hover:bg-sunken/40 lg:px-5">
-                <ChannelIcon channel={o.channel} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-semibold">{orderWhere(o, tables)}</span>
-                    <span className="text-[13px] text-faint tnum">#{o.number}</span>
-                    {o.status === "new" && o.channel === "qr" && <Pill tone="saffron">Needs OK</Pill>}
-                  </div>
-                  <div className="truncate text-[13px] text-muted">
-                    {o.status === "paid" ? paymentsText(o.payments) : o.lines.map((l) => `${l.qty} ${l.name}`).join(", ")}
-                  </div>
-                </div>
-                <div className="hidden w-28 text-right text-[13px] sm:block">
-                  <div className={late ? "font-semibold text-rose" : "text-muted"}>{o.status === "paid" ? clock(o.createdAt) : `${mins} min`}</div>
-                  <div className="text-faint">{o.customer && o.channel === "qr" ? o.customer : channelLabel(o.channel)}</div>
-                </div>
-                <div className="flex w-[92px] flex-col items-end gap-1">
-                  <span className="text-[15px] font-semibold tnum">{inr(o.status === "paid" ? paidSum(o.payments ?? []) : orderTotal(o.lines))}</span>
-                  {Pref && o.status !== "paid" ? (
-                    <Pill tone="sky"><Pref size={11} /> Bill · {methodLabel[o.payPreference!]}</Pill>
-                  ) : (
-                    <StatusPill status={o.status} />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </Group>
+        {shown.length === 0 ? (
+          <div className="rounded-[22px] bg-surface px-5 py-14 text-center">
+            <p className="text-[16px] font-semibold">Nothing here right now</p>
+            <p className="mt-1 text-[14px] text-muted">{filter === "paid" ? "Paid bills from today show here." : "New orders from New order, captains and the QR show up here live."}</p>
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+            {shown.map((o) => (
+              <OrderCard
+                key={o.id}
+                o={o}
+                where={orderWhere(o, tables)}
+                total={o.status === "paid" ? paidSum(o.payments ?? []) : billOf(o)}
+                onOpen={() => setSelId(o.id)}
+                action={nextStep(o)}
+              />
+            ))}
+          </div>
+        )}
       </Page>
 
       <Sheet
@@ -125,18 +138,30 @@ export default function OrdersPage() {
             <div className="flex gap-2">
               {sel.status === "new" && (
                 <>
-                  <Button variant="danger" size="lg" onClick={() => setStatus(sel, "cancelled", `Order #${sel.number} rejected · guest told on their phone`)}>Reject</Button>
+                  <Button variant="danger" size="lg" onClick={() => setStatus(sel, "cancelled", `Order #${sel.number} rejected · the guest sees it on their phone`)}>Reject</Button>
                   <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "accepted", "Accepted · KOT sent to kitchen")}>Accept and send to kitchen</Button>
                 </>
               )}
               {sel.status === "accepted" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "preparing", "Kitchen started")}>Mark cooking</Button>}
               {sel.status === "preparing" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "ready", "Marked ready")}>Mark ready</Button>}
               {sel.status === "ready" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "served", "Marked served")}>Mark served</Button>}
-              {sel.status === "served" && <Button size="lg" className="flex-1" onClick={() => { setPay(sel); setSelId(null); }}>Charge {inr(billOf(sel))}</Button>}
-              {sel.status === "paid" && (
+              {sel.payClaim && sel.status !== "paid" && sel.status !== "cancelled" ? (
+                canConfirm ? (
+                  <>
+                    <Button variant="plain" size="lg" onClick={() => { rejectPayment(sel.payClaim!.id); setSelId(null); toast("Marked not received · the bill is open again"); }}>Not received</Button>
+                    <Button size="lg" className="flex-1" onClick={() => { confirmPayment(sel.payClaim!.id); setSelId(null); toast(`Payment confirmed · #${sel.number} closed`); }}><Check size={17} /> Money received</Button>
+                  </>
+                ) : null
+              ) : sel.status === "served" && canCharge ? (
+                <Button size="lg" className="flex-1" onClick={() => { setPay(billFor(sel)); setSelId(null); }}>Charge {inr(billFor(sel).reduce((s, o) => s + billOf(o), 0))}</Button>
+              ) : null}
+              {sel.status === "paid" && canEditPay && (
                 <Button size="lg" variant="tinted" className="flex-1" onClick={() => setEdit({ order: sel, rows: (sel.payments ?? []).map((p) => ({ ...p })) })}>
                   <PenLine size={17} /> Change how it was paid
                 </Button>
+              )}
+              {sel.status === "paid" && owner && (
+                <Button size="lg" variant="plain" onClick={() => setUnpayAsk(sel)}><RotateCcw size={17} /> Mark unpaid</Button>
               )}
             </div>
           )
@@ -160,7 +185,13 @@ export default function OrdersPage() {
                 {sel.guestPhone && <Pill tone="jade">Number given</Pill>}
               </div>
             )}
-            {sel.payPreference && sel.status !== "paid" && (
+            {sel.payClaim && sel.status !== "paid" && sel.status !== "cancelled" && (
+              <div className="rounded-ctl bg-saffron-soft px-3 py-2.5 text-[13.5px]">
+                <b>{sel.payClaim.by}</b> marked this bill paid · {paymentsText(sel.payClaim.payments)} · {timeAgo(sel.payClaim.at)}.{" "}
+                {canConfirm ? "Check the money came in (UPI app, cash drawer), then confirm." : "Waiting for the owner to confirm."}
+              </div>
+            )}
+            {sel.payPreference && sel.status !== "paid" && !sel.payClaim && (
               <div className="rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">Guest asked for the bill and wants to pay by <b>{methodLabel[sel.payPreference]}</b>.</div>
             )}
             <div className="overflow-hidden rounded-group bg-surface">
@@ -184,10 +215,10 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {sel.status === "paid" && (
+            {(sel.status === "paid" || (sel.paymentLog?.length ?? 0) > 0) && (
               <div className="rounded-group bg-surface p-4">
-                <div className="text-[13px] text-muted">Paid by</div>
-                <div className="mt-0.5 text-[17px] font-semibold">{paymentsText(sel.payments)}</div>
+                {sel.status === "paid" && <div className="text-[13px] text-muted">Paid by</div>}
+                {sel.status === "paid" && <div className="mt-0.5 text-[17px] font-semibold">{paymentsText(sel.payments)}</div>}
                 {sel.paymentLog && sel.paymentLog.length > 0 && (
                   <div className="mt-3 space-y-1.5 border-t border-line pt-3">
                     <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-muted"><History size={13} /> Payment history</div>
@@ -216,7 +247,7 @@ export default function OrdersPage() {
               >
                 <Printer size={16} /> Print bill
               </Button>
-              {sel.status !== "paid" && sel.status !== "cancelled" && (
+              {sel.status !== "paid" && sel.status !== "cancelled" && (sel.status === "new" || canCancel) && (
                 cancelAsk === sel.id ? (
                   <Button variant="danger" onClick={() => { orderActions.setStatus(sel.id, "cancelled"); setCancelAsk(null); toast(`#${sel.number} cancelled`); }}>
                     <XCircle size={16} /> Yes, cancel
@@ -266,16 +297,35 @@ export default function OrdersPage() {
       <Checkout
         open={!!pay}
         onClose={() => setPay(null)}
-        subtotal={pay ? orderTotal(pay.lines) : 0}
-        label={pay ? orderWhere(pay, tables) : ""}
-        preferred={pay?.payPreference}
-        prepaid={pay?.prepaid}
-        lines={pay?.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))}
-        billNo={pay?.number}
-        onPaid={(payments) => {
-          if (!pay) return;
-          orderActions.pay([pay.id], payments, myName);
-          if (pay.tableId && pay.partyId) tableActions.close(pay.tableId, pay.partyId);
+        subtotal={pay ? pay.reduce((s, o) => s + orderTotal(o.lines), 0) : 0}
+        label={pay?.[0] ? orderWhere(pay[0], tables) : ""}
+        preferred={pay?.find((o) => o.payPreference)?.payPreference}
+        prepaid={pay?.flatMap((o) => o.prepaid ?? [])}
+        lines={pay?.flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })))}
+        billNo={pay?.[0]?.number}
+        onPaid={(payments, extra) => {
+          if (!pay?.length) return;
+          const o = pay[0];
+          return closeBill({ ids: pay.map((x) => x.id), payments, by: myName, tableId: o.tableId, partyId: o.tableId ? o.partyId ?? "A" : undefined, discount: extra?.discount, coupon: extra?.coupon });
+        }}
+      />
+
+      <PasswordCheck
+        open={!!unpayAsk}
+        onClose={() => setUnpayAsk(null)}
+        title={unpayAsk ? `Mark #${unpayAsk.number} unpaid?` : ""}
+        body={unpayAsk ? `${paymentsText(unpayAsk.payments)} comes off today's sales and the bill opens again${unpayAsk.tableId ? " on its table" : ""}. This is saved in the activity log.` : ""}
+        confirmLabel="Mark unpaid"
+        onConfirmed={() => {
+          if (!unpayAsk) return;
+          // a table bill can span several orders paid together: open all of them
+          const group = unpayAsk.tableId
+            ? list.filter((o) => o.status === "paid" && o.tableId === unpayAsk.tableId && (o.partyId ?? "A") === (unpayAsk.partyId ?? "A") && o.paymentLog?.at(-1)?.at === unpayAsk.paymentLog?.at(-1)?.at).map((o) => o.id)
+            : [unpayAsk.id];
+          markUnpaid(group.length ? group : [unpayAsk.id]);
+          setUnpayAsk(null);
+          setSelId(null);
+          toast(`#${unpayAsk.number} is unpaid again`);
         }}
       />
     </>
