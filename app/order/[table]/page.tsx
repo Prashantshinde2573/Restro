@@ -39,6 +39,7 @@ import {
   type MenuFilters,
 } from "@/components/guest-menu";
 import { PayPanel, ThankYou } from "@/components/guest-pay";
+import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
 import { cloudConfigured, feedbackActions, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
@@ -163,10 +164,13 @@ export default function GuestOrder() {
   const storeKey = t ? `restropi.party.${t.name}.${t.visitId}` : "";
   const [myParty, setMyParty] = useState<string | null>(null);
   const [mine, setMine] = useState<string[]>([]); // counter orders placed from this phone
+  const [guestCount, setGuestCount] = useState<number | null>(null); // asked right after the scan (tables only)
+  const [countOpen, setCountOpen] = useState(false); // "change" from the header
   const [guest, setGuest] = useState<GuestProfile | null>(null);
   useEffect(() => {
     try {
       if (storeKey) setMyParty(localStorage.getItem(storeKey));
+      if (storeKey) setGuestCount(Number(localStorage.getItem(storeKey + ".guests")) || null);
       const g = localStorage.getItem("restropi.guest");
       if (g) setGuest(JSON.parse(g));
       const m = localStorage.getItem("restropi.mine.counter");
@@ -183,6 +187,14 @@ export default function GuestOrder() {
     },
     [storeKey],
   );
+  const pickGuests = (n: number) => {
+    setGuestCount(n);
+    setCountOpen(false);
+    try { localStorage.setItem(storeKey + ".guests", String(n)); } catch {}
+    // already seated: update the party so staff see the right number
+    const pp = t?.parties.find((x) => x.id === myParty);
+    if (t && pp && pp.guests !== n) tableActions.update(t.id, pp.id, { guests: n });
+  };
   const addMine = (id: string) =>
     setMine((m) => {
       const next = [id, ...m].slice(0, 20);
@@ -323,7 +335,7 @@ export default function GuestOrder() {
     if (t && !p) {
       // New phone = new group on this table. Its first order waits for staff to
       // accept — unless it's already paid from the phone (a paid order is no prank).
-      p = tableActions.seat(t.id, 1, { source: "qr", phoneClaimed: true, pendingApproval: !extra.prepaid, server: undefined });
+      p = tableActions.seat(t.id, guestCount ?? 1, { source: "qr", phoneClaimed: true, pendingApproval: !extra.prepaid, server: undefined });
       remember(p.id);
     }
     const order = orderActions.add({
@@ -467,6 +479,18 @@ export default function GuestOrder() {
 
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-36 sm:max-w-2xl">
+      {/* ---------- how many guests (table orders, before the menu) ---------- */}
+      {t && !counter && qrOn && isOpen && ((!party && (t.parties.length === 0 || ownBill) && !guestCount) || countOpen) && (
+        <GuestCountScreen
+          place={placeLabel}
+          restaurant={settings.name}
+          lang={lang}
+          initial={party?.guests ?? guestCount}
+          onPick={pickGuests}
+          onClose={countOpen ? () => setCountOpen(false) : ownBill && !party ? () => setOwnBill(false) : undefined}
+        />
+      )}
+
       {/* ---------- header ---------- */}
       <header className="px-5 pb-3 pt-6">
         <div className="flex items-center justify-between gap-2">
@@ -477,6 +501,11 @@ export default function GuestOrder() {
               {placeLabel}
               {party && shared && <> · {groupName}</>}
             </span>
+            {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
+              <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">
+                <Users size={14} /> <span className="tnum">{party?.guests ?? guestCount}</span>
+              </button>
+            ) : null}
             <button onClick={() => setLang(mr ? "en" : "mr")} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">{mr ? "English" : "मराठी"}</button>
           </div>
         </div>

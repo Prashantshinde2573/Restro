@@ -139,7 +139,7 @@ export const en: Manual = {
         { steps: [
           "Open **New order**.",
           "Choose **Dine-in**, **Counter** (or Takeaway) or **Delivery** at the top of the cart.",
-          "Dine-in: tap the table box and pick the table. On a shared table, pick the party (A, B…) or “+ New party”. Counter or delivery: you can type the guest's name.",
+          "Dine-in: tap the table box and pick the table. On a shared table, pick the party (A, B…) or “+ New party”. For a new party, tap how many **Guests** (1–6, or 7+) — it is needed before sending. Counter or delivery: you can type the guest's name.",
           "Tap dishes to add them. Search at the top, or pick a category. Dishes with choices (size, spice, add-ons) open a small sheet first.",
           "Tap “Add note” under a dish for the kitchen (Less spicy, Jain, Pack separately…). Use − and + to change the quantity.",
           "Tap **Send to kitchen**. The order goes to the Kitchen screen and Orders, on every device.",
@@ -267,7 +267,7 @@ export const en: Manual = {
       blocks: [
         { h: "What the guest does" },
         { steps: [
-          "Scans the table QR with the phone camera. Your menu opens — no app to install.",
+          "Scans the table QR with the phone camera — no app to install. First they choose **how many guests** are at the table (1–8, or more); they can change it later with the 👥 button at the top. Then your menu opens.",
           "Browses categories on the left, searches, or uses Filters (veg / non-veg, spicy or sweet, price, specials). Can switch the menu to Marathi.",
           "Taps ADD on dishes, then **View cart** → **Place order**. The first time, they type their name and mobile number.",
           "A new group's first order waits for your staff to accept. After that, more orders go straight to the kitchen.",

@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { Button, Chips, DietMark, Segmented, Sheet } from "@/components/ui";
 import { PhotoSlide } from "@/components/menu-bits";
 import { Checkout, billTotals } from "@/components/checkout";
+import { GuestCount } from "@/components/guest-count";
 import { VoiceOrder } from "@/components/voice";
 import { ItemSheet } from "@/components/item-sheet";
 import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
@@ -53,6 +54,7 @@ function PosScreen() {
     if (tables.length && !tables.some((x) => x.name === table)) setTable((tables.find((x) => tableState(x) === "free") ?? tables[0]).name);
   }, [tables, table]);
   const [party, setParty] = useState<string | null>(params.get("party"));
+  const [newGuests, setNewGuests] = useState<number | null>(null); // a new party: how many guests
   const [lines, setLines] = useState<Line[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [pickTable, setPickTable] = useState(false);
@@ -93,6 +95,8 @@ function PosScreen() {
     type === "dine-in" ? (pty && tbShared ? `${table} · Party ${party}` : `Table ${table}`) : cust.trim() ? `${type === "delivery" ? "Delivery" : counterToo || cafe ? "Counter" : "Takeaway"} · ${cust.trim()}` : type === "takeaway" ? (counterToo || cafe ? "Counter" : "Takeaway") : "Delivery";
   const noTable = type === "dine-in" && !tb;
   const waitingPay = type === "dine-in" && !!pty?.paymentPending;
+  // a new party at a table needs its number of guests before it's sent
+  const needGuests = type === "dine-in" && !!tb && !pty && !newGuests;
 
   const [sentIds, setSentIds] = useState<string[]>([]); // takeaway/delivery orders sent but not paid yet
   const allOrders = useOrders();
@@ -104,8 +108,9 @@ function PosScreen() {
   const ensureParty = () => {
     if (type !== "dine-in" || !tb) return null;
     if (pty) return pty.id;
-    const p = tableActions.seat(tb.id, 2);
+    const p = tableActions.seat(tb.id, newGuests ?? 1);
     setParty(p.id);
+    setNewGuests(null);
     return p.id;
   };
 
@@ -160,12 +165,20 @@ function PosScreen() {
               <span className="block text-[12px] text-muted">{tbShared ? "Shared table · separate bill" : "Table"}</span>
               <span className="text-[16px] font-semibold">
                 {table}
-                {pty ? (tbShared ? ` · Party ${pty.id} · ${pty.guests} ${pty.guests > 1 ? "guests" : "guest"}` : ` · ${pty.guests} guests`) : tb && tb.parties.length ? " · choose party" : " · new guests"}
+                {pty ? (tbShared ? ` · Party ${pty.id}` : "") : tb && tb.parties.length ? " · new party" : " · new guests"}
               </span>
             </span>
             <ChevronDown size={18} className="text-muted" />
           </button>
-        ) : (
+        ) : null}
+        {type === "dine-in" && !cafe && tb && (
+          <GuestCount
+            value={pty ? pty.guests : newGuests}
+            onChange={(n) => (pty ? tableActions.update(tb.id, pty.id, { guests: n }) : setNewGuests(n))}
+            className="px-1"
+          />
+        )}
+        {type === "dine-in" && !cafe ? null : (
           <input value={cust} onChange={(e) => setCust(e.target.value)} className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder={type === "delivery" ? "Guest name, phone or address" : "Guest name (optional, shows on the order)"} />
         )}
       </div>
@@ -212,12 +225,13 @@ function PosScreen() {
         </div>
         <div className={clsx("grid gap-2", canCharge ? "grid-cols-2" : "grid-cols-1")}>
           {noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">Pick a table first</p>}
+          {needGuests && lines.length > 0 && !noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">Choose how many guests</p>}
           {waitingPay && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">This bill is marked paid · waiting for the owner&apos;s OK</p>}
-          <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent || noTable} onClick={() => sendKitchen()}>
+          <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent || noTable || needGuests} onClick={() => sendKitchen()}>
             {sent ? <><Check size={18} /> Sent</> : <><Send size={17} /> {t("sendKitchen")}</>}
           </Button>
           {canCharge && (
-            <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0 || noTable || waitingPay} onClick={() => { setCartOpen(false); setPay(true); }}>
+            <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0 || noTable || waitingPay || (needGuests && lines.length > 0 && !sent)} onClick={() => { setCartOpen(false); setPay(true); }}>
               {t("charge")}
             </Button>
           )}
@@ -338,6 +352,7 @@ function PosScreen() {
             const pick = (pid: string | null) => {
               setTable(tb.name);
               setParty(pid);
+              setNewGuests(null);
               setPickTable(false);
               setSent(false);
             };
