@@ -220,7 +220,7 @@ export default function SettingsPage() {
             <Field label="UPI ID for QR payments" hint="Each bill gets a QR for its exact amount.">
               <input className={inputCls} autoCapitalize="none" placeholder="name@okaxis" value={draft.upi} onChange={(e) => setDraft({ ...draft, upi: e.target.value.replace(/\s/g, "") })} />
             </Field>
-            {!!draft.upi && !upiOk && <p className="-mt-2 text-[13.5px] font-medium text-rose">Enter a UPI ID like name@bank.</p>}
+            {!!draft.upi && !upiOk && <p className="-mt-2 text-[13.5px] font-medium text-rose">{/@[^@]*\./.test(draft.upi) ? "This looks like an email address, not a UPI ID. Open your UPI app (GPay, PhonePe, Paytm…) → Profile to see your UPI ID, like name@okaxis or 98xxxxxx@ybl." : "Enter a UPI ID like name@okaxis."}</p>}
             {upiOk && (
               <div className="rounded-group bg-surface p-4">
                 <div className="mb-2 text-center text-[13.5px] font-semibold">Test QR · scan with your UPI app</div>

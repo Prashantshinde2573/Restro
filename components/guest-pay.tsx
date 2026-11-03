@@ -49,6 +49,24 @@ export function PayPanel({
   const [cashPart, setCashPart] = useState(half);
   useEffect(() => setCashPart(Math.max(0, Math.round(amount / 2 / 10) * 10)), [amount]);
   const upiPart = Math.max(0, amount - cashPart);
+  // "I've paid" only after the guest went to pay (UPI app opened), or says they scanned the QR
+  const [opened, setOpened] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  useEffect(() => { setOpened(false); setScanned(false); }, [m, amount, upiPart]);
+  const canConfirm = opened || scanned;
+  const confirmGate = (button: ReactNode) =>
+    canConfirm ? (
+      <div className="mt-4 animate-fade-in">
+        <p className="mb-2 rounded-[12px] bg-saffron-soft px-3 py-2 text-[13px] font-medium text-ink/80">
+          {tx(lang, "Tap this only after the money has gone from your UPI app. The restaurant will check it.", "UPI ॲपमधून पैसे गेल्यानंतरच हे दाबा. रेस्टॉरंट ते तपासेल.")}
+        </p>
+        {button}
+      </div>
+    ) : (
+      <button onClick={() => setScanned(true)} className="mt-4 w-full text-center text-[13.5px] font-semibold text-muted underline underline-offset-4">
+        {tx(lang, "Already paid by scanning the QR?", "QR स्कॅन करून आधीच भरलं?")}
+      </button>
+    );
 
   const choices: { v: GuestPayChoice; label: string; icon: typeof QrCode }[] = [
     { v: "upi", label: tx(lang, "UPI", "UPI"), icon: QrCode },
@@ -76,10 +94,12 @@ export function PayPanel({
 
       {m === "upi" && (
         <div className="rounded-group bg-surface p-5">
-          <UpiPayCard upi={upi} payee={payee} amount={amount} note={note} onCopy={() => toast(tx(lang, "UPI ID copied", "UPI ID कॉपी केला"))} />
-          <Button size="lg" className="mt-4 w-full" onClick={onUpiPaid}>
-            <Check size={18} /> {tx(lang, `I've paid ${inr(amount)}`, `${inr(amount)} भरले`)}
-          </Button>
+          <UpiPayCard upi={upi} payee={payee} amount={amount} note={note} onOpen={() => setOpened(true)} onCopy={() => toast(tx(lang, "UPI ID copied", "UPI ID कॉपी केला"))} />
+          {confirmGate(
+            <Button size="lg" className="w-full" onClick={onUpiPaid}>
+              <Check size={18} /> {tx(lang, `I've paid ${inr(amount)}`, `${inr(amount)} भरले`)}
+            </Button>,
+          )}
         </div>
       )}
 
@@ -129,10 +149,12 @@ export function PayPanel({
           </div>
           {upiPart > 0 ? (
             <>
-              <UpiPayCard upi={upi} payee={payee} amount={upiPart} note={`${note} (UPI part)`} size={170} compact onCopy={() => toast(tx(lang, "UPI ID copied", "UPI ID कॉपी केला"))} />
-              <Button size="lg" className="w-full" disabled={cashPart <= 0} onClick={() => onMixed(upiPart, cashPart)}>
-                <Check size={18} /> {tx(lang, `Paid ${inr(upiPart)} UPI · ${inr(cashPart)} cash ${where}`, `${inr(upiPart)} UPI भरले · ${inr(cashPart)} रोख`)}
-              </Button>
+              <UpiPayCard upi={upi} payee={payee} amount={upiPart} note={`${note} (UPI part)`} size={170} compact onOpen={() => setOpened(true)} onCopy={() => toast(tx(lang, "UPI ID copied", "UPI ID कॉपी केला"))} />
+              {confirmGate(
+                <Button size="lg" className="w-full" disabled={cashPart <= 0} onClick={() => onMixed(upiPart, cashPart)}>
+                  <Check size={18} /> {tx(lang, `Paid ${inr(upiPart)} UPI · ${inr(cashPart)} cash ${where}`, `${inr(upiPart)} UPI भरले · ${inr(cashPart)} रोख`)}
+                </Button>,
+              )}
             </>
           ) : (
             <p className="text-center text-[14px] text-muted">{tx(lang, "That's all cash — choose Cash above.", "हे सगळं रोख आहे — वर 'रोख' निवडा.")}</p>
@@ -153,10 +175,13 @@ export function ThankYou({
   orderNo,
   token,
   lang,
+  pending = false,
   onRate,
   onClose,
   children,
 }: {
+  /** the guest says they paid; the owner hasn't confirmed it yet */
+  pending?: boolean;
   name?: string;
   place: string;
   payments: Payment[];
@@ -181,8 +206,12 @@ export function ThankYou({
 
         <div className="mt-6 w-full rounded-[22px] bg-surface p-4 text-left">
           <div className="flex items-baseline justify-between">
-            <span className="text-[14px] text-muted">{tx(lang, "Paid", "भरले")}</span>
+            <span className="text-[14px] text-muted">{pending ? tx(lang, "Payment sent", "पैसे पाठवले") : tx(lang, "Paid", "भरले")}</span>
             <span className="text-[26px] font-semibold tnum">{inr(total)}</span>
+          </div>
+          <div className={clsx("mt-2 flex items-center gap-2 rounded-[12px] px-3 py-2 text-[13.5px] font-semibold", pending ? "bg-saffron-soft text-saffron" : "bg-jade-soft text-jade-deep")}>
+            {pending ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-saffron" /> : <Check size={15} strokeWidth={2.6} />}
+            {pending ? tx(lang, "Confirming with the owner · nothing more to pay", "मालकाकडून खात्री होत आहे · आणखी काही भरायचं नाही") : tx(lang, "Confirmed by the restaurant", "रेस्टॉरंटने खात्री केली")}
           </div>
           {payments.length > 0 && (
             <div className="mt-1 text-[13.5px] text-muted">{payments.map((p) => `${label(p)} ${inr(p.amount)}`).join(" + ")}</div>

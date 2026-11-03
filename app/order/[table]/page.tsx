@@ -663,15 +663,27 @@ export default function GuestOrder() {
             <span className="text-[15px] tnum opacity-90">{inr(itemTotal)} <span className="text-[12px] opacity-75">+ GST</span></span>
             <span className="ml-auto text-[16px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
           </button>
-        ) : openOrders.length > 0 ? (
-          <div className={clsx("grid gap-2", !payNow && unbilled.length > 0 ? "grid-cols-2" : "grid-cols-1")}>
+        ) : openOrders.length > 0 || (!payNow && billState === "paid") ? (
+          <div className={clsx("grid gap-2", !payNow && billState !== "none" ? "grid-cols-2" : "grid-cols-1")}>
             <Button size="lg" variant="plain" className="shadow-float" onClick={() => { setView(view === "menu" ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}>
               {view === "menu" ? <><ReceiptText size={17} /> {tx(lang, "My orders", "माझ्या ऑर्डर्स")}</> : <><UtensilsCrossed size={17} /> {tx(lang, "Order more", "आणखी ऑर्डर")}</>}
             </Button>
-            {!payNow && unbilled.length > 0 && (
+            {/* where the bill stands: pay it / already paid, owner confirming / paid */}
+            {!payNow && billState === "open" && (
               <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setBillOpen(true); }}>
-                {tx(lang, "Get the bill", "बिल मागवा")}
+                {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span></>}
               </Button>
+            )}
+            {!payNow && billState === "sent" && (
+              <button onClick={() => setBillOpen(true)} className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-saffron-soft px-3 text-saffron shadow-float ring-1 ring-saffron/25">
+                <span className="flex items-center gap-1.5 text-[15px] font-semibold"><Check size={16} strokeWidth={2.6} /> {tx(lang, "Already paid", "पैसे भरले")}</span>
+                <span className="text-[11.5px] font-medium leading-tight text-saffron/85">{tx(lang, "Confirming with owner", "मालकाकडून खात्री होत आहे")}</span>
+              </button>
+            )}
+            {!payNow && billState === "paid" && (
+              <button onClick={() => setBillOpen(true)} className="flex h-14 items-center justify-center gap-1.5 rounded-[18px] bg-jade px-3 text-[15px] font-semibold text-white shadow-float">
+                <Check size={17} strokeWidth={2.6} /> {tx(lang, "Bill paid", "बिल भरलं")}
+              </button>
             )}
           </div>
         ) : null}
@@ -845,6 +857,7 @@ export default function GuestOrder() {
           orderNo={thanksOrder?.number || thanks.orderNo || undefined}
           token={thanks.token ? thanksOrder?.number || thanks.orderNo || undefined : undefined}
           lang={lang}
+          pending={!thanks.token && !!thanksOrder && thanksOrder.status !== "paid"}
           onRate={(stars, text) =>
             feedbackActions.add({ customer: guest?.name ?? "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: stars >= 4 ? "google" : "private" })
           }
@@ -944,8 +957,15 @@ function BillDone({ state, claimTotal, paidTotal, lang, compact = false }: { sta
           {paid ? tx(lang, "Bill paid", "बिल भरलं") : tx(lang, "Payment sent", "पैसे पाठवले")} · <span className="tnum">{inr(paid ? paidTotal : claimTotal)}</span>
         </div>
         <div className={clsx("text-[13.5px]", paid ? "text-white/85" : "text-ink/70")}>
-          {paid ? tx(lang, "All settled. Thank you!", "सगळं झालं. धन्यवाद!") : tx(lang, "The restaurant is confirming it. Nothing more to pay.", "रेस्टॉरंट खात्री करत आहे. आणखी काही भरायचं नाही.")}
+          {paid ? tx(lang, "Confirmed by the restaurant. Thank you!", "रेस्टॉरंटने खात्री केली. धन्यवाद!") : tx(lang, "Already paid · confirming with the owner. Nothing more to pay.", "पैसे भरले · मालकाकडून खात्री होत आहे. आणखी काही भरायचं नाही.")}
         </div>
+        {!paid && !compact && (
+          <ol className="mx-auto mt-5 max-w-[260px] space-y-2 text-left text-[13.5px]">
+            <li className="flex items-center gap-2.5"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-jade text-white"><Check size={12} strokeWidth={3} /></span>{tx(lang, "You paid", "तुम्ही पैसे भरले")}</li>
+            <li className="flex items-center gap-2.5"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-white ring-2 ring-saffron"><span className="h-2 w-2 animate-pulse rounded-full bg-saffron" /></span>{tx(lang, "Owner checks the payment", "मालक पेमेंट तपासत आहे")}</li>
+            <li className="flex items-center gap-2.5 text-ink/50"><span className="h-5 w-5 rounded-full ring-2 ring-line" />{tx(lang, "Bill shows Paid", "बिलावर “भरलं” दिसेल")}</li>
+          </ol>
+        )}
       </div>
     </div>
   );

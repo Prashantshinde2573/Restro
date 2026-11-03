@@ -5,7 +5,9 @@ import { ScanQr } from "./qr";
 import { inr } from "@/lib/format";
 
 /** name@bank — the shape every UPI ID has (e.g. saffronlane@okhdfc). */
-export const isValidUpi = (v: string) => /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.-]{1,63}$/.test(v.trim());
+// The part after "@" is the bank's handle (okaxis, ybl, paytm…): letters and digits, never a
+// domain — "name@gmail.com" is an email address, not a UPI ID, and UPI apps reject it.
+export const isValidUpi = (v: string) => /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/.test(v.trim());
 
 /**
  * Standard UPI deep link. Every UPI app (GPay, PhonePe, Paytm, BHIM, bank apps)
@@ -30,7 +32,10 @@ export function UpiPayCard({
   size = 200,
   compact,
   onCopy,
+  onOpen,
 }: {
+  /** the guest tapped "Pay with a UPI app" */
+  onOpen?: () => void;
   upi: string;
   payee: string;
   amount: number;
@@ -67,6 +72,7 @@ export function UpiPayCard({
       {/* On a phone the guest can't scan their own screen: open the UPI app directly. */}
       <a
         href={uri}
+        onClick={() => onOpen?.()}
         className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-ctl bg-ink text-[15px] font-semibold text-canvas md:hidden"
       >
         <Smartphone size={17} /> Pay {inr(amount)} with a UPI app

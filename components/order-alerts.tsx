@@ -98,9 +98,11 @@ export function OrderAlerts() {
       ping = true;
     }
     for (const c of claimOnes) {
-      const body = `${orderWhere(c.orders[0], tables)} · ${paymentsText(c.claim.payments)} · marked by ${c.claim.by}`;
-      pushNotice({ kind: "claim", title: "Payment to confirm", body, href: "/app/orders" });
-      notify("Payment to confirm", body);
+      const guest = c.claim.source === "guest";
+      const title = guest ? "Guest paid · please confirm" : "Payment to confirm";
+      const body = `${orderWhere(c.orders[0], tables)} · ${paymentsText(c.claim.payments)} · ${guest ? `paid from the phone by ${c.claim.by}` : `marked by ${c.claim.by}`}`;
+      pushNotice({ kind: "claim", title, body, href: "/app/orders" });
+      notify(title, body);
       toast(`Payment to confirm · ${orderWhere(c.orders[0], tables)}`);
       ping = true;
     }
