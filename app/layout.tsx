@@ -4,6 +4,7 @@ import "./globals.css";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
+import { CookieConsent } from "@/components/cookie-consent";
 
 // Analytics: set these in .env.local / your host's environment to switch them on.
 // Google Analytics 4 Measurement ID (public, it shows in every page). NEXT_PUBLIC_GA_ID on Vercel overrides it.
@@ -31,6 +32,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Google Consent Mode v2: nothing is stored until the visitor agrees (components/cookie-consent.tsx).
+            Runs before Tag Manager / Analytics load, and re-applies a saved choice. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});try{var c=JSON.parse(localStorage.getItem('restropi.consent')||'null');if(c){var g=function(v){return v?'granted':'denied'};gtag('consent','update',{analytics_storage:g(c.analytics),ad_storage:g(c.marketing),ad_user_data:g(c.marketing),ad_personalization:g(c.marketing)})}}catch(e){}",
+          }}
+        />
         {/* Public pages animate in. Hide those elements before the first paint only if motion is
             allowed; if the page scripts never start, show everything after 3 s.
             First visit to the home or pricing page in a tab: show the loader for one turn (1.5 s). */}
@@ -51,12 +60,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {GA_ID && (
           <>
             <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
-            <Script id="ga4" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GA_ID}');`}</Script>
+            <Script id="ga4" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments);};gtag('js',new Date());gtag('config','${GA_ID}');`}</Script>
           </>
         )}
         <Providers>{children}</Providers>
         {/* Vercel Web Analytics: page views on the Vercel dashboard (no cookies) */}
         <Analytics />
+        <CookieConsent />
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { Check, History, PenLine, Phone, Printer, RotateCcw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Chips, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
@@ -18,7 +19,7 @@ import { isOwner } from "@/lib/access";
 import { clock, inr, orderTotal, timeAgo } from "@/lib/format";
 import type { Order, OrderStatus, Payment } from "@/lib/types";
 
-type Filter = "open" | "confirm" | "online" | "ready" | "paid";
+type Filter = "open" | "confirm" | "online" | "ready" | "paid" | "all";
 
 export default function OrdersPage() {
   const toast = useToast();
@@ -47,7 +48,7 @@ export default function OrdersPage() {
 
   const isOnline = (o: Order) => ["whatsapp", "swiggy", "zomato", "qr"].includes(o.channel);
   const match = (o: Order, f: Filter) =>
-    f === "open" ? !["paid", "cancelled"].includes(o.status) : f === "confirm" ? !!o.payClaim && !["paid", "cancelled"].includes(o.status) : f === "online" ? isOnline(o) && !["paid", "cancelled"].includes(o.status) : f === "ready" ? o.status === "ready" : o.status === "paid" && new Date(o.createdAt).getTime() >= startOfDay();
+    f === "open" ? !["paid", "cancelled"].includes(o.status) : f === "confirm" ? !!o.payClaim && !["paid", "cancelled"].includes(o.status) : f === "online" ? isOnline(o) && !["paid", "cancelled"].includes(o.status) : f === "ready" ? o.status === "ready" : f === "all" ? true : o.status === "paid" && new Date(o.createdAt).getTime() >= startOfDay();
   const shown = useMemo(
     () => list.filter((o) => match(o, filter)).sort((a, b) => Number(b.status === "new") - Number(a.status === "new") || b.number - a.number),
     [list, filter],
@@ -93,6 +94,7 @@ export default function OrdersPage() {
             { value: "online", label: "Online & QR", count: count("online") },
             { value: "ready", label: "Ready to serve", count: count("ready") },
             { value: "paid", label: "Paid today", count: count("paid") },
+            { value: "all", label: "All orders" },
           ]}
         />
       </PageHeader>
@@ -107,7 +109,9 @@ export default function OrdersPage() {
             ))}
           </div>
         )}
-        {shown.length === 0 ? (
+        {filter === "all" ? (
+          <OrderHistory list={list} where={(o) => orderWhere(o, tables)} onOpen={(o) => setSelId(o.id)} />
+        ) : shown.length === 0 ? (
           <div className="rounded-[22px] bg-surface px-5 py-14 text-center">
             <p className="text-[16px] font-semibold">Nothing here right now</p>
             <p className="mt-1 text-[14px] text-muted">{filter === "paid" ? "Paid bills from today show here." : "New orders from New order, captains and the QR show up here live."}</p>
@@ -170,7 +174,7 @@ export default function OrdersPage() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
               <StatusPill status={sel.status} />
-              <span>{channelLabel(sel.channel)}</span>·<span>{sel.type}</span>·<span>{clock(sel.createdAt)}</span>
+              <span>{channelLabel(sel.channel)}</span>·<span>{sel.type}</span>·<span>{new Date(sel.createdAt).getTime() >= today0 ? clock(sel.createdAt) : `${dayName(sel.createdAt)}, ${clock(sel.createdAt)}`}</span>
             </div>
             {sel.status === "new" && sel.channel === "qr" && (
               <p className="rounded-ctl bg-saffron-soft px-3 py-2 text-[13.5px]">
@@ -328,5 +332,132 @@ export default function OrdersPage() {
         }}
       />
     </>
+  );
+}
+
+/* ---------------- All orders: every order, by day ---------------- */
+type Range = "today" | "yesterday" | "7d" | "30d" | "all";
+type StatusF = "any" | "paid" | "open" | "cancelled";
+const DAY = 86_400_000;
+const dayName = (iso: string | number) => new Date(iso).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: new Date(iso).getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+
+function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order) => string; onOpen: (o: Order) => void }) {
+  const [range, setRange] = useState<Range>("7d");
+  const [status, setStatus] = useState<StatusF>("any");
+  const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(80);
+  const t0 = startOfDay();
+  const from = range === "today" ? t0 : range === "yesterday" ? t0 - DAY : range === "7d" ? t0 - 6 * DAY : range === "30d" ? t0 - 29 * DAY : 0;
+  const to = range === "yesterday" ? t0 : Infinity;
+  const amountOf = (o: Order) => (o.status === "paid" ? paidSum(o.payments ?? []) : billOf(o));
+
+  const rows = useMemo(() => {
+    const term = q.trim().toLowerCase().replace(/^#/, "");
+    return list
+      .filter((o) => {
+        const t = new Date(o.createdAt).getTime();
+        if (t < from || t >= to) return false;
+        if (status === "paid" && o.status !== "paid") return false;
+        if (status === "cancelled" && o.status !== "cancelled") return false;
+        if (status === "open" && (o.status === "paid" || o.status === "cancelled")) return false;
+        if (!term) return true;
+        const hay = [String(o.number), where(o), o.customer ?? "", o.guestPhone ?? "", o.staff ?? "", ...o.lines.map((l) => l.name)].join(" ").toLowerCase();
+        return hay.includes(term);
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [list, from, to, status, q, where]);
+
+  const paidRows = rows.filter((o) => o.status === "paid");
+  const total = paidRows.reduce((s, o) => s + amountOf(o), 0);
+  const visible = rows.slice(0, limit);
+  const groups: { day: number; items: Order[] }[] = [];
+  for (const o of visible) {
+    const d = startOfDay(new Date(o.createdAt));
+    const g = groups[groups.length - 1];
+    if (g && g.day === d) g.items.push(o);
+    else groups.push({ day: d, items: [o] });
+  }
+  const dayTotals = (day: number) => {
+    const all = rows.filter((o) => startOfDay(new Date(o.createdAt)) === day);
+    return { n: all.length, paid: all.filter((o) => o.status === "paid").reduce((s, o) => s + amountOf(o), 0) };
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_180px_180px]">
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setLimit(80); }}
+          placeholder="Search order no., table, guest, phone, dish…"
+          aria-label="Search orders"
+          className="col-span-2 h-11 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade sm:col-span-1"
+        />
+        <select
+          value={range}
+          onChange={(e) => { setRange(e.target.value as Range); setLimit(80); }}
+          aria-label="Time range"
+          className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-2 focus:ring-jade"
+        >
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="all">All time</option>
+        </select>
+        <select
+          value={status}
+          onChange={(e) => { setStatus(e.target.value as StatusF); setLimit(80); }}
+          aria-label="Order status"
+          className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-2 focus:ring-jade"
+        >
+          <option value="any">Any status</option>
+          <option value="paid">Paid</option>
+          <option value="open">Not paid yet</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div className="-mt-1 px-1 text-[13.5px] text-muted">
+        <b className="text-ink tnum">{rows.length}</b> orders · <b className="text-ink tnum">{inr(total)}</b> paid
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-[22px] bg-surface px-5 py-14 text-center">
+          <p className="text-[16px] font-semibold">No orders found</p>
+          <p className="mt-1 text-[14px] text-muted">Try a longer time range, another status, or a different search.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groups.map((g) => {
+            const dt = dayTotals(g.day);
+            return (
+              <section key={g.day} className="overflow-hidden rounded-group bg-surface">
+                <div className="flex items-baseline justify-between gap-3 border-b border-line/70 bg-sunken/40 px-4 py-2.5">
+                  <span className="text-[14px] font-semibold">{g.day === t0 ? "Today" : g.day === t0 - DAY ? "Yesterday" : dayName(g.day)}</span>
+                  <span className="text-[12.5px] text-muted tnum">{dt.n} orders · {inr(dt.paid)} paid</span>
+                </div>
+                {g.items.map((o) => (
+                  <button key={o.id} onClick={() => onOpen(o)} className="flex w-full items-center gap-3 border-b border-line/60 px-4 py-3 text-left last:border-0 hover:bg-sunken/40">
+                    <span className="w-14 shrink-0 text-[14px] font-semibold tnum">#{o.number || "—"}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14.5px] font-medium">{where(o)}{o.customer && !where(o).includes(o.customer) ? <span className="text-muted"> · {o.customer}</span> : null}</span>
+                      <span className="block truncate text-[12.5px] text-muted">
+                        {clock(o.createdAt)} · {o.lines.reduce((s, l) => s + l.qty, 0)} items · {o.status === "paid" && o.payments?.length ? paymentsText(o.payments) : channelLabel(o.channel)}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={clsx("text-[15px] font-semibold tnum", o.status === "cancelled" && "text-faint line-through")}>{inr(amountOf(o))}</span>
+                      <StatusPill status={o.status} />
+                    </span>
+                  </button>
+                ))}
+              </section>
+            );
+          })}
+          {rows.length > limit && (
+            <Button variant="plain" className="w-full" onClick={() => setLimit((n) => n + 80)}>Show more · {rows.length - limit} left</Button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

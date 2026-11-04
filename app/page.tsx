@@ -1,5 +1,5 @@
 import { PricingTable } from "@/components/pricing";
-import { MobileCta, SiteFooter, SiteNav, WhatsAppTab } from "@/components/site/chrome";
+import { MobileCta, SiteFooter, SiteNav } from "@/components/site/chrome";
 import { Hero, MadeFor } from "@/components/site/hero";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
@@ -33,7 +33,6 @@ export default function Landing() {
         <SiteFooter />
         <MobileCta />
         <HelpChat />
-        <WhatsAppTab />
       </div>
     </SiteMotion>
   );
