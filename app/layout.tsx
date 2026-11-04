@@ -6,7 +6,8 @@ import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
 
 // Analytics: set these in .env.local / your host's environment to switch them on.
-const GA_ID = process.env.NEXT_PUBLIC_GA_ID; // Google Analytics 4, e.g. G-XXXXXXX
+// Google Analytics 4 Measurement ID (public, it shows in every page). NEXT_PUBLIC_GA_ID on Vercel overrides it.
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-DCQPV9HT7T";
 const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID; // Google Tag Manager, e.g. GTM-XXXXXX
 const GSC = process.env.NEXT_PUBLIC_GSC_VERIFICATION; // Search Console "HTML tag" code
 
