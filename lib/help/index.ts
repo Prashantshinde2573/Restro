@@ -10,18 +10,6 @@ export { SUPPORT };
 export const MANUALS: Record<HelpLang, Manual> = { en, mr, hi };
 export const HELP_LANGS: HelpLang[] = ["en", "mr", "hi"];
 
-/** The downloadable, designed PDF of each manual (made by scripts/manuals). */
-export const MANUAL_PDF: Record<HelpLang, string> = {
-  en: "/manuals/restropi-manual-en.pdf",
-  mr: "/manuals/restropi-manual-mr.pdf",
-  hi: "/manuals/restropi-manual-hi.pdf",
-};
-export const MANUAL_FILE: Record<HelpLang, string> = {
-  en: "Restropi-User-Manual-English.pdf",
-  mr: "Restropi-User-Manual-Marathi.pdf",
-  hi: "Restropi-User-Manual-Hindi.pdf",
-};
-
 /** "**bold** text" → parts, for rendering without HTML. */
 export function boldParts(s: string): { text: string; bold: boolean }[] {
   return s.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((p) => (p.startsWith("**") && p.endsWith("**") ? { text: p.slice(2, -2), bold: true } : { text: p, bold: false }));

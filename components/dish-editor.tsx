@@ -3,7 +3,6 @@
 import clsx from "clsx";
 import { ImagePlus, Plus, Star, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { inputCls } from "./ui";
 import type { OptionGroup } from "@/lib/types";
 import { uploadMenuPhoto } from "@/lib/cloud";
 

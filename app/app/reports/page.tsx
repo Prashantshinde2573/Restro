@@ -6,8 +6,8 @@ import { useMemo, useState } from "react";
 import { Button, Group, Page, PageHeader, Segmented, inputCls } from "@/components/ui";
 import { Donut, TrendChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
-import { billOf, paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu, useOrders } from "@/lib/live";
-import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, paidAmount, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
+import { paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu, useOrders } from "@/lib/live";
+import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import type { Order } from "@/lib/types";
 
@@ -46,7 +46,6 @@ async function shareFile(name: string, blob: Blob, text: string): Promise<boolea
   }
   return true;
 }
-const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState<Period>("7d");

@@ -3,24 +3,7 @@
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
-import {
-  Banknote,
-  BellRing,
-  Check,
-  ClipboardCheck,
-  Copy,
-  CreditCard,
-  MessageCircle,
-  Minus,
-  Plus,
-  QrCode,
-  ReceiptText,
-  Search,
-  ShoppingBag,
-  Users,
-  UtensilsCrossed,
-  X,
-} from "lucide-react";
+import { Banknote, BellRing, Check, CreditCard, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DietMark, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -43,6 +26,7 @@ import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
 import { cloudConfigured, feedbackActions, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { useReady } from "@/lib/store";
 import { ensureGuest, useCloud } from "@/lib/cloud";
 import type { MenuItem, Order, Payment } from "@/lib/types";
 
@@ -83,7 +67,7 @@ type Lang = "en" | "mr";
 const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
-type Waiting = { ids: string[]; kind: "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean };
+type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean };
 type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
 
 export default function GuestOrder() {
@@ -158,7 +142,6 @@ export default function GuestOrder() {
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [thanks, setThanks] = useState<Thanks | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [, tick] = useState(0);
 
   // ---- who is this phone? (its group for this visit to the table, guest profile) ----
   const storeKey = t ? `restropi.party.${t.name}.${t.visitId}` : "";
@@ -166,6 +149,7 @@ export default function GuestOrder() {
   const [mine, setMine] = useState<string[]>([]); // counter orders placed from this phone
   const [guestCount, setGuestCount] = useState<number | null>(null); // asked right after the scan (tables only)
   const [countOpen, setCountOpen] = useState(false); // "change" from the header
+  const [skipAsk, setSkipAsk] = useState(false); // just paid and tapped Done: show the menu, ask guests only if they order again
   const [guest, setGuest] = useState<GuestProfile | null>(null);
   useEffect(() => {
     try {
@@ -205,9 +189,10 @@ export default function GuestOrder() {
     });
 
   const party = t?.parties.find((p) => p.id === myParty);
+  // a new group at this table: ask how many guests before the menu
+  const needCount = !!t && !counter && !party && (t.parties.length === 0 || ownBill) && !guestCount;
   const shared = t ? isShared(t) : false;
   const groupName = party ? (shared ? `Group ${party.id}` : tx(lang, "Your group", "तुमचा गट")) : "";
-  const unclaimed = !party ? t?.parties.find((p) => p.source === "captain" && !p.phoneClaimed) : undefined;
 
   const myOrders = useMemo(() => {
     // cancelled orders stay visible for an hour, so the guest knows what happened
@@ -226,26 +211,63 @@ export default function GuestOrder() {
   const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
   const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
 
-  // ---- settling: show the thank-you once staff have the money ----
+  // ---- settling: show the thank-you once the money is confirmed ----
+  // Remember a payment we are waiting on, so a reload keeps the "being confirmed" screen.
+  const waitKey = `restropi.waiting.${table}`;
+  const ordersReady = useReady("orders");
+  useEffect(() => {
+    try {
+      const w = localStorage.getItem(waitKey);
+      const saved = w ? (JSON.parse(w) as Waiting & { at?: number }) : null;
+      // only a recent one (a few hours): old leftovers are dropped
+      if (saved && saved.at && Date.now() - saved.at < 6 * 3600_000) setWaiting(saved);
+      else if (w) localStorage.removeItem(waitKey);
+    } catch {}
+  }, [waitKey]);
+  useEffect(() => {
+    try {
+      if (waiting && !waiting.payFirst) localStorage.setItem(waitKey, JSON.stringify({ ...waiting, at: Date.now() }));
+      else localStorage.removeItem(waitKey);
+    } catch {}
+  }, [waiting, waitKey]);
   useEffect(() => {
     if (!waiting) return;
     const os = allOrders.filter((o) => waiting.ids.includes(o.id));
-    if (!os.length) return;
+    if (!os.length) {
+      if (ordersReady) setWaiting(null); // a saved wait for orders this phone can't see any more
+      return;
+    }
     const payments: Payment[] =
       waiting.kind === "mixed"
         ? [{ method: "upi", amount: waiting.upiPart ?? 0 }, { method: "cash", amount: waiting.amount - (waiting.upiPart ?? 0) }]
         : [{ method: waiting.kind, amount: waiting.amount }];
-    // Pay-first: staff accept the order once they have the cash/card payment at the counter.
-    // staff took the money (paid, or marked paid and waiting for the owner's OK)
-    const settled = waiting.payFirst ? os.every((o) => o.status !== "new") : os.every((o) => o.status === "paid" || !!o.payClaim);
-    if (settled) {
-      setThanks({ payments: waiting.payFirst ? payments : os[0].payments ?? os[0].payClaim?.payments ?? payments, orderNo: os[0].number, orderId: os[0].id, token: waiting.payFirst });
+    if (waiting.payFirst) {
+      // Pay-first: staff accept the order once they have the cash/card payment at the counter.
+      if (os.every((o) => o.status !== "new")) {
+        setThanks({ payments, orderNo: os[0].number, orderId: os[0].id, token: true });
+        setWaiting(null);
+        setConfirmed(null);
+      }
+      return;
+    }
+    // Pay at the end: say thank you only once the owner has confirmed the money (the bill is paid).
+    if (os.every((o) => o.status === "paid" || o.status === "cancelled") && os.some((o) => o.status === "paid")) {
+      const paid = os.find((o) => o.status === "paid")!;
+      setThanks({ payments: paid.payments ?? payments, orderNo: paid.number, orderId: paid.id });
       setWaiting(null);
       setConfirmed(null);
       setBillOpen(false);
       return;
     }
-  }, [waiting, allOrders]);
+    const claimed = os.some((o) => !!o.payClaim);
+    if (claimed && !waiting.claimSeen) setWaiting({ ...waiting, claimSeen: true });
+    else if (!claimed && waiting.claimSeen) {
+      // the owner tapped "Not received": the bill is open again
+      setWaiting(null);
+      setBillOpen(true);
+      toast(tx(lang, "The restaurant hasn't received this payment yet. Please check and pay again, or ask our staff.", "रेस्टॉरंटला अजून हे पैसे मिळालेले नाहीत. तपासून पुन्हा भरा, किंवा स्टाफला विचारा."));
+    }
+  }, [waiting, allOrders, ordersReady]);
 
 
 
@@ -307,7 +329,11 @@ export default function GuestOrder() {
       return i >= 0 ? c.map((x, j) => (j === i ? { ...x, qty: x.qty + line.qty } : x)) : [...c, line];
     });
   const changeLine = (key: string, d: number) => setCart((c) => c.flatMap((x) => (x.key !== key ? [x] : x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }])));
-  const tapAdd = (m: MenuItem) => (m.options?.length ? setDetail(m) : addLine(makeLine(m, 1)));
+  const tapAdd = (m: MenuItem) => {
+    // after paying and leaving, a new order at this table asks for the number of guests again
+    if (needCount && skipAsk) return setSkipAsk(false);
+    return m.options?.length ? setDetail(m) : addLine(makeLine(m, 1));
+  };
   const tapLess = (m: MenuItem) => {
     const last = [...cart].reverse().find((l) => l.item.id === m.id);
     if (last) changeLine(last.key, -1);
@@ -371,13 +397,14 @@ export default function GuestOrder() {
     return order;
   };
 
-  // QR ordering only in the hours the owner set (Settings → Ordering), and not while paused.
+  // Table QR ordering only in the opening hours (Settings → Details on bills), and not while paused.
   const [, tickHours] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => tickHours((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
   }, []);
-  const hours = orderingOpen(settings);
+  // opening hours apply to table QR only; the counter QR takes orders any time (pause still stops both)
+  const hours = orderingOpen(counter ? { ordersPaused: settings.ordersPaused } : settings);
   const isOpen = hours.open;
   const closedText = hours.open
     ? ""
@@ -433,8 +460,8 @@ export default function GuestOrder() {
     // The restaurant checks the money came in and confirms; the table closes then.
     orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, { source: "guest" });
     if (t && party) tableActions.update(t.id, party.id, { status: "billing", paymentPending: true });
-    setBillOpen(false);
-    setThanks({ payments: [{ method: "upi", amount: billTotal }], orderNo: unbilled[0]?.number, orderId: unbilled[0]?.id });
+    // stay on the bill: it says "being confirmed" until the owner confirms, then thank you
+    setWaiting({ ids: billIds, kind: "upi", amount: billTotal, payFirst: false, claimSeen: true });
   };
   const billLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
     if (kind === "mixed" && upiPart) orderActions.prepay(billIds, { method: "upi", amount: upiPart }, who);
@@ -480,7 +507,7 @@ export default function GuestOrder() {
   return (
     <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-36 sm:max-w-2xl">
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
-      {t && !counter && qrOn && isOpen && ((!party && (t.parties.length === 0 || ownBill) && !guestCount) || countOpen) && (
+      {t && !counter && qrOn && isOpen && !thanks && !waiting && ((needCount && !skipAsk) || countOpen) && (
         <GuestCountScreen
           place={placeLabel}
           restaurant={settings.name}
@@ -563,12 +590,12 @@ export default function GuestOrder() {
       )}
 
       {/* ---------- menu / my orders switch ---------- */}
-      {myOrders.length > 0 && (
+      {(qrOn || myOrders.length > 0) && (
         <div className="px-4 pb-1">
           <div className="flex rounded-ctl bg-sunken p-[3px]" role="tablist">
             {(["menu", "orders"] as const).map((v) => (
               <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", view === v ? "bg-surface shadow-float" : "text-muted")}>
-                {v === "menu" ? tx(lang, "Menu", "मेनू") : `${tx(lang, "My orders", "माझ्या ऑर्डर्स")} · ${myOrders.length}`}
+                {v === "menu" ? tx(lang, "Menu", "मेनू") : `${tx(lang, "My orders", "माझ्या ऑर्डर्स")}${myOrders.length ? ` · ${myOrders.length}` : ""}`}
               </button>
             ))}
           </div>
@@ -635,6 +662,14 @@ export default function GuestOrder() {
         <main className="space-y-3 px-4 pt-3">
           {(billState === "sent" || billState === "paid") && (
             <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} compact />
+          )}
+          {myOrders.length === 0 && (
+            <div className="flex flex-col items-center rounded-[22px] bg-surface px-6 py-10 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-sunken text-muted"><ReceiptText size={24} /></span>
+              <div className="mt-3 text-[17px] font-semibold">{tx(lang, "No orders yet", "अजून ऑर्डर नाही")}</div>
+              <p className="mt-1 max-w-xs text-[14px] text-muted">{tx(lang, "Add dishes from the menu and place your order. You can follow it here, and pay the bill from here too.", "मेनूमधून डिश जोडा आणि ऑर्डर द्या. ऑर्डरची स्थिती आणि बिल इथेच दिसेल.")}</p>
+              <Button size="lg" className="mt-5" onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}><UtensilsCrossed size={17} /> {tx(lang, "See the menu", "मेनू पहा")}</Button>
+            </div>
           )}
           {myOrders.map((o) => (
             <section key={o.id} className="rounded-[22px] bg-surface p-4">
@@ -886,11 +921,10 @@ export default function GuestOrder() {
           orderNo={thanksOrder?.number || thanks.orderNo || undefined}
           token={thanks.token ? thanksOrder?.number || thanks.orderNo || undefined : undefined}
           lang={lang}
-          pending={!thanks.token && !!thanksOrder && thanksOrder.status !== "paid"}
           onRate={(stars, text) =>
             feedbackActions.add({ customer: guest?.name ?? "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: stars >= 4 ? "google" : "private" })
           }
-          onClose={() => { setThanks(null); setView(thanks.token ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}
+          onClose={() => { setThanks(null); setSkipAsk(true); setView(thanks.token ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}
         >
           {thanks.token && thanksOrder && thanksOrder.status !== "paid" && (
             <div className="mt-3 border-t border-line pt-3">
@@ -907,7 +941,9 @@ export default function GuestOrder() {
         onClose={() => setBillOpen(false)}
         title={waiting && !waiting.payFirst ? tx(lang, "Almost done", "जवळजवळ झालं") : tx(lang, "Your bill", "तुमचं बिल")}
       >
-        {waiting && !waiting.payFirst ? (
+        {waiting && !waiting.payFirst && (waiting.kind === "upi" || waiting.claimSeen) ? (
+          <BillDone state="sent" claimTotal={waiting.amount} paidTotal={0} lang={lang} />
+        ) : waiting && !waiting.payFirst ? (
           <div className="flex flex-col items-center pt-4 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-saffron-soft text-saffron">{waiting.kind === "card" ? <CreditCard size={30} /> : <Banknote size={30} />}</div>
             <p className="mt-4 max-w-xs text-[15px] text-muted">
@@ -917,7 +953,7 @@ export default function GuestOrder() {
                   ? tx(lang, `Your captain is bringing the bill. Please keep ${inr(waiting.amount)} ready in cash.`, `कॅप्टन बिल घेऊन येत आहे. ${inr(waiting.amount)} रोख तयार ठेवा.`)
                   : tx(lang, "Your captain is bringing the card machine.", "कॅप्टन कार्ड मशीन घेऊन येत आहे.")}
             </p>
-            <p className="mt-3 text-[13px] text-faint">{tx(lang, "This screen says thank you once it's done.", "झालं की इथे धन्यवाद दिसेल.")}</p>
+            <p className="mt-3 text-[13px] text-faint">{tx(lang, "Once the restaurant confirms the payment, this screen says thank you.", "रेस्टॉरंटने पैसे मिळाल्याची खात्री केली की इथे धन्यवाद दिसेल.")}</p>
           </div>
         ) : unbilled.length === 0 ? (
           <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} />

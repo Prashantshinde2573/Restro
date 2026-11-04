@@ -62,11 +62,13 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
 };
 
 /** The ways an outlet serves guests. `mixed` outlets run both. */
-export const outletKinds = (o: { businessType: BusinessType; mixed?: boolean }): BusinessType[] => (o.mixed ? ["restaurant", "cafe"] : [o.businessType]);
+/** Restaurants also take counter orders unless the owner turned it off; cafés serve at tables only when turned on. */
+export const isMixed = (o: { businessType: BusinessType; mixed?: boolean }) => o.mixed ?? o.businessType === "restaurant";
+export const outletKinds = (o: { businessType: BusinessType; mixed?: boolean }): BusinessType[] => (isMixed(o) ? ["restaurant", "cafe"] : [o.businessType]);
 /** Has tables (dine-in at a table, table QR, captains). */
-export const hasTables = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "restaurant" || !!o.mixed;
+export const hasTables = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "restaurant" || isMixed(o);
 /** Takes counter orders with a token (counter QR, pay first). */
-export const hasCounter = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "cafe" || !!o.mixed;
+export const hasCounter = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "cafe" || isMixed(o);
 
 export type FeatureState = "ok" | "plan" | "type";
 export function featureState(f: Feature, plan: PlanId, type: BusinessType | BusinessType[]): FeatureState {
@@ -140,7 +142,6 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
   },
 ];
 export const ALL_PERMS: Perm[] = PERM_GROUPS.flatMap((g) => g.perms.map((p) => p.key));
-export const permMeta = (p: Perm) => PERM_GROUPS.flatMap((g) => g.perms).find((x) => x.key === p)!;
 
 /** Starting ticks for common jobs — the admin can change any box after. */
 export const PRESETS: { name: string; types: BusinessType[]; perms: Perm[] }[] = [

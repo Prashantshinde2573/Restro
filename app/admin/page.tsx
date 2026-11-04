@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
-import { Button, Chips, Field, Group, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import { ChangePassword, PasswordInput } from "@/components/owner-auth";

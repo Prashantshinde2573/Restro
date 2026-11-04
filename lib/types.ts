@@ -216,18 +216,6 @@ export interface Order {
   outletId?: string; // which outlet took the order
 }
 
-export interface Ingredient {
-  id: string;
-  name: string;
-  unit: string;
-  stock: number;
-  par: number;
-  costPerUnit: number;
-  supplier: string;
-  forecastTomorrow: number;
-  expiresInDays?: number;
-}
-
 /** A raw material the kitchen keeps (paneer, oil, milk…). */
 /** A discount code the restaurant gives its guests (Growth plan and up). */
 export interface Coupon {
@@ -282,18 +270,6 @@ export interface Customer {
   bills?: { orderNo: number; at: string; amount: number; method: string }[];
 }
 
-export interface StaffMember {
-  id: string;
-  name: string;
-  role: "Owner" | "Manager" | "Captain" | "Cashier" | "Chef" | "Helper";
-  onShift: boolean;
-  clockedIn?: string;
-  hoursThisWeek: number;
-  salesToday: number;
-  rating: number;
-  hue: number;
-}
-
 export interface Feedback {
   id: string;
   customer: string;
@@ -302,43 +278,6 @@ export interface Feedback {
   at: string;
   routed: "google" | "private";
   replied?: boolean;
-}
-
-export type AlertSeverity = "high" | "medium" | "low";
-
-export interface LeakAlert {
-  id: string;
-  title: string;
-  detail: string;
-  severity: AlertSeverity;
-  at: string;
-  who?: string;
-  amount?: number;
-  kind: "void" | "discount" | "cash" | "stock" | "refund";
-}
-
-export interface Campaign {
-  id: string;
-  name: string;
-  channel: "WhatsApp" | "SMS" | "Email";
-  audience: string;
-  status: "draft" | "scheduled" | "sent";
-  sent?: number;
-  visits?: number;
-  revenue?: number;
-  when: string;
-}
-
-export interface Tenant {
-  id: string;
-  name: string;
-  city: string;
-  plan: "Starter" | "Growth" | "Pro" | "Chain";
-  outlets: number;
-  status: "active" | "trial" | "past-due" | "cancelled";
-  mrr: number;
-  since: string;
-  ordersToday: number;
 }
 
 export interface Plan {

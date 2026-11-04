@@ -8,7 +8,7 @@ import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
-import { canConfirmPay, featureState, hasPerm, inOutlet, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
+import { canConfirmPay, featureState, hasPerm, inOutlet, isMixed, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
 import type { Account, ActivityEntry, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
 export { hydrateStores };
@@ -44,7 +44,6 @@ export const outletActions = {
 
 const memberStore = createStore<Member[]>([], "members", { kind: "collection", coll: "members" });
 export const useMembers = () => memberStore.use();
-export const getMembers = () => memberStore.get();
 export const memberActions = {
   save(m: Member) {
     const list = memberStore.get();
@@ -140,7 +139,7 @@ export function useSettings(): OutletSettings {
   const a = useAccount();
   const o = useCurrentOutlet();
   return {
-    name: a.name, businessType: o.businessType, mixed: !!o.mixed, upi: o.upi, payFirst: o.payFirst,
+    name: a.name, businessType: o.businessType, mixed: isMixed(o), upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
     orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, gstRate: o.gstRate ?? 0.05,
   };

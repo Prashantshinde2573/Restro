@@ -172,7 +172,6 @@ body {
    (see the inline script in app/layout.tsx); GSAP then reveals them. */
 .motion-ok [data-reveal],
 .motion-ok [data-reveal-group] > *,
-.motion-ok [data-piece],
 .motion-ok [data-hero-fade] {
   opacity: 0;
 }
@@ -180,16 +179,12 @@ body {
   transform: translateY(110%);
 }
 @media (prefers-reduced-motion: reduce) {
-  .animate-marquee,
   .animate-float {
     animation: none !important;
   }
 }
 .text-balance {
   text-wrap: balance;
-}
-.grain {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
 }
 /* custom icons redraw on hover */
 .site-icon * {
@@ -208,10 +203,6 @@ body {
   to {
     stroke-dashoffset: 0;
   }
-}
-@keyframes scrollcue {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(200%); }
 }
 @keyframes wave {
   0%, 100% { transform: scaleY(0.45); }

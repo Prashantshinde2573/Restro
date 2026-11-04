@@ -533,11 +533,6 @@ const check = ({ error }: { error: unknown }) => {
 };
 const report = (e: unknown) => console.error("[restropi] cloud write failed", e);
 
-/** New order: the server trigger gives it the next order number (0 until it arrives). */
-export function createOrderInCloud(order: { id: string } & Record<string, unknown>) {
-  // The normal store writer inserts it (guests: with their uid); nothing extra needed.
-  void order;
-}
 export const isConnected = () => !!connected;
 
 /** Guests add/update only their own customer record (name, phone), or leave feedback. */

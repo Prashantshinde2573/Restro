@@ -1,8 +1,8 @@
 "use client";
 
-import { Banknote, Check, Clock3, CreditCard, History, PenLine, Phone, Printer, QrCode, RotateCcw, XCircle } from "lucide-react";
+import { Check, History, PenLine, Phone, Printer, RotateCcw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Button, Chips, Group, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
+import { Button, Chips, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
 import { StatusPill, channelLabel } from "@/components/channel";
 import { OrderCard } from "@/components/order-card";
 import { startOfDay } from "@/lib/stats";
@@ -15,11 +15,10 @@ import { billOf, methodLabel, orderActions, paymentsText, pendingClaims, useCan,
 import { closeBill, confirmPayment, markUnpaid, partyOpenOrders, rejectPayment } from "@/lib/billing";
 import { PasswordCheck } from "@/components/password-check";
 import { isOwner } from "@/lib/access";
-import { clock, inr, minutesSince, orderTotal, timeAgo } from "@/lib/format";
+import { clock, inr, orderTotal, timeAgo } from "@/lib/format";
 import type { Order, OrderStatus, Payment } from "@/lib/types";
 
 type Filter = "open" | "confirm" | "online" | "ready" | "paid";
-const prefIcon = { upi: QrCode, cash: Banknote, card: CreditCard };
 
 export default function OrdersPage() {
   const toast = useToast();

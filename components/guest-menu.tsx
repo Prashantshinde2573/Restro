@@ -310,55 +310,6 @@ export function CategoryRail({ groups, active, onPick, lang }: { groups: { c: Ca
 }
 
 /* ---------------- one dish (grid card) ---------------- */
-// First look stays simple: photo, veg/non-veg mark, name, price. Description,
-// spice, labels and choices open when the guest taps the dish.
-export function DishCard({
-  m,
-  qty,
-  onOpen,
-  onAdd,
-  onLess,
-  lang,
-  readOnly,
-}: {
-  m: MenuItem;
-  qty: number;
-  onOpen: () => void;
-  onAdd: () => void;
-  onLess: () => void;
-  lang: Lang;
-  readOnly?: boolean;
-}) {
-  return (
-    <div className="flex flex-col overflow-hidden rounded-[16px] bg-surface">
-      <button onClick={onOpen} aria-label={`Open ${m.name}`} className="block">
-        <PhotoSlide item={m} className="aspect-square w-full" />
-      </button>
-      <div className="flex flex-1 flex-col p-2.5">
-        <button onClick={onOpen} className="flex items-start gap-1.5 text-left">
-          <span className="mt-[3px] shrink-0"><DietMark diet={m.diet} /></span>
-          <span className="line-clamp-2 min-h-[2.5em] text-[14px] font-semibold leading-[1.25]">{m.name}</span>
-        </button>
-        <div className="mt-1.5 text-[14px] font-semibold tnum">{inr(m.price)}</div>
-        {!readOnly && (
-          <div className="mt-2">
-            {qty === 0 ? (
-              <button onClick={onAdd} className="h-9 w-full rounded-[10px] border border-jade/30 bg-jade-soft text-[13.5px] font-bold text-jade">
-                {tx(lang, "ADD", "जोडा")}
-              </button>
-            ) : (
-              <div className="flex h-9 w-full items-center justify-between rounded-[10px] bg-jade px-1 text-white">
-                <button aria-label="Less" onClick={onLess} className="flex h-8 w-8 items-center justify-center"><Minus size={15} /></button>
-                <span className="text-[14px] font-bold tnum">{qty}</span>
-                <button aria-label="More" onClick={onAdd} className="flex h-8 w-8 items-center justify-center"><Plus size={15} /></button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ---------------- one dish (list row) ---------------- */
 // One dish per row: veg/non-veg mark, name and price on the left; photo with

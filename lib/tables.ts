@@ -20,11 +20,6 @@ export const isShared = (t: Table) => t.parties.length > 1;
 export const tableTotal = (t: Table) => t.parties.reduce((s, p) => s + (p.total ?? 0), 0);
 export const oldestSince = (t: Table) => t.parties.map((p) => p.since).sort()[0];
 
-/** "T6" for a single party, "T6 · B" when the table is shared. */
-export function partyLabel(tableName: string, partyId?: string, shared = true) {
-  return partyId && shared ? `${tableName} · ${partyId}` : tableName;
-}
-
 export const nextPartyId = (t: Table) => {
   const used = new Set(t.parties.map((p) => p.id));
   return "ABCDEFGHIJ".split("").find((l) => !used.has(l)) ?? `P${t.parties.length + 1}`;

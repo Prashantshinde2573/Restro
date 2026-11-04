@@ -1,33 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import Link from "next/link";
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { CONTACT_EMAIL, CONTACT_WA, Magnetic } from "./chrome";
-import { Mesh } from "./hero";
-import {
-  IconArrow,
-  IconBill,
-  IconChat,
-  IconForecast,
-  IconGuests,
-  IconKitchen,
-  IconOffline,
-  IconPulse,
-  IconReports,
-  IconShield,
-  IconSplit,
-  IconStar,
-  IconStock,
-  IconTable,
-  IconTeam,
-  IconVoice,
-} from "./icons";
-import { KotTicket, PhoneMenu, PhoneOwner, PulseNote, Receipt, TabletPOS, UpiCard } from "./mockups";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { IconArrow, IconBill, IconForecast, IconGuests, IconKitchen, IconPulse, IconShield, IconSplit, IconStock, IconTable, IconVoice } from "./icons";
+import { PulseNote } from "./mockups";
 import { Eyebrow, SectionHead } from "./head";
 import { Swipe } from "./swipe";
-import { sb } from "@/lib/cloud";
-import { RiseText, ScrollTrigger, gsap, reducedMotion, useIsoLayoutEffect, useTilt } from "./motion";
+import { ScrollTrigger, reducedMotion, useIsoLayoutEffect, useTilt } from "./motion";
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 

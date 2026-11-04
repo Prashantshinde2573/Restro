@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Plus, Store, UserPlus } from "lucide-react";
+import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Store, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -23,6 +23,7 @@ import {
   isOwner,
   type Member,
   type Perm,
+  isMixed,
 } from "@/lib/access";
 import { memberActions, outletActions, useAccount, useMe, useMembers, useOutlets } from "@/lib/live";
 import { setStaffPin, useCloud } from "@/lib/cloud";
@@ -194,7 +195,7 @@ export default function AccessPage() {
                       <span className={clsx("flex h-9 w-9 items-center justify-center rounded-[10px] text-white", o.businessType === "cafe" ? "bg-saffron" : "bg-jade")}>
                         {o.businessType === "cafe" ? <Coffee size={17} /> : <Store size={17} />}
                       </span>
-                      <Pill tone={o.businessType === "cafe" ? "saffron" : "jade"}>{typeLabel(o.businessType)}{o.mixed ? " + " + (o.businessType === "cafe" ? "tables" : "counter") : ""}</Pill>
+                      <Pill tone={o.businessType === "cafe" ? "saffron" : "jade"}>{typeLabel(o.businessType)}{isMixed(o) ? " + " + (o.businessType === "cafe" ? "tables" : "counter") : ""}</Pill>
                     </div>
                     <div className="mt-3 text-[15.5px] font-semibold">{o.name}</div>
                     <div className="text-[13px] text-muted">{n} {n === 1 ? "person" : "people"} · {subs.length ? `Sub admin: ${subs.map((s) => s.name.split(" ")[0]).join(", ")}` : "No sub admin yet"}</div>
@@ -411,7 +412,7 @@ export default function AccessPage() {
               />
             </Field>
             <p className="-mt-2 text-[13px] text-muted">
-              {outletDraft.mixed
+              {isMixed(outletDraft)
                 ? "Tables and counter both: table QR, dine-in and split bills, plus counter orders with tokens."
                 : outletDraft.businessType === "cafe"
                   ? "Counter orders with tokens. Turn on tables below if some guests sit and order."
@@ -419,7 +420,7 @@ export default function AccessPage() {
             </p>
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
               <span className="text-[15px]">{outletDraft.businessType === "cafe" ? "Also serve at tables" : "Also take counter orders"}</span>
-              <Toggle checked={!!outletDraft.mixed} onChange={(v) => setOutletDraft({ ...outletDraft, mixed: v })} label="Tables and counter both" />
+              <Toggle checked={isMixed(outletDraft)} onChange={(v) => setOutletDraft({ ...outletDraft, mixed: v })} label="Tables and counter both" />
             </div>
             <Field label="UPI ID for this outlet's bills">
               <input className={clsx(inputCls, outletDraft.upi && !isValidUpi(outletDraft.upi) && "ring-2 ring-rose")} autoCapitalize="none" value={outletDraft.upi} onChange={(e) => setOutletDraft({ ...outletDraft, upi: e.target.value.replace(/\s/g, "") })} placeholder="name@bank" />

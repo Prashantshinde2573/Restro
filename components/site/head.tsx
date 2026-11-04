@@ -5,8 +5,6 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import { RiseText } from "./motion";
 
-export const SECTION_PY = "py-14 lg:py-28"; // 56px on phones
-
 export function Eyebrow({ children, dark = false, className }: { children: ReactNode; dark?: boolean; className?: string }) {
   return (
     <div

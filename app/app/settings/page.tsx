@@ -28,7 +28,7 @@ import {
 } from "@/lib/live";
 import { useAllTables } from "@/lib/tables";
 import { cloudSignOut, signOutEverywhere, useCloud } from "@/lib/cloud";
-import { RENEW_WARN_DAYS, daysLeft, isOwner } from "@/lib/access";
+import { RENEW_WARN_DAYS, daysLeft, isMixed, isOwner } from "@/lib/access";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
 import type { OutletSettings } from "@/lib/types";
@@ -70,6 +70,9 @@ export default function SettingsPage() {
   const [panel, setPanelRaw] = useState<Panel>(null);
   const settings = useSettings();
   const [draft, setDraft] = useState<OutletSettings>(settings);
+  // opening hours: the times decide table QR ordering, and the bill prints them
+  const setHours = (from: string, to: string) =>
+    setDraft((d) => ({ ...d, orderFrom: from, orderTo: to, hours: from && to ? `${niceTime(from)} – ${niceTime(to)}` : from || to ? d.hours : "" }));
   const setPanel = (p: Panel) => {
     setDraft(settings);
     setPanelRaw(p);
@@ -131,10 +134,10 @@ export default function SettingsPage() {
 
         {(owner || canOutlet) && (
           <div>
-            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}{outlet.mixed ? " · tables + counter" : ""}</div>
+            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}{isMixed(outlet) ? " · tables + counter" : ""}</div>
             <div className="overflow-hidden rounded-group bg-surface">
               <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi || "Add UPI ID"} onClick={() => setPanel("payments")} />
-              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo ? `QR orders ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
+              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo && settings.orderFrom !== settings.orderTo ? `Table QR ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
               <Item icon={<Receipt size={16} />} tint="#DE9122" title="Details on bills" value={settings.gstin || "GSTIN, FSSAI, address"} onClick={() => setPanel("restaurant")} />
             </div>
           </div>
@@ -200,9 +203,22 @@ export default function SettingsPage() {
             <Field label="Outlet address"><input className={inputCls} value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Phone"><input className={inputCls} inputMode="tel" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} /></Field>
-              <Field label="Opening hours"><input className={inputCls} placeholder="11:00 am – 11:00 pm" value={draft.hours ?? ""} onChange={(e) => setDraft({ ...draft, hours: e.target.value })} /></Field>
               <Field label="GSTIN" hint="Leave empty if not GST-registered."><input className={inputCls} autoCapitalize="characters" value={draft.gstin ?? ""} onChange={(e) => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })} /></Field>
               <Field label="FSSAI licence"><input className={inputCls} inputMode="numeric" value={draft.fssai ?? ""} onChange={(e) => setDraft({ ...draft, fssai: e.target.value })} /></Field>
+            </div>
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Opens at"><input type="time" className={inputCls} value={draft.orderFrom ?? ""} onChange={(e) => setHours(e.target.value, draft.orderTo ?? "")} /></Field>
+                <Field label="Closes at"><input type="time" className={inputCls} value={draft.orderTo ?? ""} onChange={(e) => setHours(draft.orderFrom ?? "", e.target.value)} /></Field>
+              </div>
+              <p className="mt-1.5 text-[12.5px] text-muted">
+                {draft.orderFrom && draft.orderTo && draft.orderFrom !== draft.orderTo
+                  ? `Table QR orders work only from ${niceTime(draft.orderFrom)} to ${niceTime(draft.orderTo)}${draft.orderTo < draft.orderFrom ? " (closes after midnight)" : ""}. The counter QR works any time. Staff can always take orders.`
+                  : "Set both times to take table QR orders only while you're open. The counter QR works any time."}
+              </p>
+              {(draft.orderFrom || draft.orderTo) && (
+                <button type="button" onClick={() => setHours("", "")} className="mt-1 text-[13px] font-semibold text-muted underline underline-offset-4">Clear opening hours</button>
+              )}
             </div>
             <Field label="Message at the bottom of the bill"><input className={inputCls} placeholder="Thank you! Visit again" value={draft.billFooter ?? ""} onChange={(e) => setDraft({ ...draft, billFooter: e.target.value })} /></Field>
             <Field label="GST on bills" hint="Most restaurants and cafés charge 5%. Choose 0% if this outlet isn't GST-registered.">
@@ -272,25 +288,15 @@ export default function SettingsPage() {
                 </div>
                 <Toggle checked={!!draft.ordersPaused} onChange={(v) => setDraft({ ...draft, ordersPaused: v })} label="Pause QR orders" />
               </div>
-              <div className="flex items-center justify-between gap-4 border-t border-line/80 px-4 py-3">
+              <button type="button" onClick={() => setPanel("restaurant")} className="flex w-full items-center justify-between gap-4 border-t border-line/80 px-4 py-3 text-left">
                 <div>
-                  <div className="text-[15px]">Take QR orders only in these hours</div>
-                  <div className="text-[12.5px] text-muted">Outside these times guests see &ldquo;closed&rdquo; and when ordering opens.</div>
+                  <div className="text-[15px]">Table QR ordering hours</div>
+                  <div className="text-[12.5px] text-muted">
+                    {draft.orderFrom && draft.orderTo && draft.orderFrom !== draft.orderTo ? `${niceTime(draft.orderFrom)} – ${niceTime(draft.orderTo)}, your opening hours. Counter QR works any time.` : "Any time. Set your opening hours in Details on bills."}
+                  </div>
                 </div>
-                <Toggle
-                  checked={!!(draft.orderFrom && draft.orderTo)}
-                  onChange={(v) => setDraft({ ...draft, orderFrom: v ? draft.orderFrom || "09:00" : "", orderTo: v ? draft.orderTo || "22:00" : "" })}
-                  label="Ordering hours"
-                />
-              </div>
-              {!!(draft.orderFrom && draft.orderTo) && (
-                <div className="grid grid-cols-2 gap-3 border-t border-line/80 px-4 py-3">
-                  <Field label="Opens at"><input type="time" className={inputCls} value={draft.orderFrom ?? ""} onChange={(e) => setDraft({ ...draft, orderFrom: e.target.value })} /></Field>
-                  <Field label="Closes at"><input type="time" className={inputCls} value={draft.orderTo ?? ""} onChange={(e) => setDraft({ ...draft, orderTo: e.target.value })} /></Field>
-                  {draft.orderFrom === draft.orderTo && <p className="col-span-2 text-[12.5px] text-saffron">Opening and closing are the same, so guests can order any time.</p>}
-                  {!!draft.orderFrom && !!draft.orderTo && draft.orderTo < draft.orderFrom && <p className="col-span-2 text-[12.5px] text-muted">Closes after midnight, the next day.</p>}
-                </div>
-              )}
+                <span className="shrink-0 text-[14px] font-semibold text-jade">Change</span>
+              </button>
             </div>
             <Link href="/app/tables" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Tables and their QR codes →</Link>
             {(draft.businessType === "cafe" || draft.mixed) && cloud.rid && (

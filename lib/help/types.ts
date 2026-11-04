@@ -1,5 +1,5 @@
 // Help center content: the user manual and common problems, in English, Marathi and Hindi.
-// The in-app Help center, the help button and the downloadable PDF manuals all read this.
+// The in-app help chat (the "?" button and the Help center) reads this.
 export type HelpLang = "en" | "mr" | "hi";
 
 export type Block =
@@ -29,14 +29,10 @@ export interface Faq {
 
 export interface Manual {
   lang: HelpLang;
-  langName: string;
-  title: string;
   subtitle: string;
-  updated: string;
   ui: Record<
-    | "help" | "helpCenter" | "searchPlaceholder" | "commonProblems" | "manual" | "readManual" | "download" | "downloadPdf" | "print"
-    | "contents" | "contact" | "contactBody" | "email" | "whatsapp" | "noResults" | "allTopics" | "back" | "goodToKnow" | "careful" | "step"
-    | "openHelpCenter" | "forThisScreen" | "manuals" | "page",
+    | "help" | "helpCenter" | "contact" | "contactBody" | "whatsapp" | "noResults" | "goodToKnow" | "careful" | "forThisScreen"
+    | "hello" | "askPlaceholder" | "send" | "topics" | "stepByStep" | "related" | "talkToUs" | "helper" | "online",
     string
   >;
   areas: Record<Faq["area"], string>;

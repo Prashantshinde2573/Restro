@@ -104,6 +104,7 @@ export function PricingTable() {
         ))}
       </div>
       <p className="mt-8 text-center text-[13.5px] text-ink/50">No card needed for the trial. Cancel any time. Your data stays downloadable.</p>
+      <p className="mx-auto mt-2 max-w-2xl text-center text-[12px] leading-relaxed text-ink/40">* Prices are per outlet and exclusive of applicable taxes (GST 18%). Plans, features and offers are indicative and subject to change.</p>
     </div>
   );
 }

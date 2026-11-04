@@ -264,20 +264,6 @@ export function Avatar({ name, hue = 160, size = 36 }: { name: string; hue?: num
 }
 
 /* Dish art placeholder until real photos are uploaded to Storage */
-export function DishArt({ hue, className }: { hue: number; name?: string; className?: string }) {
-  return (
-    <div
-      aria-hidden
-      className={clsx("relative overflow-hidden", className)}
-      style={{ background: `linear-gradient(150deg, hsl(${hue} 70% 88%), hsl(${hue} 55% 74%))` }}
-    >
-      <span
-        className="absolute left-1/2 top-1/2 h-[64%] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{ background: `radial-gradient(circle, hsl(${hue} 60% 62%) 0 42%, rgb(255 255 255 / .55) 43% 60%, rgb(255 255 255 / .25) 61%)` }}
-      />
-    </div>
-  );
-}
 
 /* ---------- Sheet: bottom sheet on phones, side panel on desktop ----------
    Rendered in a portal on <body> so no page container (sticky headers,
@@ -405,41 +391,6 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 }
 
 /* ---------- Tiny charts (SVG, no chart lib) ---------- */
-export function Bars({
-  data,
-  height = 120,
-  highlightLast,
-  format,
-}: {
-  data: { label: string; value: number; ghost?: number }[];
-  height?: number;
-  highlightLast?: boolean;
-  format?: (n: number) => string;
-}) {
-  const max = Math.max(...data.map((d) => Math.max(d.value, d.ghost ?? 0)), 1);
-  return (
-    <div className="flex items-end gap-1.5" style={{ height }}>
-      {data.map((d, i) => {
-        const isLast = i === data.length - 1;
-        return (
-          <div key={d.label} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
-            <div className="relative flex w-full flex-1 items-end justify-center">
-              {d.ghost !== undefined && (
-                <div className="absolute bottom-0 w-full rounded-[5px] bg-sunken" style={{ height: `${(d.ghost / max) * 100}%` }} />
-              )}
-              <div
-                title={format ? format(d.value) : String(d.value)}
-                className={clsx("relative w-full rounded-[5px] transition-all", highlightLast && !isLast ? "bg-jade/35" : "bg-jade")}
-                style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value ? 3 : 0 }}
-              />
-            </div>
-            <span className="text-[11px] text-faint tnum">{d.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export function Ring({ value, size = 64, stroke = 7, tone = "jade" }: { value: number; size?: number; stroke?: number; tone?: "jade" | "saffron" | "rose" }) {
   const r = (size - stroke) / 2;
@@ -461,16 +412,6 @@ export function Ring({ value, size = 64, stroke = 7, tone = "jade" }: { value: n
         style={{ transition: "stroke-dashoffset .8s cubic-bezier(.2,.9,.3,1)" }}
       />
     </svg>
-  );
-}
-
-export function Stat({ label, value, delta, tone }: { label: string; value: ReactNode; delta?: string; tone?: "up" | "down" }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[13px] text-muted">{label}</div>
-      <div className="mt-0.5 text-[22px] font-semibold tracking-tight tnum">{value}</div>
-      {delta && <div className={clsx("text-[12px] font-medium tnum", tone === "down" ? "text-rose" : "text-jade")}>{delta}</div>}
-    </div>
   );
 }
 

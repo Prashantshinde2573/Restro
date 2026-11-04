@@ -3,9 +3,9 @@
 import { useCloud } from "@/lib/cloud";
 import clsx from "clsx";
 import Link from "next/link";
-import { ArrowLeftRight, Check, Clock, LayoutGrid, Merge, Minus, Pencil, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Trash2, Users, UserPlus } from "lucide-react";
+import { Check, Clock, LayoutGrid, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Users, UserPlus } from "lucide-react";
 import { useState } from "react";
-import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet, Field, inputCls } from "@/components/ui";
+import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
 import { Checkout } from "@/components/checkout";
 import { useToast } from "@/components/toast";
@@ -45,7 +45,6 @@ export default function TablesPage() {
   const [selId, setSelId] = useState<string | null>(null);
   const [qr, setQr] = useState(false);
   const [seat, setSeat] = useState<{ tableId: string; guests: number } | null>(null);
-  const [move, setMove] = useState<{ tableId: string; partyId: string } | null>(null);
   const [pay, setPay] = useState<{ tableId: string; party: Party; label: string } | null>(null);
   const [manage, setManage] = useState(false);
   const me = useMe();
@@ -161,7 +160,7 @@ export default function TablesPage() {
                           <span className={clsx("flex items-center gap-1", long && "font-semibold text-rose")}>
                             <Clock size={12} /> {mins} min · {seatsTaken(t)}/{t.seats}
                           </span>
-                          {toConfirm ? <span className="font-semibold text-saffron">Paid? Confirm</span> : total ? <span className="font-semibold text-ink tnum">{inr(total)}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} bills</span>}</span> : <span>Not ordered</span>}
+                          {toConfirm ? <span className="font-semibold text-saffron">Paid? Confirm</span> : total ? <span className="font-semibold text-ink tnum">{inr(Math.round(total * (1 + gstRate())))}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} bills</span>}</span> : <span>Not ordered</span>}
                         </>
                       )}
                     </div>
@@ -212,11 +211,10 @@ export default function TablesPage() {
                         {minutesSince(p.since)} min · {p.server ?? "No captain yet"} · {p.source === "qr" ? "opened from QR" : "seated by captain"}
                         {p.phoneClaimed && <> · <Smartphone size={12} className="inline -translate-y-px" /> phone linked</>}
                       </div>
-                      <div className="mt-1 text-[12.5px] text-muted">Join code for friends: <b className="tracking-widest text-ink tnum">{p.code}</b></div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[18px] font-semibold tnum">{p.total ? inr(p.total) : "—"}</div>
-                      <div className="text-[12px] text-muted">{p.total ? "before GST" : "no order yet"}</div>
+                      <div className="text-[18px] font-semibold tnum">{p.total ? inr(Math.round(p.total * (1 + gstRate()))) : "—"}</div>
+                      <div className="text-[12px] text-muted">{p.total ? "incl. GST" : "no order yet"}</div>
                     </div>
                   </div>
                   {claim && (
@@ -240,7 +238,6 @@ export default function TablesPage() {
                     {p.total && !claim && canCharge ? (
                       <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
-                    <Button size="sm" variant="plain" onClick={() => setMove({ tableId: sel.id, partyId: p.id })}><ArrowLeftRight size={15} /> Move</Button>
                     {others.map((o) => (
                       <Button key={o.id} size="sm" variant="plain" onClick={() => { tableActions.merge(sel.id, p.id, o.id); orderActions.moveParty(sel.id, p.id, { tableId: sel.id, tableName: sel.name, partyId: o.id }); toast(`Party ${p.id} joined Party ${o.id} · one bill now`); }}>
                         <Merge size={15} /> Merge with {o.id}
@@ -264,9 +261,6 @@ export default function TablesPage() {
             )}
 
             <Button variant="plain" className="w-full" onClick={() => setQr(true)}><QrCode size={16} /> Show table QR</Button>
-            {canManage && sel.parties.length === 0 && (
-              <Button variant="plain" className="w-full" onClick={() => { setSelId(null); setManage(true); }}><Pencil size={16} /> Edit or remove this table</Button>
-            )}
           </div>
         )}
       </Sheet>
@@ -312,34 +306,6 @@ export default function TablesPage() {
             </div>
           );
         })()}
-      </Sheet>
-
-      {/* ---------- Move a party ---------- */}
-      <Sheet open={!!move} onClose={() => setMove(null)} title="Move to which table?">
-        {move && (
-          <div className="grid grid-cols-4 gap-2">
-            {tables.filter((t) => t.id !== move.tableId).map((t) => {
-              const free = tableState(t) === "free";
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    const from = tables.find((x) => x.id === move.tableId)!;
-                    const p = tableActions.move(move.tableId, move.partyId, t.id);
-                    orderActions.moveParty(move.tableId, move.partyId, { tableId: t.id, tableName: t.name, partyId: p.id });
-                    setMove(null);
-                    setSelId(t.id);
-                    toast(`Moved from ${from.name} to ${t.name}${t.parties.length ? ` · Party ${p.id}` : ""} · order moved too`);
-                  }}
-                  className={clsx("rounded-[14px] py-3 text-center", free ? "bg-surface" : "bg-sunken text-muted")}
-                >
-                  <div className="text-[17px] font-semibold">{t.name}</div>
-                  <div className="text-[11px]">{free ? `${t.seats} seats` : `${seatsFree(t)} free`}</div>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </Sheet>
 
       <Sheet open={qr} onClose={() => setQr(false)} title={`Table ${sel?.name ?? ""} QR`}>

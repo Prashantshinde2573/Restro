@@ -4,7 +4,7 @@ import { hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Camera, FolderPlus, Plus, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, LocalSegmented, Sheet, SwitchRow, Toggle, inputCls } from "@/components/ui";
+import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeature, useMenu, useOrders } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
