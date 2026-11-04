@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/instrument-sans";
 import "./globals.css";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
 
 // Analytics: set these in .env.local / your host's environment to switch them on.
@@ -52,6 +53,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
         <Providers>{children}</Providers>
+        {/* Vercel Web Analytics: page views on the Vercel dashboard (no cookies) */}
+        <Analytics />
       </body>
     </html>
   );
