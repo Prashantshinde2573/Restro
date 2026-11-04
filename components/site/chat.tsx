@@ -26,7 +26,7 @@ const faqs: QA[] = [
     q: "How much does it cost?",
     a: (
       <>
-        Prices are per outlet, per month, plus GST:
+        Prices are per outlet, per month:
         <span className="mt-2 block space-y-1">
           {priced.map((p) => (
             <span key={p.id} className="flex justify-between gap-4">

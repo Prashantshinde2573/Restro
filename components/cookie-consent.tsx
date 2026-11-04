@@ -3,7 +3,8 @@
 // Cookie consent for the website, wired to Google Consent Mode v2.
 // The head script in app/layout.tsx sets everything to "denied" before Google Tag Manager /
 // Analytics load (and re-applies a saved choice). This banner asks once and updates consent.
-// Anything can reopen it with openCookieSettings() (e.g. the footer link).
+// To change the choice later, the visitor clears this site's data (see the cookie policy in /privacy).
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -31,9 +32,6 @@ function applyConsent(c: { analytics: boolean; marketing: boolean }) {
   window.dataLayer.push({ event: "consent_update", consent_analytics: c.analytics, consent_marketing: c.marketing });
 }
 
-const OPEN_EVENT = "restropi:cookie-settings";
-export const openCookieSettings = () => window.dispatchEvent(new Event(OPEN_EVENT));
-
 // The banner shows on the public website only — not inside the restaurant app or the guest QR menu.
 const isAppPath = (p: string) => /^\/(app|order|admin|print)(\/|$)/.test(p);
 
@@ -52,12 +50,6 @@ export function CookieConsent() {
       return () => window.clearTimeout(t);
     }
   }, [path]);
-
-  useEffect(() => {
-    const on = () => setOpen(true);
-    window.addEventListener(OPEN_EVENT, on);
-    return () => window.removeEventListener(OPEN_EVENT, on);
-  }, []);
 
   const save = (c: { analytics: boolean; marketing: boolean }) => {
     try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ ...c, at: Date.now() })); } catch {}
@@ -78,18 +70,21 @@ export function CookieConsent() {
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <span aria-hidden className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-[20px] shadow-[0_4px_14px_-6px_rgb(16_24_20/.35)] ring-1 ring-black/[.04]">🍪</span>
             <div className="min-w-0">
-              <div className="text-[15.5px] font-semibold">We value your privacy</div>
+              <div className="text-[15.5px] font-semibold">Cookie Settings</div>
               <p className="mt-0.5 text-[13.5px] leading-relaxed text-ink/65">
-                We use cookies to keep the site working and, with your OK, to understand how visitors use it so we can make it better. Change this any time from &ldquo;Cookie settings&rdquo; at the bottom of the page.
+                We use cookies to enhance your experience, analyze site traffic and deliver personalized content. Read our{" "}
+                <Link href="/privacy#cookies" className="font-semibold text-jade underline underline-offset-4 hover:text-jade-deep">cookie policy</Link>
+                {" "}and{" "}
+                <Link href="/privacy" className="font-semibold text-jade underline underline-offset-4 hover:text-jade-deep">privacy policy</Link>.
               </p>
             </div>
           </div>
           <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <button onClick={() => save({ analytics: false, marketing: false })} className="h-11 rounded-full bg-white/80 px-5 text-[14.5px] font-semibold ring-1 ring-black/[.08] backdrop-blur hover:bg-white">
-              Only necessary
+              Reject
             </button>
             <button onClick={() => save({ analytics: true, marketing: true })} className="h-11 rounded-full bg-jade px-6 text-[14.5px] font-semibold text-white shadow-[0_10px_24px_-12px_rgb(var(--jade)/.9)] transition hover:bg-jade-deep">
-              Accept all
+              Accept
             </button>
           </div>
         </div>

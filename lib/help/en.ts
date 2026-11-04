@@ -78,7 +78,7 @@ export const en: Manual = {
       title: "3. Plans: what is included",
       summary: "Prices, outlets, staff and features in each plan",
       blocks: [
-        { p: "Prices are **per outlet, per month, plus 18% GST**. A locked item in the menu (🔒) is part of a higher plan; the owner can tap it to see the upgrade." },
+        { p: "Prices are **per outlet, per month**. A locked item in the menu (🔒) is part of a higher plan; the owner can tap it to see the upgrade." },
         { table: {
           head: ["", "Starter", "Growth", "Pro", "Chain"],
           rows: [
@@ -284,7 +284,7 @@ export const en: Manual = {
       summary: "Categories, dishes, photos, choices, sold out, menu from photo",
       blocks: [
         { h: "Categories" },
-        { p: "Menu → Categories → Add category (with an emoji icon). The order you set here is the order guests see on the left of the QR menu." },
+        { p: "Menu → Categories → Add category (with an emoji icon). The order you set here is the order guests see on the left of the QR menu. To rename a category or change its icon, tap **Edit** next to it (or ✎ in Categories). To delete it, tap 🗑 — first choose whether its dishes move to another category or are deleted too." },
         { h: "Add or edit a dish" },
         { list: [
           "**Dish name** and **Price** (before GST).",

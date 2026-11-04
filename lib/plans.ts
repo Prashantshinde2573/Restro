@@ -53,3 +53,7 @@ export function cyclePrice(p: Pick<Plan, "monthly" | "yearly">, c: Cycle): numbe
   if (!p.monthly) return null;
   return c === "monthly" ? p.monthly : c === "half" ? p.monthly * 5 : p.yearly ?? p.monthly * 10;
 }
+
+/** GST on Restropi plan payments. 0 until Restropi is GST-registered; set to 0.18 then
+ *  (the plan sheet, website prices and help text all follow this). */
+export const PLAN_GST_RATE = 0;

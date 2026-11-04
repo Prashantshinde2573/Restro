@@ -534,6 +534,18 @@ export const categoryActions = {
   update(id: string, patch: Partial<Category>) {
     catStore.set(catStore.get().map((c) => (c.id === id ? { ...c, ...patch } : c)));
   },
+  /** Delete a category. Its dishes move to another category, or are deleted with it. */
+  remove(id: string, dishes: { moveTo: string } | "delete" | null = null) {
+    const c = catStore.get().find((x) => x.id === id);
+    if (!c) return;
+    const inIt = menuStore.get().filter((m) => m.categoryId === id);
+    const to = dishes && dishes !== "delete" ? catStore.get().find((x) => x.id === dishes.moveTo) : undefined;
+    if (inIt.length && to) menuStore.set(menuStore.get().map((m) => (m.categoryId === id ? { ...m, categoryId: to.id } : m)));
+    else if (inIt.length && dishes === "delete") menuStore.set(menuStore.get().filter((m) => m.categoryId !== id));
+    else if (inIt.length) return; // never leave dishes without a category
+    catStore.set(catStore.get().filter((x) => x.id !== id));
+    logActivity("menu", `Deleted category ${c.name}${inIt.length ? (to ? ` · ${inIt.length} dishes moved to ${to.name}` : ` and its ${inIt.length} dishes`) : ""}`);
+  },
   move(id: string, dir: -1 | 1) {
     const list = [...catStore.get()];
     const i = list.findIndex((c) => c.id === id);

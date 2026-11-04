@@ -2,7 +2,7 @@
 
 import { hasTables } from "@/lib/access";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Camera, FolderPlus, Plus, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -56,6 +56,13 @@ export default function MenuPage() {
   }, [menuRaw, orders]);
   const [edit, setEditRaw] = useState<MenuItem | "new" | null>(null);
   const cats = useCategories();
+  // edit / delete a category
+  const [catEdit, setCatEdit] = useState<{ id: string; name: string; icon: string } | null>(null);
+  const [catDel, setCatDel] = useState<{ id: string; dishes: string } | null>(null); // dishes: another category id, or "delete"
+  const askDelete = (id: string) => {
+    setCatEdit(null);
+    setCatDel({ id, dishes: cats.find((x) => x.id !== id)?.id ?? "delete" });
+  };
   const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
   const engineeringOn = useFeature("menuEngineering") === "ok";
   const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], cost: "" });
@@ -128,7 +135,12 @@ export default function MenuPage() {
         {tab === "dishes" || !engineeringOn ? (
           <div className="grid gap-6 lg:grid-cols-2">
             {cats.map((c) => (
-              <Group key={c.id} title={`${c.icon ? c.icon + " " : ""}${c.name}`} flush>
+              <Group
+                key={c.id}
+                title={`${c.icon ? c.icon + " " : ""}${c.name}`}
+                action={<button onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> Edit</button>}
+                flush
+              >
                 {!items.some((m) => m.categoryId === c.id) && (
                   <button onClick={() => setEdit("new", c.id)} className="flex w-full items-center gap-2 px-4 py-3.5 text-left text-[14px] font-semibold text-jade lg:px-5">
                     <Plus size={16} /> Add the first dish to {c.name}
@@ -363,6 +375,92 @@ export default function MenuPage() {
         </div>
       </Sheet>
 
+      {/* edit a category */}
+      <Sheet
+        open={!!catEdit}
+        onClose={() => setCatEdit(null)}
+        title="Edit category"
+        footer={
+          catEdit && (() => {
+            const name = catEdit.name.trim();
+            const taken = cats.some((x) => x.id !== catEdit.id && x.name.trim().toLowerCase() === name.toLowerCase());
+            return (
+              <div className="space-y-2">
+                {taken && <p className="text-center text-[13px] font-medium text-rose">{name} already exists</p>}
+                <div className="grid grid-cols-[auto_1fr] gap-2">
+                  <Button variant="plain" className="!text-rose" onClick={() => askDelete(catEdit.id)}><Trash2 size={16} /> Delete</Button>
+                  <Button disabled={!name || taken} onClick={() => { categoryActions.update(catEdit.id, { name, icon: catEdit.icon }); toast(`${name} saved`); setCatEdit(null); }}>Save</Button>
+                </div>
+              </div>
+            );
+          })()
+        }
+      >
+        {catEdit && (
+          <div className="space-y-4">
+            <Field label="Category name">
+              <input autoFocus className={inputCls} value={catEdit.name} onChange={(e) => setCatEdit({ ...catEdit, name: e.target.value })} placeholder="e.g. Cold drinks" />
+            </Field>
+            <div>
+              <div className="mb-1.5 text-[13px] font-medium text-muted">Icon (shown in the guest menu side bar)</div>
+              <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-10">
+                {[...new Set([catEdit.icon, ...CAT_ICONS])].map((x) => (
+                  <button key={x} aria-pressed={catEdit.icon === x} onClick={() => setCatEdit({ ...catEdit, icon: x })} className={clsx("flex aspect-square items-center justify-center rounded-[10px] text-[20px]", catEdit.icon === x ? "bg-jade-soft ring-2 ring-jade" : "bg-sunken")}>
+                    {x}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Sheet>
+
+      {/* delete a category */}
+      <Sheet
+        open={!!catDel}
+        onClose={() => setCatDel(null)}
+        title={`Delete ${cats.find((x) => x.id === catDel?.id)?.name ?? "category"}?`}
+        footer={
+          catDel && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="plain" onClick={() => setCatDel(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  const c = cats.find((x) => x.id === catDel.id);
+                  const n = items.filter((m) => m.categoryId === catDel.id).length;
+                  const to = cats.find((x) => x.id === catDel.dishes);
+                  categoryActions.remove(catDel.id, n ? (catDel.dishes === "delete" ? "delete" : { moveTo: catDel.dishes }) : null);
+                  toast(`${c?.name ?? "Category"} deleted${n ? (to ? ` · ${n} dishes moved to ${to.name}` : ` with its ${n} dishes`) : ""}`);
+                  setCatDel(null);
+                }}
+              >
+                Delete category
+              </Button>
+            </div>
+          )
+        }
+      >
+        {catDel && (() => {
+          const n = items.filter((m) => m.categoryId === catDel.id).length;
+          const others = cats.filter((x) => x.id !== catDel.id);
+          return n === 0 ? (
+            <p className="text-[15px] text-muted">This category has no dishes. Guests won&apos;t see it any more.</p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[15px] text-muted">It has <b className="text-ink">{n} {n === 1 ? "dish" : "dishes"}</b>. What should happen to {n === 1 ? "it" : "them"}?</p>
+              <Field label="Dishes in this category">
+                <select className={inputCls} value={catDel.dishes} onChange={(e) => setCatDel({ ...catDel, dishes: e.target.value })}>
+                  {others.map((o) => <option key={o.id} value={o.id}>Move to {o.icon ? o.icon + " " : ""}{o.name}</option>)}
+                  <option value="delete">Delete the {n === 1 ? "dish" : `${n} dishes`} too</option>
+                </select>
+              </Field>
+              {catDel.dishes === "delete" && <p className="rounded-ctl bg-rose-soft px-3 py-2 text-[13.5px] text-rose">The dishes are removed from your menu. Past bills and reports keep them.</p>}
+            </div>
+          );
+        })()}
+      </Sheet>
+
       <Sheet open={catsOpen} onClose={() => setCatsOpen(false)} title="Categories">
         <div className="space-y-4">
           <p className="text-[14px] text-muted">Shown to guests as filters and side-bar entries, in this order.</p>
@@ -371,25 +469,17 @@ export default function MenuPage() {
               const n = items.filter((m) => m.categoryId === c.id).length;
               return (
                 <div key={c.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0">
-                  <select
-                    aria-label={`Icon for ${c.name}`}
-                    value={c.icon ?? ""}
-                    onChange={(e) => categoryActions.update(c.id, { icon: e.target.value })}
-                    className="h-10 w-[4.25rem] rounded-[10px] bg-sunken pl-3 text-[20px] outline-none"
-                  >
-                    {[...new Set([c.icon ?? "🍽️", ...CAT_ICONS])].map((x) => <option key={x} value={x}>{x}</option>)}
-                  </select>
-                  <input
-                    aria-label="Category name"
-                    value={c.name}
-                    onChange={(e) => categoryActions.update(c.id, { name: e.target.value })}
-                    className="h-10 min-w-0 flex-1 rounded-[10px] bg-transparent px-2 text-[15px] font-medium outline-none focus:bg-sunken/60"
-                  />
-                  <span className="text-[13px] text-muted tnum">{n} {n === 1 ? "dish" : "dishes"}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-sunken text-[20px]">{c.icon || "🍽️"}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-medium">{c.name}</div>
+                    <div className="text-[12.5px] text-muted tnum">{n} {n === 1 ? "dish" : "dishes"}</div>
+                  </div>
                   <div className="flex">
                     <button aria-label="Move up" disabled={i === 0} onClick={() => categoryActions.move(c.id, -1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowUp size={16} /></button>
                     <button aria-label="Move down" disabled={i === cats.length - 1} onClick={() => categoryActions.move(c.id, 1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowDown size={16} /></button>
                   </div>
+                  <button aria-label={`Edit ${c.name}`} onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink"><Pencil size={15} /></button>
+                  <button aria-label={`Delete ${c.name}`} onClick={() => askDelete(c.id)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose/10 text-rose"><Trash2 size={15} /></button>
                 </div>
               );
             })}

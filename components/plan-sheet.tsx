@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { checkPlanCoupon, getPlatformSettings, useCloud, type PlatformSettings } from "@/lib/cloud";
 import { createStore } from "@/lib/store";
 import { useAccount, useOutlets } from "@/lib/live";
-import { CYCLES, cyclePrice, plans, type Cycle } from "@/lib/plans";
+import { CYCLES, cyclePrice, plans, type Cycle, PLAN_GST_RATE } from "@/lib/plans";
 import { PLAN_NAME } from "@/lib/access";
 import { inr } from "@/lib/format";
 import { Button, Sheet, inputCls } from "./ui";
@@ -19,7 +19,6 @@ const sheet = createStore<{ open: boolean; plan?: PlanId }>({ open: false });
 /** Open the plan sheet from anywhere (renew banner, locked screens, settings). */
 export const openPlanSheet = (plan?: PlanId) => sheet.set({ open: true, plan });
 
-const PLAN_GST = 0.18;
 
 /** WhatsApp link to the Restropi team with a ready-made message. */
 export function teamWhatsApp(number: string, text: string) {
@@ -69,7 +68,7 @@ export function PlanSheet() {
   const each = cyclePrice(p, cycle);
   const base = each ? each * count : 0;
   const off = coupon ? Math.min(base, Math.round(coupon.kind === "percent" ? (base * coupon.value) / 100 : coupon.value)) : 0;
-  const gst = Math.round((base - off) * PLAN_GST);
+  const gst = Math.round((base - off) * PLAN_GST_RATE);
   const total = base - off + gst;
   const custom = !p.monthly;
   const renewing = plan === account.plan;
@@ -85,7 +84,7 @@ export function PlanSheet() {
     `Current plan: ${PLAN_NAME[account.plan]} (runs until ${new Date(account.renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})`,
     `New plan: ${p.name}${custom ? "" : `, ${cyc.short}`}, ${count} outlet${count === 1 ? "" : "s"}`,
     ...(coupon ? [`Coupon: ${coupon.code} (−${inr(off)})`] : []),
-    ...(custom ? ["Please share the price."] : [`Amount: ${inr(total)} incl. GST`, platform?.upi ? "I have paid by UPI. Screenshot attached." : "Please share how to pay."]),
+    ...(custom ? ["Please share the price."] : [`Amount: ${inr(total)}${PLAN_GST_RATE ? " incl. GST" : ""}`, platform?.upi ? "I have paid by UPI. Screenshot attached." : "Please share how to pay."]),
   ].join("\n");
 
   const apply = async () => {
@@ -181,7 +180,7 @@ export function PlanSheet() {
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14px]">
               <div className="flex justify-between"><dt className="text-muted">{p.name} · {count} outlet{count === 1 ? "" : "s"} · {cyc.short}</dt><dd className="tnum">{inr(base)}</dd></div>
               {off > 0 && <div className="flex justify-between text-jade"><dt>Coupon {coupon?.code}</dt><dd className="tnum">−{inr(off)}</dd></div>}
-              <div className="flex justify-between"><dt className="text-muted">GST 18%</dt><dd className="tnum">{inr(gst)}</dd></div>
+              {PLAN_GST_RATE > 0 && <div className="flex justify-between"><dt className="text-muted">GST {Math.round(PLAN_GST_RATE * 100)}%</dt><dd className="tnum">{inr(gst)}</dd></div>}
               <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>To pay</dt><dd className="tnum">{inr(total)}</dd></div>
             </dl>
 

@@ -4,7 +4,7 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { useState } from "react";
-import { CYCLES, cyclePrice, plans as allPlans, type Cycle } from "@/lib/plans";
+import { CYCLES, cyclePrice, plans as allPlans, type Cycle, PLAN_GST_RATE } from "@/lib/plans";
 import { inr } from "@/lib/format";
 import { IconArrow } from "./site/icons";
 
@@ -47,7 +47,7 @@ function PlanCard({ p, cycle }: { p: (typeof allPlans)[number]; cycle: Cycle }) 
           <span className="text-[34px] font-semibold leading-none tracking-tight">Let&apos;s talk</span>
         )}
       </div>
-      <div className={clsx("relative mt-2 text-[13px]", dark ? "text-canvas/60" : "text-muted")}>{p.outlets} · + GST</div>
+      <div className={clsx("relative mt-2 text-[13px]", dark ? "text-canvas/60" : "text-muted")}>{p.outlets}{PLAN_GST_RATE ? " · + GST" : ""}</div>
 
       <Link
         href="/#contact"
@@ -104,7 +104,7 @@ export function PricingTable() {
         ))}
       </div>
       <p className="mt-8 text-center text-[13.5px] text-ink/50">No card needed for the trial. Cancel any time. Your data stays downloadable.</p>
-      <p className="mx-auto mt-2 max-w-2xl text-center text-[12px] leading-relaxed text-ink/40">* Prices are per outlet and exclusive of applicable taxes (GST 18%). Plans, features and offers are indicative and subject to change.</p>
+      <p className="mx-auto mt-2 max-w-2xl text-center text-[12px] leading-relaxed text-ink/40">* Prices are per outlet. Plans, features and offers are indicative and subject to change.</p>
     </div>
   );
 }

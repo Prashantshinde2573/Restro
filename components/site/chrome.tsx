@@ -1,7 +1,6 @@
 "use client";
 
 // Website navigation and footer (home, pricing).
-import { openCookieSettings } from "@/components/cookie-consent";
 import { DEFAULT_CONTACT_EMAIL, DEFAULT_CONTACT_WHATSAPP } from "@/lib/config";
 import clsx from "clsx";
 import Link from "next/link";
@@ -239,7 +238,7 @@ function DemoDialog() {
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
   { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/#pricing", label: "Pricing" }, { href: "/pricing", label: "Compare plans" }] },
   { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
-  { t: "Restropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/#contact", label: "Contact us" }] },
+  { t: "Restropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/privacy", label: "Privacy policy" }, { href: "/#contact", label: "Contact us" }] },
 ];
 
 export function SiteFooter() {
@@ -292,8 +291,7 @@ export function SiteFooter() {
           </div>
           <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/45 sm:flex-row sm:items-center">
             <span>© {new Date().getFullYear()} Restropi. All rights reserved. · UPI payments go straight to your bank.</span>
-            <button type="button" onClick={openCookieSettings} className="text-left transition hover:text-jade sm:ml-auto">Cookie settings</button>
-            <span>Made in Pune for Indian restaurants</span>
+            <span className="sm:ml-auto">Made in Pune for Indian restaurants</span>
           </div>
         </div>
       </div>
