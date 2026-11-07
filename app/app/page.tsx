@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText } from "lucide-react";
+import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText, CalendarDays, MapPin } from "lucide-react";
 import { hasTables, isOwner } from "@/lib/access";
 import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders } from "@/lib/live";
 import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
@@ -87,13 +87,24 @@ function OwnerHome() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const steps = [
-    { done: !!outlet.upi, text: "Add your UPI ID for payment QRs", href: "/app/settings" },
-    { done: menu.length > 0, text: "Add your menu", href: "/app/menu" },
-    ...(cafe ? [] : [{ done: tables.length > 0, text: "Set up your tables", href: "/app/tables" }]),
-    { done: members.some((m) => m.role !== "owner"), text: "Add your staff and their PINs", href: "/app/access" },
-    { done: orders.length > 0, text: "Take your first order", href: "/app/pos" },
+    { id: "upi", done: !!outlet.upi, text: "Add your UPI ID for payment QRs", href: "/app/settings" },
+    { id: "menu", done: menu.length > 0, text: "Add your menu", href: "/app/menu" },
+    ...(cafe ? [] : [{ id: "tables", done: tables.length > 0, text: "Set up your tables", href: "/app/tables" }]),
+    { id: "staff", done: members.some((m) => m.role !== "owner"), text: "Add your staff and their PINs", href: "/app/access" },
+    { id: "order", done: orders.length > 0, text: "Take your first order", href: "/app/pos" },
   ];
   const doneSteps = steps.filter((s) => s.done).length;
+  // steps the owner chose to skip for now (kept on this device, per outlet)
+  const skipKey = `restropi.setupSkip.${outlet.id || "main"}`;
+  const [skipped, setSkipped] = useState<string[]>([]);
+  useEffect(() => {
+    try { setSkipped(JSON.parse(localStorage.getItem(skipKey) || "[]")); } catch { setSkipped([]); }
+  }, [skipKey]);
+  const setSkip = (ids: string[]) => {
+    setSkipped(ids);
+    try { localStorage.setItem(skipKey, JSON.stringify(ids)); } catch {}
+  };
+  const pending = steps.filter((s) => !s.done && !skipped.includes(s.id));
   const vs = (a: number, b: number) => {
     const c = change(a, b);
     return c === null ? { note: `vs ${dayName} last week: —`, up: true } : { note: `${c >= 0 ? "+" : ""}${c}% vs last ${dayName}`, up: c >= 0 };
@@ -110,30 +121,59 @@ function OwnerHome() {
     <>
       <PageHeader
         title={`${greeting}, ${me?.name.split(" ")[0] ?? ""}`}
-        subtitle={`${new Date(now).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} · ${outlet.name}`}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1.5"><CalendarDays size={16} strokeWidth={1.8} className="text-faint" />{new Date(now).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</span>
+            {outlet.name && (
+              <>
+                <span aria-hidden className="h-1 w-1 rounded-full bg-faint" />
+                <span className="inline-flex items-center gap-1.5"><MapPin size={16} strokeWidth={1.8} className="text-faint" />{outlet.name}</span>
+              </>
+            )}
+          </span>
+        }
         actions={<UserChip />}
       />
       <Page className="space-y-6">
         <NeedsYou />
-        {doneSteps < steps.length && (
+        {pending.length > 0 && (
           <section className="rounded-[24px] bg-surface p-5 lg:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-[19px] font-semibold tracking-tight">Get your restaurant ready</h2>
-                <p className="text-[14px] text-muted">{doneSteps} of {steps.length} done</p>
+                <p className="text-[14px] text-muted">
+                  {doneSteps} of {steps.length} done
+                  <button onClick={() => setSkip(steps.filter((x) => !x.done).map((x) => x.id))} className="ml-2 font-semibold text-ink/60 underline-offset-4 hover:text-ink hover:underline">Skip all for now</button>
+                </p>
               </div>
               <Ring value={doneSteps / steps.length} size={48} stroke={6} />
             </div>
             <div className="mt-4 space-y-2">
-              {steps.map((s) => (
-                <Link key={s.text} href={s.href} className="flex items-center gap-3 rounded-[14px] bg-canvas px-3.5 py-3 text-[15px] hover:bg-sunken">
-                  <span className={s.done ? "flex h-6 w-6 items-center justify-center rounded-full bg-jade text-white" : "h-6 w-6 rounded-full ring-2 ring-line"}>
-                    {s.done && <Check size={14} strokeWidth={3} />}
-                  </span>
-                  <span className={s.done ? "flex-1 text-muted line-through" : "flex-1 font-medium"}>{s.text}</span>
-                  {!s.done && <ArrowUpRight size={16} className="text-faint" />}
-                </Link>
-              ))}
+              {steps.map((s) => {
+                const skip = !s.done && skipped.includes(s.id);
+                return (
+                  <div key={s.id} className="flex items-center gap-2 rounded-[14px] bg-canvas pr-2 hover:bg-sunken">
+                    <Link href={s.href} className="flex min-w-0 flex-1 items-center gap-3 px-3.5 py-3 text-[15px]">
+                      <span className={s.done ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-jade text-white" : skip ? "h-6 w-6 shrink-0 rounded-full border-2 border-dashed border-line" : "h-6 w-6 shrink-0 rounded-full ring-2 ring-line"}>
+                        {s.done && <Check size={14} strokeWidth={3} />}
+                      </span>
+                      <span className={s.done ? "min-w-0 flex-1 text-muted line-through" : skip ? "min-w-0 flex-1 text-muted" : "min-w-0 flex-1 font-medium"}>
+                        {s.text}
+                        {skip && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[11.5px] font-semibold text-muted">Skipped</span>}
+                      </span>
+                      {!s.done && !skip && <ArrowUpRight size={16} className="shrink-0 text-faint" />}
+                    </Link>
+                    {!s.done && (
+                      <button
+                        onClick={() => setSkip(skip ? skipped.filter((x) => x !== s.id) : [...skipped, s.id])}
+                        className="h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold text-muted ring-1 ring-line hover:text-ink"
+                      >
+                        {skip ? "Undo" : "Skip"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}

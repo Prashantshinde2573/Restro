@@ -45,7 +45,7 @@ export default function TeamPage() {
           <Group title={period === "today" ? "Orders taken today" : "Orders taken · 7 days"} flush>
             {rows.map(({ m, count, sales }) => (
               <Link key={m.id} href="/app/access" className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40 lg:px-5">
-                <Avatar name={m.name} hue={m.hue} size={40} />
+                <Avatar name={m.name} hue={m.hue} photo={m.photo} size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-[15px] font-medium">
                     {m.name}

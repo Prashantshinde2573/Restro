@@ -246,7 +246,12 @@ export function DietMark({ diet }: { diet: Diet }) {
   );
 }
 
-export function Avatar({ name, hue = 160, size = 36 }: { name: string; hue?: number; size?: number }) {
+export function Avatar({ name, hue = 160, size = 36, photo }: { name: string; hue?: number; size?: number; photo?: string }) {
+  if (photo)
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={photo} alt={name} width={size} height={size} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />
+    );
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold"

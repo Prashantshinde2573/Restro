@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, QrCode, Receipt, ShieldCheck, Store, Users } from "lucide-react";
+import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, QrCode, Receipt, ShieldCheck, Store, Users } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -11,6 +11,7 @@ import { ChangePassword } from "@/components/owner-auth";
 import { useToast } from "@/components/toast";
 import {
   billOf,
+  memberActions,
   niceTime,
   paymentsText,
   settingsActions,
@@ -27,11 +28,12 @@ import {
   useSettings,
 } from "@/lib/live";
 import { useAllTables } from "@/lib/tables";
-import { cloudSignOut, signOutEverywhere, useCloud } from "@/lib/cloud";
+import { cloudSignOut, signOutEverywhere, uploadProfilePhoto, useCloud } from "@/lib/cloud";
 import { RENEW_WARN_DAYS, daysLeft, isMixed, isOwner } from "@/lib/access";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
 import type { OutletSettings } from "@/lib/types";
+import type { Member } from "@/lib/access";
 
 type Panel = "restaurant" | "payments" | "ordering" | "security" | "data" | null;
 
@@ -92,15 +94,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" />
       <Page className="mx-auto max-w-2xl space-y-6 lg:mx-0">
-        {me && (
-          <div className="flex items-center gap-4 rounded-group bg-surface p-4">
-            <Avatar name={me.name} hue={me.hue} size={52} />
-            <div className="min-w-0 flex-1">
-              <div className="text-[17px] font-semibold">{me.name}</div>
-              <div className="truncate text-[14px] text-muted">{owner ? `Owner · ${cloud.email ?? ""}` : `${me.title} · ${outlet.name}`}</div>
-            </div>
-          </div>
-        )}
+        {me && <ProfileCard me={me} subtitle={owner ? `Owner · ${cloud.email ?? ""}` : `${me.title} · ${outlet.name}`} />}
 
         {/* Subscription: set by the Restropi team; owner sees it */}
         {owner && (
@@ -402,6 +396,68 @@ function Export() {
       >
         <Store size={17} /> Everything (backup file)
       </Button>
+    </div>
+  );
+}
+
+/* ---------------- your profile photo ---------------- */
+/** Crop to a square in the middle and shrink, so a profile photo stays small. */
+async function squarePhoto(file: File, side = 320): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(bmp.width, bmp.height);
+  const c = document.createElement("canvas");
+  c.width = c.height = Math.min(side, s);
+  c.getContext("2d")!.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, c.width, c.height);
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read the photo"))), "image/jpeg", 0.85));
+}
+
+function ProfileCard({ me, subtitle }: { me: Member; subtitle: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  // only the owner and sub admins can change team records (staff ask the owner)
+  const canEdit = me.role !== "staff";
+  const pick = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return toast("Choose a photo (JPG or PNG)");
+    setBusy(true);
+    try {
+      const url = await uploadProfilePhoto(await squarePhoto(f), me.id);
+      memberActions.setPhoto(me.id, url);
+      toast("Profile photo updated");
+    } catch (e) {
+      toast(`Couldn't upload the photo: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex items-center gap-4 rounded-group bg-surface p-4">
+      <label className={clsx("relative shrink-0", canEdit && "cursor-pointer")} aria-label={canEdit ? "Change profile photo" : undefined}>
+        <Avatar name={me.name} hue={me.hue} photo={me.photo} size={56} />
+        {canEdit && (
+          <>
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-white ring-2 ring-surface">
+              {busy ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Camera size={12} />}
+            </span>
+            <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+          </>
+        )}
+      </label>
+      <div className="min-w-0 flex-1">
+        <div className="text-[17px] font-semibold">{me.name}</div>
+        <div className="truncate text-[14px] text-muted">{subtitle}</div>
+        {canEdit ? (
+          <div className="mt-1.5 flex gap-3 text-[13.5px] font-semibold">
+            <label className="cursor-pointer text-jade hover:underline">
+              {me.photo ? "Change photo" : "Add a photo"}
+              <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+            </label>
+            {me.photo && <button onClick={() => { memberActions.setPhoto(me.id, undefined); toast("Photo removed"); }} className="text-muted hover:text-rose">Remove</button>}
+          </div>
+        ) : (
+          <div className="mt-1 text-[12.5px] text-faint">Ask the owner to change your photo.</div>
+        )}
+      </div>
     </div>
   );
 }

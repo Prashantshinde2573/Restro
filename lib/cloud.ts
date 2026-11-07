@@ -273,6 +273,15 @@ export async function uploadMenuPhoto(blob: Blob): Promise<string> {
   if (error) throw new Error(error.message);
   return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
 }
+/** Upload a profile photo (already cropped and shrunk) and get its public link. */
+export async function uploadProfilePhoto(blob: Blob, memberId: string): Promise<string> {
+  const rid = stateStore.get().rid;
+  if (!rid) throw new Error("Not signed in");
+  const path = `${rid}/profile-${memberId}-${Date.now().toString(36)}.jpg`;
+  const { error } = await sb().storage.from("menu-photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (error) throw new Error(error.message);
+  return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
+}
 /** Owner or sub admin sets a staff member's 4-digit PIN (stored hashed on the server). */
 export async function setStaffPin(rid: string, memberId: string, pin: string) {
   await flushWrites();

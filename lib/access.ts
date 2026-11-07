@@ -164,6 +164,8 @@ export interface Member {
   perms: Perm[];
   active: boolean;
   hue: number;
+  /** profile photo (public link), shown instead of the initials */
+  photo?: string;
 }
 
 export const isOwner = (m?: Member | null) => m?.role === "owner";

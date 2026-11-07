@@ -51,6 +51,10 @@ export const memberActions = {
     memberStore.set(old ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m]);
     logActivity("team", old ? (old.active && !m.active ? `Turned off access for ${m.name}` : !old.active && m.active ? `Turned on access for ${m.name}` : `Changed access for ${m.name}`) : `Added ${m.name} (${m.title || "staff"}) to the team`);
   },
+  /** Profile photo of a member (a link, or undefined to go back to initials). */
+  setPhoto(id: string, photo: string | undefined) {
+    memberStore.set(memberStore.get().map((x) => (x.id === id ? { ...x, photo } : x)));
+  },
   remove(id: string) {
     const m = memberStore.get().find((x) => x.id === id);
     memberStore.set(memberStore.get().filter((m) => m.id !== id));

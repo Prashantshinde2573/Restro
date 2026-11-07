@@ -27,6 +27,8 @@ import {
   Plus,
   History,
   CircleHelp,
+  Store,
+  ChevronDown,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
@@ -160,8 +162,15 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
   return (
     <>
       {compact ? (
-        <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} aria-label={`Outlet: ${current.name}`} className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white text-[12.5px] font-bold text-ink">
-          {initials}
+        <button
+          onClick={() => setOpen(true)}
+          disabled={outlets.length < 2 && !isOwner(me)}
+          aria-label={`Outlet: ${current.name}`}
+          className="flex h-[38px] max-w-[160px] items-center gap-2 rounded-full px-3.5 text-[14.5px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10 disabled:hover:bg-transparent"
+        >
+          <Store size={17} strokeWidth={1.9} className="shrink-0" />
+          <span className="min-w-0 truncate">{current.name || account.name}</span>
+          {(outlets.length > 1 || isOwner(me)) && <ChevronDown size={15} className="shrink-0 text-white/80" />}
         </button>
       ) : (
       <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} className="flex w-full items-center gap-3 rounded-ctl px-2 py-2 text-left hover:bg-surface/60 disabled:hover:bg-transparent">
@@ -213,7 +222,7 @@ function MeButton({ compact }: { compact?: boolean }) {
   return (
     <>
       <button onClick={() => setOpen(true)} className={clsx("flex items-center gap-2.5 rounded-[10px] text-left", compact ? "" : "w-full px-2 py-1.5 hover:bg-surface/60")} aria-label="Signed in as">
-        <Avatar name={me.name} hue={me.hue} size={compact ? 34 : 30} />
+        <Avatar name={me.name} hue={me.hue} photo={me.photo} size={compact ? 32 : 30} />
         {!compact && (
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13.5px] font-semibold">{me.name}</span>
@@ -227,7 +236,7 @@ function MeButton({ compact }: { compact?: boolean }) {
         ) : (
           <>
             <div className="flex items-center gap-3 rounded-group bg-surface p-4">
-              <Avatar name={me.name} hue={me.hue} size={40} />
+              <Avatar name={me.name} hue={me.hue} photo={me.photo} size={40} />
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold">{me.name}</div>
                 <div className="truncate text-[13px] text-muted">{me.role === "owner" ? `Owner · ${cloud.email ?? ""}` : me.title}</div>
@@ -589,13 +598,15 @@ function MobileTopBar() {
     return () => window.removeEventListener("scroll", on);
   }, []);
   return (
-    <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] text-white transition-shadow lg:hidden", scrolled && "shadow-[0_8px_20px_-12px_rgb(0_0_0/.5)]")}>
-      <div className="grid h-[52px] grid-cols-[1fr_auto_1fr] items-center px-4">
-        <div className="justify-self-start"><OutletSwitcher compact /></div>
-        <Link href="/app" aria-label="Restropi home" className="justify-self-center">
+    <div className="pt-safe sticky top-0 z-30 bg-canvas/90 backdrop-blur-xl lg:hidden">
+      {/* floating dark bar: logo on the left; outlet, alerts and you on the right */}
+      <div className={clsx("mx-2 mt-2 flex h-[52px] items-center gap-2 rounded-[18px] bg-[#0a0a0a] pl-4 pr-2 text-white transition-shadow", scrolled && "shadow-[0_10px_24px_-12px_rgb(0_0_0/.55)]")}>
+        <Link href="/app" aria-label="Restropi home" className="mr-auto shrink-0">
           <Wordmark light className="h-[26px]" />
         </Link>
-        <div className="flex items-center gap-1 justify-self-end"><HelpButton dark /><NoticeBell dark /><MeButton compact /></div>
+        <OutletSwitcher compact />
+        <NoticeBell dark />
+        <MeButton compact />
       </div>
     </div>
   );

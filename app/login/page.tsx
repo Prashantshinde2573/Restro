@@ -156,7 +156,7 @@ export default function LoginPage() {
               <div className="mt-6 grid grid-cols-3 gap-3">
                 {staff.map((s) => (
                   <button key={s.id} onClick={() => { setWho(s); setPin(""); setError(""); }} className="flex flex-col items-center gap-2 rounded-group bg-surface px-2 py-4 active:scale-[.97]">
-                    <Avatar name={s.name} hue={s.hue} size={48} />
+                    <Avatar name={s.name} hue={s.hue} photo={(s as { photo?: string }).photo} size={48} />
                     <span className="text-center text-[13px] font-medium leading-tight">{s.name.split(" ")[0]}</span>
                   </button>
                 ))}

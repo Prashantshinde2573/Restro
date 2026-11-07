@@ -235,7 +235,7 @@ export default function AccessPage() {
                   onClick={() => { setConfirmRemove(false); setPin(""); setDraft({ ...m }); }}
                   className={clsx("flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 lg:px-5", editable ? "hover:bg-sunken/40" : "cursor-default", !m.active && "opacity-50")}
                 >
-                  <Avatar name={m.name} hue={m.hue} size={40} />
+                  <Avatar name={m.name} hue={m.hue} photo={m.photo} size={40} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[15px] font-medium">{m.name}</span>
