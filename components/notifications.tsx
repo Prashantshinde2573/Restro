@@ -4,7 +4,7 @@
 // payments to confirm), and "Needs you now" on the home screen.
 import clsx from "clsx";
 import Link from "next/link";
-import { Bell, Check, Clock3, ReceiptText, Smartphone, X } from "lucide-react";
+import { Bell, BellOff, ChefHat, Check, Clock3, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createStore } from "@/lib/store";
@@ -14,11 +14,12 @@ import { orderWhere, useAllTables } from "@/lib/tables";
 import { inr, timeAgo } from "@/lib/format";
 import { Button, Sheet } from "./ui";
 import { useToast } from "./toast";
+import { setSound, useSound } from "./sound";
 
 export interface Notice {
   id: string;
   at: string;
-  kind: "order" | "bill" | "claim";
+  kind: "order" | "bill" | "claim" | "ready" | "kitchen" | "review";
   title: string;
   body: string;
   href: string;
@@ -32,7 +33,7 @@ export function pushNotice(n: Omit<Notice, "id" | "at">) {
   noticeStore.set([item, ...noticeStore.get()].slice(0, 60));
 }
 
-const icon = { order: ReceiptText, bill: Smartphone, claim: Clock3 };
+const icon = { order: ReceiptText, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star };
 
 /** Bell with the unread count; opens the list. */
 export function NoticeBell({ dark = false }: { dark?: boolean }) {
@@ -41,6 +42,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
   const path = usePathname();
   useEffect(() => setOpen(false), [path]); // a link in the list was tapped
   const unread = list.filter((n) => !n.read).length;
+  const sound = useSound();
   const markAll = () => noticeStore.set(noticeStore.get().map((n) => (n.read ? n : { ...n, read: true })));
   return (
     <>
@@ -49,7 +51,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
         aria-label={unread ? `${unread} new notifications` : "Notifications"}
         className={clsx("relative flex h-[34px] w-[34px] items-center justify-center rounded-full", dark ? "text-white hover:bg-white/10" : "bg-surface text-ink shadow-float hover:bg-sunken")}
       >
-        <Bell size={18} />
+        {sound ? <Bell size={18} /> : <BellOff size={18} />}
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold text-white tnum">{unread > 9 ? "9+" : unread}</span>
         )}
@@ -62,6 +64,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
         }}
         title="Notifications"
       >
+        <SoundRow />
         <NeedsYou compact />
         {list.length === 0 ? (
           <p className="py-10 text-center text-[14px] text-muted">Nothing yet. New orders, bill requests and payments to confirm show up here.</p>
@@ -76,7 +79,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
                   onClick={markAll}
                   className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40"
                 >
-                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "claim" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
+                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "claim" || n.kind === "review" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
                     <I size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -155,5 +158,30 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
         )}
       </div>
     </section>
+  );
+}
+
+/** Sound on / off for this device (in the bell and in your profile menu). */
+export function SoundRow() {
+  const on = useSound();
+  return (
+    <div className="mb-3 flex items-center gap-3 rounded-group bg-surface px-4 py-3">
+      <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", on ? "bg-jade-soft text-jade" : "bg-sunken text-muted")}>
+        {on ? <Volume2 size={16} /> : <VolumeX size={16} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14.5px] font-semibold">Sound</span>
+        <span className="block text-[12.5px] text-muted">{on ? "Plays a ping for new orders, bills and payments" : "Muted on this device · alerts still show here"}</span>
+      </span>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label="Sound for alerts"
+        onClick={() => setSound(!on)}
+        className={clsx("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors", on ? "bg-jade" : "bg-line")}
+      >
+        <span className={clsx("absolute h-5 w-5 rounded-full bg-white shadow transition-transform", on ? "translate-x-6" : "translate-x-1")} />
+      </button>
+    </div>
   );
 }

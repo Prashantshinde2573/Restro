@@ -27,7 +27,7 @@ import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
 import { cloudConfigured, feedbackActions, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { ensureGuest, useCloud } from "@/lib/cloud";
+import { cloudSignOut, ensureGuest, useCloud } from "@/lib/cloud";
 import type { MenuItem, Order, Payment } from "@/lib/types";
 
 const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
@@ -99,10 +99,16 @@ export default function GuestOrder() {
       if (rid) localStorage.setItem("restropi.rid", rid);
     } catch {}
     if (!rid) {
-      setCloudErr("This QR code is missing the restaurant link.");
+      setCloudErr("link");
       return;
     }
-    ensureGuest(rid).catch(() => setCloudErr("Couldn't connect. Check your internet and scan again."));
+    const tryConnect = (tries: number): void =>
+      void ensureGuest(rid!).catch((e: Error) => {
+        if (e.message === "OTHER_RESTAURANT") return setCloudErr("other");
+        if (tries > 0) return void window.setTimeout(() => tryConnect(tries - 1), 1500);
+        setCloudErr("net");
+      });
+    tryConnect(2);
     const id = window.setTimeout(() => setWaitedLong(true), 6000);
     return () => window.clearTimeout(id);
   }, []);
@@ -115,10 +121,12 @@ export default function GuestOrder() {
   // a suspended or deleted restaurant never loads: give up after a while instead of spinning
   const [gaveUp, setGaveUp] = useState(false);
   useEffect(() => {
-    const id = window.setTimeout(() => setGaveUp(true), 15000);
+    const id = window.setTimeout(() => setGaveUp(true), 25000);
     return () => window.clearTimeout(id);
   }, []);
-  const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !waitedLong));
+  // Only call a table "not found" once the tables have really arrived from the server.
+  const tablesReady = useReady("tables");
+  const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !(tablesReady && waitedLong)));
 
   const [lang, setLang] = useState<Lang>("en");
   const mr = lang === "mr";
@@ -479,11 +487,37 @@ export default function GuestOrder() {
     );
   }
   if (cloudErr || !account.name || (!t && !counter)) {
+    // say what actually went wrong, so the guest (or the owner testing) knows what to do
+    const why: { title: string; body: string; action?: { label: string; run: () => void } } =
+      cloudErr === "other"
+        ? {
+            title: "You're signed in to another restaurant",
+            body: "This phone is signed in to a Restropi account of a different restaurant, so it can't open this menu. Sign out to open it as a guest, or scan with another phone.",
+            action: { label: "Sign out and open the menu", run: () => void cloudSignOut().finally(() => window.location.reload()) },
+          }
+        : cloudErr === "net" || (!account.name && !cloudErr)
+          ? {
+              title: "Couldn't open the menu",
+              body: "Check your internet and try again. If it keeps happening, please ask a staff member — this QR may no longer be active.",
+              action: { label: "Try again", run: () => window.location.reload() },
+            }
+          : cloudErr === "link"
+            ? { title: "This QR code isn't complete", body: "It is missing the restaurant link. Please ask a staff member for a new QR code." }
+            : account.status === "suspended"
+              ? { title: "Ordering is paused", body: "This restaurant isn't taking orders on this QR right now. Please order with our staff." }
+              : {
+                  title: "This QR code isn't active",
+                  body: "This table may have been removed or renamed. Please ask a staff member for help, or scan the code on your table again.",
+                  action: { label: "Try again", run: () => window.location.reload() },
+                };
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center bg-canvas px-6 text-center">
         <QrCode size={32} className="text-muted" />
-        <div className="mt-3 text-[20px] font-semibold">This QR code isn&apos;t active</div>
-        <p className="mt-2 text-[15px] text-muted">Please ask a staff member for help, or scan the code on your table again.</p>
+        <div className="mt-3 text-[20px] font-semibold">{why.title}</div>
+        <p className="mt-2 text-[15px] text-muted">{why.body}</p>
+        {why.action && (
+          <Button size="lg" className="mt-6" onClick={why.action.run}>{why.action.label}</Button>
+        )}
       </div>
     );
   }

@@ -1,40 +1,28 @@
 "use client";
 
 // Ping the team when something needs them:
-//   • any new order taken on another phone, tablet or from a guest's QR
+//   • any new order taken on another phone, tablet or from a guest's QR (every outlet you work in)
 //   • a guest asking for the bill
 //   • a bill marked paid that needs the owner's OK (for people who can confirm)
+//   • a payment you marked that the owner did NOT confirm
+//   • an order the kitchen marked ready (for waiters / order takers)
+//   • a new order for the kitchen (kitchen staff, on any screen)
+//   • a guest review of 3 stars or less (owner / guests access)
 // Sound + a toast, a phone/desktop notification when the browser allows it, and
 // a line in the bell list. Things already there when the app opens never ping.
+// The sound can be muted on each device (components/sound.ts).
 import { BellRing, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useReady } from "@/lib/store";
-import { createdHere, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useOrders } from "@/lib/live";
+import { inOutlet } from "@/lib/access";
+import { createdHere, paymentsText, pendingClaims, useCan, useCanConfirm, useFeedback, useMe, useOrders, useOutlets } from "@/lib/live";
 import { orderWhere, useAllTables } from "@/lib/tables";
-import { pushNotice } from "./notifications";
+import { pushNotice, type Notice } from "./notifications";
 import { useToast } from "./toast";
 
-let ctx: AudioContext | null = null;
-export function chime() {
-  try {
-    ctx = ctx ?? new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const t = ctx.currentTime;
-    [880, 1320].forEach((f, i) => {
-      const o = ctx!.createOscillator();
-      const g = ctx!.createGain();
-      o.type = "sine";
-      o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, t + i * 0.16);
-      g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.16 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.16 + 0.35);
-      o.connect(g).connect(ctx!.destination);
-      o.start(t + i * 0.16);
-      o.stop(t + i * 0.16 + 0.4);
-    });
-  } catch {
-    /* no sound on this device */
-  }
-}
+export { chime } from "./sound";
+import { chime } from "./sound";
 
 function notify(title: string, body: string) {
   try {
@@ -46,77 +34,126 @@ function notify(title: string, body: string) {
 
 export function OrderAlerts() {
   const all = useOrders();
-  const outlet = useCurrentOutlet();
+  const me = useMe();
+  const outlets = useOutlets();
   const tables = useAllTables();
+  const feedback = useFeedback();
+  const path = usePathname() ?? "";
   const ready = useReady("orders");
   const canSee = useCan("orders");
+  const canKitchen = useCan("kitchen");
+  const canGuests = useCan("guests");
   const canConfirm = useCanConfirm();
   const toast = useToast();
   const seenNew = useRef<Set<string> | null>(null);
   const seenBill = useRef<Set<string> | null>(null);
-  const seenClaim = useRef<Set<string> | null>(null);
+  const seenClaim = useRef<Map<string, { by: string; ids: string[] }> | null>(null);
+  const seenReady = useRef<Set<string> | null>(null);
+  const seenReview = useRef<Set<string> | null>(null);
   const [ask, setAsk] = useState(false);
+  const watching = canSee || canKitchen;
 
   useEffect(() => {
-    if (!ready || !canSee) return;
-    const orders = all.filter((o) => !o.outletId || !outlet.id || o.outletId === outlet.id);
+    if (!ready || !watching) return;
+    // every outlet this person works in (the owner: all of them)
+    const orders = all.filter((o) => !o.outletId || inOutlet(me, o.outletId));
+    const outletTag = (id?: string) => (outlets.length > 1 && id ? ` · ${outlets.find((x) => x.id === id)?.name ?? ""}` : "");
     const open = orders.filter((o) => o.status !== "paid" && o.status !== "cancelled");
     const bills = open.filter((o) => o.payPreference && !o.payClaim);
-    const claims = canConfirm ? pendingClaims(orders) : [];
-    if (!seenNew.current || !seenBill.current || !seenClaim.current) {
+    const claims = pendingClaims(orders);
+    const readyNow = open.filter((o) => o.status === "ready");
+    if (!seenNew.current || !seenBill.current || !seenClaim.current || !seenReady.current || !seenReview.current) {
       // first load: remember what's already there, ping only for what comes after
       seenNew.current = new Set(orders.map((o) => o.id));
       seenBill.current = new Set(bills.map((o) => o.id));
-      seenClaim.current = new Set(claims.map((c) => c.claim.id));
+      seenClaim.current = new Map(claims.map((c) => [c.claim.id, { by: c.claim.by, ids: c.orders.map((o) => o.id) }]));
+      seenReady.current = new Set(readyNow.map((o) => o.id));
+      seenReview.current = new Set(feedback.map((f) => f.id));
       return;
     }
+    let ping = false;
+    const say = (kind: Notice["kind"], title: string, body: string, href: string, short = body) => {
+      pushNotice({ kind, title, body, href });
+      notify(title, body);
+      toast(short);
+      ping = true;
+    };
+
+    // new orders from other devices / guests
     const newOnes = open.filter((o) => !seenNew.current!.has(o.id));
     orders.forEach((o) => seenNew.current!.add(o.id));
     const fromElsewhere = newOnes.filter((o) => !createdHere.has(o.id));
-    const billOnes = bills.filter((o) => !seenBill.current!.has(o.id));
-    billOnes.forEach((o) => seenBill.current!.add(o.id));
-    const claimOnes = claims.filter((c) => !seenClaim.current!.has(c.claim.id));
-    claimOnes.forEach((c) => seenClaim.current!.add(c.claim.id));
+    if (canSee) {
+      for (const o of fromElsewhere) {
+        const items = o.lines.reduce((s, l) => s + l.qty, 0);
+        const needsOk = o.status === "new";
+        const title = needsOk ? (o.payPreference ? "New order · take the payment" : "New QR order · accept it") : o.channel === "qr" ? "New QR order" : `New order by ${o.staff}`;
+        const body = `${orderWhere(o, tables)} · ${items} item${items === 1 ? "" : "s"}${outletTag(o.outletId)}`;
+        pushNotice({ kind: "order", title, body, href: "/app/orders" });
+        notify(title, body);
+        ping = true;
+      }
+      if (fromElsewhere.length) toast(fromElsewhere.length > 1 ? `${fromElsewhere.length} new orders` : `New order · ${orderWhere(fromElsewhere[0], tables)}`);
+    } else if (canKitchen && !path.startsWith("/app/kitchen")) {
+      // kitchen staff away from the kitchen screen
+      const toCook = fromElsewhere.filter((o) => o.status === "accepted" || o.status === "preparing");
+      for (const o of toCook) say("kitchen", "New order for the kitchen", `${orderWhere(o, tables)} · ${o.lines.map((l) => `${l.qty} ${l.name}`).join(", ")}`, "/app/kitchen", `New order · ${orderWhere(o, tables)}`);
+    }
 
-    let ping = false;
-    for (const o of fromElsewhere) {
-      const items = o.lines.reduce((s, l) => s + l.qty, 0);
-      const where = orderWhere(o, tables);
-      const needsOk = o.status === "new";
-      const title = needsOk ? "New QR order · accept it" : o.channel === "qr" ? "New QR order" : `New order by ${o.staff}`;
-      const body = `${where} · ${items} item${items === 1 ? "" : "s"}`;
-      pushNotice({ kind: "order", title, body, href: "/app/orders" });
-      notify(title, body);
-      ping = true;
+    if (canSee) {
+      // a guest (or staff) asked for the bill
+      for (const o of bills.filter((o) => !seenBill.current!.has(o.id))) {
+        seenBill.current!.add(o.id);
+        if (o.status === "new" && fromElsewhere.includes(o)) continue; // already pinged as a new order
+        const body = `${o.tableName ? `Table ${o.tableName}` : "A guest"} asked for the bill · ${o.payPreference!.toUpperCase()}${outletTag(o.outletId)}`;
+        say("bill", "Bill requested", body, o.tableName ? "/app/tables" : "/app/orders");
+      }
+      // food is ready to serve (not when you're the one on the kitchen screen)
+      for (const o of readyNow.filter((o) => !seenReady.current!.has(o.id))) {
+        seenReady.current!.add(o.id);
+        if (path.startsWith("/app/kitchen")) continue;
+        say("ready", "Ready to serve", `${orderWhere(o, tables)} · order #${o.number || "—"}${outletTag(o.outletId)}`, "/app/orders");
+      }
     }
-    if (fromElsewhere.length) toast(fromElsewhere.length > 1 ? `${fromElsewhere.length} new orders` : `New order · ${orderWhere(fromElsewhere[0], tables)}`);
-    for (const o of billOnes) {
-      const body = `${o.tableName ? `Table ${o.tableName}` : "A guest"} asked for the bill${o.payPreference ? ` · ${o.payPreference.toUpperCase()}` : ""}`;
-      pushNotice({ kind: "bill", title: "Bill requested", body, href: o.tableName ? "/app/tables" : "/app/orders" });
-      notify("Bill requested", body);
-      toast(body);
-      ping = true;
-    }
-    for (const c of claimOnes) {
+
+    // payments: new ones to confirm, and ones the owner turned down
+    const claimNow = new Map(claims.map((c) => [c.claim.id, c]));
+    for (const c of claims) {
+      if (seenClaim.current!.has(c.claim.id)) continue;
+      seenClaim.current!.set(c.claim.id, { by: c.claim.by, ids: c.orders.map((o) => o.id) });
+      if (!canConfirm) continue;
       const guest = c.claim.source === "guest";
       const title = guest ? "Guest paid · please confirm" : "Payment to confirm";
-      const body = `${orderWhere(c.orders[0], tables)} · ${paymentsText(c.claim.payments)} · ${guest ? `paid from the phone by ${c.claim.by}` : `marked by ${c.claim.by}`}`;
-      pushNotice({ kind: "claim", title, body, href: "/app/orders" });
-      notify(title, body);
-      toast(`Payment to confirm · ${orderWhere(c.orders[0], tables)}`);
-      ping = true;
+      const body = `${orderWhere(c.orders[0], tables)} · ${paymentsText(c.claim.payments)} · ${guest ? `paid from the phone by ${c.claim.by}` : `marked by ${c.claim.by}`}${outletTag(c.orders[0].outletId)}`;
+      say("claim", title, body, "/app/orders", `Payment to confirm · ${orderWhere(c.orders[0], tables)}`);
     }
+    for (const [id, was] of [...seenClaim.current!]) {
+      if (claimNow.has(id)) continue;
+      seenClaim.current!.delete(id);
+      const os = orders.filter((o) => was.ids.includes(o.id));
+      const turnedDown = os.length > 0 && os.every((o) => o.status !== "paid" && !o.payClaim);
+      if (turnedDown && me && was.by === me.name && !canConfirm) {
+        say("claim", "Payment not confirmed", `${orderWhere(os[0], tables)} · the owner marked it "not received". Please check with the guest.`, "/app/orders", `Payment not confirmed · ${orderWhere(os[0], tables)}`);
+      }
+    }
+
+    // a low rating from a guest
+    for (const f of feedback.filter((f) => !seenReview.current!.has(f.id))) {
+      seenReview.current!.add(f.id);
+      if (f.stars <= 3 && (canGuests || me?.role === "owner")) say("review", `${f.stars}★ review · needs a look`, `${f.customer || "A guest"}${f.text ? `: “${f.text.slice(0, 80)}”` : ""}`, "/app/guests", `${f.stars}★ review from ${f.customer || "a guest"}`);
+    }
+
     if (ping) chime();
-  }, [all, outlet.id, tables, ready, canSee, canConfirm, toast]);
+  }, [all, me, outlets, tables, feedback, path, ready, watching, canSee, canKitchen, canGuests, canConfirm, toast]);
 
   // offer phone/desktop notifications once
   useEffect(() => {
-    if (!canSee || !("Notification" in window) || Notification.permission !== "default") return;
+    if (!watching || !("Notification" in window) || Notification.permission !== "default") return;
     try {
       if (localStorage.getItem("restropi.notifyAsked")) return;
     } catch {}
     setAsk(true);
-  }, [canSee]);
+  }, [watching]);
 
   if (!ask) return null;
   const close = () => {

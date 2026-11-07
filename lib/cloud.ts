@@ -246,6 +246,8 @@ export async function ensureGuest(rid: string) {
   }
   const uid = data.session!.user.id;
   const cur = getCloud();
+  // An owner or staff login of ANOTHER restaurant on this phone can't read this restaurant's menu.
+  if (!data.session!.user.is_anonymous && cur.rid && cur.rid !== rid && cur.role && cur.role !== "guest") throw new Error("OTHER_RESTAURANT");
   if (cur.role === "guest" || !cur.rid || data.session!.user.is_anonymous) {
     const role: Role = data.session!.user.is_anonymous ? "guest" : (cur.role ?? "guest");
     stateStore.set({ status: "ready", role, rid, uid, memberId: cur.memberId });
@@ -384,12 +386,19 @@ export function connect(rid: string, role: Role, uid: string) {
         if (cached) writeCache(scope, b.key, v);
       };
       ch.on("postgres_changes", { event: "UPDATE", schema: "public", table: "restaurants", filter: `id=eq.${rid}` }, (p) => got(fromAccount(p.new as AccountRow)));
-      void client
-        .from("restaurants")
-        .select("name, owner, plan, renews_at, status")
-        .eq("id", rid)
-        .maybeSingle()
-        .then(({ data }) => data && got(fromAccount(data as AccountRow)));
+      // a weak connection (a guest on mobile data) can drop the first try: retry a few times
+      const loadAccount = (tries: number) =>
+        void client
+          .from("restaurants")
+          .select("name, owner, plan, renews_at, status")
+          .eq("id", rid)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (connected?.rid !== rid) return;
+            if (error && tries > 0) return void setTimeout(() => loadAccount(tries - 1), 1200 * (4 - tries));
+            if (data) got(fromAccount(data as AccountRow));
+          });
+      loadAccount(3);
       continue;
     }
     const table = TABLE[b.key];
@@ -427,11 +436,20 @@ export function connect(rid: string, role: Role, uid: string) {
         if (map.delete(o.id)) publish(b);
       }
     });
-    let q = client.from(table).select(b.key === "orders" ? "id, data, number" : "id, data").eq("rid", rid);
-    if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
-    if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
-    if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
-    void q.then(({ data, error }) => {
+    const query = () => {
+      let q = client.from(table).select(b.key === "orders" ? "id, data, number" : "id, data").eq("rid", rid);
+      if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
+      if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
+      if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
+      return q;
+    };
+    const load = (tries: number): void => void query().then(({ data, error }) => {
+      if (connected?.rid !== rid) return;
+      // a network hiccup (not a "not allowed"): try again before giving up
+      if (error && tries > 0 && /fetch|network|timeout|Failed|503|502|504/i.test(`${error.message} ${error.code ?? ""}`)) {
+        setTimeout(() => load(tries - 1), 1200 * (4 - tries));
+        return;
+      }
       if (error) {
         // not allowed (or the table isn't there yet): don't keep showing an old copy
         if (map.size) {
@@ -449,6 +467,7 @@ export function connect(rid: string, role: Role, uid: string) {
       publish(b);
       setReady(b.key, true);
     });
+    load(3);
   }
   ch.subscribe();
   channel = ch;

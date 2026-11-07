@@ -80,7 +80,13 @@ export default function SettingsPage() {
     setPanelRaw(p);
   };
   const upiOk = isValidUpi(draft.upi);
-  const saves = panel === "restaurant" || panel === "payments" || panel === "ordering";
+  const saves = panel === "restaurant" || panel === "payments";
+  // Ordering switches take effect the moment they're flipped (no Save button to miss).
+  const saveNow = (patch: Partial<OutletSettings>, msg: string) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    settingsActions.update(patch);
+    toast(msg);
+  };
 
   const titles: Record<Exclude<Panel, null>, string> = {
     restaurant: `Details on bills · ${outlet.name}`,
@@ -252,7 +258,7 @@ export default function SettingsPage() {
               <Segmented
                 className="w-full"
                 value={draft.businessType}
-                onChange={(v) => setDraft({ ...draft, businessType: v, payFirst: v === "cafe" ? true : draft.payFirst })}
+                onChange={(v) => saveNow({ businessType: v, payFirst: v === "cafe" ? true : draft.payFirst }, v === "cafe" ? "Saved · café" : "Saved · restaurant")}
                 options={[{ value: "restaurant", label: "Restaurant · table service" }, { value: "cafe", label: "Café · counter + token" }]}
               />
             </Field>
@@ -265,14 +271,14 @@ export default function SettingsPage() {
                     : "Some guests order at the counter: a counter QR and token orders, along with your tables."}
                 </div>
               </div>
-              <Toggle checked={!!draft.mixed} onChange={(v) => setDraft({ ...draft, mixed: v })} label="Tables and counter both" />
+              <Toggle checked={isMixed(draft)} onChange={(v) => saveNow({ mixed: v }, v ? "Tables and counter both · on" : "Tables and counter both · off")} label="Tables and counter both" />
             </div>
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
               <div>
                 <div className="text-[15px]">Guests pay before the kitchen starts</div>
                 <div className="text-[12.5px] text-muted">Order → pay (UPI, cash, or both) → token. Usual for cafés. Off: guests pay at the end.</div>
               </div>
-              <Toggle checked={draft.payFirst} onChange={(v) => setDraft({ ...draft, payFirst: v })} label="Guests pay first" />
+              <Toggle checked={!!draft.payFirst} onChange={(v) => saveNow({ payFirst: v }, v ? "Guests now pay before the kitchen starts" : "Guests now pay at the end")} label="Guests pay first" />
             </div>
             <div className="overflow-hidden rounded-group bg-surface">
               <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -280,7 +286,7 @@ export default function SettingsPage() {
                   <div className="text-[15px]">Pause QR orders now</div>
                   <div className="text-[12.5px] text-muted">Guests can still see the menu but can&apos;t order from their phone. Staff can still take orders.</div>
                 </div>
-                <Toggle checked={!!draft.ordersPaused} onChange={(v) => setDraft({ ...draft, ordersPaused: v })} label="Pause QR orders" />
+                <Toggle checked={!!draft.ordersPaused} onChange={(v) => saveNow({ ordersPaused: v }, v ? "QR orders paused" : "QR orders are back on")} label="Pause QR orders" />
               </div>
               <button type="button" onClick={() => setPanel("restaurant")} className="flex w-full items-center justify-between gap-4 border-t border-line/80 px-4 py-3 text-left">
                 <div>

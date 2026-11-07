@@ -40,7 +40,7 @@ import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
-import { NoticeBell } from "./notifications";
+import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
 
@@ -249,6 +249,7 @@ function MeButton({ compact }: { compact?: boolean }) {
                 </button>
               ))}
             </div>
+            <div className="mt-3"><SoundRow /></div>
             {cloud.role === "owner" && (
               <button onClick={() => setPw(true)} className="mt-3 flex w-full items-center gap-2 rounded-group bg-surface px-4 py-3 text-left text-[15px] font-medium">
                 <KeyRound size={17} className="text-jade" /> Change password
