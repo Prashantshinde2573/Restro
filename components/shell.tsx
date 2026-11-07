@@ -40,6 +40,7 @@ import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
+import { CallAlerts, WaiterCallBar } from "./waiter-calls";
 import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
@@ -628,6 +629,8 @@ function AppFrame({ children }: { children: ReactNode }) {
             <RouteGate>{children}</RouteGate>
             <PlanSheet />
             <OrderAlerts />
+            <CallAlerts />
+            <WaiterCallBar />
             <HelpSheet />
           </ClientOnly>
         </div>

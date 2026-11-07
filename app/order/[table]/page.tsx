@@ -25,7 +25,7 @@ import { PayPanel, ThankYou } from "@/components/guest-pay";
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
-import { cloudConfigured, feedbackActions, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { callActions, cloudConfigured, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
 import { cloudSignOut, ensureGuest, useCloud } from "@/lib/cloud";
 import type { MenuItem, Order, Payment } from "@/lib/types";
@@ -197,6 +197,14 @@ export default function GuestOrder() {
     });
 
   const party = t?.parties.find((p) => p.id === myParty);
+  // "Call a waiter": this phone's latest call to this table that is still going
+  const calls = useCalls();
+  const myCall = t ? liveCalls(calls).find((c) => c.tableId === t.id) : undefined;
+  const callWaiter = () => {
+    if (!t) return;
+    callActions.call({ outletId: t.outletId, tableId: t.id, tableName: t.name, partyId: myParty ?? undefined, customer: guest?.name });
+    toast(tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…"));
+  };
   // a new group at this table: ask how many guests before the menu
   const needCount = !!t && !counter && !party && (t.parties.length === 0 || ownBill) && !guestCount;
   const shared = t ? isShared(t) : false;
@@ -746,9 +754,21 @@ export default function GuestOrder() {
             </div>
           )}
           {!counter && (
-            <button onClick={() => toast(tx(lang, "A waiter is on the way", "वेटर येत आहे"))} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
-              <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
-            </button>
+            myCall?.status === "taken" ? (
+              <div className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-jade-soft py-3.5 text-[15px] font-semibold text-jade-deep">
+                <Check size={17} /> {tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}
+              </div>
+            ) : myCall?.status === "open" ? (
+              <div className="flex w-full items-center gap-2 rounded-[18px] bg-saffron-soft py-2 pl-4 pr-2 text-saffron">
+                <BellRing size={17} className="animate-pulse" />
+                <span className="flex-1 text-[15px] font-semibold">{tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…")}</span>
+                <button onClick={() => callActions.cancel(myCall.id)} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink">{tx(lang, "Cancel", "रद्द करा")}</button>
+              </div>
+            ) : (
+              <button onClick={callWaiter} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+                <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
+              </button>
+            )
           )}
         </main>
       )}

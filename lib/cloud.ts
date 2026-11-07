@@ -38,6 +38,7 @@ const TABLE: Record<string, string> = {
   stock: "stock_items",
   coupons: "coupons",
   activity: "activity",
+  calls: "waiter_calls",
 };
 
 /* ---------------- who is signed in on this device ---------------- */
@@ -303,7 +304,7 @@ export async function publicInfo(rid: string): Promise<{ name: string } | null> 
 /* ---------------- this device's copy (screens open instantly, then refresh) ---------------- */
 // Only for the owner's and staff's own restaurant, on their own device. Cleared on sign-out.
 const CACHE = "restropi.cache.";
-const CACHE_MAX: Record<string, number> = { orders: 300, activity: 200 };
+const CACHE_MAX: Record<string, number> = { orders: 300, activity: 200, calls: 50 };
 const cacheKey = (rid: string, key: string) => `${CACHE}${rid}.${key}`;
 function readCache<T>(rid: string, key: string): T | null {
   try {
@@ -441,6 +442,7 @@ export function connect(rid: string, role: Role, uid: string) {
       if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
       if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
       if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
+      if (b.key === "calls") q = q.order("updated_at", { ascending: false }).limit(100);
       return q;
     };
     const load = (tries: number): void => void query().then(({ data, error }) => {
@@ -477,6 +479,7 @@ export function connect(rid: string, role: Role, uid: string) {
 const sortLike = (key: string, list: unknown[]) => {
   const l = list as Record<string, unknown>[];
   if (key === "orders") return l.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if (key === "calls") return l.sort((a, b) => String(b.at).localeCompare(String(a.at)));
   if (key === "categories" || key === "outlets") return l.sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0));
   if (key === "tables" || key === "members") return l.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
   return l;
@@ -522,7 +525,7 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
       for (const t of changed) track(client.rpc("guest_set_parties", { r: rid, t: t.id, parties: t.parties ?? [] }).then(check));
       return;
     }
-    if (b.key !== "orders") return;
+    if (b.key !== "orders" && b.key !== "calls") return;
     for (const o of changed) {
       const isNew = !before.has(String(o.id));
       const row = { rid, id: String(o.id), data: o, guest_uid: uid };

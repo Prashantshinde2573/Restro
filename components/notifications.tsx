@@ -4,7 +4,7 @@
 // payments to confirm), and "Needs you now" on the home screen.
 import clsx from "clsx";
 import Link from "next/link";
-import { Bell, BellOff, ChefHat, Check, Clock3, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, BellOff, BellRing, ChefHat, Check, ChevronDown, Clock3, Play, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createStore } from "@/lib/store";
@@ -14,12 +14,13 @@ import { orderWhere, useAllTables } from "@/lib/tables";
 import { inr, timeAgo } from "@/lib/format";
 import { Button, Sheet } from "./ui";
 import { useToast } from "./toast";
-import { setSound, useSound } from "./sound";
+import { WaiterCallCards, useOutletCalls } from "./waiter-calls";
+import { playSound, setSound, setSoundFor, SOUND_EVENTS, SOUNDS, useSound, useSoundPicks, type SoundId } from "./sound";
 
 export interface Notice {
   id: string;
   at: string;
-  kind: "order" | "bill" | "claim" | "ready" | "kitchen" | "review";
+  kind: "order" | "call" | "bill" | "claim" | "ready" | "kitchen" | "review";
   title: string;
   body: string;
   href: string;
@@ -33,7 +34,7 @@ export function pushNotice(n: Omit<Notice, "id" | "at">) {
   noticeStore.set([item, ...noticeStore.get()].slice(0, 60));
 }
 
-const icon = { order: ReceiptText, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star };
+const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star };
 
 /** Bell with the unread count; opens the list. */
 export function NoticeBell({ dark = false }: { dark?: boolean }) {
@@ -79,7 +80,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
                   onClick={markAll}
                   className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40"
                 >
-                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "claim" || n.kind === "review" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
+                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "claim" || n.kind === "review" || n.kind === "call" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
                     <I size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -105,7 +106,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
   );
 }
 
-/** "Needs you now": QR orders to accept, bills asked for, payments to confirm. Nothing → nothing shown. */
+/** "Needs you now": waiter calls, QR orders to accept, bills asked for, payments to confirm. Nothing → nothing shown. */
 export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: () => void }) {
   const all = useOrders();
   const outlet = useCurrentOutlet();
@@ -117,11 +118,13 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
   const toAccept = canOrders ? orders.filter((o) => o.status === "new") : [];
   const bills = canOrders ? orders.filter((o) => o.payPreference && !o.payClaim && o.status !== "paid" && o.status !== "cancelled") : [];
   const claims = canConfirm ? pendingClaims(orders) : [];
-  if (!toAccept.length && !bills.length && !claims.length) return null;
+  const calls = useOutletCalls();
+  if (!toAccept.length && !bills.length && !claims.length && !calls.length) return null;
   return (
     <section className={clsx("rounded-[24px] bg-saffron-soft/70", compact ? "p-3" : "p-4 lg:p-5")}>
       <h2 className={clsx("font-semibold tracking-tight", compact ? "px-1 text-[15px]" : "text-[18px]")}>Needs you now</h2>
       <div className="mt-2 space-y-2">
+        <WaiterCallCards calls={calls} />
         {claims.map((c) => {
           const total = c.claim.payments.reduce((s, p) => s + p.amount, 0);
           return (
@@ -164,24 +167,67 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
 /** Sound on / off for this device (in the bell and in your profile menu). */
 export function SoundRow() {
   const on = useSound();
+  const picks = useSoundPicks();
+  const [open, setOpen] = useState(false);
   return (
-    <div className="mb-3 flex items-center gap-3 rounded-group bg-surface px-4 py-3">
-      <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", on ? "bg-jade-soft text-jade" : "bg-sunken text-muted")}>
-        {on ? <Volume2 size={16} /> : <VolumeX size={16} />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] font-semibold">Sound</span>
-        <span className="block text-[12.5px] text-muted">{on ? "Plays a ping for new orders, bills and payments" : "Muted on this device · alerts still show here"}</span>
-      </span>
+    <div className="mb-3 overflow-hidden rounded-group bg-surface">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", on ? "bg-jade-soft text-jade" : "bg-sunken text-muted")}>
+          {on ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14.5px] font-semibold">Sound</span>
+          <span className="block text-[12.5px] text-muted">{on ? "A different sound for each kind of alert" : "Muted on this device · alerts still show here"}</span>
+        </span>
+        <button
+          role="switch"
+          aria-checked={on}
+          aria-label="Sound for alerts"
+          onClick={() => setSound(!on)}
+          className={clsx("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors", on ? "bg-jade" : "bg-line")}
+        >
+          <span className={clsx("absolute h-5 w-5 rounded-full bg-white shadow transition-transform", on ? "translate-x-6" : "translate-x-1")} />
+        </button>
+      </div>
       <button
-        role="switch"
-        aria-checked={on}
-        aria-label="Sound for alerts"
-        onClick={() => setSound(!on)}
-        className={clsx("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors", on ? "bg-jade" : "bg-line")}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between border-t border-line/80 px-4 py-2.5 text-[13.5px] font-semibold text-jade"
       >
-        <span className={clsx("absolute h-5 w-5 rounded-full bg-white shadow transition-transform", on ? "translate-x-6" : "translate-x-1")} />
+        Choose sounds
+        <ChevronDown size={16} className={clsx("transition-transform", open && "rotate-180")} />
       </button>
+      {open && (
+        <div className={clsx("border-t border-line/80", !on && "opacity-60")}>
+          {SOUND_EVENTS.map((ev) => (
+            <div key={ev.id} className="flex items-center gap-2 border-b border-line/60 px-4 py-2.5 last:border-0">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-medium">{ev.label}</span>
+                <span className="block text-[12px] leading-snug text-muted">{ev.hint}</span>
+              </span>
+              <select
+                aria-label={`Sound for ${ev.label}`}
+                value={picks[ev.id]}
+                onChange={(e) => setSoundFor(ev.id, e.target.value as SoundId)}
+                className="h-9 max-w-[140px] rounded-[10px] bg-sunken px-2 text-[13px] font-medium outline-none"
+              >
+                {SOUNDS.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => playSound(picks[ev.id])}
+                disabled={picks[ev.id] === "none"}
+                aria-label={`Play ${ev.label} sound`}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink disabled:opacity-40"
+              >
+                <Play size={14} />
+              </button>
+            </div>
+          ))}
+          {!on && <p className="px-4 pb-3 pt-1 text-[12px] text-muted">Sound is off, so these won't play until you turn it on.</p>}
+        </div>
+      )}
     </div>
   );
 }

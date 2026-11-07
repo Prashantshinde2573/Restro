@@ -22,7 +22,7 @@ import { pushNotice, type Notice } from "./notifications";
 import { useToast } from "./toast";
 
 export { chime } from "./sound";
-import { chime } from "./sound";
+import { chime, type SoundEvent } from "./sound";
 
 function notify(title: string, body: string) {
   try {
@@ -71,12 +71,18 @@ export function OrderAlerts() {
       seenReview.current = new Set(feedback.map((f) => f.id));
       return;
     }
-    let ping = false;
+    // one sound per check: the most important kind of alert wins
+    const RANK: SoundEvent[] = ["payment", "bill", "order", "kitchen", "ready", "review"];
+    let ping: SoundEvent | null = null;
+    const ring = (ev: SoundEvent) => {
+      if (!ping || RANK.indexOf(ev) < RANK.indexOf(ping)) ping = ev;
+    };
+    const SOUND_OF: Record<Notice["kind"], SoundEvent> = { order: "order", call: "waiter", kitchen: "kitchen", bill: "bill", claim: "payment", ready: "ready", review: "review" };
     const say = (kind: Notice["kind"], title: string, body: string, href: string, short = body) => {
       pushNotice({ kind, title, body, href });
       notify(title, body);
       toast(short);
-      ping = true;
+      ring(SOUND_OF[kind]);
     };
 
     // new orders from other devices / guests
@@ -91,7 +97,7 @@ export function OrderAlerts() {
         const body = `${orderWhere(o, tables)} · ${items} item${items === 1 ? "" : "s"}${outletTag(o.outletId)}`;
         pushNotice({ kind: "order", title, body, href: "/app/orders" });
         notify(title, body);
-        ping = true;
+        ring("order");
       }
       if (fromElsewhere.length) toast(fromElsewhere.length > 1 ? `${fromElsewhere.length} new orders` : `New order · ${orderWhere(fromElsewhere[0], tables)}`);
     } else if (canKitchen && !path.startsWith("/app/kitchen")) {
@@ -143,7 +149,7 @@ export function OrderAlerts() {
       if (f.stars <= 3 && (canGuests || me?.role === "owner")) say("review", `${f.stars}★ review · needs a look`, `${f.customer || "A guest"}${f.text ? `: “${f.text.slice(0, 80)}”` : ""}`, "/app/guests", `${f.stars}★ review from ${f.customer || "a guest"}`);
     }
 
-    if (ping) chime();
+    if (ping) chime(ping);
   }, [all, me, outlets, tables, feedback, path, ready, watching, canSee, canKitchen, canGuests, canConfirm, toast]);
 
   // offer phone/desktop notifications once

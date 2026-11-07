@@ -664,3 +664,70 @@ export function orderingOpen(s: { orderFrom?: string; orderTo?: string; ordersPa
   const inside = a < b ? t >= a && t < b : t >= a || t < b; // b < a: open past midnight
   return inside ? { open: true as const } : { open: false as const, why: "hours" as const, opensAt: niceTime(s.orderFrom) };
 }
+
+/* ---------------- waiter calls: a guest taps "Call a waiter" ---------------- */
+// Every waiter in that outlet gets it. One of them taps "I'll go" (or the owner /
+// a sub admin assigns someone), and everyone sees who has it. Then "Done".
+export interface WaiterCall {
+  id: string;
+  at: string; // ISO
+  outletId?: string;
+  tableId?: string;
+  tableName: string;
+  partyId?: string;
+  customer?: string;
+  status: "open" | "taken" | "done" | "cancelled";
+  /** the member going to the table */
+  to?: string;
+  toName?: string;
+  takenAt?: string;
+  /** set when someone else gave it to them (the owner / a sub admin) */
+  assignedBy?: string;
+  doneAt?: string;
+}
+const callStore = createStore<WaiterCall[]>([], "calls", { kind: "collection", coll: "calls", guest: "own" });
+export const useCalls = () => callStore.use();
+/** Calls still waiting (open or on the way) from the last 2 hours. Older ones are stale. */
+export const liveCalls = (calls: WaiterCall[]) => {
+  const since = Date.now() - 2 * 3600_000;
+  return calls.filter((c) => (c.status === "open" || c.status === "taken") && Date.parse(c.at) > since);
+};
+/** Who answers waiter calls: the owner, and staff with Tables access in that outlet. */
+export const answersCalls = (m: Member | null | undefined, outletId?: string) => !!m && m.active && hasPerm(m, "tables") && (!outletId || inOutlet(m, outletId));
+/** Who can hand a call to someone: the owner, and sub admins who manage the team. */
+export const assignsCalls = (m: Member | null | undefined) => !!m && m.active && (m.role === "owner" || hasPerm(m, "team"));
+const patchCall = (id: string, fn: (c: WaiterCall) => WaiterCall) => callStore.set(callStore.get().map((c) => (c.id === id ? fn(c) : c)));
+export const callActions = {
+  /** Guest: call a waiter to this table. */
+  call(c: Pick<WaiterCall, "outletId" | "tableId" | "tableName" | "partyId" | "customer">): WaiterCall {
+    const call: WaiterCall = { ...c, id: `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: new Date().toISOString(), status: "open" };
+    // a guest can't write "to" (the server refuses it), so leave empty keys out
+    for (const k of Object.keys(call) as (keyof WaiterCall)[]) if (call[k] === undefined) delete call[k];
+    callStore.set([call, ...callStore.get()]);
+    return call;
+  },
+  /** Guest: never mind. */
+  cancel(id: string) {
+    patchCall(id, (c) => (c.status === "open" ? { ...c, status: "cancelled" } : c));
+  },
+  /** Waiter: "I'll go". */
+  take(id: string): string | null {
+    const me = currentMember();
+    if (!me) return null;
+    const cur = callStore.get().find((c) => c.id === id);
+    if (cur?.status === "taken" && cur.to !== me.id) return cur.toName ?? "someone"; // someone got there first
+    patchCall(id, (c) => ({ ...c, status: "taken", to: me.id, toName: me.name, takenAt: new Date().toISOString(), assignedBy: undefined }));
+    return null;
+  },
+  /** Owner / sub admin: send this waiter. */
+  assign(id: string, m: Member) {
+    const me = currentMember();
+    patchCall(id, (c) => ({ ...c, status: "taken", to: m.id, toName: m.name, takenAt: new Date().toISOString(), assignedBy: me && me.id !== m.id ? me.name : undefined }));
+    const c = callStore.get().find((x) => x.id === id);
+    if (c) logActivity("order", `Sent ${m.name} to ${c.tableName === "Counter" ? "the counter" : `Table ${c.tableName}`} (waiter call)`, c.outletId);
+  },
+  /** At the table: done. */
+  done(id: string) {
+    patchCall(id, (c) => ({ ...c, status: "done", doneAt: new Date().toISOString() }));
+  },
+};

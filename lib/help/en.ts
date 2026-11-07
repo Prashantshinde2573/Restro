@@ -285,6 +285,7 @@ export const en: Manual = {
       blocks: [
         { h: "Categories" },
         { p: "Menu → Categories → Add category (with an emoji icon). The order you set here is the order guests see on the left of the QR menu. To rename a category or change its icon, tap **Edit** next to it (or ✎ in Categories). To delete it, tap 🗑 — first choose whether its dishes move to another category or are deleted too." },
+        { tip: "Put a dish in the wrong category? Hold the ⋮⋮ handle on the left of the dish and drag it onto the right category." },
         { h: "Add or edit a dish" },
         { list: [
           "**Dish name** and **Price** (before GST).",
@@ -303,7 +304,7 @@ export const en: Manual = {
         ] },
         { tip: `Up to ${MENU_PHOTOS_PER_DAY} photos per restaurant per day. Take photos in good light, flat, one page per photo.` },
         { h: "What's working (Pro)" },
-        { p: "Puts each dish in one of four groups — **Stars** (popular and profitable), **Workhorses** (popular, thin margin), **Hidden gems** (profitable, few orders) and **Rethink** (low on both) — with what to do for each." },
+        { p: "A bar for each dish shows what it earned you this week (plates sold × profit per plate), biggest first. The bar's colour puts it in one of four groups — **Stars** (popular and profitable), **Workhorses** (popular, thin margin), **Hidden gems** (profitable, few orders) and **Rethink** (low on both) — and the boxes beside it say what to do for each." },
       ],
     },
     {
@@ -431,6 +432,14 @@ export const en: Manual = {
           "A new order from another phone, the QR, a bill request or a payment to confirm plays a **sound**, shows a **pop-up** and adds a line to the **🔔 bell** at the top.",
           "Tap **Turn on** when Restropi asks, to also get phone or computer notifications when the app is in the background.",
           "Keep Restropi open on the counter device, with the volume up.",
+          "**Sounds:** 🔔 bell → Sound → **Choose sounds** gives each alert its own sound (new order, waiter call, kitchen, bill, payment, ready, low rating). ▶ plays it. The switch mutes this device.",
+        ] },
+        { h: "Waiter calls" },
+        { list: [
+          "When a guest taps **Call a waiter** on the table QR, every waiter in that outlet (staff with Tables access) and the owner get a ping.",
+          "Tap **I'll go** — everyone else sees who is going, and the guest's phone shows “Rahul is coming to your table”.",
+          "The owner or a sub admin can tap **Assign** to send a waiter; that waiter gets a ping. **Done** when you've been to the table.",
+          "Calls show in **Needs you now** on the home screen and in a small bar at the bottom of other screens.",
         ] },
         { tip: "On iPhone, notifications work after “Add to Home Screen” and opening Restropi from there." },
       ],

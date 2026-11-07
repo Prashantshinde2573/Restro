@@ -8,6 +8,7 @@ import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Shee
 import { useToast } from "@/components/toast";
 import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeature, useMenu, useOrders } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
+import { DragGhost, DragHandle, useDishDrag } from "@/components/dish-drag";
 import { MenuFromPhoto } from "@/components/menu-import";
 import { OptionsEditor, PhotoUploader } from "@/components/dish-editor";
 import { inr } from "@/lib/format";
@@ -109,10 +110,15 @@ export default function MenuPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
-  const maxSold = Math.max(1, ...items.map((m) => m.soldThisWeek));
-  const maxMargin = Math.max(1, ...items.map((m) => m.price - m.cost));
   const editing = edit && edit !== "new" ? edit : null;
   const [fromPhoto, setFromPhoto] = useState(false);
+  // drag a dish onto another category
+  const catName = (id: string | null) => cats.find((c) => c.id === id)?.name ?? "";
+  const { drag, start: startDrag } = useDishDrag((dishId, toCat) => {
+    const m = items.find((x) => x.id === dishId);
+    menuActions.update(dishId, { categoryId: toCat });
+    toast(`${m?.name ?? "Dish"} moved to ${catName(toCat)}`);
+  });
 
   return (
     <>
@@ -135,8 +141,12 @@ export default function MenuPage() {
         {tab === "dishes" || !engineeringOn ? (
           <div className="grid gap-6 lg:grid-cols-2">
             {cats.map((c) => (
-              <Group
+              <div
                 key={c.id}
+                data-drop-cat={c.id}
+                className={clsx("rounded-[24px] transition", drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft/60 ring-2 ring-jade ring-offset-4 ring-offset-canvas")}
+              >
+              <Group
                 title={`${c.icon ? c.icon + " " : ""}${c.name}`}
                 action={<button onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> Edit</button>}
                 flush
@@ -149,7 +159,8 @@ export default function MenuPage() {
                 {items.filter((m) => m.categoryId === c.id).map((m) => {
                   const margin = Math.round(((m.price - m.cost) / m.price) * 100);
                   return (
-                    <div key={m.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5">
+                    <div key={m.id} className={clsx("flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5", drag?.id === m.id && "opacity-40")}>
+                      <DragHandle name={m.name} onPointerDown={startDrag(m)} />
                       <button onClick={() => setEdit(m)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                         <PhotoSlide item={m} className="h-11 w-11 shrink-0 rounded-[12px]" />
                         <div className="min-w-0">
@@ -175,7 +186,9 @@ export default function MenuPage() {
                   );
                 })}
               </Group>
+              </div>
             ))}
+            <DragGhost drag={drag} label={catName} />
           </div>
         ) : (
           <div className="space-y-6">
@@ -197,40 +210,7 @@ export default function MenuPage() {
             })()}
 
             <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-              <Group title="Popularity vs profit, this week" overflowVisible>
-                <div className="relative aspect-[4/3] w-full">
-                  <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px overflow-hidden rounded-[14px] bg-line/70">
-                    {(["puzzle", "star", "dog", "plowhorse"] as Quadrant[]).map((q) => (
-                      <div key={q} className="relative bg-sunken/40 p-2.5">
-                        <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[12px] font-semibold text-muted">{qMeta[q].name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {items.map((m) => {
-                    const x = (m.soldThisWeek / maxSold) * 92 + 4;
-                    const y = 100 - (((m.price - m.cost) / maxMargin) * 88 + 6);
-                    const q = quadrant(m);
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => setEdit(m)}
-                        title={`${m.name} · ${m.soldThisWeek} sold · ${inr(m.price - m.cost)} margin`}
-                        className={clsx(
-                          "group absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface transition hover:z-20 hover:scale-150 focus-visible:z-20",
-                          q === "star" ? "bg-jade" : q === "plowhorse" ? "bg-sky" : q === "puzzle" ? "bg-saffron" : "bg-rose",
-                        )}
-                        style={{ left: `${x}%`, top: `${y}%` }}
-                      >
-                        <span className="pointer-events-none absolute bottom-4 left-1/2 z-30 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11px] text-canvas group-hover:block group-focus-visible:block">{m.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 flex justify-between text-[12px] text-faint">
-                  <span>Fewer orders</span>
-                  <span>More orders</span>
-                </div>
-              </Group>
+              <EarnedChart items={items} quadrant={quadrant} onOpen={setEdit} />
 
               <div className="space-y-4">
                 {(["star", "puzzle", "plowhorse", "dog"] as Quadrant[]).map((q) => (
@@ -532,5 +512,69 @@ function NewCategory({
         <Button disabled={!value.name.trim()} onClick={onAdd}>Add category</Button>
       </div>
     </div>
+  );
+}
+
+/** "What each dish earned you this week": plates sold × profit per plate, biggest first. */
+const qBar: Record<Quadrant, string> = { star: "bg-jade", plowhorse: "bg-sky", puzzle: "bg-saffron", dog: "bg-rose" };
+const qShort: Record<Quadrant, string> = { star: "Star", plowhorse: "Workhorse", puzzle: "Hidden gem", dog: "Rethink" };
+function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant: (m: MenuItem) => Quadrant; onOpen: (m: MenuItem) => void }) {
+  const [all, setAll] = useState(false);
+  const sold = items.filter((m) => m.soldThisWeek > 0).map((m) => ({ m, per: Math.max(0, m.price - m.cost), q: quadrant(m) })).map((r) => ({ ...r, earned: r.per * r.m.soldThisWeek }));
+  sold.sort((a, b) => b.earned - a.earned || b.m.soldThisWeek - a.m.soldThisWeek);
+  const none = items.filter((m) => m.soldThisWeek === 0);
+  const max = Math.max(1, ...sold.map((r) => r.earned));
+  const total = sold.reduce((s, r) => s + r.earned, 0);
+  const noCost = items.some((m) => !m.cost);
+  const shown = all ? sold : sold.slice(0, 10);
+  return (
+    <Group title="What each dish earned you this week">
+      <p className="text-[13px] leading-relaxed text-muted">
+        Each bar = <b className="text-ink">plates sold × profit per plate</b>. Longer bar, more money. The colour tells you what to do with the dish (see the boxes).
+        {noCost && " Dishes without a cost per plate count the full price as profit, so add costs for true numbers."}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-muted">
+        {(["star", "plowhorse", "puzzle", "dog"] as Quadrant[]).map((q) => (
+          <span key={q} className="inline-flex items-center gap-1.5"><span className={clsx("h-2.5 w-2.5 rounded-full", qBar[q])} />{qShort[q]}</span>
+        ))}
+      </div>
+      {sold.length === 0 ? (
+        <p className="mt-4 rounded-[14px] bg-sunken/60 p-4 text-[14px] text-muted">No dish was ordered in the last 7 days yet. Bars show up as orders come in.</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {shown.map(({ m, per, q, earned }) => (
+            <li key={m.id}>
+              <button onClick={() => onOpen(m)} title={`${m.name}: ${m.soldThisWeek} sold × ${inr(per)} = ${inr(earned)}`} className="group block w-full text-left">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate text-[14.5px] font-medium group-hover:underline">{m.name}</span>
+                  <span className="shrink-0 text-[14.5px] font-semibold tnum">{inr(earned)}</span>
+                </div>
+                <div className="mt-1 h-2.5 w-full rounded-full bg-sunken">
+                  <div className={clsx("h-full rounded-full", qBar[q])} style={{ width: `${Math.max(2, (earned / max) * 100)}%` }} />
+                </div>
+                <div className="mt-1 text-[12.5px] text-muted tnum">
+                  {qShort[q]} · {m.soldThisWeek} sold × {inr(per)} profit
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {sold.length > 10 && (
+        <button onClick={() => setAll((v) => !v)} className="mt-3 text-[13.5px] font-semibold text-jade">{all ? "Show top 10" : `Show all ${sold.length} dishes`}</button>
+      )}
+      {sold.length > 0 && <div className="mt-4 flex justify-between border-t border-line/80 pt-3 text-[14px]"><span className="text-muted">Total profit from all dishes this week</span><b className="tnum">{inr(total)}</b></div>}
+      {none.length > 0 && (
+        <div className="mt-4">
+          <div className="text-[12.5px] font-semibold text-muted">Not ordered this week ({none.length})</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {none.slice(0, all ? undefined : 12).map((m) => (
+              <button key={m.id} onClick={() => onOpen(m)} className="rounded-full bg-sunken px-2.5 py-1 text-[12.5px] font-medium hover:bg-line">{m.name}</button>
+            ))}
+            {!all && none.length > 12 && <span className="px-1 py-1 text-[12.5px] text-muted">+{none.length - 12} more</span>}
+          </div>
+        </div>
+      )}
+    </Group>
   );
 }

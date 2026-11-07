@@ -64,7 +64,7 @@ export default function KitchenPage() {
     const fresh = live.filter((o) => !seen.current!.has(o.id));
     fresh.forEach((o) => seen.current!.add(o.id));
     if (!fresh.length) return;
-    chime();
+    chime("kitchen");
     if (!voice || !("speechSynthesis" in window)) return;
     for (const o of fresh) {
       const where = o.tableName ? `Table ${o.tableName}` : o.type === "takeaway" ? `Parcel, token ${o.number || ""}` : `Order ${o.number || ""}`;
