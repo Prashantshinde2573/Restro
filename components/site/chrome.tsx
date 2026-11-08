@@ -15,7 +15,7 @@ import { SCROLL_LOCK_EVENT, gsap, lockScroll, pageScrollY, reducedMotion, scroll
 const links = [
   { href: "/#features", label: "Features" },
   { href: "/#story", label: "How it works" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/#contact", label: "Contact" },
 ];
 
@@ -79,7 +79,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           </Link>
           <nav className={clsx("hidden items-center gap-1 whitespace-nowrap lg:flex", light ? "mx-auto" : "ml-6")} aria-label="Main">
             {links.map((l) => (
-              <Link key={l.href} href={l.href} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : "text-ink/65 hover:bg-white/60 hover:text-ink")}>
+              <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : path === l.href ? "bg-white/70 font-semibold text-ink" : "text-ink/65 hover:bg-white/60 hover:text-ink")}>
                 {l.label}
               </Link>
             ))}
@@ -236,7 +236,7 @@ function DemoDialog() {
 }
 
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
-  { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/#pricing", label: "Pricing" }, { href: "/pricing", label: "Compare plans" }] },
+  { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/pricing", label: "Pricing" }, { href: "/pricing#compare", label: "Compare plans" }] },
   { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
   { t: "Restropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/privacy", label: "Privacy policy" }, { href: "/#contact", label: "Contact us" }] },
 ];
@@ -258,7 +258,7 @@ export function SiteFooter() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>
               Book a free demo
             </a>
-            <Link href="/#pricing" className="flex h-14 w-full items-center justify-center rounded-[16px] bg-white px-7 text-[16px] font-semibold ring-1 ring-black/[.06] transition hover:bg-jade-soft sm:w-auto">
+            <Link href="/pricing" className="flex h-14 w-full items-center justify-center rounded-[16px] bg-white px-7 text-[16px] font-semibold ring-1 ring-black/[.06] transition hover:bg-jade-soft sm:w-auto">
               See plans (from ₹699/mo)
             </Link>
           </div>

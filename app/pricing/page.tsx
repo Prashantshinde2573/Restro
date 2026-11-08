@@ -43,7 +43,7 @@ export default function PricingPage() {
             </div>
           </section>
 
-          <section className="pb-14 lg:pb-28">
+          <section id="compare" className="scroll-mt-24 pb-14 lg:pb-28">
             <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
               <SectionHead eyebrow="Side by side" title="Compare *plans.*" />
               <div data-reveal className="glass mt-8 overflow-x-auto rounded-[28px] lg:mt-12">

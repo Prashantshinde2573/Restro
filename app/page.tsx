@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { PricingTable } from "@/components/pricing";
 import { MobileCta, SiteFooter, SiteNav } from "@/components/site/chrome";
 import { Hero, MadeFor } from "@/components/site/hero";
@@ -27,6 +29,18 @@ export default function Landing() {
               <SectionHead eyebrow="Pricing" title="Simple pricing, *per outlet.*" sub="Every plan includes unlimited bills, free updates and WhatsApp support in Marathi, Hindi and English." />
               <div className="mt-6 lg:mt-8">
                 <PricingTable />
+              </div>
+              <div data-reveal className="mt-8 flex flex-col items-center gap-2 text-center lg:mt-10">
+                <Link
+                  href="/pricing"
+                  className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink ring-1 ring-black/[.06] transition hover:bg-jade-soft"
+                >
+                  Compare all plans in detail
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-white transition group-hover:translate-x-0.5">
+                    <ArrowRight size={17} />
+                  </span>
+                </Link>
+                <span className="text-[13px] text-ink/50">Every feature, side by side</span>
               </div>
             </div>
           </section>
