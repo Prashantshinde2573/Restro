@@ -3,6 +3,7 @@ import { MobileCta, SiteFooter, SiteNav } from "@/components/site/chrome";
 import { Hero, MadeFor } from "@/components/site/hero";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
+import { JsonLd } from "@/components/site/json-ld";
 import { SectionHead } from "@/components/site/head";
 import { Features, Only, Statement, Story, WhyRestropi } from "@/components/site/sections";
 
@@ -10,6 +11,7 @@ export default function Landing() {
   return (
     <SiteMotion>
       <div className="min-h-dvh overflow-x-clip bg-canvas">
+        <JsonLd page="home" />
         <SiteNav onVideo />
         <main>
           <Hero />

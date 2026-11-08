@@ -31,6 +31,7 @@ export function SectionHead({
   dark = false,
   align = "center",
   className,
+  as = "h2",
 }: {
   eyebrow: string;
   title: string;
@@ -38,12 +39,14 @@ export function SectionHead({
   dark?: boolean;
   align?: "center" | "left";
   className?: string;
+  /** "h1" for the main heading of a page that has no hero */
+  as?: "h1" | "h2";
 }) {
   return (
     <div className={clsx(align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-3xl", className)}>
       <Eyebrow dark={dark}>{eyebrow}</Eyebrow>
       <RiseText
-        as="h2"
+        as={as}
         onScroll
         text={title}
         className={clsx(

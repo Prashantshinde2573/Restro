@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import { JsonLd } from "@/components/site/json-ld";
+import { pageMeta } from "@/lib/site";
 import { PricingTable } from "@/components/pricing";
 import { SiteFooter, SiteNav } from "@/components/site/chrome";
 import { HelpChat } from "@/components/site/chat";
@@ -6,7 +9,11 @@ import { SectionHead } from "@/components/site/head";
 import { MobileCta } from "@/components/site/chrome";
 import { plans } from "@/lib/plans";
 
-export const metadata = { title: "Pricing" };
+export const metadata: Metadata = pageMeta(
+  "/pricing",
+  "Pricing · plans from ₹699 a month per outlet",
+  "Restropi plans for cafés, restaurants and chains: Starter ₹699, Growth ₹1,999 and Pro ₹2,999 a month per outlet. Unlimited bills, free updates, WhatsApp support. Change or cancel any time.",
+);
 
 /** Each plan includes everything in the one before it, plus its own list. */
 function comparison() {
@@ -24,11 +31,12 @@ export default function PricingPage() {
   return (
     <SiteMotion>
       <div className="min-h-dvh overflow-x-clip bg-canvas">
+        <JsonLd page="pricing" />
         <SiteNav />
         <main>
           <section className="relative isolate overflow-hidden pb-14 pt-28 lg:pb-28 lg:pt-40">
             <div className="relative mx-auto max-w-[1240px] px-5 text-center lg:px-8">
-              <SectionHead eyebrow="Pricing" title="Pick a *plan.*" sub="Change or cancel any time. Prices are per outlet." />
+              <SectionHead as="h1" eyebrow="Pricing" title="Pick a *plan.*" sub="Change or cancel any time. Prices are per outlet." />
               <div className="mt-6 text-left lg:mt-8">
                 <PricingTable />
               </div>

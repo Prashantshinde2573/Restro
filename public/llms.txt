@@ -1,0 +1,13 @@
+# Restropi
+
+> Restropi is a restaurant and café management app for India. One app for billing with UPI QR and GST, kitchen orders (KOT) on a phone or tablet, tables, QR ordering and payment from the table, stock and dish costing, staff, guests and daily reports. It runs on the phone, tablet or laptop a restaurant already has, in English, Marathi and Hindi.
+
+## Pages
+
+- [Home](https://www.restropi.com/): what Restropi does, who it is for
+- [Pricing](https://www.restropi.com/pricing): Starter ₹699, Growth ₹1,999 and Pro ₹2,999 a month per outlet; Chain for 4+ outlets
+- [Privacy policy](https://www.restropi.com/privacy): personal data and cookies
+
+## Contact
+
+- Email: support@restropi.com

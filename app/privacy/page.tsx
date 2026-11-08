@@ -1,13 +1,12 @@
+import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site";
 import type { ReactNode } from "react";
 import { MobileCta, SiteFooter, SiteNav } from "@/components/site/chrome";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
 import { DEFAULT_CONTACT_EMAIL } from "@/lib/config";
 
-export const metadata = {
-  title: "Privacy policy",
-  description: "How Restropi collects, uses and protects personal data, and how we use cookies.",
-};
+export const metadata: Metadata = pageMeta("/privacy", "Privacy policy", "How Restropi collects, uses and protects personal data, and how we use cookies.");
 
 const EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL;
 const UPDATED = "5 November 2026";

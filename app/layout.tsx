@@ -5,6 +5,7 @@ import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
 import { CookieConsent } from "@/components/cookie-consent";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 // Analytics: set these in .env.local / your host's environment to switch them on.
 // Google Analytics 4 Measurement ID (public, it shows in every page). NEXT_PUBLIC_GA_ID on Vercel overrides it.
@@ -14,9 +15,29 @@ const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || "GTM-PVZ25CCF";
 const GSC = process.env.NEXT_PUBLIC_GSC_VERIFICATION; // Search Console "HTML tag" code
 
 export const metadata: Metadata = {
-  title: { default: "Restropi", template: "%s · Restropi" },
-  description: "Run your restaurant or café from one calm screen — billing, kitchen, stock, team and guests.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: "%s · Restropi" },
+  description: SITE_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "business",
   manifest: "/manifest.webmanifest",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    locale: "en_IN",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: SITE_TITLE }],
+  },
+  twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION, images: ["/opengraph-image"] },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
+  formatDetection: { telephone: false, email: false, address: false },
   appleWebApp: { capable: true, title: "Restropi", statusBarStyle: "default" },
   ...(GSC ? { verification: { google: GSC } } : {}),
 };

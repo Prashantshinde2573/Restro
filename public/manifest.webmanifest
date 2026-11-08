@@ -1,10 +1,20 @@
 {
+  "id": "/app",
   "name": "Restropi",
   "short_name": "Restropi",
+  "description": "Restaurant and café billing, kitchen, tables, QR ordering and stock in one app.",
+  "lang": "en-IN",
   "start_url": "/app",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#F3F4F1",
   "theme_color": "#0E7A5F",
+  "categories": [
+    "business",
+    "food",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/brand/icon-192.png",
