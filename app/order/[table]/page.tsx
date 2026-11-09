@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
-import { Banknote, BellRing, Check, CreditCard, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
+import { Banknote, BellRing, Check, ConciergeBell, CreditCard, Languages, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DietMark, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -12,9 +12,11 @@ import { PhotoSlide } from "@/components/menu-bits";
 import { OtpSheet, type GuestProfile } from "@/components/otp-sheet";
 import {
   ActiveFilters,
-  CategoryRail,
-  DishRow,
+  CategoryChips,
+  DietPills,
+  DishCard,
   FilterButton,
+  GuestTabs,
   FilterSheet,
   applyFilters,
   noFilters,
@@ -129,8 +131,8 @@ export default function GuestOrder() {
   const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !(tablesReady && waitedLong)));
 
   const [lang, setLang] = useState<Lang>("en");
-  const mr = lang === "mr";
-  const [view, setView] = useState<"menu" | "orders">("menu");
+  const [view, setView] = useState<"menu" | "browse" | "orders">("menu");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<MenuFilters>(noFilters);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -182,6 +184,7 @@ export default function GuestOrder() {
   const pickGuests = (n: number) => {
     setGuestCount(n);
     setCountOpen(false);
+    window.scrollTo({ top: 0 }); // start the menu from the top
     try { localStorage.setItem(storeKey + ".guests", String(n)); } catch {}
     // already seated: update the party so staff see the right number
     const pp = t?.parties.find((x) => x.id === myParty);
@@ -333,6 +336,16 @@ export default function GuestOrder() {
       if (raf) cancelAnimationFrame(raf);
     };
   }, [grouped, view, barH, cloudLoading]);
+  /** Menu tab → a category: back to home, scrolled to it. */
+  const openCat = (id: string) => {
+    setQ("");
+    setFilters((f) => ({ ...f, cats: [] }));
+    setView("menu");
+    window.setTimeout(() => {
+      setActiveCat(id);
+      document.getElementById(`cat-${id}`)?.scrollIntoView({ block: "start" });
+    }, 60);
+  };
   const jumpTo = (id: string) => {
     setActiveCat(id);
     document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -547,7 +560,7 @@ export default function GuestOrder() {
   const cashWhere = payNow ? "counter" : "table";
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-36 sm:max-w-2xl">
+    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-[168px] sm:max-w-2xl">
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
       {t && !counter && qrOn && isOpen && !thanks && !waiting && ((needCount && !skipAsk) || countOpen) && (
         <GuestCountScreen
@@ -561,29 +574,36 @@ export default function GuestOrder() {
       )}
 
       {/* ---------- header ---------- */}
-      <header className="px-5 pb-3 pt-6">
+      <header className="px-5 pb-2 pt-6">
         <div className="flex items-center justify-between gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[22px] w-auto select-none" draggable={false} />
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-ink px-3 py-1.5 text-[13px] font-semibold text-canvas">
-              {placeLabel}
-              {party && shared && <> · {groupName}</>}
-            </span>
-            {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
-              <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">
-                <Users size={14} /> <span className="tnum">{party?.guests ?? guestCount}</span>
-              </button>
-            ) : null}
-            <button onClick={() => setLang(mr ? "en" : "mr")} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">{mr ? "English" : "मराठी"}</button>
-          </div>
+          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[34px] w-auto select-none" draggable={false} />
+          <button onClick={() => setMoreOpen(true)} aria-label={tx(lang, "More", "अधिक")} className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full active:bg-sunken">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M4 10h20M10 18h14" /></svg>
+          </button>
         </div>
-        <h1 className="mt-4 text-[30px] font-semibold leading-tight tracking-tight">{settings.name}</h1>
-        <p className="text-[14px] text-muted">
+        <h1 className="mt-5 text-[32px] font-bold leading-tight tracking-tight">{settings.name}</h1>
+        <p className="mt-0.5 text-[15px] text-ink/75">
           {payNow
             ? tx(lang, "Order and pay from your phone. We'll call your token when it's ready.", "फोनवरून ऑर्डर करा आणि पैसे भरा. तयार झालं की टोकन बोलावू.")
             : tx(lang, "Order from your phone. We'll bring it to your table.", "फोनवरून ऑर्डर करा. आम्ही टेबलवर आणू.")}
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-ink px-3 py-1.5 text-[12.5px] font-semibold text-canvas">
+            {placeLabel}
+            {party && shared && <> · {groupName}</>}
+          </span>
+          {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
+            <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[12.5px] font-semibold ring-1 ring-line">
+              <Users size={13} /> <span className="tnum">{party?.guests ?? guestCount}</span>
+            </button>
+          ) : null}
+          {myCall && (
+            <span className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold", myCall.status === "taken" ? "bg-jade-soft text-jade-deep" : "bg-saffron-soft text-saffron")}>
+              <BellRing size={13} /> {myCall.status === "taken" ? tx(lang, `${myCall.toName ?? "Waiter"} is coming`, `${myCall.toName ?? "वेटर"} येत आहे`) : tx(lang, "Waiter called", "वेटरला बोलावलं")}
+            </span>
+          )}
+        </div>
 
         {t && qrOn && !payNow && !cafe && (party ? (
           shared ? (
@@ -631,74 +651,104 @@ export default function GuestOrder() {
         </div>
       )}
 
-      {/* ---------- menu / my orders switch ---------- */}
-      {(qrOn || myOrders.length > 0) && (
-        <div className="px-4 pb-1">
-          <div className="flex rounded-ctl bg-sunken p-[3px]" role="tablist">
-            {(["menu", "orders"] as const).map((v) => (
-              <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", view === v ? "bg-surface shadow-float" : "text-muted")}>
-                {v === "menu" ? tx(lang, "Menu", "मेनू") : `${tx(lang, "My orders", "माझ्या ऑर्डर्स")}${myOrders.length ? ` · ${myOrders.length}` : ""}`}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {view === "menu" ? (
+        /* ---------- home: veg switch, category chips, dish cards ---------- */
         <>
-          {/* search, veg/non-veg, filters — each its own control */}
-          <div ref={barRef} className="sticky top-0 z-20 space-y-2 border-b border-line/60 bg-canvas px-4 pb-3 pt-3">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  type="search"
-                  enterKeyHint="search"
-                  placeholder={tx(lang, "Search menu", "मेनू शोधा")}
-                  className="h-11 w-full rounded-ctl bg-surface pl-10 pr-9 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade [&::-webkit-search-cancel-button]:hidden"
-                />
-                {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
+          <div className="px-4 pt-2">
+            <DietPills value={filters.diet} onChange={(d) => setFilters({ ...filters, diet: d })} menu={menu} lang={lang} />
+          </div>
+          <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-2 pt-3 backdrop-blur">
+            {grouped.length > 1 && <CategoryChips groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />}
+            {(q.trim() || sheetFilterCount({ ...filters, diet: "all" }) > 0) && (
+              <div className="mt-2 flex items-center gap-2">
+                {q.trim() && (
+                  <button onClick={() => setQ("")} className="flex shrink-0 items-center gap-1 rounded-full bg-ink py-1 pl-3 pr-2 text-[13px] font-semibold text-canvas">
+                    “{q.trim()}” <X size={13} />
+                  </button>
+                )}
+                <div className="min-w-0 flex-1"><ActiveFilters f={{ ...filters, diet: "all" }} setF={(f) => setFilters({ ...f, diet: filters.diet })} cats={cats} lang={lang} /></div>
               </div>
-              <FilterButton count={sheetFilterCount(filters)} onClick={() => setFilterOpen(true)} lang={lang} />
-            </div>
-            <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
-          </div>
-
-          <div className="flex items-start gap-2.5 px-3 pt-3">
-            {grouped.length > 1 && (
-              <aside className="sticky z-10 flex w-[76px] shrink-0 self-start flex-col sm:w-[92px]" style={{ top: barH + 12, maxHeight: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
-                <CategoryRail groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />
-              </aside>
             )}
-            <main className="min-w-0 flex-1 space-y-6 pb-4">
-              {filtering && grouped.length > 0 && (
-                <p className="px-1 text-[13px] text-muted">{tx(lang, `${shownItems.length} dishes`, `${shownItems.length} डिश`)}</p>
-              )}
-              {grouped.length === 0 && (
-                <div className="py-16 text-center">
-                  <div className="text-[16px] font-semibold">{tx(lang, "No dishes match", "काही सापडलं नाही")}</div>
-                  <button onClick={() => { setQ(""); setFilters(noFilters); }} className="mt-2 text-[14px] font-semibold text-jade">{tx(lang, "Clear search and filters", "शोध आणि फिल्टर काढा")}</button>
-                </div>
-              )}
-              {grouped.map(({ c, items }) => (
-                <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 12 }}>
-                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[17px] font-semibold leading-tight tracking-tight">
-                    {c.icon && <span aria-hidden>{c.icon}</span>} {c.name}
-                    <span className="text-[13px] font-medium text-faint tnum">{items.length}</span>
-                  </h2>
-                  <div className="overflow-hidden rounded-[18px] bg-surface">
-                    {items.map((m) => (
-                      <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-              <PoweredBy />
-            </main>
           </div>
+          <main className="space-y-7 px-4 pb-4 pt-3">
+            {grouped.length === 0 && (
+              <div className="py-16 text-center">
+                <div className="text-[16px] font-semibold">{tx(lang, "No dishes match", "काही सापडलं नाही")}</div>
+                <button onClick={() => { setQ(""); setFilters(noFilters); }} className="mt-2 text-[14px] font-semibold text-jade">{tx(lang, "Clear search and filters", "शोध आणि फिल्टर काढा")}</button>
+              </div>
+            )}
+            {grouped.map(({ c, items }) => (
+              <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 8 }}>
+                <h2 className="mb-3.5 flex items-center gap-3 px-0.5">
+                  {c.icon ? <span aria-hidden className="text-[24px] leading-none">{c.icon}</span> : <ConciergeBell size={28} strokeWidth={1.7} className="text-jade-deep" aria-hidden />}
+                  <span className="min-w-0 flex-1 truncate text-[22px] font-bold tracking-tight">{c.name}</span>
+                  <span className="shrink-0 text-[15px] font-semibold text-ink/70 tnum">{items.length} {items.length === 1 ? tx(lang, "item", "डिश") : tx(lang, "items", "डिश")}</span>
+                </h2>
+                <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                  {items.map((m) => (
+                    <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
+                  ))}
+                </div>
+              </section>
+            ))}
+            <PoweredBy />
+          </main>
         </>
+      ) : view === "browse" ? (
+        /* ---------- menu tab: search, filters, every category ---------- */
+        <main className="px-4 pt-2">
+          <div className="sticky top-0 z-20 -mx-4 flex gap-2 bg-canvas/95 px-4 pb-3 pt-2 backdrop-blur">
+            <div className="relative flex-1">
+              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                type="search"
+                enterKeyHint="search"
+                placeholder={tx(lang, "Search dishes", "डिश शोधा")}
+                className="h-12 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade [&::-webkit-search-cancel-button]:hidden"
+              />
+              {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
+            </div>
+            <FilterButton count={sheetFilterCount(filters)} onClick={() => setFilterOpen(true)} lang={lang} />
+          </div>
+          {filtering ? (
+            <>
+              <div className="mb-3 flex items-baseline justify-between px-0.5">
+                <span className="text-[15px] font-semibold">{tx(lang, `${shownItems.length} dishes`, `${shownItems.length} डिश`)}</span>
+                <button onClick={() => { setQ(""); setFilters(noFilters); }} className="text-[13.5px] font-semibold text-jade">{tx(lang, "Clear", "काढा")}</button>
+              </div>
+              <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
+              <div className="mt-3 grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                {shownItems.map((m) => (
+                  <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
+                ))}
+              </div>
+              {shownItems.length === 0 && <p className="py-12 text-center text-[15px] text-muted">{tx(lang, "No dishes match", "काही सापडलं नाही")}</p>}
+            </>
+          ) : (
+            <>
+              <h2 className="mb-3 px-0.5 text-[20px] font-bold tracking-tight">{tx(lang, "Categories", "प्रकार")}</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {cats.map((c) => {
+                  const n = menu.filter((m) => m.categoryId === c.id).length;
+                  if (!n) return null;
+                  const cover = menu.find((m) => m.categoryId === c.id && m.photos?.length) ?? menu.find((m) => m.categoryId === c.id)!;
+                  return (
+                    <button key={c.id} onClick={() => openCat(c.id)} className="overflow-hidden rounded-[20px] bg-surface text-left shadow-[0_1px_2px_rgb(16_24_20/.04),0_10px_24px_-14px_rgb(16_24_20/.18)] active:scale-[.98]">
+                      <PhotoSlide item={cover} className="aspect-[16/10] w-full" />
+                      <span className="flex items-center gap-2 px-3 py-2.5">
+                        {c.icon && <span aria-hidden className="text-[18px]">{c.icon}</span>}
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{c.name}</span>
+                        <span className="text-[12.5px] font-semibold text-muted tnum">{n}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </main>
       ) : (
         /* ---------- my orders ---------- */
         <main className="space-y-3 px-4 pt-3">
@@ -773,19 +823,16 @@ export default function GuestOrder() {
         </main>
       )}
 
-      {/* ---------- bottom bar ---------- */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 [--safe-pb:16px] sm:max-w-2xl">
-        {count > 0 ? (
-          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-5 py-4 text-white shadow-float">
+      {/* ---------- above the tabs: cart total, or where the bill stands ---------- */}
+      <div className="fixed inset-x-0 bottom-[74px] z-30 mx-auto max-w-md px-4 pb-2 sm:max-w-2xl">
+        {count > 0 && view !== "orders" ? (
+          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade-deep px-5 py-3.5 text-white shadow-float">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
             <span className="text-[15px] tnum opacity-90">{inr(itemTotal)} <span className="text-[12px] opacity-75">+ GST</span></span>
             <span className="ml-auto text-[16px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
           </button>
-        ) : openOrders.length > 0 || (!payNow && billState === "paid") ? (
-          <div className={clsx("grid gap-2", !payNow && billState !== "none" ? "grid-cols-2" : "grid-cols-1")}>
-            <Button size="lg" variant="plain" className="shadow-float" onClick={() => { setView(view === "menu" ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}>
-              {view === "menu" ? <><ReceiptText size={17} /> {tx(lang, "My orders", "माझ्या ऑर्डर्स")}</> : <><UtensilsCrossed size={17} /> {tx(lang, "Order more", "आणखी ऑर्डर")}</>}
-            </Button>
+        ) : view === "orders" && !payNow && billState !== "none" ? (
+          <div className="grid grid-cols-1 gap-2">
             {/* where the bill stands: pay it / already paid, owner confirming / paid */}
             {!payNow && billState === "open" && (
               <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setBillOpen(true); }}>
@@ -806,6 +853,69 @@ export default function GuestOrder() {
           </div>
         ) : null}
       </div>
+
+      {/* ---------- bottom tabs ---------- */}
+      <GuestTabs
+        tab={view === "menu" ? "home" : view === "browse" ? "menu" : "orders"}
+        onTab={(tb) => {
+          if (tb === "cart") return count ? setCartOpen(true) : toast(tx(lang, "Your cart is empty · tap + on a dish", "कार्ट रिकामी आहे · डिशवर + दाबा"));
+          setView(tb === "home" ? "menu" : tb === "menu" ? "browse" : "orders");
+          window.scrollTo({ top: 0 });
+        }}
+        cartCount={count}
+        ordersBadge={openOrders.length}
+        showCart={qrOn}
+        lang={lang}
+      />
+
+      {/* ---------- ☰ more: language, guests, call a waiter ---------- */}
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={settings.name}>
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-group bg-surface">
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-[15px] font-medium">{tx(lang, "You're at", "तुम्ही आहात")}</span>
+              <span className="text-[15px] font-semibold">{placeLabel}{party && shared ? ` · ${groupName}` : ""}</span>
+            </div>
+            {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
+              <button onClick={() => { setMoreOpen(false); setCountOpen(true); }} className="flex w-full items-center justify-between border-t border-line/80 px-4 py-3.5 text-left">
+                <span className="text-[15px] font-medium">{tx(lang, "Guests", "किती जण")}</span>
+                <span className="flex items-center gap-2 text-[15px] font-semibold"><Users size={15} /> {party?.guests ?? guestCount} <span className="text-[13px] font-semibold text-jade">{tx(lang, "Change", "बदला")}</span></span>
+              </button>
+            ) : null}
+            <div className="flex items-center justify-between border-t border-line/80 px-4 py-3">
+              <span className="flex items-center gap-2 text-[15px] font-medium"><Languages size={17} /> {tx(lang, "Language", "भाषा")}</span>
+              <div className="flex rounded-ctl bg-sunken p-[3px]">
+                {(["en", "mr"] as const).map((l) => (
+                  <button key={l} onClick={() => setLang(l)} className={clsx("rounded-[9px] px-3 py-1.5 text-[13.5px] font-semibold", lang === l ? "bg-surface shadow-float" : "text-muted")}>{l === "en" ? "English" : "मराठी"}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+            {!counter && (
+              myCall?.status === "taken" ? (
+                <div className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-jade-soft py-3.5 text-[15px] font-semibold text-jade-deep">
+                  <Check size={17} /> {tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}
+                </div>
+              ) : myCall?.status === "open" ? (
+                <div className="flex w-full items-center gap-2 rounded-[18px] bg-saffron-soft py-2 pl-4 pr-2 text-saffron">
+                  <BellRing size={17} className="animate-pulse" />
+                  <span className="flex-1 text-[15px] font-semibold">{tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…")}</span>
+                  <button onClick={() => callActions.cancel(myCall.id)} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink">{tx(lang, "Cancel", "रद्द करा")}</button>
+                </div>
+              ) : (
+                <button onClick={() => { callWaiter(); setMoreOpen(false); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+                  <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
+                </button>
+              )
+            )}
+          {myOrders.length > 0 && (
+            <button onClick={() => { setMoreOpen(false); setView("orders"); window.scrollTo({ top: 0 }); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+              <ReceiptText size={17} /> {tx(lang, "My orders and bill", "माझ्या ऑर्डर्स आणि बिल")}
+            </button>
+          )}
+          <PoweredBy />
+        </div>
+      </Sheet>
 
       {/* ---------- dish detail / photos ---------- */}
       <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={qrOn && isOpen ? addLine : undefined} photosOnly={!qrOn || !isOpen} />
