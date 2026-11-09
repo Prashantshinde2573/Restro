@@ -1,5 +1,6 @@
 "use client";
 
+import { GUEST_LANGS, tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
@@ -39,9 +40,9 @@ const PAIRINGS: Record<string, string> = { mains: "m10", starters: "m19", rice: 
 const sumOf = (p: Payment[]) => p.reduce((s, x) => s + x.amount, 0);
 const num = (n: number) => (n ? n : "…"); // cloud: number arrives a moment after the order
 
-function StatusTrack({ status, lang }: { status: Order["status"]; lang: "en" | "mr" }) {
+function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) {
   const cur = stepOf(status);
-  const labels = lang === "mr" ? STEPS_MR : STEPS;
+  const labels = STEPS.map((en, i) => tx(lang, en, STEPS_MR[i]));
   return (
     <ol className="flex items-start" aria-label={`Order status: ${STEPS[cur]}`}>
       {labels.map((l, i) => (
@@ -65,8 +66,6 @@ function StatusTrack({ status, lang }: { status: Order["status"]; lang: "en" | "
   );
 }
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
 type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean };
@@ -130,7 +129,17 @@ export default function GuestOrder() {
   const tablesReady = useReady("tables");
   const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !(tablesReady && waitedLong)));
 
-  const [lang, setLang] = useState<Lang>("en");
+  const [lang, setLangState] = useState<Lang>("en");
+  useEffect(() => {
+    try {
+      const l = localStorage.getItem("restropi.guestLang");
+      if (l === "en" || l === "mr" || l === "hi") setLangState(l);
+    } catch {}
+  }, []);
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    try { localStorage.setItem("restropi.guestLang", l); } catch {}
+  };
   const [view, setView] = useState<"menu" | "browse" | "orders">("menu");
   const [moreOpen, setMoreOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -560,7 +569,7 @@ export default function GuestOrder() {
   const cashWhere = payNow ? "counter" : "table";
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-[168px] sm:max-w-2xl">
+    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-[140px] sm:max-w-2xl">
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
       {t && !counter && qrOn && isOpen && !thanks && !waiting && ((needCount && !skipAsk) || countOpen) && (
         <GuestCountScreen
@@ -574,32 +583,32 @@ export default function GuestOrder() {
       )}
 
       {/* ---------- header ---------- */}
-      <header className="px-5 pb-2 pt-6">
+      <header className="px-4 pb-1 pt-4">
         <div className="flex items-center justify-between gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[34px] w-auto select-none" draggable={false} />
-          <button onClick={() => setMoreOpen(true)} aria-label={tx(lang, "More", "अधिक")} className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full active:bg-sunken">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M4 10h20M10 18h14" /></svg>
+          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[26px] w-auto select-none" draggable={false} />
+          <button onClick={() => setMoreOpen(true)} aria-label={tx(lang, "More", "अधिक")} className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full active:bg-sunken">
+            <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M4 10h20M10 18h14" /></svg>
           </button>
         </div>
-        <h1 className="mt-5 text-[32px] font-bold leading-tight tracking-tight">{settings.name}</h1>
-        <p className="mt-0.5 text-[15px] text-ink/75">
+        <h1 className="mt-3.5 text-[24px] font-bold leading-tight tracking-tight">{settings.name}</h1>
+        <p className="mt-0.5 text-[13.5px] text-ink/70">
           {payNow
             ? tx(lang, "Order and pay from your phone. We'll call your token when it's ready.", "फोनवरून ऑर्डर करा आणि पैसे भरा. तयार झालं की टोकन बोलावू.")
             : tx(lang, "Order from your phone. We'll bring it to your table.", "फोनवरून ऑर्डर करा. आम्ही टेबलवर आणू.")}
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-ink px-3 py-1.5 text-[12.5px] font-semibold text-canvas">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas">
             {placeLabel}
             {party && shared && <> · {groupName}</>}
           </span>
           {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
-            <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[12.5px] font-semibold ring-1 ring-line">
-              <Users size={13} /> <span className="tnum">{party?.guests ?? guestCount}</span>
+            <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[12px] font-semibold ring-1 ring-line">
+              <Users size={12} /> <span className="tnum">{party?.guests ?? guestCount}</span>
             </button>
           ) : null}
           {myCall && (
-            <span className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold", myCall.status === "taken" ? "bg-jade-soft text-jade-deep" : "bg-saffron-soft text-saffron")}>
+            <span className={clsx("flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold", myCall.status === "taken" ? "bg-jade-soft text-jade-deep" : "bg-saffron-soft text-saffron")}>
               <BellRing size={13} /> {myCall.status === "taken" ? tx(lang, `${myCall.toName ?? "Waiter"} is coming`, `${myCall.toName ?? "वेटर"} येत आहे`) : tx(lang, "Waiter called", "वेटरला बोलावलं")}
             </span>
           )}
@@ -657,7 +666,7 @@ export default function GuestOrder() {
           <div className="px-4 pt-2">
             <DietPills value={filters.diet} onChange={(d) => setFilters({ ...filters, diet: d })} menu={menu} lang={lang} />
           </div>
-          <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-2 pt-3 backdrop-blur">
+          <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-1.5 pt-2.5 backdrop-blur">
             {grouped.length > 1 && <CategoryChips groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />}
             {(q.trim() || sheetFilterCount({ ...filters, diet: "all" }) > 0) && (
               <div className="mt-2 flex items-center gap-2">
@@ -670,7 +679,7 @@ export default function GuestOrder() {
               </div>
             )}
           </div>
-          <main className="space-y-7 px-4 pb-4 pt-3">
+          <main className="space-y-6 px-4 pb-4 pt-2.5">
             {grouped.length === 0 && (
               <div className="py-16 text-center">
                 <div className="text-[16px] font-semibold">{tx(lang, "No dishes match", "काही सापडलं नाही")}</div>
@@ -679,12 +688,12 @@ export default function GuestOrder() {
             )}
             {grouped.map(({ c, items }) => (
               <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 8 }}>
-                <h2 className="mb-3.5 flex items-center gap-3 px-0.5">
-                  {c.icon ? <span aria-hidden className="text-[24px] leading-none">{c.icon}</span> : <ConciergeBell size={28} strokeWidth={1.7} className="text-jade-deep" aria-hidden />}
-                  <span className="min-w-0 flex-1 truncate text-[22px] font-bold tracking-tight">{c.name}</span>
-                  <span className="shrink-0 text-[15px] font-semibold text-ink/70 tnum">{items.length} {items.length === 1 ? tx(lang, "item", "डिश") : tx(lang, "items", "डिश")}</span>
+                <h2 className="mb-2.5 flex items-center gap-2 px-0.5">
+                  {c.icon ? <span aria-hidden className="text-[18px] leading-none">{c.icon}</span> : <ConciergeBell size={20} strokeWidth={1.8} className="text-jade-deep" aria-hidden />}
+                  <span className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-tight">{c.name}</span>
+                  <span className="shrink-0 text-[12.5px] font-semibold text-ink/60 tnum">{items.length} {items.length === 1 ? tx(lang, "item", "डिश") : tx(lang, "items", "डिश")}</span>
                 </h2>
-                <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                   {items.map((m) => (
                     <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
                   ))}
@@ -706,7 +715,7 @@ export default function GuestOrder() {
                 type="search"
                 enterKeyHint="search"
                 placeholder={tx(lang, "Search dishes", "डिश शोधा")}
-                className="h-12 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade [&::-webkit-search-cancel-button]:hidden"
+                className="h-11 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade [&::-webkit-search-cancel-button]:hidden"
               />
               {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
             </div>
@@ -719,7 +728,7 @@ export default function GuestOrder() {
                 <button onClick={() => { setQ(""); setFilters(noFilters); }} className="text-[13.5px] font-semibold text-jade">{tx(lang, "Clear", "काढा")}</button>
               </div>
               <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
-              <div className="mt-3 grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {shownItems.map((m) => (
                   <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
                 ))}
@@ -728,18 +737,18 @@ export default function GuestOrder() {
             </>
           ) : (
             <>
-              <h2 className="mb-3 px-0.5 text-[20px] font-bold tracking-tight">{tx(lang, "Categories", "प्रकार")}</h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <h2 className="mb-2.5 px-0.5 text-[17px] font-bold tracking-tight">{tx(lang, "Categories", "प्रकार")}</h2>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {cats.map((c) => {
                   const n = menu.filter((m) => m.categoryId === c.id).length;
                   if (!n) return null;
                   const cover = menu.find((m) => m.categoryId === c.id && m.photos?.length) ?? menu.find((m) => m.categoryId === c.id)!;
                   return (
-                    <button key={c.id} onClick={() => openCat(c.id)} className="overflow-hidden rounded-[20px] bg-surface text-left shadow-[0_1px_2px_rgb(16_24_20/.04),0_10px_24px_-14px_rgb(16_24_20/.18)] active:scale-[.98]">
+                    <button key={c.id} onClick={() => openCat(c.id)} className="overflow-hidden rounded-[16px] bg-surface text-left ring-1 ring-line/70 active:scale-[.98]">
                       <PhotoSlide item={cover} className="aspect-[16/10] w-full" />
-                      <span className="flex items-center gap-2 px-3 py-2.5">
+                      <span className="flex items-center gap-1.5 px-2.5 py-2">
                         {c.icon && <span aria-hidden className="text-[18px]">{c.icon}</span>}
-                        <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{c.name}</span>
+                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{c.name}</span>
                         <span className="text-[12.5px] font-semibold text-muted tnum">{n}</span>
                       </span>
                     </button>
@@ -824,12 +833,12 @@ export default function GuestOrder() {
       )}
 
       {/* ---------- above the tabs: cart total, or where the bill stands ---------- */}
-      <div className="fixed inset-x-0 bottom-[74px] z-30 mx-auto max-w-md px-4 pb-2 sm:max-w-2xl">
+      <div className="fixed inset-x-0 bottom-[60px] z-30 mx-auto max-w-md px-4 pb-2 sm:max-w-2xl">
         {count > 0 && view !== "orders" ? (
-          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade-deep px-5 py-3.5 text-white shadow-float">
+          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[16px] bg-jade-deep px-4 py-3 text-white">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
             <span className="text-[15px] tnum opacity-90">{inr(itemTotal)} <span className="text-[12px] opacity-75">+ GST</span></span>
-            <span className="ml-auto text-[16px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
+            <span className="ml-auto text-[15px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
           </button>
         ) : view === "orders" && !payNow && billState !== "none" ? (
           <div className="grid grid-cols-1 gap-2">
@@ -885,8 +894,8 @@ export default function GuestOrder() {
             <div className="flex items-center justify-between border-t border-line/80 px-4 py-3">
               <span className="flex items-center gap-2 text-[15px] font-medium"><Languages size={17} /> {tx(lang, "Language", "भाषा")}</span>
               <div className="flex rounded-ctl bg-sunken p-[3px]">
-                {(["en", "mr"] as const).map((l) => (
-                  <button key={l} onClick={() => setLang(l)} className={clsx("rounded-[9px] px-3 py-1.5 text-[13.5px] font-semibold", lang === l ? "bg-surface shadow-float" : "text-muted")}>{l === "en" ? "English" : "मराठी"}</button>
+                {GUEST_LANGS.map((l) => (
+                  <button key={l.id} onClick={() => setLang(l.id)} className={clsx("rounded-[9px] px-2.5 py-1.5 text-[13px] font-semibold", lang === l.id ? "bg-surface shadow-float" : "text-muted")}>{l.label}</button>
                 ))}
               </div>
             </div>
@@ -1171,7 +1180,7 @@ export default function GuestOrder() {
 }
 
 /** The bill is settled (or sent): no pay buttons, just where it stands. */
-function BillDone({ state, claimTotal, paidTotal, lang, compact = false }: { state: "open" | "sent" | "paid" | "none"; claimTotal: number; paidTotal: number; lang: "en" | "mr"; compact?: boolean }) {
+function BillDone({ state, claimTotal, paidTotal, lang, compact = false }: { state: "open" | "sent" | "paid" | "none"; claimTotal: number; paidTotal: number; lang: Lang; compact?: boolean }) {
   if (state === "none" || state === "open") {
     return compact ? null : <p className="py-8 text-center text-[15px] text-muted">{tx(lang, "Nothing to pay yet. Your bill shows here once you order.", "अजून भरायचं काही नाही. ऑर्डर केल्यावर बिल इथे दिसेल.")}</p>;
   }

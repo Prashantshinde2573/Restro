@@ -6,6 +6,7 @@
 // Every filter option comes from the owner's own menu: the categories they
 // created, the labels they ticked, the price range of their dishes.
 
+import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
 import { ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -14,8 +15,6 @@ import { PhotoSlide } from "./menu-bits";
 import { inr } from "@/lib/format";
 import type { Category, Diet, MenuItem } from "@/lib/types";
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 /* ---------------- filter state ---------------- */
 export type Taste = "spicy" | "sweet";
@@ -43,7 +42,9 @@ export function applyFilters(menu: MenuItem[], f: MenuFilters, term: string, cat
   const q = term.trim().toLowerCase();
   const catName = new Map(cats.map((c) => [c.id, c.name.toLowerCase()]));
   return menu.filter((m) => {
-    if (f.diet !== "all" && m.diet !== f.diet) return false;
+    if (f.diet === "veg" && m.diet !== "veg") return false;
+    if (f.diet === "nonveg" && m.diet === "veg") return false; // egg dishes show under NON-VEG
+    if (f.diet === "egg" && m.diet !== "egg") return false;
     if (f.taste.length && !f.taste.some((t) => (t === "spicy" ? isSpicy(m) : !!m.sweet))) return false;
     if (f.specials.length && !specialsOf(m).some((s) => f.specials.includes(s))) return false;
     if (f.cats.length && !f.cats.includes(m.categoryId)) return false;
@@ -256,12 +257,11 @@ export function DietPills({ value, onChange, menu, lang }: { value: MenuFilters[
   const opts: { v: MenuFilters["diet"]; label: string }[] = [
     { v: "all", label: tx(lang, "ALL", "सर्व") },
     ...(has("veg") ? [{ v: "veg" as const, label: tx(lang, "VEG", "व्हेज") }] : []),
-    ...(has("egg") ? [{ v: "egg" as const, label: tx(lang, "EGG", "अंडा") }] : []),
-    ...(has("nonveg") ? [{ v: "nonveg" as const, label: tx(lang, "NON-VEG", "नॉन-व्हेज") }] : []),
+    ...(has("nonveg") || has("egg") ? [{ v: "nonveg" as const, label: tx(lang, "NON-VEG", "नॉन-व्हेज") }] : []),
   ];
   if (!has("nonveg") && !has("egg")) return null; // a pure-veg menu needs no switch
   return (
-    <div className={clsx("flex", opts.length > 3 ? "gap-1.5" : "gap-2.5")} role="radiogroup" aria-label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}>
+    <div className="flex gap-2" role="radiogroup" aria-label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}>
       {opts.map((o) => {
         const on = value === o.v;
         return (
@@ -271,12 +271,12 @@ export function DietPills({ value, onChange, menu, lang }: { value: MenuFilters[
             aria-checked={on}
             onClick={() => onChange(o.v)}
             className={clsx(
-              "flex h-12 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold tracking-wide transition active:scale-[.98]",
-              opts.length > 3 ? "px-1.5 text-[13.5px]" : "px-3 text-[15px]",
-              on ? (o.v === "nonveg" ? "bg-rose text-white" : o.v === "egg" ? "bg-saffron text-white" : "bg-jade-deep text-white shadow-[0_8px_18px_-10px_rgb(15_122_85/.8)]") : "bg-surface text-ink ring-1 ring-line",
+              "flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold tracking-wide transition active:scale-[.98]",
+              "px-2.5 text-[13px]",
+              on ? (o.v === "nonveg" ? "bg-rose text-white" : "bg-jade-deep text-white") : "border border-line bg-surface text-ink",
             )}
           >
-            {o.v !== "all" && <span className={clsx("inline-block h-2 w-2 rounded-full", on ? "bg-white" : o.v === "veg" ? "bg-jade" : o.v === "nonveg" ? "bg-rose" : "bg-saffron")} />}
+            {o.v !== "all" && <span className={clsx("inline-block h-2 w-2 rounded-full", on ? "bg-white" : o.v === "veg" ? "bg-jade" : "bg-rose")} />}
             {o.label}
           </button>
         );
@@ -298,7 +298,7 @@ export function CategoryChips({ groups, active, onPick, lang }: { groups: { c: C
     box.scrollTo({ left, behavior: "smooth" });
   }, [active]);
   return (
-    <nav ref={ref} aria-label={tx(lang, "Menu categories", "मेनू प्रकार")} className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 py-1.5">
+    <nav ref={ref} aria-label={tx(lang, "Menu categories", "मेनू प्रकार")} className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
       {groups.map(({ c }) => {
         const on = active === c.id;
         return (
@@ -308,8 +308,8 @@ export function CategoryChips({ groups, active, onPick, lang }: { groups: { c: C
             onClick={() => onPick(c.id)}
             aria-current={on ? "true" : undefined}
             className={clsx(
-              "shrink-0 whitespace-nowrap rounded-[16px] px-4 py-2.5 text-[15px] transition",
-              on ? "bg-surface font-bold text-jade-deep shadow-[0_6px_18px_-8px_rgb(16_24_20/.25)]" : "font-medium text-ink ring-1 ring-line",
+              "shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13.5px] transition",
+              on ? "border border-jade/40 bg-jade-soft font-semibold text-jade-deep" : "border border-line font-medium text-ink",
             )}
           >
             {c.name}
@@ -341,36 +341,36 @@ export function DishCard({
 }) {
   const badge = m.tags?.includes("Bestseller") ? tx(lang, "Bestseller", "बेस्टसेलर") : m.isNew ? tx(lang, "New", "नवीन") : m.tags?.includes("Chef special") ? tx(lang, "Chef's special", "शेफ स्पेशल") : null;
   return (
-    <div className="flex flex-col overflow-hidden rounded-[20px] bg-surface shadow-[0_1px_2px_rgb(16_24_20/.04),0_10px_24px_-14px_rgb(16_24_20/.18)]">
+    <div className="flex flex-col overflow-hidden rounded-[16px] bg-surface ring-1 ring-line/70">
       <button onClick={onOpen} aria-label={`Open ${m.name}`} className="relative block">
         <PhotoSlide item={m} className="aspect-[4/3] w-full" />
-        {badge && <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-ink backdrop-blur">{badge}</span>}
+        {badge && <span className="absolute left-1.5 top-1.5 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-ink backdrop-blur">{badge}</span>}
       </button>
-      <div className="flex flex-1 flex-col px-3 pb-3 pt-2.5">
+      <div className="flex flex-1 flex-col px-2.5 pb-2.5 pt-2">
         <button onClick={onOpen} className="flex flex-1 flex-col items-start justify-start text-left">
           <span className="flex items-center gap-1.5">
             <DietMark diet={m.diet} />
-            {isSpicy(m) && <span className="text-[12px]" aria-label="Spicy">🌶</span>}
+            {isSpicy(m) && <span className="text-[11px]" aria-label="Spicy">🌶</span>}
           </span>
-          <span className="mt-1.5 line-clamp-2 text-[16px] font-bold leading-snug tracking-tight">{m.name}</span>
-          {m.desc && <span className="mt-0.5 line-clamp-1 text-[13px] text-muted">{m.desc}</span>}
+          <span className="mt-1 line-clamp-2 text-[14px] font-bold leading-snug tracking-tight">{m.name}</span>
+          {m.desc && <span className="mt-0.5 line-clamp-1 text-[12px] text-muted">{m.desc}</span>}
         </button>
-        <div className="mt-2.5 flex min-h-10 items-center justify-between gap-2">
-          <span className="text-[18px] font-bold text-jade-deep tnum">{inr(m.price)}</span>
+        <div className="mt-2 flex min-h-8 items-center justify-between gap-2">
+          <span className="text-[15px] font-bold text-jade-deep tnum">{inr(m.price)}</span>
           {!readOnly &&
             (qty === 0 ? (
-              <button onClick={onAdd} aria-label={tx(lang, `Add ${m.name}`, `${m.name} जोडा`)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep transition active:scale-90">
-                <Plus size={20} strokeWidth={2.4} />
+              <button onClick={onAdd} aria-label={tx(lang, `Add ${m.name}`, `${m.name} जोडा`)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep transition active:scale-90">
+                <Plus size={17} strokeWidth={2.4} />
               </button>
             ) : (
-              <div className="flex h-10 shrink-0 items-center rounded-full bg-jade-deep text-white">
-                <button aria-label="Less" onClick={onLess} className="flex h-10 w-9 items-center justify-center"><Minus size={16} strokeWidth={2.4} /></button>
-                <span className="min-w-4 text-center text-[15px] font-bold tnum">{qty}</span>
-                <button aria-label="More" onClick={onAdd} className="flex h-10 w-9 items-center justify-center"><Plus size={16} strokeWidth={2.4} /></button>
+              <div className="flex h-8 shrink-0 items-center rounded-full bg-jade-deep text-white">
+                <button aria-label={`One less ${m.name}`} onClick={onLess} className="flex h-8 w-7 items-center justify-center"><Minus size={14} strokeWidth={2.4} /></button>
+                <span className="min-w-3 text-center text-[13.5px] font-bold tnum">{qty}</span>
+                <button aria-label={`One more ${m.name}`} onClick={onAdd} className="flex h-8 w-7 items-center justify-center"><Plus size={14} strokeWidth={2.4} /></button>
               </div>
             ))}
         </div>
-        {!readOnly && m.options?.length ? <span className="mt-1 text-[11.5px] text-faint">{tx(lang, "Customisable", "बदल करता येतात")}</span> : null}
+        {!readOnly && m.options?.length ? <span className="mt-0.5 text-[10.5px] text-faint">{tx(lang, "Customisable", "बदल करता येतात")}</span> : null}
       </div>
     </div>
   );
@@ -380,22 +380,22 @@ export function DishCard({
 export type GuestTab = "home" | "menu" | "cart" | "orders";
 export function GuestTabs({ tab, onTab, cartCount, ordersBadge, showCart, lang }: { tab: GuestTab; onTab: (t: GuestTab) => void; cartCount: number; ordersBadge: number; showCart: boolean; lang: Lang }) {
   const items: { id: GuestTab; label: string; icon: ReactNode; badge?: number }[] = [
-    { id: "home", label: tx(lang, "Home", "होम"), icon: <House size={24} strokeWidth={tab === "home" ? 2.4 : 1.8} fill={tab === "home" ? "currentColor" : "none"} /> },
-    { id: "menu", label: tx(lang, "Menu", "मेनू"), icon: <LayoutGrid size={24} strokeWidth={tab === "menu" ? 2.4 : 1.8} /> },
-    ...(showCart ? [{ id: "cart" as const, label: tx(lang, "Cart", "कार्ट"), icon: <ShoppingCart size={24} strokeWidth={tab === "cart" ? 2.4 : 1.8} />, badge: cartCount }] : []),
-    { id: "orders", label: tx(lang, "Orders", "ऑर्डर्स"), icon: <ClipboardList size={24} strokeWidth={tab === "orders" ? 2.4 : 1.8} />, badge: ordersBadge },
+    { id: "home", label: tx(lang, "Home", "होम"), icon: <House size={21} strokeWidth={tab === "home" ? 2.4 : 1.8} fill={tab === "home" ? "currentColor" : "none"} /> },
+    { id: "menu", label: tx(lang, "Menu", "मेनू"), icon: <LayoutGrid size={21} strokeWidth={tab === "menu" ? 2.4 : 1.8} /> },
+    ...(showCart ? [{ id: "cart" as const, label: tx(lang, "Cart", "कार्ट"), icon: <ShoppingCart size={21} strokeWidth={tab === "cart" ? 2.4 : 1.8} />, badge: cartCount }] : []),
+    { id: "orders", label: tx(lang, "Orders", "ऑर्डर्स"), icon: <ClipboardList size={21} strokeWidth={tab === "orders" ? 2.4 : 1.8} />, badge: ordersBadge },
   ];
   return (
-    <nav aria-label={tx(lang, "Sections", "विभाग")} className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[26px] bg-surface shadow-[0_-8px_30px_-12px_rgb(16_24_20/.2)] [--safe-pb:6px] sm:max-w-2xl">
+    <nav aria-label={tx(lang, "Sections", "विभाग")} className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[20px] border-t border-line bg-surface [--safe-pb:4px] sm:max-w-2xl">
       <div className="flex">
         {items.map((it) => {
           const on = tab === it.id;
           return (
-            <button key={it.id} onClick={() => onTab(it.id)} aria-current={on ? "page" : undefined} className={clsx("relative flex flex-1 flex-col items-center gap-0.5 pb-2 pt-3 text-[13px]", on ? "font-bold text-jade-deep" : "font-medium text-ink/80")}>
+            <button key={it.id} onClick={() => onTab(it.id)} aria-current={on ? "page" : undefined} className={clsx("relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11.5px]", on ? "font-bold text-jade-deep" : "font-medium text-ink/80")}>
               <span className="relative">
                 {it.icon}
                 {!!it.badge && (
-                  <span className="absolute -right-2.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold text-white tnum">{it.badge}</span>
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-white tnum">{it.badge}</span>
                 )}
               </span>
               {it.label}

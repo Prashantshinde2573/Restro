@@ -2,6 +2,7 @@
 
 // "How many guests?" — for table orders only: the guest's phone asks right after the scan,
 // and staff choose it when they seat a new party from New order.
+import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
 import { Minus, Plus, Users } from "lucide-react";
 import { useState } from "react";
@@ -56,8 +57,6 @@ function Stepper({ value, onChange, large }: { value: number; onChange: (n: numb
   );
 }
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 /** Full screen on the guest's phone, before the menu. */
 export function GuestCountScreen({ place, restaurant, lang, initial, onPick, onClose }: { place: string; restaurant: string; lang: Lang; initial?: number | null; onPick: (n: number) => void; onClose?: () => void }) {

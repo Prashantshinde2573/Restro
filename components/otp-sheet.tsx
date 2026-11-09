@@ -1,5 +1,6 @@
 "use client";
 
+import { tx, type GuestLang } from "@/lib/guest-lang";
 import clsx from "clsx";
 import { Check, ShieldCheck } from "lucide-react";
 import { useState } from "react";
@@ -16,8 +17,7 @@ export interface GuestProfile {
  * opens the menu. Name + mobile → done. Remembered on the phone.
  * (No SMS code: SMS costs money per message. Add phone OTP later if needed.)
  */
-export function OtpSheet({ open, onClose, onVerified, lang }: { open: boolean; onClose: () => void; onVerified: (g: GuestProfile) => void; lang: "en" | "mr" }) {
-  const mr = lang === "mr";
+export function OtpSheet({ open, onClose, onVerified, lang }: { open: boolean; onClose: () => void; onVerified: (g: GuestProfile) => void; lang: GuestLang }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [optIn, setOptIn] = useState(true);
@@ -33,38 +33,38 @@ export function OtpSheet({ open, onClose, onVerified, lang }: { open: boolean; o
     <Sheet
       open={open}
       onClose={onClose}
-      title={mr ? "ऑर्डर पाठवण्याआधी" : "One quick step"}
+      title={tx(lang, "One quick step", "ऑर्डर पाठवण्याआधी")}
       footer={
         <Button size="lg" className="w-full" disabled={!name.trim() || !validPhone} onClick={go}>
-          {mr ? "पुढे" : "Continue"}
+          {tx(lang, "Continue", "पुढे")}
         </Button>
       }
     >
       <div className="space-y-4">
         <p className="text-[15px] text-muted">
-          {mr ? "तुमची ऑर्डर ओळखण्यासाठी नाव आणि नंबर. एकदाच विचारतो." : "So the restaurant knows whose order it is. We only ask once."}
+          {tx(lang, "So the restaurant knows whose order it is. We only ask once.", "तुमची ऑर्डर ओळखण्यासाठी नाव आणि नंबर. एकदाच विचारतो.")}
         </p>
         <label className="block">
-          <span className="mb-1.5 block text-[13px] font-medium text-muted">{mr ? "तुमचं नाव" : "Your name"}</span>
-          <input autoFocus autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={mr ? "उदा. नेहा" : "e.g. Neha"} className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade" />
+          <span className="mb-1.5 block text-[13px] font-medium text-muted">{tx(lang, "Your name", "तुमचं नाव")}</span>
+          <input autoFocus autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(lang, "e.g. Neha", "उदा. नेहा")} className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade" />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[13px] font-medium text-muted">{mr ? "मोबाईल नंबर" : "Mobile number"}</span>
+          <span className="mb-1.5 block text-[13px] font-medium text-muted">{tx(lang, "Mobile number", "मोबाईल नंबर")}</span>
           <div className="flex gap-2">
             <span className="flex h-12 items-center rounded-ctl bg-surface px-3 text-[16px] ring-1 ring-line">+91</span>
             <input autoComplete="tel-national" inputMode="tel" maxLength={11} value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} placeholder="98220 41187" className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line tnum focus:ring-2 focus:ring-jade" />
           </div>
-          {digits.length >= 10 && !validPhone && <span className="mt-1 block text-[13px] text-rose">{mr ? "10 अंकी मोबाईल नंबर टाका" : "Enter a 10-digit Indian mobile number"}</span>}
+          {digits.length >= 10 && !validPhone && <span className="mt-1 block text-[13px] text-rose">{tx(lang, "Enter a 10-digit Indian mobile number", "10 अंकी मोबाईल नंबर टाका")}</span>}
         </label>
         <button onClick={() => setOptIn((v) => !v)} className="flex w-full items-start gap-3 text-left" aria-pressed={optIn}>
           <span className={clsx("mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border-2", optIn ? "border-jade bg-jade text-white" : "border-line")}>
             {optIn && <Check size={13} strokeWidth={3} />}
           </span>
-          <span className="text-[14px] text-muted">{mr ? "WhatsApp वर ऑफर्स पाठवा" : "Send me offers on WhatsApp"}</span>
+          <span className="text-[14px] text-muted">{tx(lang, "Send me offers on WhatsApp", "WhatsApp वर ऑफर्स पाठवा")}</span>
         </button>
         <p className="flex items-start gap-2 text-[12.5px] text-faint">
           <ShieldCheck size={14} className="mt-0.5 shrink-0" />
-          {mr ? "तुमचा नंबर फक्त या रेस्टॉरंटकडे राहतो." : "Your number stays with this restaurant only."}
+          {tx(lang, "Your number stays with this restaurant only.", "तुमचा नंबर फक्त या रेस्टॉरंटकडे राहतो.")}
         </p>
       </div>
     </Sheet>

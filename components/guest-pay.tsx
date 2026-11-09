@@ -3,6 +3,7 @@
 // How the guest pays from their phone: UPI (exact-amount QR), cash, cash + UPI,
 // or card. And the thank-you screen they see once the bill is settled.
 
+import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
 import { Banknote, Check, CreditCard, Layers, QrCode, Star } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -12,8 +13,6 @@ import { useToast } from "./toast";
 import { inr } from "@/lib/format";
 import type { Payment } from "@/lib/types";
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 export type GuestPayChoice = "upi" | "cash" | "mixed" | "card";
 
