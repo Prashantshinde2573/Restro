@@ -47,7 +47,7 @@ export function PaymentSplit({ total, rows, onChange }: { total: number; rows: P
               value={Number.isFinite(r.amount) && r.amount !== 0 ? r.amount : ""}
               onChange={(e) => set(i, { amount: Number(e.target.value.replace(/\D/g, "")) || 0 })}
               placeholder="0"
-              className="h-10 w-full rounded-[10px] bg-sunken/60 pl-7 pr-2 text-right text-[16px] font-semibold outline-none tnum focus:ring-2 focus:ring-jade"
+              className="h-10 w-full rounded-[10px] bg-sunken/60 pl-7 pr-2 text-right text-[16px] font-semibold outline-none tnum focus:ring-1 focus:ring-jade/40"
             />
           </div>
           {rows.length > 1 && (

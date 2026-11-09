@@ -150,6 +150,7 @@ const HI: Record<string, string> = {
   Price: "कीमत",
   "Before GST, per dish": "GST से पहले, प्रति डिश",
   Specials: "स्पेशल",
+  "Show only": "सिर्फ़ ये दिखाएँ",
   "Pick one or more": "एक या ज़्यादा चुनें",
   ALL: "सभी",
   VEG: "वेज",

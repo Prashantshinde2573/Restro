@@ -8,8 +8,8 @@
 
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { BellRing, ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { BellRing, Check, ChevronDown, ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, DietMark, Sheet } from "./ui";
 import { PhotoSlide } from "./menu-bits";
 import { inr } from "@/lib/format";
@@ -148,7 +148,7 @@ function Group({ title, hint, children }: { title: string; hint?: string; childr
 
 function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button aria-pressed={on} onClick={onClick} className={clsx("flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[14px] font-semibold transition", on ? "bg-ink text-canvas" : "bg-sunken text-ink")}>
+    <button aria-pressed={on} onClick={onClick} className={clsx("flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[14px] font-semibold transition", on ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-transparent bg-sunken text-ink")}>
       {children}
     </button>
   );
@@ -182,7 +182,6 @@ export function FilterSheet({
   const specials = useMemo(() => ["Bestseller", "Chef special", "New", "Seasonal"].filter((s) => menu.some((m) => specialsOf(m).includes(s))), [menu]);
   const hasSweet = menu.some((m) => m.sweet);
   const hasSpicy = menu.some(isSpicy);
-  const catCount = (id: string) => menu.filter((m) => m.categoryId === id).length;
 
   return (
     <Sheet
@@ -191,7 +190,7 @@ export function FilterSheet({
       title={tx(lang, "Filters", "फिल्टर")}
       footer={
         <div className="grid grid-cols-[auto_1fr] gap-2">
-          <Button size="lg" variant="plain" onClick={() => setF({ ...noFilters })}>{tx(lang, "Clear all", "सर्व काढा")}</Button>
+          <Button size="lg" variant="plain" onClick={() => setF({ ...noFilters, diet: f.diet })}>{tx(lang, "Clear all", "सर्व काढा")}</Button>
           <Button size="lg" disabled={shown === 0} onClick={() => { onApply(f); onClose(); }}>
             {shown === 0 ? tx(lang, "No dishes match", "काही सापडलं नाही") : tx(lang, `Show ${shown} dishes`, `${shown} डिश दाखवा`)}
           </Button>
@@ -199,44 +198,23 @@ export function FilterSheet({
       }
     >
       <div className="space-y-3">
-        {menu.some((m) => m.diet !== "veg") && <Group title={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}>
-          <DietPills value={f.diet} onChange={(diet) => setF({ ...f, diet })} menu={menu} lang={lang} />
-        </Group>}
-
-        {(hasSpicy || hasSweet) && (
-          <Group title={tx(lang, "Taste", "चव")}>
-            <div className="flex flex-wrap gap-2">
-              {hasSpicy && <Choice on={f.taste.includes("spicy")} onClick={() => setF({ ...f, taste: toggle(f.taste, "spicy") })}><Flame size={15} /> {tx(lang, "Spicy", "तिखट")}</Choice>}
-              {hasSweet && <Choice on={f.taste.includes("sweet")} onClick={() => setF({ ...f, taste: toggle(f.taste, "sweet") })}>🍬 {tx(lang, "Sweet", "गोड")}</Choice>}
-            </div>
-          </Group>
-        )}
-
         <Group title={tx(lang, "Price", "किंमत")} hint={tx(lang, "Before GST, per dish", "GST आधी, प्रति डिश")}>
           <PriceRange bounds={bounds} value={f.price ?? bounds} onChange={(p) => setF({ ...f, price: p[0] === bounds[0] && p[1] === bounds[1] ? null : p })} lang={lang} />
         </Group>
 
-        {specials.length > 0 && (
-          <Group title={tx(lang, "Specials", "स्पेशल")}>
+        {(specials.length > 0 || hasSpicy || hasSweet) && (
+          <Group title={tx(lang, "Show only", "फक्त हे दाखवा")}>
             <div className="flex flex-wrap gap-2">
               {specials.map((s) => (
                 <Choice key={s} on={f.specials.includes(s)} onClick={() => setF({ ...f, specials: toggle(f.specials, s) })}>
                   {s === "New" ? <Sparkles size={14} /> : null} {specialLabel(s, lang)}
                 </Choice>
               ))}
+              {hasSpicy && <Choice on={f.taste.includes("spicy")} onClick={() => setF({ ...f, taste: toggle(f.taste, "spicy") })}><Flame size={15} /> {tx(lang, "Spicy", "तिखट")}</Choice>}
+              {hasSweet && <Choice on={f.taste.includes("sweet")} onClick={() => setF({ ...f, taste: toggle(f.taste, "sweet") })}>🍬 {tx(lang, "Sweet", "गोड")}</Choice>}
             </div>
           </Group>
         )}
-
-        <Group title={tx(lang, "Categories", "प्रकार")} hint={tx(lang, "Pick one or more", "एक किंवा जास्त निवडा")}>
-          <div className="flex flex-wrap gap-2">
-            {cats.filter((c) => catCount(c.id) > 0).map((c) => (
-              <Choice key={c.id} on={f.cats.includes(c.id)} onClick={() => setF({ ...f, cats: toggle(f.cats, c.id) })}>
-                {c.icon && <span>{c.icon}</span>} {c.name} <span className="font-normal opacity-60 tnum">{catCount(c.id)}</span>
-              </Choice>
-            ))}
-          </div>
-        </Group>
       </div>
     </Sheet>
   );
@@ -244,62 +222,69 @@ export function FilterSheet({
 
 export function FilterButton({ count, onClick, lang }: { count: number; onClick: () => void; lang: Lang }) {
   return (
-    <button onClick={onClick} className={clsx("relative flex h-11 shrink-0 items-center gap-1.5 rounded-ctl px-3.5 text-[14px] font-semibold", count ? "bg-ink text-canvas" : "bg-surface text-ink")}>
+    <button onClick={onClick} className={clsx("relative flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[14px] font-semibold", count ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-line bg-surface text-ink")}>
       <SlidersHorizontal size={16} /> {tx(lang, "Filters", "फिल्टर")}
       {count > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-jade px-1 text-[11.5px] font-bold text-white tnum">{count}</span>}
     </button>
   );
 }
 
-/* ---------------- ALL / VEG / NON-VEG (big pills, top of the menu) ---------------- */
-export function DietPills({ value, onChange, menu, lang }: { value: MenuFilters["diet"]; onChange: (d: MenuFilters["diet"]) => void; menu: MenuItem[]; lang: Lang }) {
-  const has = (d: Diet) => menu.some((m) => m.diet === d);
-  const opts: { v: MenuFilters["diet"]; label: string }[] = [
-    { v: "all", label: tx(lang, "ALL", "सर्व") },
-    ...(has("veg") ? [{ v: "veg" as const, label: tx(lang, "VEG", "व्हेज") }] : []),
-    ...(has("nonveg") || has("egg") ? [{ v: "nonveg" as const, label: tx(lang, "NON-VEG", "नॉन-व्हेज") }] : []),
-  ];
-  if (!has("nonveg") && !has("egg")) return null; // a pure-veg menu needs no switch
-  return (
-    <div className="flex gap-2" role="radiogroup" aria-label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}>
-      {opts.map((o) => {
-        const on = value === o.v;
-        return (
-          <button
-            key={o.v}
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(o.v)}
-            className={clsx(
-              "flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold tracking-wide transition active:scale-[.98]",
-              "px-2.5 text-[13px]",
-              on ? (o.v === "nonveg" ? "bg-rose text-white" : "bg-jade-deep text-white") : "border border-line bg-surface text-ink",
-            )}
-          >
-            {o.v !== "all" && <span className={clsx("inline-block h-2 w-2 rounded-full", on ? "bg-white" : o.v === "veg" ? "bg-jade" : "bg-rose")} />}
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /* ---------------- one row: diet ▾ · category ▾ · filters ---------------- */
-// Native dropdowns, so the phone shows its own picker (the chevron comes from globals.css).
-function Drop({ label, value, onChange, children, tone }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode; tone?: "veg" | "nonveg" }) {
+// Our own dropdown (the phone's picker is a big dark sheet).
+type DropOption = { value: string; label: string; dot?: "veg" | "nonveg" };
+function Drop({ label, value, options, onChange }: { label: string; value: string; options: DropOption[]; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const cur = options.find((o) => o.value === value) ?? options[0];
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    // keep the picked one in view
+    box.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const dot = (d?: DropOption["dot"]) => d && <span className={clsx("h-2 w-2 shrink-0 rounded-full", d === "veg" ? "bg-jade" : "bg-rose")} />;
   return (
-    <label className="relative flex h-10 min-w-0 items-center rounded-full border border-line bg-surface">
-      {tone && <span className={clsx("pointer-events-none absolute left-3 h-2 w-2 rounded-full", tone === "veg" ? "bg-jade" : "bg-rose")} />}
-      <select
+    <div ref={box} className="relative min-w-0">
+      <button
+        type="button"
         aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={clsx("h-full w-full min-w-0 appearance-none truncate rounded-full bg-transparent pr-8 text-[13.5px] font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-jade", tone ? "pl-7" : "pl-3.5")}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={clsx("flex h-10 w-full min-w-0 items-center gap-2 rounded-full border bg-surface pl-3.5 pr-3 text-left text-[13.5px] font-semibold transition-colors", open ? "border-jade/40" : "border-line")}
       >
-        {children}
-      </select>
-    </label>
+        {dot(cur?.dot)}
+        <span className="min-w-0 flex-1 truncate">{cur?.label}</span>
+        <ChevronDown size={16} className={clsx("shrink-0 text-muted transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <ul role="listbox" aria-label={label} className="absolute left-0 top-full z-40 mt-1.5 max-h-[55vh] w-max min-w-full max-w-[78vw] animate-pop overflow-y-auto rounded-[16px] border border-line bg-surface p-1 shadow-[0_14px_34px_-14px_rgb(16_24_20/.28)]">
+          {options.map((o) => {
+            const on = o.value === cur?.value;
+            return (
+              <li key={o.value} role="option" aria-selected={on}>
+                <button
+                  type="button"
+                  onClick={() => { onChange(o.value); setOpen(false); }}
+                  className={clsx("flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-left text-[14px]", on ? "bg-jade-soft font-semibold text-jade-deep" : "font-medium text-ink active:bg-sunken")}
+                >
+                  {dot(o.dot)}
+                  <span className="min-w-0 flex-1">{o.label}</span>
+                  {on && <Check size={16} className="shrink-0" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -329,27 +314,30 @@ export function MenuBar({
     <div className="flex items-center gap-2">
       {mixed && (
         <div className="w-[118px] shrink-0">
-          <Drop label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")} value={diet === "egg" ? "nonveg" : diet} onChange={(v) => onDiet(v as MenuFilters["diet"])} tone={diet === "veg" ? "veg" : diet === "all" ? undefined : "nonveg"}>
-            <option value="all">{tx(lang, "All", "सर्व")}</option>
-            <option value="veg">{tx(lang, "Veg", "व्हेज")}</option>
-            <option value="nonveg">{tx(lang, "Non-veg", "नॉन-व्हेज")}</option>
-          </Drop>
+          <Drop
+            label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}
+            value={diet === "egg" ? "nonveg" : diet}
+            onChange={(v) => onDiet(v as MenuFilters["diet"])}
+            options={[
+              { value: "all", label: tx(lang, "All", "सर्व") },
+              { value: "veg", label: tx(lang, "Veg", "व्हेज"), dot: "veg" },
+              { value: "nonveg", label: tx(lang, "Non-veg", "नॉन-व्हेज"), dot: "nonveg" },
+            ]}
+          />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <Drop label={tx(lang, "Menu categories", "मेनू प्रकार")} value={active && groups.some((g) => g.c.id === active) ? active : groups[0]?.c.id ?? ""} onChange={onPick}>
-          {groups.map(({ c, n }) => (
-            <option key={c.id} value={c.id}>
-              {c.icon ? `${c.icon} ` : ""}
-              {c.name} ({n})
-            </option>
-          ))}
-        </Drop>
+        <Drop
+          label={tx(lang, "Menu categories", "मेनू प्रकार")}
+          value={active && groups.some((g) => g.c.id === active) ? active : groups[0]?.c.id ?? ""}
+          onChange={onPick}
+          options={groups.map(({ c, n }) => ({ value: c.id, label: `${c.icon ? `${c.icon} ` : ""}${c.name} (${n})` }))}
+        />
       </div>
       <button
         onClick={onFilters}
         aria-label={tx(lang, "Filters", "फिल्टर")}
-        className={clsx("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border", filterCount ? "border-jade-deep bg-jade-deep text-white" : "border-line bg-surface text-ink")}
+        className={clsx("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border", filterCount ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-line bg-surface text-ink")}
       >
         <SlidersHorizontal size={17} />
         {filterCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-white tnum">{filterCount}</span>}

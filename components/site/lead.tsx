@@ -52,7 +52,7 @@ export function LeadForm({ flat = false }: { flat?: boolean }) {
       </div>
     );
 
-  const input = "h-12 w-full rounded-[14px] bg-[#f4f5f3] px-4 text-[15.5px] text-ink outline-none ring-1 ring-transparent transition placeholder:text-ink/35 focus:bg-white focus:ring-jade";
+  const input = "h-12 w-full rounded-[14px] bg-[#f4f5f3] px-4 text-[15.5px] text-ink outline-none ring-1 ring-transparent transition placeholder:text-ink/35 focus:bg-white focus:ring-jade/40";
   return (
     <form onSubmit={submit} className={clsx("rounded-[28px] bg-white p-6 text-ink sm:p-8", !flat && "shadow-[0_40px_80px_-40px_rgb(0_0_0/.5)]")}>
       <h3 className="text-[22px] font-semibold tracking-[-0.02em]">Book a free demo</h3>
@@ -98,7 +98,7 @@ export function CallBack() {
         setState((await sendLead({ name: "Call back request", phone: clean.slice(0, 16), restaurant: null, city: null, kind: "Call back" })) ? "done" : "error");
       }}
     >
-      <div className="flex items-center rounded-full bg-[#f4f5f3] p-1.5 pl-5 ring-1 ring-black/[.06] focus-within:ring-jade">
+      <div className="flex items-center rounded-full bg-[#f4f5f3] p-1.5 pl-5 ring-1 ring-black/[.06] focus-within:ring-jade/40">
         <input
           type="tel"
           inputMode="tel"

@@ -53,7 +53,7 @@ export default function GuestsPage() {
             <div className="space-y-4">
               <div className="relative">
                 <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="h-11 w-full rounded-ctl bg-surface pl-10 pr-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade lg:max-w-md" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="h-11 w-full rounded-ctl bg-surface pl-10 pr-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40 lg:max-w-md" />
               </div>
               <Chips
                 value={seg}

@@ -50,7 +50,7 @@ export default function CampaignsPage() {
           </Field>
           {seg !== "optin" && <p className="-mt-2 text-[13px] text-saffron">Only message guests who&apos;d expect to hear from you.</p>}
           <Field label="Message" hint="{name} becomes each guest's first name.">
-            <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={5} className="w-full rounded-ctl bg-surface p-4 text-[15px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade" />
+            <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={5} className="w-full rounded-ctl bg-surface p-4 text-[15px] outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40" />
           </Field>
           {couponsOn && live.length > 0 && (
             <div className="-mt-2 flex flex-wrap gap-2">

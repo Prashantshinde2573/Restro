@@ -243,7 +243,7 @@ export function ThankYou({
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={stars >= 4 ? tx(lang, "What did you like? (optional)", "काय आवडलं? (ऐच्छिक)") : tx(lang, "What went wrong? It goes straight to the owner.", "काय चुकलं? थेट मालकाला जाईल.")}
-                  className="w-full rounded-ctl bg-surface p-3 text-[15px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade"
+                  className="w-full rounded-ctl bg-surface p-3 text-[15px] outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
                 />
                 <Button size="lg" variant="tinted" className="mt-2 w-full" onClick={() => { onRate(stars, text); setSent(true); }}>
                   {tx(lang, "Send rating", "रेटिंग पाठवा")}

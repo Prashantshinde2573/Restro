@@ -84,10 +84,19 @@ body {
   scrollbar-width: none;
 }
 
+/* focus: a soft halo for keyboard users only; nothing on tap/click */
+:focus {
+  outline: none;
+}
 :focus-visible {
-  outline: 2px solid rgb(var(--jade));
+  outline: 2px solid rgb(var(--jade) / 0.28);
   outline-offset: 2px;
-  border-radius: 8px;
+}
+/* fields and dropdowns already show their own soft ring */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }
 
 /* safe-area padding; set --safe-pb / --safe-pt for a minimum (e.g. [--safe-pb:16px]) */

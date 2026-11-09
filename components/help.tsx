@@ -312,7 +312,7 @@ export function HelpChat({ full = false }: { full?: boolean }) {
             onChange={(e) => setText(e.target.value)}
             placeholder={m.ui.askPlaceholder}
             aria-label={m.ui.askPlaceholder}
-            className="h-11 min-w-0 flex-1 rounded-full bg-sunken px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade"
+            className="h-11 min-w-0 flex-1 rounded-full bg-sunken px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40"
           />
           <button type="submit" disabled={!text.trim() || typing} aria-label={m.ui.send} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-jade text-white disabled:opacity-40">
             <SendHorizontal size={18} />

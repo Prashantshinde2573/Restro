@@ -374,7 +374,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 export const inputCls =
-  "h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade";
+  "h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-1 focus:ring-jade/40";
 
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (

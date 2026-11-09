@@ -46,13 +46,13 @@ export function OtpSheet({ open, onClose, onVerified, lang }: { open: boolean; o
         </p>
         <label className="block">
           <span className="mb-1.5 block text-[13px] font-medium text-muted">{tx(lang, "Your name", "तुमचं नाव")}</span>
-          <input autoFocus autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(lang, "e.g. Neha", "उदा. नेहा")} className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade" />
+          <input autoFocus autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={tx(lang, "e.g. Neha", "उदा. नेहा")} className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40" />
         </label>
         <label className="block">
           <span className="mb-1.5 block text-[13px] font-medium text-muted">{tx(lang, "Mobile number", "मोबाईल नंबर")}</span>
           <div className="flex gap-2">
             <span className="flex h-12 items-center rounded-ctl bg-surface px-3 text-[16px] ring-1 ring-line">+91</span>
-            <input autoComplete="tel-national" inputMode="tel" maxLength={11} value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} placeholder="98220 41187" className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line tnum focus:ring-2 focus:ring-jade" />
+            <input autoComplete="tel-national" inputMode="tel" maxLength={11} value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} placeholder="98220 41187" className="h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line tnum focus:ring-1 focus:ring-jade/40" />
           </div>
           {digits.length >= 10 && !validPhone && <span className="mt-1 block text-[13px] text-rose">{tx(lang, "Enter a 10-digit Indian mobile number", "10 अंकी मोबाईल नंबर टाका")}</span>}
         </label>

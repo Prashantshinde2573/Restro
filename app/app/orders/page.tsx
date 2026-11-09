@@ -390,13 +390,13 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
           onChange={(e) => { setQ(e.target.value); setLimit(80); }}
           placeholder="Search order no., table, guest, phone, dish…"
           aria-label="Search orders"
-          className="col-span-2 h-11 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade sm:col-span-1"
+          className="col-span-2 h-11 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-1 focus:ring-jade/40 sm:col-span-1"
         />
         <select
           value={range}
           onChange={(e) => { setRange(e.target.value as Range); setLimit(80); }}
           aria-label="Time range"
-          className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-2 focus:ring-jade"
+          className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
         >
           <option value="today">Today</option>
           <option value="yesterday">Yesterday</option>
@@ -408,7 +408,7 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
           value={status}
           onChange={(e) => { setStatus(e.target.value as StatusF); setLimit(80); }}
           aria-label="Order status"
-          className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-2 focus:ring-jade"
+          className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
         >
           <option value="any">Any status</option>
           <option value="paid">Paid</option>

@@ -111,7 +111,7 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
       {groups.map((g, i) => (
         <div key={g.id + i} className="rounded-group bg-surface p-3">
           <div className="flex items-center gap-2">
-            <input aria-label="Option group name" value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/60 px-3 text-[15px] font-semibold outline-none focus:ring-2 focus:ring-jade" />
+            <input aria-label="Option group name" value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/60 px-3 text-[15px] font-semibold outline-none focus:ring-1 focus:ring-jade/40" />
             <select
               aria-label="Choice type"
               value={g.type === "single" ? (g.required ? "one" : "one-opt") : "any"}
@@ -133,7 +133,7 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
                   aria-label="Choice name"
                   value={c.name}
                   onChange={(e) => setGroup(i, { choices: g.choices.map((x, m) => (m === k ? { ...x, name: e.target.value } : x)) })}
-                  className="h-9 min-w-0 flex-1 rounded-[10px] bg-sunken/40 px-3 text-[14px] outline-none focus:ring-2 focus:ring-jade"
+                  className="h-9 min-w-0 flex-1 rounded-[10px] bg-sunken/40 px-3 text-[14px] outline-none focus:ring-1 focus:ring-jade/40"
                 />
                 <span className="text-[13px] text-muted">+₹</span>
                 <input
@@ -142,7 +142,7 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
                   value={c.price || ""}
                   placeholder="0"
                   onChange={(e) => setGroup(i, { choices: g.choices.map((x, m) => (m === k ? { ...x, price: Number(e.target.value.replace(/\D/g, "")) || 0 } : x)) })}
-                  className="h-9 w-16 rounded-[10px] bg-sunken/40 px-2 text-right text-[14px] outline-none tnum focus:ring-2 focus:ring-jade"
+                  className="h-9 w-16 rounded-[10px] bg-sunken/40 px-2 text-right text-[14px] outline-none tnum focus:ring-1 focus:ring-jade/40"
                 />
                 <button aria-label="Remove choice" onClick={() => setGroup(i, { choices: g.choices.filter((_, m) => m !== k) })} className="p-1 text-faint"><X size={14} /></button>
               </div>
