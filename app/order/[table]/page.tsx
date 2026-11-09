@@ -13,8 +13,7 @@ import { PhotoSlide } from "@/components/menu-bits";
 import { OtpSheet, type GuestProfile } from "@/components/otp-sheet";
 import {
   ActiveFilters,
-  CategoryChips,
-  DietPills,
+  MenuBar,
   DishCard,
   FilterButton,
   GuestTabs,
@@ -587,9 +586,15 @@ export default function GuestOrder() {
         <div className="flex items-center justify-between gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[26px] w-auto select-none" draggable={false} />
-          <button onClick={() => setMoreOpen(true)} aria-label={tx(lang, "More", "अधिक")} className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full active:bg-sunken">
-            <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M4 10h20M10 18h14" /></svg>
-          </button>
+          <div className="flex items-center gap-1">
+            <span className="rounded-full bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas">
+              {placeLabel}
+              {party && shared && <> · {groupName}</>}
+            </span>
+            <button onClick={() => setMoreOpen(true)} aria-label={tx(lang, "More", "अधिक")} className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full active:bg-sunken">
+              <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M4 10h20M10 18h14" /></svg>
+            </button>
+          </div>
         </div>
         <h1 className="mt-3.5 text-[24px] font-bold leading-tight tracking-tight">{settings.name}</h1>
         <p className="mt-0.5 text-[13.5px] text-ink/70">
@@ -597,22 +602,13 @@ export default function GuestOrder() {
             ? tx(lang, "Order and pay from your phone. We'll call your token when it's ready.", "फोनवरून ऑर्डर करा आणि पैसे भरा. तयार झालं की टोकन बोलावू.")
             : tx(lang, "Order from your phone. We'll bring it to your table.", "फोनवरून ऑर्डर करा. आम्ही टेबलवर आणू.")}
         </p>
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas">
-            {placeLabel}
-            {party && shared && <> · {groupName}</>}
-          </span>
-          {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
-            <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[12px] font-semibold ring-1 ring-line">
-              <Users size={12} /> <span className="tnum">{party?.guests ?? guestCount}</span>
-            </button>
-          ) : null}
-          {myCall && (
+        {myCall && (
+          <div className="mt-2.5 flex">
             <span className={clsx("flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold", myCall.status === "taken" ? "bg-jade-soft text-jade-deep" : "bg-saffron-soft text-saffron")}>
               <BellRing size={13} /> {myCall.status === "taken" ? tx(lang, `${myCall.toName ?? "Waiter"} is coming`, `${myCall.toName ?? "वेटर"} येत आहे`) : tx(lang, "Waiter called", "वेटरला बोलावलं")}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {t && qrOn && !payNow && !cafe && (party ? (
           shared ? (
@@ -661,13 +657,20 @@ export default function GuestOrder() {
       )}
 
       {view === "menu" ? (
-        /* ---------- home: veg switch, category chips, dish cards ---------- */
+        /* ---------- home: diet ▾ · category ▾ · filters, then dish cards ---------- */
         <>
-          <div className="px-4 pt-2">
-            <DietPills value={filters.diet} onChange={(d) => setFilters({ ...filters, diet: d })} menu={menu} lang={lang} />
-          </div>
-          <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-1.5 pt-2.5 backdrop-blur">
-            {grouped.length > 1 && <CategoryChips groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />}
+          <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-2 pt-2.5 backdrop-blur">
+            <MenuBar
+              diet={filters.diet}
+              onDiet={(d) => setFilters({ ...filters, diet: d })}
+              menu={menu}
+              groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))}
+              active={activeCat}
+              onPick={jumpTo}
+              filterCount={sheetFilterCount({ ...filters, diet: "all" })}
+              onFilters={() => setFilterOpen(true)}
+              lang={lang}
+            />
             {(q.trim() || sheetFilterCount({ ...filters, diet: "all" }) > 0) && (
               <div className="mt-2 flex items-center gap-2">
                 {q.trim() && (
@@ -874,6 +877,14 @@ export default function GuestOrder() {
         cartCount={count}
         ordersBadge={openOrders.length}
         showCart={qrOn}
+        waiter={counter || !t ? null : myCall ? myCall.status as "open" | "taken" : "idle"}
+        onWaiter={() => {
+          if (!myCall) return callWaiter();
+          if (myCall.status === "open") {
+            callActions.cancel(myCall.id);
+            toast(tx(lang, "Waiter call cancelled", "वेटर कॉल रद्द केला"));
+          } else toast(tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`));
+        }}
         lang={lang}
       />
 

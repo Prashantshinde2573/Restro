@@ -8,8 +8,8 @@
 
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { BellRing, ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, DietMark, Sheet } from "./ui";
 import { PhotoSlide } from "./menu-bits";
 import { inr } from "@/lib/format";
@@ -285,38 +285,76 @@ export function DietPills({ value, onChange, menu, lang }: { value: MenuFilters[
   );
 }
 
-/* ---------------- category chips (sticky, scroll sideways) ---------------- */
-export function CategoryChips({ groups, active, onPick, lang }: { groups: { c: Category; n: number }[]; active: string | null; onPick: (id: string) => void; lang: Lang }) {
-  const ref = useRef<HTMLElement>(null);
-  // keep the active chip in view
-  useEffect(() => {
-    if (!active || !ref.current) return;
-    const el = ref.current.querySelector<HTMLElement>(`[data-cat="${active}"]`);
-    if (!el) return;
-    const box = ref.current;
-    const left = el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2;
-    box.scrollTo({ left, behavior: "smooth" });
-  }, [active]);
+/* ---------------- one row: diet ▾ · category ▾ · filters ---------------- */
+// Native dropdowns, so the phone shows its own picker (the chevron comes from globals.css).
+function Drop({ label, value, onChange, children, tone }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode; tone?: "veg" | "nonveg" }) {
   return (
-    <nav ref={ref} aria-label={tx(lang, "Menu categories", "मेनू प्रकार")} className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
-      {groups.map(({ c }) => {
-        const on = active === c.id;
-        return (
-          <button
-            key={c.id}
-            data-cat={c.id}
-            onClick={() => onPick(c.id)}
-            aria-current={on ? "true" : undefined}
-            className={clsx(
-              "shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13.5px] transition",
-              on ? "border border-jade/40 bg-jade-soft font-semibold text-jade-deep" : "border border-line font-medium text-ink",
-            )}
-          >
-            {c.name}
-          </button>
-        );
-      })}
-    </nav>
+    <label className="relative flex h-10 min-w-0 items-center rounded-full border border-line bg-surface">
+      {tone && <span className={clsx("pointer-events-none absolute left-3 h-2 w-2 rounded-full", tone === "veg" ? "bg-jade" : "bg-rose")} />}
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={clsx("h-full w-full min-w-0 appearance-none truncate rounded-full bg-transparent pr-8 text-[13.5px] font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-jade", tone ? "pl-7" : "pl-3.5")}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+export function MenuBar({
+  diet,
+  onDiet,
+  menu,
+  groups,
+  active,
+  onPick,
+  filterCount,
+  onFilters,
+  lang,
+}: {
+  diet: MenuFilters["diet"];
+  onDiet: (d: MenuFilters["diet"]) => void;
+  menu: MenuItem[];
+  groups: { c: Category; n: number }[];
+  active: string | null;
+  onPick: (id: string) => void;
+  filterCount: number;
+  onFilters: () => void;
+  lang: Lang;
+}) {
+  const mixed = menu.some((m) => m.diet !== "veg");
+  return (
+    <div className="flex items-center gap-2">
+      {mixed && (
+        <div className="w-[118px] shrink-0">
+          <Drop label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")} value={diet === "egg" ? "nonveg" : diet} onChange={(v) => onDiet(v as MenuFilters["diet"])} tone={diet === "veg" ? "veg" : diet === "all" ? undefined : "nonveg"}>
+            <option value="all">{tx(lang, "All", "सर्व")}</option>
+            <option value="veg">{tx(lang, "Veg", "व्हेज")}</option>
+            <option value="nonveg">{tx(lang, "Non-veg", "नॉन-व्हेज")}</option>
+          </Drop>
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <Drop label={tx(lang, "Menu categories", "मेनू प्रकार")} value={active && groups.some((g) => g.c.id === active) ? active : groups[0]?.c.id ?? ""} onChange={onPick}>
+          {groups.map(({ c, n }) => (
+            <option key={c.id} value={c.id}>
+              {c.icon ? `${c.icon} ` : ""}
+              {c.name} ({n})
+            </option>
+          ))}
+        </Drop>
+      </div>
+      <button
+        onClick={onFilters}
+        aria-label={tx(lang, "Filters", "फिल्टर")}
+        className={clsx("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border", filterCount ? "border-jade-deep bg-jade-deep text-white" : "border-line bg-surface text-ink")}
+      >
+        <SlidersHorizontal size={17} />
+        {filterCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-white tnum">{filterCount}</span>}
+      </button>
+    </div>
   );
 }
 
@@ -378,7 +416,26 @@ export function DishCard({
 
 /* ---------------- bottom tabs: Home · Menu · Cart · Orders ---------------- */
 export type GuestTab = "home" | "menu" | "cart" | "orders";
-export function GuestTabs({ tab, onTab, cartCount, ordersBadge, showCart, lang }: { tab: GuestTab; onTab: (t: GuestTab) => void; cartCount: number; ordersBadge: number; showCart: boolean; lang: Lang }) {
+export function GuestTabs({
+  tab,
+  onTab,
+  cartCount,
+  ordersBadge,
+  showCart,
+  waiter,
+  onWaiter,
+  lang,
+}: {
+  tab: GuestTab;
+  onTab: (t: GuestTab) => void;
+  cartCount: number;
+  ordersBadge: number;
+  showCart: boolean;
+  /** table orders: call a waiter (null hides it on the counter QR) */
+  waiter: "idle" | "open" | "taken" | null;
+  onWaiter: () => void;
+  lang: Lang;
+}) {
   const items: { id: GuestTab; label: string; icon: ReactNode; badge?: number }[] = [
     { id: "home", label: tx(lang, "Home", "होम"), icon: <House size={21} strokeWidth={tab === "home" ? 2.4 : 1.8} fill={tab === "home" ? "currentColor" : "none"} /> },
     { id: "menu", label: tx(lang, "Menu", "मेनू"), icon: <LayoutGrid size={21} strokeWidth={tab === "menu" ? 2.4 : 1.8} /> },
@@ -387,7 +444,7 @@ export function GuestTabs({ tab, onTab, cartCount, ordersBadge, showCart, lang }
   ];
   return (
     <nav aria-label={tx(lang, "Sections", "विभाग")} className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[20px] border-t border-line bg-surface [--safe-pb:4px] sm:max-w-2xl">
-      <div className="flex">
+      <div className="mx-auto flex max-w-[420px] px-2">
         {items.map((it) => {
           const on = tab === it.id;
           return (
@@ -402,6 +459,16 @@ export function GuestTabs({ tab, onTab, cartCount, ordersBadge, showCart, lang }
             </button>
           );
         })}
+        {waiter !== null && (
+          <button
+            onClick={onWaiter}
+            aria-label={waiter === "open" ? tx(lang, "Cancel waiter call", "वेटर कॉल रद्द करा") : tx(lang, "Call a waiter", "वेटरला बोलवा")}
+            className={clsx("relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11.5px]", waiter === "idle" ? "font-medium text-ink/80" : waiter === "open" ? "font-bold text-saffron" : "font-bold text-jade-deep")}
+          >
+            <BellRing size={21} strokeWidth={waiter === "idle" ? 1.8 : 2.4} className={clsx(waiter === "open" && "animate-pulse")} />
+            {waiter === "open" ? tx(lang, "Calling…", "बोलावत आहे…") : waiter === "taken" ? tx(lang, "Coming", "येत आहे") : tx(lang, "Waiter", "वेटर")}
+          </button>
+        )}
       </div>
     </nav>
   );
