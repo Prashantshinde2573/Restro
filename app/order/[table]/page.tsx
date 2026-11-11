@@ -5,7 +5,7 @@ import { GamesCard, GamesSheet, type GameId } from "@/components/games/games-she
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
-import { Banknote, BellRing, Check, ConciergeBell, CreditCard, Languages, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
+import { Banknote, BellRing, Check, ChevronDown, ConciergeBell, CreditCard, Languages, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DietMark, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -232,6 +232,14 @@ export default function GuestOrder() {
       : [];
   }, [allOrders, t, myParty, counter, mine]);
   const openOrders = useMemo(() => myOrders.filter((o) => o.status !== "paid" && o.status !== "cancelled"), [myOrders]);
+  // This visit's orders on top; finished orders from earlier visits go under "Previous orders".
+  const [nowOrders, pastOrders] = useMemo(() => {
+    const visitFrom = party ? Date.parse(party.since) - 60_000 : null;
+    const done = (o: Order) => o.status === "paid" || o.status === "cancelled" || (counter && o.status === "served");
+    const past = (o: Order) => done(o) && (visitFrom != null ? Date.parse(o.createdAt) < visitFrom : minutesSince(o.createdAt) > 30);
+    return [myOrders.filter((o) => !past(o)), myOrders.filter(past)];
+  }, [myOrders, party, counter]);
+  const [showPast, setShowPast] = useState(false);
   // When an order reaches the table, open "My orders": that's where the bill and Pay are.
   const ordersReadyEarly = useReady("orders");
   const served = useRef<Set<string> | null>(null);
@@ -794,7 +802,7 @@ export default function GuestOrder() {
           {(billState === "sent" || billState === "paid") && (
             <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} compact />
           )}
-          {myOrders.length === 0 && (
+          {nowOrders.length === 0 && (
             <div className="flex flex-col items-center rounded-[22px] bg-surface px-6 py-10 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-sunken text-muted"><ReceiptText size={24} /></span>
               <div className="mt-3 text-[17px] font-semibold">{tx(lang, "No orders yet", "अजून ऑर्डर नाही")}</div>
@@ -802,7 +810,7 @@ export default function GuestOrder() {
               <Button size="lg" className="mt-5" onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}><UtensilsCrossed size={17} /> {tx(lang, "See the menu", "मेनू पहा")}</Button>
             </div>
           )}
-          {myOrders.map((o) => (
+          {nowOrders.map((o) => (
             <section key={o.id} className="rounded-[22px] bg-surface p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-[16px] font-semibold">{payNow ? tx(lang, "Token", "टोकन") : tx(lang, "Order", "ऑर्डर")} #{num(o.number)}</span>
@@ -859,6 +867,31 @@ export default function GuestOrder() {
                 <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
               </button>
             )
+          )}
+          {pastOrders.length > 0 && (
+            <div className="overflow-hidden rounded-[22px] bg-surface">
+              <button onClick={() => setShowPast((v) => !v)} aria-expanded={showPast} className="flex w-full items-center justify-between px-4 py-3.5 text-left">
+                <span className="text-[15px] font-semibold">{tx(lang, "Previous orders", "आधीच्या ऑर्डर्स")} <span className="text-muted">({pastOrders.length})</span></span>
+                <ChevronDown size={18} className={clsx("text-muted transition-transform", showPast && "rotate-180")} />
+              </button>
+              {showPast && (
+                <ul className="divide-y divide-line/80 border-t border-line/80">
+                  {pastOrders.map((o) => (
+                    <li key={o.id} className="px-4 py-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[14px] font-semibold">{payNow ? tx(lang, "Token", "टोकन") : tx(lang, "Order", "ऑर्डर")} #{num(o.number)}</span>
+                        <span className="text-[12.5px] text-muted">{new Date(o.createdAt).toLocaleDateString(lang === "en" ? "en-IN" : lang === "hi" ? "hi-IN" : "mr-IN", { day: "numeric", month: "short" })} · {new Date(o.createdAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</span>
+                      </div>
+                      <div className="mt-0.5 text-[13px] text-muted">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(", ")}</div>
+                      <div className="mt-1 flex items-center justify-between text-[13px]">
+                        <span className={clsx("font-semibold", o.status === "cancelled" ? "text-rose" : "text-jade-deep")}>{o.status === "cancelled" ? tx(lang, "Not accepted", "स्वीकारली नाही") : tx(lang, "Paid", "पैसे भरले")}</span>
+                        <span className="font-semibold tnum">{inr(o.lines.reduce((a, l) => a + l.qty * l.price, 0))}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </main>
       )}
@@ -958,7 +991,7 @@ export default function GuestOrder() {
                 </button>
               )
             )}
-          <button onClick={() => { setMoreOpen(false); setGame("ludo"); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+          <button onClick={() => { setMoreOpen(false); window.setTimeout(() => setGame("ludo"), 350); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
             🎮 {tx(lang, "Play a game", "खेळ खेळा")}
           </button>
           {myOrders.length > 0 && (

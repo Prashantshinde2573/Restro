@@ -201,6 +201,8 @@ const HI: Record<string, string> = {
   "What went wrong? It goes straight to the owner.": "क्या गलत हुआ? यह सीधे मालिक तक जाएगा।",
   "Send rating": "रेटिंग भेजें",
   Done: "हो गया",
+  "Previous orders": "पिछले ऑर्डर",
+  "Not accepted": "स्वीकार नहीं हुआ",
   // games
   Games: "गेम्स",
   "Play a game": "गेम खेलें",
