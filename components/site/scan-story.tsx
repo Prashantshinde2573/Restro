@@ -11,7 +11,6 @@ import { useEffect, useRef, useState } from "react";
 import { BellRing, Check, ClipboardList, House, LayoutGrid, Plus, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import { gsap, ScrollTrigger, reducedMotion, useIsoLayoutEffect } from "./motion";
 import { Eyebrow } from "./head";
-import { IconArrow } from "./icons";
 
 // Photo from Unsplash (free under the Unsplash License): a dim restaurant, behind everything.
 const BG_IMG = "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&q=70&w=2000";
@@ -195,7 +194,7 @@ export function ScanStory() {
     if (reducedMotion()) {
       // the end state, no pinning
       gsap.set(q("[data-camera], [data-found], [data-qr], [data-title-a]"), { autoAlpha: 0 });
-      gsap.set(q("[data-title-b], [data-card-desk], [data-cta]"), { autoAlpha: 1 });
+      gsap.set(q("[data-title-b], [data-card-desk]"), { autoAlpha: 1 });
       gsap.set(q("[data-card-mob]").slice(1), { autoAlpha: 0 }); // phones: just the first card
       return;
     }
@@ -207,7 +206,7 @@ export function ScanStory() {
       });
       const cards = q(desk ? "[data-card-desk]" : "[data-card-mob]");
       gsap.set(cards, { autoAlpha: 0, x: (i) => (desk ? (i < 3 ? -50 : 50) : 0), y: desk ? 0 : 30 });
-      gsap.set(q("[data-title-b], [data-cta]"), { autoAlpha: 0, y: 20 });
+      gsap.set(q("[data-title-b]"), { autoAlpha: 0, y: 20 });
       gsap.set(q("[data-phone-wrap]"), { yPercent: 70, autoAlpha: 0 });
       gsap.set(q("[data-qr]"), { xPercent: 0, rotate: -4 });
       gsap.set(q("[data-found]"), { autoAlpha: 0, y: 12 });
@@ -233,7 +232,7 @@ export function ScanStory() {
           if (i < cards.length - 1) tl.to(c, { autoAlpha: 0, y: -24, duration: 0.4 }, "+=0.6");
         });
       }
-      tl.to(q("[data-cta]"), { autoAlpha: 1, y: 0, duration: 0.5 }).to({}, { duration: 0.6 });
+      tl.to({}, { duration: 0.8 }); // hold the full picture a moment
       return () => tl.scrollTrigger?.kill();
     };
     mm.add("(min-width: 1024px)", () => build(true));
@@ -251,7 +250,7 @@ export function ScanStory() {
           <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_50%_60%,rgb(16_22_20/.55)_0%,rgb(16_22_20/.92)_70%)]" />
 
           {/* headline: before and after the scan */}
-          <div className="relative z-20 mx-auto max-w-[1100px] px-6 pt-8 text-center lg:pt-12">
+          <div className="relative z-20 mx-auto max-w-[1100px] px-6 pt-12 text-center lg:pt-16">
             <Eyebrow dark>One app instead of five</Eyebrow>
             <div className="relative mt-3">
               <h2 data-title-a className="text-[30px] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-[44px] lg:text-[54px]">
@@ -264,7 +263,7 @@ export function ScanStory() {
           </div>
 
           {/* desktop: cards · phone · cards */}
-          <div className="relative z-10 mx-auto hidden h-[calc(100%-230px)] max-w-[1240px] grid-cols-[1fr_auto_1fr] items-center gap-10 px-8 lg:grid">
+          <div className="relative z-10 mx-auto mt-12 hidden h-[calc(100%-270px)] max-w-[1240px] grid-cols-[1fr_auto_1fr] items-center gap-10 px-8 lg:grid">
             <div className="flex flex-col gap-4">
               {FEATURES.slice(0, 3).map((f) => (
                 <div key={f.n} data-card data-card-desk><FeatureCard f={f} /></div>
@@ -272,7 +271,7 @@ export function ScanStory() {
             </div>
             <div className="relative flex items-center justify-center">
               <div data-qr className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"><QrCard /></div>
-              <div data-phone-wrap className="relative"><Phone className="w-[min(300px,calc((100svh-260px)*0.57))]" /></div>
+              <div data-phone-wrap className="relative"><Phone className="w-[min(300px,calc((100svh-290px)*0.57))]" /></div>
             </div>
             <div className="flex flex-col gap-4">
               {FEATURES.slice(3).map((f) => (
@@ -280,15 +279,8 @@ export function ScanStory() {
               ))}
             </div>
           </div>
-          <div data-cta className="absolute inset-x-0 bottom-6 z-20 hidden justify-center lg:flex xl:bottom-8">
-            <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink transition hover:bg-jade-soft">
-              Book a free demo
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
-            </a>
-          </div>
-
           {/* phone & tablet: phone in the middle, the cards take turns below it */}
-          <div className="relative z-10 flex h-[calc(100%-120px)] flex-col items-center px-5 pb-[92px] pt-2 lg:hidden">
+          <div className="relative z-10 mt-8 flex h-[calc(100%-176px)] flex-col items-center px-5 pb-[92px] lg:hidden">
             <div className="relative flex flex-1 items-center justify-center">
               <div data-qr className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 scale-[.8]"><QrCard /></div>
               <div data-phone-wrap className="relative"><Phone className="w-[min(200px,40svh*.59)]" /></div>
