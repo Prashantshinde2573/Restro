@@ -1,6 +1,6 @@
 "use client";
 
-// "One app instead of five": a pinned scroll story.
+// "One app instead of six": a pinned scroll story.
 //   1. A table QR card, a phone rises and scans it
 //   2. The scan lands on the guest menu
 //   3. The five things Restropi runs come in beside the phone, one by one
@@ -242,7 +242,7 @@ export function ScanStory() {
   }, []);
 
   return (
-    <section ref={root} id="one-app" aria-label="One app instead of five" className="px-2 py-2 sm:px-3">
+    <section ref={root} id="one-app" aria-label="One app instead of six" className="px-2 py-2 sm:px-3">
       <div className="relative isolate overflow-hidden rounded-[30px] bg-ink sm:rounded-[40px]">
         <div data-stage className="relative h-[100svh] min-h-[620px] overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -251,7 +251,7 @@ export function ScanStory() {
 
           {/* headline: before and after the scan */}
           <div className="relative z-20 mx-auto max-w-[1100px] px-6 pt-12 text-center lg:pt-16">
-            <Eyebrow dark>One app instead of five</Eyebrow>
+            <Eyebrow dark>One app instead of six</Eyebrow>
             <div className="relative mt-3">
               <h2 data-title-a className="text-[30px] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-[44px] lg:text-[54px]">
                 It starts with <span className="text-jade-soft">one scan.</span>
@@ -285,11 +285,11 @@ export function ScanStory() {
               <div data-qr className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 scale-[.8]"><QrCard /></div>
               <div data-phone-wrap className="relative"><Phone className="w-[min(200px,40svh*.59)]" /></div>
             </div>
-            <div className="relative h-[150px] w-full max-w-[420px]">
+            <div className="relative h-[184px] w-full max-w-[420px]">
               {FEATURES.map((f) => (
                 <div key={f.n} data-card data-card-mob className="absolute inset-x-0 top-0"><FeatureCard f={f} /></div>
               ))}
-              <div aria-hidden className="absolute inset-x-0 bottom-1 flex justify-center gap-1.5">
+              <div aria-hidden className="absolute inset-x-0 bottom-0 flex justify-center gap-2">
                 {FEATURES.map((f) => (
                   <span key={f.n} data-dot className="h-1.5 w-1.5 rounded-full bg-white/25" />
                 ))}
