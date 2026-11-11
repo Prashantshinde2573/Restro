@@ -276,6 +276,15 @@ export async function uploadMenuPhoto(blob: Blob): Promise<string> {
   if (error) throw new Error(error.message);
   return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
 }
+/** Upload the restaurant logo (already shrunk) and get its public link. */
+export async function uploadLogo(blob: Blob): Promise<string> {
+  const rid = stateStore.get().rid;
+  if (!rid) throw new Error("Not signed in");
+  const path = `${rid}/logo-${Date.now().toString(36)}.png`;
+  const { error } = await sb().storage.from("menu-photos").upload(path, blob, { contentType: "image/png", cacheControl: "31536000", upsert: false });
+  if (error) throw new Error(error.message);
+  return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
+}
 /** Upload a profile photo (already cropped and shrunk) and get its public link. */
 export async function uploadProfilePhoto(blob: Blob, memberId: string): Promise<string> {
   const rid = stateStore.get().rid;
@@ -354,8 +363,8 @@ function disconnect() {
 type Row = { id: string; data: Record<string, unknown>; number?: number };
 const fromRow = (key: string, r: Row) => (key === "orders" ? { ...r.data, id: r.id, number: r.number ?? r.data.number ?? 0 } : { ...r.data, id: r.id });
 
-type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string };
-const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status });
+type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string; logo?: string | null };
+const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status, logo: r.logo ?? "" });
 
 export function connect(rid: string, role: Role, uid: string) {
   if (connected && connected.rid === rid && connected.role === role && connected.uid === uid) return;
@@ -391,7 +400,7 @@ export function connect(rid: string, role: Role, uid: string) {
       const loadAccount = (tries: number) =>
         void client
           .from("restaurants")
-          .select("name, owner, plan, renews_at, status")
+          .select("name, owner, plan, renews_at, status, logo")
           .eq("id", rid)
           .maybeSingle()
           .then(({ data, error }) => {
@@ -503,8 +512,8 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
 
   if (b.spec.kind === "doc") {
     if (role !== "owner") return; // only the owner renames; plan changes go through billing
-    const n = next as { name?: string; owner?: string };
-    track(client.from("restaurants").update({ name: n.name, owner: n.owner }).eq("id", rid).then(check));
+    const n = next as { name?: string; owner?: string; logo?: string };
+    track(client.from("restaurants").update({ name: n.name, owner: n.owner, logo: n.logo || null }).eq("id", rid).then(check));
     return;
   }
   const table = TABLE[b.key];

@@ -10,6 +10,7 @@ import { openPlanSheet } from "@/components/plan-sheet";
 import { ChangePassword } from "@/components/owner-auth";
 import { useToast } from "@/components/toast";
 import {
+  accountActions,
   billOf,
   memberActions,
   niceTime,
@@ -28,7 +29,7 @@ import {
   useSettings,
 } from "@/lib/live";
 import { useAllTables } from "@/lib/tables";
-import { cloudSignOut, signOutEverywhere, uploadProfilePhoto, useCloud } from "@/lib/cloud";
+import { cloudSignOut, signOutEverywhere, uploadLogo, uploadProfilePhoto, useCloud } from "@/lib/cloud";
 import { RENEW_WARN_DAYS, daysLeft, isMixed, isOwner } from "@/lib/access";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
@@ -199,6 +200,7 @@ export default function SettingsPage() {
       >
         {panel === "restaurant" && (
           <div className="space-y-4">
+            {owner && <LogoField name={draft.name || settings.name} />}
             <Field label="Name on bills and the guest menu"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
             <Field label="Outlet address"><input className={inputCls} value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -415,6 +417,58 @@ async function squarePhoto(file: File, side = 320): Promise<Blob> {
   c.width = c.height = Math.min(side, s);
   c.getContext("2d")!.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, c.width, c.height);
   return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read the photo"))), "image/jpeg", 0.85));
+}
+
+/** Shrink a logo to fit 400 × 400, keeping its shape and transparent background. */
+async function fitLogo(file: File, max = 400): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k);
+  c.height = Math.round(bmp.height * k);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read the image"))), "image/png"));
+}
+
+/** The restaurant's logo: shown on the guest menu next to its name. */
+function LogoField({ name }: { name: string }) {
+  const { logo } = useAccount();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const pick = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return toast("Choose an image (PNG or JPG)");
+    setBusy(true);
+    try {
+      accountActions.setLogo(await uploadLogo(await fitLogo(f)));
+      toast("Logo saved · guests see it on the QR menu");
+    } catch (e) {
+      toast(`Couldn't upload the logo: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Field label="Logo" hint="Shown next to your name on the guest QR menu. A square PNG works best.">
+      <div className="flex items-center gap-4">
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-sunken ring-1 ring-line">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt={`${name} logo`} className="h-full w-full object-contain" />
+          ) : (
+            <span className="text-[24px] font-bold text-muted">{name.trim().charAt(0).toUpperCase() || "R"}</span>
+          )}
+        </span>
+        <div className="flex flex-wrap gap-3 text-[14px] font-semibold">
+          <label className={clsx("cursor-pointer text-jade hover:underline", busy && "pointer-events-none opacity-60")}>
+            {busy ? "Uploading…" : logo ? "Change logo" : "Upload logo"}
+            <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+          {logo && !busy && <button type="button" onClick={() => { accountActions.setLogo(undefined); toast("Logo removed"); }} className="text-muted hover:text-rose">Remove</button>}
+        </div>
+      </div>
+    </Field>
+  );
 }
 
 function ProfileCard({ me, subtitle }: { me: Member; subtitle: string }) {

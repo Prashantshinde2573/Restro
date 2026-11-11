@@ -20,6 +20,10 @@ export const accountActions = {
   rename(name: string) {
     accountStore.set({ ...accountStore.get(), name });
   },
+  setLogo(logo: string | undefined) {
+    accountStore.set({ ...accountStore.get(), logo: logo ?? "" });
+    logActivity("settings", logo ? "Changed the logo" : "Removed the logo");
+  },
 };
 
 const outletStore = createStore<Outlet[]>([], "outlets", { kind: "collection", coll: "outlets", guest: "read" });
@@ -143,7 +147,7 @@ export function useSettings(): OutletSettings {
   const a = useAccount();
   const o = useCurrentOutlet();
   return {
-    name: a.name, businessType: o.businessType, mixed: isMixed(o), upi: o.upi, payFirst: o.payFirst,
+    name: a.name, logo: a.logo || "", businessType: o.businessType, mixed: isMixed(o), upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
     orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, gstRate: o.gstRate ?? 0.05,
   };

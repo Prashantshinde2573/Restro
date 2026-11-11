@@ -41,6 +41,7 @@ import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
 import { CallAlerts, WaiterCallBar } from "./waiter-calls";
+import { TableJanitor } from "./table-janitor";
 import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
@@ -630,6 +631,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <PlanSheet />
             <OrderAlerts />
             <CallAlerts />
+            <TableJanitor />
             <WaiterCallBar />
             <HelpSheet />
           </ClientOnly>

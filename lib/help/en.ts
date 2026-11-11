@@ -228,6 +228,7 @@ export const en: Manual = {
           "**Merge** — two parties at one table become one bill.",
           "**Accept a QR group** — when new guests order from the table QR, an amber card asks you to check they are seated. Tap Accept to send their order to the kitchen, or Reject.",
           "**Charge** — shows the bill with GST for that party.",
+          "**Free table** — guests sat down (or only picked how many they are on the QR) but left without ordering? Tap the table → **Free table**. If nobody orders within 30 minutes, the table frees itself.",
         ] },
       ],
     },

@@ -1,6 +1,7 @@
 "use client";
 
 import { GUEST_LANGS, tx, type GuestLang as Lang } from "@/lib/guest-lang";
+import { GamesCard, GamesSheet, type GameId } from "@/components/games/games-sheet";
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
@@ -141,6 +142,7 @@ export default function GuestOrder() {
   };
   const [view, setView] = useState<"menu" | "browse" | "orders">("menu");
   const [moreOpen, setMoreOpen] = useState(false);
+  const [game, setGame] = useState<GameId | null>(null);
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<MenuFilters>(noFilters);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -230,6 +232,25 @@ export default function GuestOrder() {
       : [];
   }, [allOrders, t, myParty, counter, mine]);
   const openOrders = useMemo(() => myOrders.filter((o) => o.status !== "paid" && o.status !== "cancelled"), [myOrders]);
+  // When an order reaches the table, open "My orders": that's where the bill and Pay are.
+  const ordersReadyEarly = useReady("orders");
+  const served = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!ordersReadyEarly) return;
+    const now = new Set(myOrders.filter((o) => o.status === "served").map((o) => o.id));
+    if (served.current === null) {
+      served.current = now; // what was already served when the page opened
+      return;
+    }
+    const fresh = [...now].some((id) => !served.current!.has(id));
+    served.current = now;
+    if (fresh && !payNow) {
+      setView("orders");
+      setCartOpen(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      toast(tx(lang, "Served · your bill and Pay are here", "टेबलवर आली · बिल आणि पेमेंट इथे आहे"));
+    }
+  }, [myOrders, ordersReadyEarly]); // eslint-disable-line react-hooks/exhaustive-deps
   // Restaurant flow: the running bill. Pay-first orders are already settled from the phone.
   const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !o.payClaim && !(payNow && o.payPreference)), [openOrders, payNow]);
   // where this phone's bill stands: nothing to pay / payment sent (restaurant confirms) / paid
@@ -241,7 +262,7 @@ export default function GuestOrder() {
   // ---- settling: show the thank-you once the money is confirmed ----
   // Remember a payment we are waiting on, so a reload keeps the "being confirmed" screen.
   const waitKey = `restropi.waiting.${table}`;
-  const ordersReady = useReady("orders");
+  const ordersReady = ordersReadyEarly;
   useEffect(() => {
     try {
       const w = localStorage.getItem(waitKey);
@@ -596,7 +617,13 @@ export default function GuestOrder() {
             </button>
           </div>
         </div>
-        <h1 className="mt-3.5 text-[24px] font-bold leading-tight tracking-tight">{settings.name}</h1>
+        <div className="mt-3.5 flex items-center gap-3">
+          {settings.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.logo} alt={`${settings.name} logo`} className="h-12 w-12 shrink-0 rounded-[14px] bg-white object-contain p-1 ring-1 ring-line" />
+          )}
+          <h1 className="min-w-0 text-[24px] font-bold leading-tight tracking-tight">{settings.name}</h1>
+        </div>
         <p className="mt-0.5 text-[13.5px] text-ink/70">
           {payNow
             ? tx(lang, "Order and pay from your phone. We'll call your token when it's ready.", "फोनवरून ऑर्डर करा आणि पैसे भरा. तयार झालं की टोकन बोलावू.")
@@ -815,6 +842,7 @@ export default function GuestOrder() {
               <span className="text-[20px] font-semibold tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span>
             </div>
           )}
+          {openOrders.some((o) => o.status !== "served") && <GamesCard onGame={setGame} lang={lang} />}
           {!counter && (
             myCall?.status === "taken" ? (
               <div className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-jade-soft py-3.5 text-[15px] font-semibold text-jade-deep">
@@ -888,6 +916,8 @@ export default function GuestOrder() {
         lang={lang}
       />
 
+      <GamesSheet game={game} onGame={setGame} onClose={() => setGame(null)} lang={lang} />
+
       {/* ---------- ☰ more: language, guests, call a waiter ---------- */}
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={settings.name}>
         <div className="space-y-3">
@@ -928,6 +958,9 @@ export default function GuestOrder() {
                 </button>
               )
             )}
+          <button onClick={() => { setMoreOpen(false); setGame("ludo"); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+            🎮 {tx(lang, "Play a game", "खेळ खेळा")}
+          </button>
           {myOrders.length > 0 && (
             <button onClick={() => { setMoreOpen(false); setView("orders"); window.scrollTo({ top: 0 }); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
               <ReceiptText size={17} /> {tx(lang, "My orders and bill", "माझ्या ऑर्डर्स आणि बिल")}

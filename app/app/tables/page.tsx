@@ -3,7 +3,7 @@
 import { useCloud } from "@/lib/cloud";
 import clsx from "clsx";
 import Link from "next/link";
-import { Check, Clock, LayoutGrid, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Users, UserPlus } from "lucide-react";
+import { Check, Clock, LayoutGrid, LogOut, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Users, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
@@ -238,6 +238,11 @@ export default function TablesPage() {
                     {p.total && !claim && canCharge ? (
                       <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
+                    {!p.total && !partyOrders(sel.id, p.id).length && !p.pendingApproval && (
+                      <Button size="sm" variant="plain" onClick={() => { tableActions.close(sel.id, p.id, "freed, no order"); toast(isShared(sel) ? `Party ${p.id} removed · no order` : `${sel.name} is free`); if (sel.parties.length <= 1) setSelId(null); }}>
+                        <LogOut size={15} /> Free table
+                      </Button>
+                    )}
                     {others.map((o) => (
                       <Button key={o.id} size="sm" variant="plain" onClick={() => { tableActions.merge(sel.id, p.id, o.id); orderActions.moveParty(sel.id, p.id, { tableId: sel.id, tableName: sel.name, partyId: o.id }); toast(`Party ${p.id} joined Party ${o.id} · one bill now`); }}>
                         <Merge size={15} /> Merge with {o.id}

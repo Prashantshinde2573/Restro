@@ -48,11 +48,14 @@ export interface Account {
   plan: "starter" | "growth" | "pro" | "chain";
   renewsAt: string; // ISO
   status?: "active" | "suspended"; // set by the super admin
+  /** Logo on the guest menu, next to the name (public image link). */
+  logo?: string;
 }
 
 // What the guest page needs: the brand name + the current outlet's settings.
 export interface OutletSettings {
   name: string;
+  logo?: string; // the brand's logo (shown on the guest menu)
   businessType: BusinessType;
   mixed?: boolean; // tables and counter both
   upi: string; // UPI ID every payment QR is generated for

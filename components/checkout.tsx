@@ -47,6 +47,7 @@ export function Checkout({
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
   const [discountPct, setDiscountPct] = useState(0);
+  // cash handed over; null = the exact amount (the default, follows the total)
   const [cash, setCash] = useState<number | null>(null);
   const [guests, setGuests] = useState(3);
   const [paidGuests, setPaidGuests] = useState<number[]>([]);
@@ -164,7 +165,7 @@ export function Checkout({
             {paidGuests.length < guests ? `${guests - paidGuests.length} share${guests - paidGuests.length > 1 ? "s" : ""} left to collect` : `Close bill · ${inr(t.total)}`}
           </Button>
         ) : (
-          <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? 0) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
+          <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? t.total) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
             {method === "upi" ? "Payment received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
           </Button>
         )
@@ -374,14 +375,14 @@ export function Checkout({
                   .map((v) => (
                     <button
                       key={v}
-                      onClick={() => setCash(v)}
-                      className={clsx("rounded-ctl py-3 text-[16px] font-semibold tnum", cash === v ? "bg-jade text-white" : "bg-sunken")}
+                      onClick={() => setCash(v === t.total ? null : v)}
+                      className={clsx("rounded-ctl py-3 text-[16px] font-semibold tnum", (cash ?? t.total) === v ? "bg-jade text-white" : "bg-sunken")}
                     >
                       {v === t.total ? "Exact" : inr(v)}
                     </button>
                   ))}
               </div>
-              {cash !== null && cash >= t.total && (
+              {cash !== null && cash > t.total && (
                 <div className="mt-4 flex items-baseline justify-between rounded-ctl bg-jade-soft px-4 py-3">
                   <span className="text-[15px] font-medium text-jade-deep">Give back</span>
                   <span className="text-[24px] font-semibold text-jade-deep tnum">{inr(cash - t.total)}</span>
