@@ -17,11 +17,12 @@ import { IconArrow } from "./icons";
 const BG_IMG = "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&q=70&w=2000";
 
 const FEATURES = [
-  { n: "01", t: "QR menu & ordering", d: "Guests scan, order and pay from their phone. Nothing to install.", img: "/site/app/guest.webp" },
+  { n: "01", t: "QR menu & ordering", d: "Guests scan, order and pay from their phone. Nothing to install.", img: "" },
   { n: "02", t: "Kitchen screen", d: "Orders reach the right station the second they're placed. No paper KOTs.", img: "/site/app/kitchen.webp" },
   { n: "03", t: "Billing, GST & UPI", d: "Bills with GST, discounts and a UPI QR for the exact amount.", img: "/site/app/bill.webp" },
   { n: "04", t: "Tables & team", d: "Every table at a glance. A PIN for every captain, chef and cashier.", img: "/site/app/tables.webp" },
   { n: "05", t: "Sales & reports", d: "Today's sales, GST and best sellers the moment you close.", img: "/site/app/reports.webp" },
+  { n: "06", t: "Guests & offers", d: "Know your regulars. Send offers on WhatsApp from your own number.", img: "/site/app/offers.webp" },
 ];
 
 /* ---- the guest menu inside the phone: built like the real Restropi screen, with food photos ---- */
@@ -125,8 +126,12 @@ function GuestScreen() {
 function FeatureCard({ f, className }: { f: (typeof FEATURES)[number]; className?: string }) {
   return (
     <div className={clsx("flex items-center gap-4 rounded-[22px] bg-white/[.06] p-3 pr-5 ring-1 ring-white/10 backdrop-blur-md", className)}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={f.img} alt="" loading="lazy" width={585} height={996} className="h-[118px] w-[70px] shrink-0 rounded-[12px] object-cover object-top ring-1 ring-white/10" />
+      {f.n === "01" ? (
+        <div className="relative h-[118px] w-[70px] shrink-0 overflow-hidden rounded-[12px] ring-1 ring-white/10"><GuestScreen /></div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img src={f.img} alt="" loading="lazy" width={585} height={996} className="h-[118px] w-[70px] shrink-0 rounded-[12px] object-cover object-top ring-1 ring-white/10" />
+      )}
       <div className="min-w-0">
         <div className="text-[12px] font-semibold tracking-[.14em] text-jade-soft/70">{f.n}</div>
         <div className="mt-0.5 text-[18px] font-semibold leading-tight tracking-[-0.02em] text-white">{f.t}</div>
@@ -259,7 +264,7 @@ export function ScanStory() {
           </div>
 
           {/* desktop: cards · phone · cards */}
-          <div className="relative z-10 mx-auto hidden h-[calc(100%-150px)] max-w-[1240px] grid-cols-[1fr_auto_1fr] items-center gap-10 px-8 lg:grid">
+          <div className="relative z-10 mx-auto hidden h-[calc(100%-230px)] max-w-[1240px] grid-cols-[1fr_auto_1fr] items-center gap-10 px-8 lg:grid">
             <div className="flex flex-col gap-4">
               {FEATURES.slice(0, 3).map((f) => (
                 <div key={f.n} data-card data-card-desk><FeatureCard f={f} /></div>
@@ -267,19 +272,19 @@ export function ScanStory() {
             </div>
             <div className="relative flex items-center justify-center">
               <div data-qr className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"><QrCard /></div>
-              <div data-phone-wrap className="relative"><Phone className="w-[min(310px,calc((100svh-190px)*0.57))]" /></div>
+              <div data-phone-wrap className="relative"><Phone className="w-[min(300px,calc((100svh-260px)*0.57))]" /></div>
             </div>
             <div className="flex flex-col gap-4">
               {FEATURES.slice(3).map((f) => (
                 <div key={f.n} data-card data-card-desk><FeatureCard f={f} /></div>
               ))}
-              <div data-cta className="pl-2 pt-2">
-                <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink transition hover:bg-jade-soft">
-                  Book a free demo
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
-                </a>
-              </div>
             </div>
+          </div>
+          <div data-cta className="absolute inset-x-0 bottom-6 z-20 hidden justify-center lg:flex xl:bottom-8">
+            <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink transition hover:bg-jade-soft">
+              Book a free demo
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
+            </a>
           </div>
 
           {/* phone & tablet: phone in the middle, the cards take turns below it */}
