@@ -419,3 +419,16 @@ select.h-10:not([multiple]), select.h-9:not([multiple]) { padding-right: 2.1rem;
   backdrop-filter: blur(20px) saturate(160%);
   box-shadow: 0 10px 30px -18px rgb(16 24 20 / 0.35), inset 0 0 0 1px rgb(16 24 20 / 0.06);
 }
+
+/* the scan line in the "one app" phone */
+@keyframes scanline {
+  0% { top: 6%; }
+  50% { top: 92%; }
+  100% { top: 6%; }
+}
+.scanline {
+  animation: scanline 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanline { animation: none; top: 50%; }
+}

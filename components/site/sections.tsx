@@ -4,64 +4,12 @@ import clsx from "clsx";
 import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { IconArrow, IconBill, IconForecast, IconGuests, IconKitchen, IconPulse, IconShield, IconSplit, IconStock, IconTable, IconVoice } from "./icons";
 import { PulseNote } from "./mockups";
-import { Eyebrow, SectionHead } from "./head";
+import { SectionHead } from "./head";
 import { Swipe } from "./swipe";
-import { ScrollTrigger, reducedMotion, useIsoLayoutEffect, useTilt } from "./motion";
+import { useTilt } from "./motion";
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 
-
-/* ================= statement: words light up as you scroll, on a dark photo ================= */
-// Photo from Unsplash (free under the Unsplash License).
-const STATEMENT_IMG = "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&q=70&w=2000";
-
-export function Statement() {
-  const ref = useRef<HTMLParagraphElement>(null);
-  const text = "Everything your billing software, kitchen printer, stock register, order notebook and WhatsApp groups do today — in one place, talking to each other.";
-  useIsoLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const words = el.querySelectorAll<HTMLElement>(".lit-word");
-    if (reducedMotion()) {
-      words.forEach((w) => (w.style.color = "#fff"));
-      return;
-    }
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start: "top 80%",
-      end: "bottom 45%",
-      scrub: true,
-      onUpdate: (self) => {
-        const n = Math.round(self.progress * words.length);
-        words.forEach((w, i) => (w.style.color = i < n ? "#fff" : ""));
-      },
-    });
-    return () => st.kill();
-  }, []);
-  return (
-    <section className="px-2 py-2 sm:px-3">
-      <div className="relative isolate overflow-hidden rounded-[30px] bg-ink sm:rounded-[40px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={STATEMENT_IMG} alt="" aria-hidden loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover text-transparent opacity-45" data-parallax="-6" />
-        <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(16_22_20/.92)_0%,rgb(16_22_20/.75)_55%,rgb(16_22_20/.55)_100%)]" />
-        <div className="mx-auto max-w-[1100px] px-6 py-14 lg:px-8 lg:py-32">
-          <Eyebrow dark>One app instead of five</Eyebrow>
-          <p ref={ref} className="mt-5 text-[30px] font-semibold leading-[1.12] tracking-[-0.035em] sm:text-[46px] lg:text-[58px] [&_.lit-word]:text-white/20">
-            {text.split(" ").map((w, i) => (
-              <span key={i} className="lit-word">{w} </span>
-            ))}
-          </p>
-          <div data-reveal className="mt-10">
-            <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink transition hover:bg-jade-soft">
-              Book a free demo
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 /* ================= features: white bento cards with live little scenes ================= */
 function Card({ className, t, d, art, artFirst = false }: { className?: string; t: string; d: string; art: ReactNode; artFirst?: boolean }) {

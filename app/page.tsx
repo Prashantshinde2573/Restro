@@ -7,7 +7,8 @@ import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
 import { JsonLd } from "@/components/site/json-ld";
 import { SectionHead } from "@/components/site/head";
-import { Features, Only, Statement, Story, WhyRestropi } from "@/components/site/sections";
+import { Features, Only, Story, WhyRestropi } from "@/components/site/sections";
+import { ScanStory } from "@/components/site/scan-story";
 
 export default function Landing() {
   return (
@@ -18,7 +19,7 @@ export default function Landing() {
         <main>
           <Hero />
           <MadeFor />
-          <Statement />
+          <ScanStory />
           <WhyRestropi />
           <Features />
           <Story />
