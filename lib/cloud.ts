@@ -576,6 +576,15 @@ const report = (e: unknown) => console.error("[restropi] cloud write failed", e)
 export const isConnected = () => !!connected;
 
 /** Guests add/update only their own customer record (name, phone), or leave feedback. */
+/** Guest QR page: this guest's own stamp card (found from the number on their own orders). */
+export async function guestStamps(): Promise<{ stamps: { at: string }[]; rewards: number } | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("guest_stamps", { r: rid });
+  if (error || !data) return null;
+  return data as { stamps: { at: string }[]; rewards: number };
+}
+
 export function guestUpsert(rid: string, id: string, data: Record<string, unknown>, coll: "guests" | "feedback" | "activity" = "guests") {
   if (coll === "guests") track(sb().rpc("guest_touch", { r: rid, rec: { ...data, id } }).then(check));
   else track(sb().from(coll).insert({ rid, id, data }).then(check));

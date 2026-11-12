@@ -6,22 +6,25 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, DietMark, Sheet } from "./ui";
 import { Gallery, ItemBadges, SpiceMeter } from "./menu-bits";
 import { inr } from "@/lib/format";
-import type { MenuItem } from "@/lib/types";
+import type { MenuItem, Size } from "@/lib/types";
+import { sizesOf } from "@/lib/sizes";
 
 export interface CartLine {
-  key: string; // item + chosen options, so different choices stay separate
+  key: string; // item + size + chosen options, so different choices stay separate
   item: MenuItem;
   qty: number;
+  size?: string; // "L" (dishes sold in sizes)
   options: string[]; // readable labels, e.g. "Hot", "Extra cheese"
-  unitPrice: number; // base price + paid add-ons
+  unitPrice: number; // size (or base) price + paid add-ons
 }
 
-export const makeLine = (item: MenuItem, qty: number, options: string[] = [], extra = 0): CartLine => ({
-  key: `${item.id}|${options.join(",")}`,
+export const makeLine = (item: MenuItem, qty: number, options: string[] = [], extra = 0, size?: Size): CartLine => ({
+  key: `${item.id}|${size?.id ?? ""}|${options.join(",")}`,
   item,
   qty,
+  size: size?.name,
   options,
-  unitPrice: item.price + extra,
+  unitPrice: (size?.price ?? item.price) + extra,
 });
 
 /**
@@ -41,10 +44,14 @@ export function ItemSheet({
 }) {
   const [qty, setQty] = useState(1);
   const [picked, setPicked] = useState<Record<string, string[]>>({});
+  const sizes = item ? sizesOf(item) : [];
+  const [sizeId, setSizeId] = useState<string | null>(null);
+  const size = sizes.find((z) => z.id === sizeId) ?? sizes[0];
 
   useEffect(() => {
     if (!item) return;
     setQty(1);
+    setSizeId(null); // the first (smallest) size is picked to start
     // pre-select the first choice of required single groups, so one tap adds
     const init: Record<string, string[]> = {};
     item.options?.forEach((g) => {
@@ -89,8 +96,8 @@ export function ItemSheet({
               <span className="w-7 text-center text-[17px] font-semibold tnum">{qty}</span>
               <button aria-label="More" onClick={() => setQty((q) => q + 1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-surface"><Plus size={16} /></button>
             </div>
-            <Button size="lg" className="flex-1" disabled={!!missing} onClick={() => { onAdd(makeLine(item, qty, labels, extra)); onClose(); }}>
-              {missing ? `Choose ${missing.name.toLowerCase()}` : `Add · ${inr((item.price + extra) * qty)}`}
+            <Button size="lg" className="flex-1" disabled={!!missing} onClick={() => { onAdd(makeLine(item, qty, labels, extra, size)); onClose(); }}>
+              {missing ? `Choose ${missing.name.toLowerCase()}` : `Add${size ? ` ${size.name}` : ""} · ${inr(((size?.price ?? item.price) + extra) * qty)}`}
             </Button>
           </div>
         ) : undefined
@@ -105,9 +112,35 @@ export function ItemSheet({
               <ItemBadges item={item} />
               <SpiceMeter level={item.spice} withLabel />
             </div>
-            <div className="mt-2 text-[20px] font-semibold tnum">{inr(item.price)}</div>
+            <div className="mt-2 text-[20px] font-semibold tnum">{sizes.length ? `${inr(size!.price)}${size ? ` · ${size.name}` : ""}` : inr(item.price)}</div>
             {item.desc && <p className="mt-1 text-[15px] leading-relaxed text-muted">{item.desc}</p>}
           </div>
+          {sizes.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-baseline justify-between">
+                <h3 className="text-[16px] font-semibold">Size</h3>
+                <span className="text-[12.5px] text-muted">Pick one</span>
+              </div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(sizes.length, 3)}, minmax(0, 1fr))` }} role="radiogroup" aria-label="Size">
+                {sizes.map((z) => {
+                  const on = z.id === size?.id;
+                  return (
+                    <button
+                      key={z.id}
+                      role="radio"
+                      aria-checked={on}
+                      disabled={photosOnly}
+                      onClick={() => setSizeId(z.id)}
+                      className={clsx("flex flex-col items-center rounded-[14px] border px-2 py-2.5 transition", on ? "border-jade bg-jade-soft text-jade-deep" : "border-line bg-surface")}
+                    >
+                      <span className="text-[15px] font-semibold">{z.name}</span>
+                      <span className="text-[13.5px] tnum opacity-80">{inr(z.price)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           {!photosOnly &&
             item.options?.map((g) => (
               <section key={g.id}>

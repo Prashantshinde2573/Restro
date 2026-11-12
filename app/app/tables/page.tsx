@@ -339,6 +339,10 @@ export default function TablesPage() {
         prepaid={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.prepaid ?? []) : undefined}
         lines={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))) : undefined}
         billNo={pay ? partyOrders(pay.tableId, pay.party.id)[0]?.number : undefined}
+        guest={(() => {
+          const o = pay ? partyOrders(pay.tableId, pay.party.id).find((x) => x.guestPhone) : undefined;
+          return o ? { name: o.customer, phone: o.guestPhone } : undefined;
+        })()}
         onPaid={(payments, extra) => {
           if (!pay) return;
           const ids = partyOrders(pay.tableId, pay.party.id).map((o) => o.id);

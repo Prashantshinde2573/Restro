@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, useCan, useCoupons, useCurrentOutlet, useFeature, useMe, useSettings } from "@/lib/live";
+import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, stampActions, useCan, useCoupons, useCurrentOutlet, useFeature, useGuests, useMe, useMenu, useSettings } from "@/lib/live";
+import { liveStamps, mayAct, programOf, rewardOff, stampProblem } from "@/lib/stamps";
+import { StampBox } from "./stamps";
 import { printReceipt, receiptPdfBlob, receiptText } from "./receipt";
 import { useToast } from "./toast";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
@@ -32,6 +34,7 @@ export function Checkout({
   prepaid,
   lines,
   billNo,
+  guest,
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,6 +46,8 @@ export function Checkout({
   prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
   lines?: { name: string; qty: number; price: number }[]; // what's on the bill (for the receipt)
   billNo?: number;
+  /** the guest on this bill, when known (QR orders): fills in the name and number */
+  guest?: { name?: string; phone?: string };
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
@@ -63,6 +68,11 @@ export function Checkout({
   const coupons = useCoupons();
   const canDiscount = useCan("discount");
   const couponsOn = useFeature("coupons") === "ok" && canDiscount;
+  // stamp card
+  const [useReward, setUseReward] = useState(false);
+  const [giveStamp, setGiveStamp] = useState<boolean | null>(null); // null = the program's default
+  const menu = useMenu();
+  const guestsList = useGuests();
 
   // Start fresh each time the sheet opens — not when the bill behind it changes
   // (paying changes it, and that used to throw the "Paid" screen back to "Charge").
@@ -77,8 +87,10 @@ export function Checkout({
       setCash(null);
       setDiscountPct(0);
       setCustom({ on: false, kind: "pct", value: "" });
-      setPhone("");
-      setGuestName("");
+      setPhone(guest?.phone ?? "");
+      setGuestName(guest?.name ?? "");
+      setUseReward(false);
+      setGiveStamp(null);
       setCoupon(null);
       setCode("");
       setCodeErr("");
@@ -99,7 +111,20 @@ export function Checkout({
     const v = Math.max(0, Number(custom.value) || 0);
     return Math.min(subtotal, Math.round(custom.kind === "pct" ? (subtotal * Math.min(v, 100)) / 100 : v));
   })();
-  const t = billTotals(subtotal, coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100));
+  const settingsEarly = useSettings();
+  const meEarly = useMe();
+  const stampsOn = useFeature("stamps") === "ok" && !!settingsEarly.stamps?.on;
+  const prog = programOf(settingsEarly.stamps);
+  const phoneKey = phone.replace(/\D/g, "").slice(-10);
+  const stampGuest = stampsOn && phoneKey.length === 10 ? guestsList.find((c) => c.phone.replace(/\D/g, "").slice(-10) === phoneKey) : undefined;
+  const liveCount = liveStamps(stampGuest, prog).length;
+  const canRedeem = stampsOn && liveCount >= prog.needed && mayAct(meEarly, prog.redeemers);
+  const rewardAmt = canRedeem && useReward ? rewardOff(prog, subtotal, menu) : 0;
+  const stampWhyNot = stampsOn && phoneKey.length === 10 ? stampProblem(prog, stampGuest, subtotal) : null;
+  const mayGive = mayAct(meEarly, prog.givers);
+  const willStamp = stampsOn && phoneKey.length === 10 && !stampWhyNot && mayGive && (giveStamp ?? prog.auto);
+  const baseOff = coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100);
+  const t = billTotals(subtotal, Math.min(subtotal, baseOff + rewardAmt));
   const perGuest = Math.ceil(t.total / guests);
   const settings = useSettings();
   const splitOn = useFeature("splitByGuest") === "ok";
@@ -145,6 +170,9 @@ export function Checkout({
     // a number typed at billing puts this guest (and the bill) in the guest book
     if (phone.replace(/\D/g, "").length >= 10)
       guestActions.fromBill(guestName, phone, { orderNo: billNo ?? 0, amount: t.total, method: payments.map((p) => p.method.toUpperCase()).join(" + ") });
+    // stamp card: the reward first (a new card starts), then this bill's stamp
+    if (rewardAmt > 0) stampActions.redeem(phone, liveCount, prog.needed, { reward: prog.reward, amount: rewardAmt, orderNo: billNo, by: me?.name, outletId: outlet.id });
+    if (willStamp) stampActions.give(phone, { orderNo: billNo, by: me?.name, outletId: outlet.id });
     const r = onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
     setWaiting(r === "waiting");
   };
@@ -238,6 +266,22 @@ export function Checkout({
             <input className={clsx(inputCls, "!h-11 !text-[15px]")} placeholder="Customer name" value={guestName} onChange={(e) => setGuestName(e.target.value)} aria-label="Customer name (optional)" autoComplete="off" />
             <input className={clsx(inputCls, "!h-11 !text-[15px]")} inputMode="tel" placeholder="Mobile (optional)" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d +]/g, ""))} aria-label="Customer mobile number (optional)" autoComplete="off" />
           </div>
+          {stampsOn && (
+            <StampBox
+              phoneOk={phoneKey.length === 10}
+              name={stampGuest?.name || guestName}
+              have={liveCount}
+              program={prog}
+              rewardAmt={rewardOff(prog, subtotal, menu)}
+              canRedeem={canRedeem}
+              useReward={useReward}
+              onUseReward={setUseReward}
+              mayGive={mayGive}
+              whyNot={stampWhyNot}
+              give={willStamp}
+              onGive={(v) => setGiveStamp(v)}
+            />
+          )}
           {/* totals */}
           <div className="rounded-group bg-surface p-4">
             <div className="flex items-baseline justify-between">
@@ -246,7 +290,8 @@ export function Checkout({
             </div>
             <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
               <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
-              {t.discount > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount, { decimals: true })}</dd></div>}
+              {t.discount - rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount - rewardAmt, { decimals: true })}</dd></div>}
+              {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>Stamp card · {prog.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt>CGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>SGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>

@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { ImagePlus, Plus, Star, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
-import type { OptionGroup } from "@/lib/types";
+import type { OptionGroup, Size } from "@/lib/types";
 import { uploadMenuPhoto } from "@/lib/cloud";
 
 /** Shrink a photo on the phone before uploading: max 1200 px, JPEG. */
@@ -103,7 +103,40 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
   );
 }
 
-/** Customisations: spice level, add-ons, sizes… */
+/** Sizes, each with its own full price (Pizza S / M / L). */
+export function SizesEditor({ sizes, onChange }: { sizes: Size[]; onChange: (s: Size[]) => void }) {
+  const set = (i: number, patch: Partial<Size>) => onChange(sizes.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const preset = (names: string[]) => onChange(names.map((n, k) => ({ id: `s${Date.now()}${k}`, name: n, price: sizes[k]?.price ?? 0 })));
+  return (
+    <div className="rounded-group bg-surface p-3">
+      {sizes.length === 0 ? (
+        <p className="px-1 pb-2 text-[13px] text-muted">One price for this dish. Sold in sizes (pizza, shakes, half / full)? Add them here — each size has its own price.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {sizes.map((z, i) => (
+            <div key={z.id} className="flex items-center gap-2">
+              <input aria-label="Size name" value={z.name} placeholder="e.g. Medium" onChange={(e) => set(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/50 px-3 text-[15px] font-medium outline-none focus:ring-1 focus:ring-jade/40" />
+              <span className="text-[13px] text-muted">₹</span>
+              <input aria-label={`Price for ${z.name || "this size"}`} inputMode="numeric" value={z.price || ""} placeholder="0" onChange={(e) => set(i, { price: Number(e.target.value.replace(/\D/g, "")) || 0 })} className="h-10 w-20 rounded-[10px] bg-sunken/50 px-2 text-right text-[15px] font-semibold outline-none tnum focus:ring-1 focus:ring-jade/40" />
+              <button aria-label="Remove size" onClick={() => onChange(sizes.filter((_, j) => j !== i))} className="p-1 text-faint"><X size={15} /></button>
+            </div>
+          ))}
+          <button onClick={() => onChange([...sizes, { id: `s${Date.now()}`, name: "", price: 0 }])} className="pt-1 text-[13px] font-semibold text-jade">+ Add size</button>
+          {sizes.length === 1 && <p className="text-[12px] text-saffron">Add at least two sizes, or remove this one.</p>}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {[["S", "M", "L"], ["Regular", "Medium", "Large"], ["Half", "Full"]].map((names) => (
+          <button key={names.join()} onClick={() => preset(names)} className="flex items-center gap-1 rounded-full bg-sunken px-3 py-1.5 text-[13px] font-semibold">
+            <Plus size={13} /> {names.join(" / ")}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Customisations: spice level, add-ons… */
 export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onChange: (g: OptionGroup[]) => void }) {
   const setGroup = (i: number, patch: Partial<OptionGroup>) => onChange(groups.map((g, j) => (j === i ? { ...g, ...patch } : g)));
   return (
@@ -155,7 +188,6 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
         {[
           { name: "Spice level", type: "single" as const, required: true, choices: ["Mild", "Medium", "Hot"] },
           { name: "Add extra", type: "multi" as const, required: false, choices: ["Extra cheese"] },
-          { name: "Size", type: "single" as const, required: true, choices: ["Half", "Full"] },
         ]
           .filter((p) => !groups.some((g) => g.name === p.name))
           .map((p) => (

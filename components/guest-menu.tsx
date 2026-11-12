@@ -6,6 +6,7 @@
 // Every filter option comes from the owner's own menu: the categories they
 // created, the labels they ticked, the price range of their dishes.
 
+import { fromPrice, hasSizes } from "@/lib/sizes";
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
 import { BellRing, Check, ChevronDown, ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
@@ -382,7 +383,7 @@ export function DishCard({
           {m.desc && <span className="mt-0.5 line-clamp-1 text-[12px] text-muted">{m.desc}</span>}
         </button>
         <div className="mt-2 flex min-h-8 items-center justify-between gap-2">
-          <span className="text-[15px] font-bold text-jade-deep tnum">{inr(m.price)}</span>
+          <span className="text-[15px] font-bold text-jade-deep tnum">{hasSizes(m) && <span className="mr-0.5 text-[11.5px] font-semibold text-muted">{tx(lang, "from", "पासून")}</span>}{inr(fromPrice(m))}</span>
           {!readOnly &&
             (qty === 0 ? (
               <button onClick={onAdd} aria-label={tx(lang, `Add ${m.name}`, `${m.name} जोडा`)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep transition active:scale-90">

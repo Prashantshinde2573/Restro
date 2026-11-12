@@ -38,6 +38,7 @@ export interface Outlet {
   gstRate?: number;
   billFooter?: string; // message at the bottom of the bill
   acceptCard?: boolean; // card machine at the counter
+  stamps?: StampProgram; // stamp card (loyalty), set by the owner
   sort?: number;
 }
 
@@ -56,6 +57,7 @@ export interface Account {
 export interface OutletSettings {
   name: string;
   logo?: string; // the brand's logo (shown on the guest menu)
+  stamps?: StampProgram; // stamp card (loyalty)
   businessType: BusinessType;
   mixed?: boolean; // tables and counter both
   upi: string; // UPI ID every payment QR is generated for
@@ -90,9 +92,17 @@ export interface MenuItem {
   sweet?: boolean; // shows under the guest "Sweet" filter
   desc?: string;
   options?: OptionGroup[]; // customisations: spice level, add-ons…
+  /** sizes with their own price (Pizza M ₹250 / L ₹350). With sizes, `price` is the smallest. */
+  sizes?: Size[];
   photos?: string[]; // uploaded photo URLs (Cloud Storage later)
   photoCount?: number; // sample-data stand-in for photos
   hue: number; // placeholder art colour until photos come from Storage
+}
+
+export interface Size {
+  id: string;
+  name: string; // "M", "Large", "Half"
+  price: number; // the full price for this size, before GST
 }
 
 export interface OptionChoice {
@@ -255,6 +265,41 @@ export interface StockLog {
   note?: string;
 }
 
+/** Stamp card: a stamp per bill, a reward when the card is full. Set per outlet by the owner. */
+export interface StampProgram {
+  on: boolean;
+  /** stamps to fill a card; the reward is given on the next bill */
+  needed: number;
+  /** what the guest gets, in words: "Free coffee" */
+  reward: string;
+  /** how the reward comes off the bill */
+  rewardKind: "item" | "flat" | "pct";
+  rewardItemId?: string; // rewardKind "item": this dish is free (up to its price)
+  rewardValue?: number; // rewardKind "flat": ₹ off · "pct": % off
+  rewardCap?: number; // rewardKind "pct": at most this many ₹
+  /** a bill earns a stamp only if its items come to at least this (before GST) */
+  minBill: number;
+  /** at most this many stamps per guest per day */
+  perDay: number;
+  /** stamps older than this many days stop counting (0 = never) */
+  expiryDays: number;
+  /** who can collect: everyone with a number, or only guests who said yes to offers */
+  who: "everyone" | "optin";
+  /** add the stamp by itself when a bill is charged with the guest's number (or the cashier ticks it) */
+  auto: boolean;
+  /** who can give stamps and who can give the reward */
+  givers: "charge" | "discount" | "owner";
+  redeemers: "charge" | "discount" | "owner";
+  /** extra rules guests see */
+  terms?: string;
+}
+export interface Stamp {
+  at: string; // ISO
+  orderNo?: number;
+  by?: string; // who gave it
+  outletId?: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -271,6 +316,9 @@ export interface Customer {
   source?: "qr" | "pos" | "whatsapp";
   optIn?: boolean; // agreed to offers on WhatsApp
   bills?: { orderNo: number; at: string; amount: number; method: string }[];
+  /** stamp card: stamps on the current card (oldest first) and rewards given */
+  stamps?: Stamp[];
+  rewards?: { at: string; reward: string; amount: number; orderNo?: number; by?: string; outletId?: string }[];
 }
 
 export interface Feedback {

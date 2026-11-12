@@ -150,6 +150,7 @@ export function useSettings(): OutletSettings {
     name: a.name, logo: a.logo || "", businessType: o.businessType, mixed: isMixed(o), upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
     orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, gstRate: o.gstRate ?? 0.05,
+    stamps: o.stamps,
   };
 }
 export const settingsActions = {
@@ -159,7 +160,7 @@ export const settingsActions = {
     if (name !== undefined) accountActions.rename(name);
     const id = sessionStore.get().outletId || outletStore.get()[0]?.id;
     if (Object.keys(rest).length) outletActions.update(id, rest);
-    const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
+    const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", stamps: "stamp card", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
     const what = [...new Set([...(name !== undefined ? ["name"] : []), ...Object.keys(rest).map((k) => names[k] ?? k)])];
     if (what.length) logActivity("settings", `Changed settings: ${what.join(", ")}${rest.gstRate !== undefined ? ` (GST ${Math.round(rest.gstRate * 100)}%)` : ""}${rest.ordersPaused !== undefined ? (rest.ordersPaused ? " (paused)" : " (back on)") : ""}`, id);
   },
@@ -500,6 +501,45 @@ export const guestActions = {
           : c,
       ),
     );
+  },
+};
+
+/* ---------------- stamp card ---------------- */
+// Stamps sit on the guest's record (oldest first). A full card turns into the reward.
+const patchGuest = (phone: string, fn: (c: Customer) => Customer) => {
+  const key = normPhone(phone);
+  guestStore.set(guestStore.get().map((c) => (normPhone(c.phone) === key ? fn(c) : c)));
+};
+export const findGuest = (phone: string) => {
+  const key = normPhone(phone);
+  return key.length === 10 ? guestStore.get().find((c) => normPhone(c.phone) === key) : undefined;
+};
+export const stampActions = {
+  /** One stamp for this bill. */
+  give(phone: string, info: { orderNo?: number; by?: string; outletId?: string }) {
+    patchGuest(phone, (c) => ({ ...c, stamps: [...(c.stamps ?? []), { at: new Date().toISOString(), ...info }] }));
+    const c = findGuest(phone);
+    logActivity("guest", `Stamp for ${c?.name || phone}${info.orderNo ? ` on #${info.orderNo}` : ""} (${c?.stamps?.length ?? 1})`, info.outletId);
+  },
+  /** The card was full: the reward went on this bill; a new card starts. */
+  redeem(phone: string, live: number, needed: number, info: { reward: string; amount: number; orderNo?: number; by?: string; outletId?: string }) {
+    patchGuest(phone, (c) => {
+      // drop expired stamps and the ones this reward used up
+      const all = c.stamps ?? [];
+      const keep = all.slice(all.length - live).slice(needed);
+      return { ...c, stamps: keep, rewards: [{ at: new Date().toISOString(), ...info }, ...(c.rewards ?? [])] };
+    });
+    const c = findGuest(phone);
+    logActivity("guest", `Stamp card reward for ${c?.name || phone}: ${info.reward} (₹${info.amount} off${info.orderNo ? `, #${info.orderNo}` : ""})`, info.outletId);
+  },
+  /** Fix a card by hand (Guests → a guest). */
+  adjust(phone: string, delta: number, by?: string) {
+    patchGuest(phone, (c) => {
+      const all = c.stamps ?? [];
+      return { ...c, stamps: delta > 0 ? [...all, ...Array.from({ length: delta }, () => ({ at: new Date().toISOString(), by }))] : all.slice(0, Math.max(0, all.length + delta)) };
+    });
+    const c = findGuest(phone);
+    logActivity("guest", `${delta > 0 ? "Added" : "Removed"} ${Math.abs(delta)} stamp${Math.abs(delta) > 1 ? "s" : ""} for ${c?.name || phone} by hand`);
   },
 };
 

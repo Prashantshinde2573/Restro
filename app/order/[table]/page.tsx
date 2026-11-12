@@ -2,6 +2,9 @@
 
 import { GUEST_LANGS, tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import { GamesCard, GamesSheet, type GameId } from "@/components/games/games-sheet";
+import { StampCard } from "@/components/stamps";
+import { liveStamps, programOf } from "@/lib/stamps";
+import { hasSizes, sizedName } from "@/lib/sizes";
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
@@ -30,8 +33,8 @@ import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { cloudSignOut, ensureGuest, useCloud } from "@/lib/cloud";
-import type { MenuItem, Order, Payment } from "@/lib/types";
+import { cloudSignOut, ensureGuest, guestStamps, useCloud } from "@/lib/cloud";
+import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
 const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
 const STEPS_MR = ["मिळाली", "स्वीकारली", "बनत आहे", "तयार", "टेबलवर"] as const;
@@ -240,6 +243,38 @@ export default function GuestOrder() {
     return [myOrders.filter((o) => !past(o)), myOrders.filter(past)];
   }, [myOrders, party, counter]);
   const [showPast, setShowPast] = useState(false);
+  // stamp card: the program, and this guest's own stamps
+  const stampsFeature = useFeature("stamps") === "ok";
+  const stampProg = stampsFeature && settings.stamps?.on ? programOf(settings.stamps) : null;
+  const [myStamps, setMyStamps] = useState<number | null>(null);
+  useEffect(() => {
+    if (!stampProg) return;
+    let live = true;
+    guestStamps().then((r) => {
+      if (live && r) setMyStamps(r.stamps.length ? liveStamps({ stamps: r.stamps as Stamp[] }, stampProg).length : r.rewards ? 0 : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [!!stampProg, myOrders.length, openOrders.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stampCard = stampProg ? (
+    <div>
+      <StampCard
+        have={myStamps ?? 0}
+        needed={stampProg.needed}
+        reward={stampProg.reward}
+        title={tx(lang, "Your stamp card", "तुमचं स्टॅम्प कार्ड")}
+        note={
+          myStamps == null
+            ? tx(lang, `A stamp on every bill with your number. ${stampProg.needed} stamps = ${stampProg.reward}.`, `तुमच्या नंबरच्या प्रत्येक बिलावर एक स्टॅम्प. ${stampProg.needed} स्टॅम्प = ${stampProg.reward}.`)
+            : myStamps >= stampProg.needed
+              ? tx(lang, `Card full! ${stampProg.reward} on this bill — tell our staff.`, `कार्ड भरलं! या बिलावर ${stampProg.reward} — स्टाफला सांगा.`)
+              : tx(lang, `${stampProg.needed - myStamps} more to go for ${stampProg.reward}`, `${stampProg.reward} साठी अजून ${stampProg.needed - myStamps}`)
+        }
+      />
+      {stampProg.terms && <p className="mt-1.5 px-1 text-[12px] text-muted">{stampProg.terms}</p>}
+    </div>
+  ) : null;
   // When an order reaches the table, open "My orders": that's where the bill and Pay are.
   const ordersReadyEarly = useReady("orders");
   const served = useRef<Set<string> | null>(null);
@@ -398,7 +433,7 @@ export default function GuestOrder() {
   const tapAdd = (m: MenuItem) => {
     // after paying and leaving, a new order at this table asks for the number of guests again
     if (needCount && skipAsk) return setSkipAsk(false);
-    return m.options?.length ? setDetail(m) : addLine(makeLine(m, 1));
+    return m.options?.length || hasSizes(m) ? setDetail(m) : addLine(makeLine(m, 1));
   };
   const tapLess = (m: MenuItem) => {
     const last = [...cart].reverse().find((l) => l.item.id === m.id);
@@ -443,7 +478,7 @@ export default function GuestOrder() {
       status: p?.pendingApproval ? "new" : "accepted",
       lines: cart.map((l) => ({
         itemId: l.item.id,
-        name: l.item.name,
+        name: sizedName(l.item.name, l.size),
         qty: l.qty,
         price: l.unitPrice,
         station: l.item.station,
@@ -868,6 +903,7 @@ export default function GuestOrder() {
               </button>
             )
           )}
+          {stampCard}
           {pastOrders.length > 0 && (
             <div className="overflow-hidden rounded-[22px] bg-surface">
               <button onClick={() => setShowPast((v) => !v)} aria-expanded={showPast} className="flex w-full items-center justify-between px-4 py-3.5 text-left">
@@ -991,6 +1027,7 @@ export default function GuestOrder() {
                 </button>
               )
             )}
+          {stampCard}
           <button onClick={() => { setMoreOpen(false); window.setTimeout(() => setGame("ludo"), 350); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
             🎮 {tx(lang, "Play a game", "खेळ खेळा")}
           </button>
@@ -1043,7 +1080,7 @@ export default function GuestOrder() {
               <div key={l.key} className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0">
                 <span className="mt-1"><DietMark diet={l.item.diet} /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-medium leading-snug">{l.item.name}</div>
+                  <div className="text-[15px] font-medium leading-snug">{sizedName(l.item.name, l.size)}</div>
                   {l.options.length > 0 && <div className="mt-0.5 text-[12.5px] text-muted">{l.options.join(" · ")}</div>}
                   <div className="mt-1 text-[13.5px] text-muted tnum">{inr(l.qty * l.unitPrice)}</div>
                 </div>

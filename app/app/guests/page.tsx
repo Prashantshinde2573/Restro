@@ -1,9 +1,12 @@
 "use client";
 
-import { BadgeCheck, MessageCircle, QrCode, Search, Star, Users } from "lucide-react";
+import clsx from "clsx";
+import { BadgeCheck, Gift, MessageCircle, QrCode, Search, Star, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Chips, Group, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
-import { useGuests, useFeedback } from "@/lib/live";
+import { stampActions, useFeature, useFeedback, useGuests, useMe, useSettings } from "@/lib/live";
+import { liveStamps, mayAct, programOf } from "@/lib/stamps";
+import { StampCard } from "@/components/stamps";
 import { inr, timeAgo } from "@/lib/format";
 import type { Customer } from "@/lib/types";
 import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
@@ -29,9 +32,16 @@ export default function GuestsPage() {
   const fb = useFeedback().slice().sort((a, b) => b.at.localeCompare(a.at));
 
   const sel: Customer | null = all.find((c) => c.id === selId) ?? null;
+  // stamp card
+  const settings = useSettings();
+  const me = useMe();
+  const stampsOn = useFeature("stamps") === "ok" && !!settings.stamps?.on;
+  const prog = programOf(settings.stamps);
+  const stampsOf = (c: Customer) => liveStamps(c, prog).length;
+  const [rewardOnly, setRewardOnly] = useState(false);
   const list = useMemo(
-    () => all.filter((c) => guestMatch(c, seg) && (!q || `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.lastVisit.localeCompare(a.lastVisit)),
-    [all, seg, q],
+    () => all.filter((c) => (!rewardOnly || (stampsOn && stampsOf(c) >= prog.needed)) && guestMatch(c, seg) && (!q || `${c.name} ${c.phone}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.lastVisit.localeCompare(a.lastVisit)),
+    [all, seg, q, rewardOnly, stampsOn], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const back = all.filter((c) => c.visits > 1 && daysSince(c.lastVisit) <= 30).length;
   const avg = fb.length ? fb.reduce((s, f) => s + f.stars, 0) / fb.length : 0;
@@ -65,6 +75,11 @@ export default function GuestsPage() {
                   { value: "optin", label: "OK with offers", count: all.filter((c) => guestMatch(c, "optin")).length },
                 ]}
               />
+              {stampsOn && (
+                <button onClick={() => setRewardOnly((v) => !v)} aria-pressed={rewardOnly} className={clsx("-mt-1 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold", rewardOnly ? "border-saffron/40 bg-saffron-soft text-saffron" : "border-line bg-surface text-ink")}>
+                  <Gift size={14} /> Reward ready · {all.filter((c) => stampsOf(c) >= prog.needed).length}
+                </button>
+              )}
               <Group flush>
                 {list.map((c) => (
                   <button key={c.id} onClick={() => setSelId(c.id)} className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 hover:bg-sunken/40 lg:px-5">
@@ -75,7 +90,10 @@ export default function GuestsPage() {
                         {c.verified && <BadgeCheck size={15} className="text-jade" aria-label="Number verified" />}
                         {c.source === "qr" && c.visits <= 1 && <Pill tone="sky"><QrCode size={11} /> New via QR</Pill>}
                       </div>
-                      <div className="truncate text-[13px] text-muted">{c.phone} · {c.visits} {c.visits === 1 ? "visit" : "visits"} · {timeAgo(c.lastVisit)}</div>
+                      <div className="truncate text-[13px] text-muted">
+                        {c.phone} · {c.visits} {c.visits === 1 ? "visit" : "visits"} · {timeAgo(c.lastVisit)}
+                        {stampsOn && stampsOf(c) > 0 && <span className={clsx("font-semibold", stampsOf(c) >= prog.needed ? "text-saffron" : "text-jade-deep")}> · {stampsOf(c) >= prog.needed ? "🎁 reward ready" : `${stampsOf(c)}/${prog.needed} stamps`}</span>}
+                      </div>
                     </div>
                     <div className="text-right text-[14px] font-semibold tnum">{inr(c.spend)}</div>
                   </button>
@@ -133,6 +151,25 @@ export default function GuestsPage() {
                 </div>
               ))}
             </div>
+            {stampsOn && (
+              <div className="space-y-2">
+                <StampCard have={stampsOf(sel)} needed={prog.needed} reward={prog.reward} />
+                {mayAct(me, prog.givers) && (
+                  <div className="flex items-center justify-between rounded-group bg-surface px-4 py-2.5">
+                    <span className="text-[13.5px] text-muted">Fix the card by hand</span>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="plain" disabled={stampsOf(sel) === 0} onClick={() => stampActions.adjust(sel.phone, -1, me?.name)}>− 1</Button>
+                      <Button size="sm" variant="plain" onClick={() => stampActions.adjust(sel.phone, 1, me?.name)}>+ 1</Button>
+                    </div>
+                  </div>
+                )}
+                {!!sel.rewards?.length && (
+                  <div className="rounded-group bg-surface px-4 py-2.5 text-[13px] text-muted">
+                    {sel.rewards.length} reward{sel.rewards.length > 1 ? "s" : ""} used · last {timeAgo(sel.rewards[0].at)} ({sel.rewards[0].reward})
+                  </div>
+                )}
+              </div>
+            )}
             <div className="overflow-hidden rounded-group bg-surface">
               {[
                 ["Last visit", timeAgo(sel.lastVisit)],

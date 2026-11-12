@@ -155,6 +155,13 @@ export const en: Manual = {
           "**UPI + Cash** — part by UPI, part in cash. Enter the two amounts; they must add up to the bill.",
           "**Split by guest** (Growth, restaurants) — splits the bill equally. Tap each guest when their share is paid.",
         ] },
+        { h: "Stamp card (regulars)" },
+        { list: [
+          "Owner: **Settings → Stamp card**. Turn it on and choose how many stamps fill the card (e.g. 10), the reward (a free dish, ₹ off or % off), who can collect, the smallest bill that earns a stamp, stamps per day, when stamps expire, and who can give stamps and the reward.",
+          "At **Charge**, add the guest's mobile (QR orders fill it in). The stamp box shows their card; **Give a stamp** is ticked by itself if you chose that.",
+          "When the card is full, turn on **Use the reward** — it comes off this bill and a new card starts.",
+          "**Guests** shows each guest's stamps, a **Reward ready** filter, and − 1 / + 1 to fix a card by hand. Guests see their own card on the QR menu.",
+        ] },
         { h: "Discounts and coupons" },
         { list: [
           "Tap **5% off**, **10% off** or **Custom** (any % or ₹ amount).",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, QrCode, Receipt, ShieldCheck, Store, Users } from "lucide-react";
+import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, QrCode, Receipt, ShieldCheck, Stamp as StampIcon, Store, Users } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -8,6 +8,7 @@ import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, Toggle
 import { UpiPayCard, isValidUpi } from "@/components/upi";
 import { openPlanSheet } from "@/components/plan-sheet";
 import { ChangePassword } from "@/components/owner-auth";
+import { StampSettings } from "@/components/stamps";
 import { useToast } from "@/components/toast";
 import {
   accountActions,
@@ -20,6 +21,7 @@ import {
   useCan,
   useCategories,
   useCurrentOutlet,
+  useFeature,
   useFeedback,
   useGuests,
   useMe,
@@ -36,7 +38,7 @@ import { inr } from "@/lib/format";
 import type { OutletSettings } from "@/lib/types";
 import type { Member } from "@/lib/access";
 
-type Panel = "restaurant" | "payments" | "ordering" | "security" | "data" | null;
+type Panel = "restaurant" | "payments" | "ordering" | "stamps" | "security" | "data" | null;
 
 function Item({ icon, tint, title, value, onClick }: { icon: ReactNode; tint: string; title: string; value?: ReactNode; onClick: () => void }) {
   return (
@@ -59,6 +61,7 @@ export default function SettingsPage() {
   const me = useMe();
   const owner = isOwner(me);
   const canOutlet = useCan("outletSettings");
+  const stampsFeature = useFeature("stamps");
   const account = useAccount();
   const outlets = useOutlets();
   const outlet = useCurrentOutlet();
@@ -93,6 +96,7 @@ export default function SettingsPage() {
     restaurant: `Details on bills · ${outlet.name}`,
     payments: `Payments · ${outlet.name}`,
     ordering: `Ordering · ${outlet.name}`,
+    stamps: `Stamp card · ${outlet.name}`,
     security: "Password and sign-in",
     data: "Export your data",
   };
@@ -140,6 +144,9 @@ export default function SettingsPage() {
               <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi || "Add UPI ID"} onClick={() => setPanel("payments")} />
               <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo && settings.orderFrom !== settings.orderTo ? `Table QR ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
               <Item icon={<Receipt size={16} />} tint="#DE9122" title="Details on bills" value={settings.gstin || "GSTIN, FSSAI, address"} onClick={() => setPanel("restaurant")} />
+              {owner && stampsFeature === "ok" && (
+                <Item icon={<StampIcon size={16} />} tint="#8A4FD1" title="Stamp card" value={settings.stamps?.on ? `${settings.stamps.needed} stamps → ${settings.stamps.reward}` : "Off"} onClick={() => setPanel("stamps")} />
+              )}
             </div>
           </div>
         )}
@@ -306,6 +313,7 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+        {panel === "stamps" && <StampSettings onDone={(msg) => { setPanel(null); toast(msg); }} />}
         {panel === "security" && <Security onDone={() => { setPanel(null); toast("Password changed"); }} />}
         {panel === "data" && <Export />}
       </Sheet>

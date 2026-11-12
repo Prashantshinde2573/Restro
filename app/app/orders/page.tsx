@@ -306,6 +306,10 @@ export default function OrdersPage() {
         prepaid={pay?.flatMap((o) => o.prepaid ?? [])}
         lines={pay?.flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })))}
         billNo={pay?.[0]?.number}
+        guest={(() => {
+          const o = pay?.find((x) => x.guestPhone);
+          return o ? { name: o.customer, phone: o.guestPhone } : undefined;
+        })()}
         onPaid={(payments, extra) => {
           if (!pay?.length) return;
           const o = pay[0];

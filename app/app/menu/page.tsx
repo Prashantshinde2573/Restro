@@ -10,9 +10,10 @@ import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeatu
 import { PhotoSlide } from "@/components/menu-bits";
 import { DragGhost, DragHandle, useDishDrag } from "@/components/dish-drag";
 import { MenuFromPhoto } from "@/components/menu-import";
-import { OptionsEditor, PhotoUploader } from "@/components/dish-editor";
+import { OptionsEditor, PhotoUploader, SizesEditor } from "@/components/dish-editor";
+import { hasSizes, sizesOf } from "@/lib/sizes";
 import { inr } from "@/lib/format";
-import type { Diet, MenuItem, OptionGroup } from "@/lib/types";
+import type { Diet, MenuItem, OptionGroup, Size } from "@/lib/types";
 
 // Emoji the owner can give a category — shown in the guest menu side bar.
 const CAT_ICONS = ["🍢", "🍛", "🫓", "🍚", "🍨", "🥤", "☕", "🍕", "🍔", "🥪", "🍜", "🥗", "🍰", "🍦", "🥘", "🍳", "🥟", "🍹", "🧁", "🍽️"];
@@ -29,6 +30,7 @@ type Draft = {
   isNew: boolean;
   tags: string[];
   options: OptionGroup[];
+  sizes: Size[];
   cost: string; // ₹ per plate (ingredients)
 };
 
@@ -66,14 +68,14 @@ export default function MenuPage() {
   };
   const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
   const engineeringOn = useFeature("menuEngineering") === "ok";
-  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], cost: "" });
+  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], sizes: [], cost: "" });
   const [draft, setDraft] = useState<Draft>(blank());
   const setEdit = (m: MenuItem | "new" | null, catId?: string) => {
     setEditRaw(m);
     const it = m && m !== "new" ? m : null;
     setDraft(
       it
-        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], cost: it.cost ? String(it.cost) : "" }
+        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], sizes: it.sizes ?? [], cost: it.cost ? String(it.cost) : "" }
         : blank(catId),
     );
     setNewCat(null);
@@ -92,8 +94,12 @@ export default function MenuPage() {
     toast(`“${c.name}” added · guests see it as a filter now`);
     return c.id;
   };
-  const priceNum = Number(draft.price);
-  const draftOk = draft.name.trim().length > 1 && priceNum > 0 && !!draft.categoryId;
+  // sizes: at least two, each with a name and a price; the dish's price is then the smallest
+  const sizes = draft.sizes.filter((z) => z.name.trim() && z.price > 0).map((z) => ({ ...z, name: z.name.trim() }));
+  const sized = sizes.length > 1;
+  const sizesBad = draft.sizes.length > 0 && (draft.sizes.length < 2 || sizes.length !== draft.sizes.length);
+  const priceNum = sized ? Math.min(...sizes.map((z) => z.price)) : Number(draft.price);
+  const draftOk = draft.name.trim().length > 1 && priceNum > 0 && !!draft.categoryId && !sizesBad;
 
   const avgSold = items.length ? items.reduce((s, m) => s + m.soldThisWeek, 0) / items.length : 0;
   const avgMargin = items.length ? items.reduce((s, m) => s + (m.price - m.cost), 0) / items.length : 0;
@@ -169,7 +175,7 @@ export default function MenuPage() {
                             <span className={clsx("truncate text-[15px] font-medium", !m.available && "text-muted")}>{m.name}</span>
                           </div>
                           <div className="text-[13px] text-muted tnum">
-                            {inr(m.price)}{m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>} · {m.soldThisWeek} sold
+                            {hasSizes(m) ? `${sizesOf(m).map((z) => `${z.name} ${inr(z.price)}`).join(" · ")}` : inr(m.price)}{m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>} · {m.soldThisWeek} sold
                             {m.photos?.length ? ` · ${m.photos.length} photos` : ""}
                           </div>
                         </div>
@@ -259,6 +265,7 @@ export default function MenuPage() {
                 tags: draft.tags,
                 cost: Math.max(0, Math.round(Number(draft.cost) || 0)),
                 options: draft.options.filter((g) => g.name && g.choices.some((c) => c.name)).map((g) => ({ ...g, choices: g.choices.filter((c) => c.name) })),
+                sizes: sized ? sizes : [],
               };
               if (editing) menuActions.update(editing.id, patch);
               else
@@ -274,7 +281,7 @@ export default function MenuPage() {
               toast(editing ? "Dish saved · guests see it on the QR menu now" : "Dish added · it's on the guest menu now");
             }}
           >
-            {!draftOk ? "Add a name, price and category" : editing ? "Save dish" : "Add dish"}
+            {sizesBad ? "Give every size a name and price" : !draftOk ? "Add a name, price and category" : editing ? "Save dish" : "Add dish"}
           </Button>
         }
       >
@@ -283,7 +290,11 @@ export default function MenuPage() {
           <Field label="Dish name"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Paneer Tikka" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Price (₹, before GST)">
-              <input className={inputCls} inputMode="decimal" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
+              {sized ? (
+                <div className="flex h-12 items-center rounded-ctl bg-sunken/60 px-4 text-[15px] text-muted">from ₹{priceNum} · sizes below</div>
+              ) : (
+                <input className={inputCls} inputMode="decimal" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
+              )}
             </Field>
             <Field label="Category">
               <select
@@ -346,7 +357,11 @@ export default function MenuPage() {
               ))}
             </div>
           </Field>
-          <Field label="Choices for guests (spice, add-ons, size)">
+          <div>
+            <div className="mb-1.5 text-[13px] font-medium text-muted">Sizes (each with its own price)</div>
+            <SizesEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
+          </div>
+          <Field label="Choices for guests (spice, add-ons)">
             <OptionsEditor groups={draft.options} onChange={(options) => setDraft({ ...draft, options })} />
           </Field>
           <Field label="Cost per plate (₹)" hint="What the ingredients cost you. Used for margins in “What's working”. Optional.">

@@ -32,6 +32,7 @@ export type Feature =
   | "guests"
   | "campaigns"
   | "coupons"
+  | "stamps"
   | "voice"
   | "prepForecast"
   | "insights"
@@ -55,6 +56,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   guests: { label: "Guests", plan: "growth", types: BOTH },
   campaigns: { label: "Campaigns", plan: "growth", types: BOTH },
   coupons: { label: "Discount coupons", plan: "growth", types: BOTH },
+  stamps: { label: "Stamp card (loyalty)", plan: "growth", types: BOTH },
   voice: { label: "Voice ordering", plan: "pro", types: BOTH },
   prepForecast: { label: "Prep forecast", plan: "pro", types: BOTH },
   insights: { label: "Insights and Leak guard", plan: "pro", types: BOTH },

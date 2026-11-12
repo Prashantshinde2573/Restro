@@ -1,5 +1,6 @@
 "use client";
 
+import { fromPrice, hasSizes, needsChoice, sizedName, sizesOf } from "@/lib/sizes";
 import { hasCounter, hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { ChevronDown, Mic, Minus, Plus, Search, Send, Trash2, X, Check } from "lucide-react";
@@ -19,7 +20,7 @@ import { closeBill, partyOpenOrders } from "@/lib/billing";
 import { inr, gstLabel } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
 
-type Line = { item: MenuItem; qty: number; note?: string; unitPrice?: number };
+type Line = { item: MenuItem; qty: number; note?: string; unitPrice?: number; size?: string };
 const NOTES = ["Less spicy", "Extra spicy", "No onion", "Jain", "Pack separately"];
 
 export default function PosPage() {
@@ -72,13 +73,13 @@ function PosScreen() {
     [menu, cat, q],
   );
 
-  const add = (item: MenuItem, qty = 1, note?: string, unitPrice?: number) => {
+  const add = (item: MenuItem, qty = 1, note?: string, unitPrice?: number, size?: string) => {
     if (!item.available) return;
     setSent(false);
     setLines((ls) => {
-      const i = ls.findIndex((l) => l.item.id === item.id && l.note === note && l.unitPrice === unitPrice);
+      const i = ls.findIndex((l) => l.item.id === item.id && l.note === note && l.unitPrice === unitPrice && l.size === size);
       if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, qty: l.qty + qty } : l));
-      return [...ls, { item, qty, note, unitPrice }];
+      return [...ls, { item, qty, note, unitPrice, size }];
     });
   };
   const priceOf = (l: Line) => l.unitPrice ?? l.item.price;
@@ -131,7 +132,7 @@ function PosScreen() {
       staff: me?.name ?? "Staff",
       createdAt: new Date().toISOString(),
       status: "accepted",
-      lines: lines.map((l) => ({ itemId: l.item.id, name: l.item.name, qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
+      lines: lines.map((l) => ({ itemId: l.item.id, name: sizedName(l.item.name, l.size), qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
     });
     const kot = type === "dine-in" ? (tb && getTable(tb.id)!.parties.length > 1 ? `${table} · ${pid}` : table) : label;
     toast(`KOT sent · ${count} items for ${kot}`);
@@ -191,10 +192,10 @@ function PosScreen() {
           </div>
         ) : (
           lines.map((l, i) => (
-            <div key={`${l.item.id}-${l.note ?? ""}`} className="group flex items-start gap-3 rounded-ctl px-2 py-2.5 hover:bg-sunken/40">
+            <div key={`${l.item.id}-${l.size ?? ""}-${l.note ?? ""}`} className="group flex items-start gap-3 rounded-ctl px-2 py-2.5 hover:bg-sunken/40">
               <div className="mt-1"><DietMark diet={l.item.diet} /></div>
               <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-medium leading-tight">{l.item.name}</div>
+                <div className="text-[15px] font-medium leading-tight">{sizedName(l.item.name, l.size)}</div>
                 <button onClick={() => setNoteFor(`${i}`)} className={clsx("mt-0.5 text-[12.5px]", l.note ? "font-medium text-saffron" : "text-faint hover:text-jade")}>
                   {l.note ?? "Add note"}
                 </button>
@@ -288,7 +289,7 @@ function PosScreen() {
               return (
                 <button
                   key={m.id}
-                  onClick={() => (m.options?.some((g) => g.required) ? setCustomize(m) : add(m))}
+                  onClick={() => (needsChoice(m) ? setCustomize(m) : add(m))}
                   disabled={!m.available}
                   className={clsx(
                     "group relative flex flex-col overflow-hidden rounded-[18px] bg-surface text-left transition active:scale-[.97]",
@@ -310,9 +311,11 @@ function PosScreen() {
                       <span className="text-[14.5px] font-semibold leading-tight">{m.name}</span>
                     </div>
                     <div className="mt-auto flex items-center justify-between pt-2">
-                      <span className="text-[14px] font-medium text-muted tnum">{inr(m.price)}</span>
+                      <span className="text-[14px] font-medium text-muted tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
                       {!m.available ? (
                         <span className="text-[11.5px] font-semibold text-rose">Sold out</span>
+                      ) : hasSizes(m) ? (
+                        <span className="text-[11.5px] font-medium text-jade">{sizesOf(m).map((z) => z.name).join(" / ")}</span>
                       ) : m.options?.some((g) => g.required) ? (
                         <span className="text-[11.5px] font-medium text-jade">Choices</span>
                       ) : m.tags?.[0] ? (
@@ -401,8 +404,8 @@ function PosScreen() {
         </div>
       </Sheet>
 
-      <ItemSheet item={customize} onClose={() => setCustomize(null)} onAdd={(l) => add(l.item, l.qty, l.options.join(" · ") || undefined, l.unitPrice)} />
-      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => ls.forEach((l) => add(l.item, l.qty, l.note))} />
+      <ItemSheet item={customize} onClose={() => setCustomize(null)} onAdd={(l) => add(l.item, l.qty, l.options.join(" · ") || undefined, l.unitPrice, l.size)} />
+      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => ls.forEach((l) => add(l.item, l.qty, l.note, l.size?.price, l.size?.name))} />
       <Checkout
         open={pay}
         onClose={() => setPay(false)}
@@ -412,7 +415,7 @@ function PosScreen() {
           ...getOrders()
             .filter((o) => (type === "dine-in" ? !!tb && o.tableId === tb.id && (o.partyId ?? "A") === (pty?.id ?? party ?? "A") : sentIds.includes(o.id)) && o.status !== "paid" && o.status !== "cancelled")
             .flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))),
-          ...(sent ? [] : lines.map((l) => ({ name: l.item.name, qty: l.qty, price: priceOf(l) }))),
+          ...(sent ? [] : lines.map((l) => ({ name: sizedName(l.item.name, l.size), qty: l.qty, price: priceOf(l) }))),
         ]}
         onPaid={(payments, extra) => {
           // Anything still in the cart becomes an order first, so the sale is saved.

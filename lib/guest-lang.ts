@@ -203,6 +203,11 @@ const HI: Record<string, string> = {
   Done: "हो गया",
   "Previous orders": "पिछले ऑर्डर",
   "Not accepted": "स्वीकार नहीं हुआ",
+  from: "से शुरू",
+  "Your stamp card": "आपका स्टैम्प कार्ड",
+  "A stamp on every bill with your number. {} stamps = {}.": "आपके नंबर वाले हर बिल पर एक स्टैम्प। {} स्टैम्प = {}।",
+  "Card full! {} on this bill — tell our staff.": "कार्ड भर गया! इस बिल पर {} — स्टाफ को बताएँ।",
+  "{} more to go for {}": "बस {} और, फिर {}",
   // games
   Games: "गेम्स",
   "Play a game": "गेम खेलें",
