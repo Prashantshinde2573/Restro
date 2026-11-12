@@ -175,10 +175,13 @@ export function ThankYou({
   token,
   lang,
   pending = false,
+  closed = false,
   onRate,
   onClose,
   children,
 }: {
+  /** the visit is over (own page): no "Done", ask to scan the QR to order again */
+  closed?: boolean;
   /** the guest says they paid; the owner hasn't confirmed it yet */
   pending?: boolean;
   name?: string;
@@ -188,7 +191,7 @@ export function ThankYou({
   token?: number;
   lang: Lang;
   onRate: (stars: number, text: string) => void;
-  onClose: () => void;
+  onClose?: () => void;
   children?: ReactNode;
 }) {
   const [stars, setStars] = useState(0);
@@ -253,7 +256,17 @@ export function ThankYou({
           </>
         )}
       </div>
-      <Button size="lg" className="mt-6 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
+      {closed ? (
+        <div className="mt-6 flex w-full items-center gap-3 rounded-[18px] bg-surface p-4 text-left">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><QrCode size={20} /></span>
+          <span className="text-[14px] leading-snug text-muted">
+            <b className="block text-[15px] text-ink">{tx(lang, "Your visit is complete", "तुमची भेट पूर्ण झाली")}</b>
+            {tx(lang, "Want to order again? Scan the QR on your table.", "पुन्हा ऑर्डर करायची आहे? टेबलवरचा QR पुन्हा स्कॅन करा.")}
+          </span>
+        </div>
+      ) : (
+        <Button size="lg" className="mt-6 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
+      )}
     </div>
   );
 }

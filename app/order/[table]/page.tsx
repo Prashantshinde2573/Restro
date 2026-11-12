@@ -41,6 +41,7 @@ const STEPS_MR = ["मिळाली", "स्वीकारली", "बन�
 const stepOf = (s: Order["status"]) => (s === "new" ? 0 : s === "accepted" ? 1 : s === "preparing" ? 2 : s === "ready" ? 3 : 4);
 const PAIRINGS: Record<string, string> = { mains: "m10", starters: "m19", rice: "m16", breads: "m6", desserts: "m21", drinks: "m4", hot: "m16" };
 const sumOf = (p: Payment[]) => p.reduce((s, x) => s + x.amount, 0);
+const DONE_TTL = 6 * 60 * 60 * 1000; // a finished visit stays closed on this phone for 6 hours (unless the QR is scanned again)
 const num = (n: number) => (n ? n : "…"); // cloud: number arrives a moment after the order
 
 function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) {
@@ -143,6 +144,29 @@ export default function GuestOrder() {
     setLangState(l);
     try { localStorage.setItem("restropi.guestLang", l); } catch {}
   };
+  // ---- after the bill is paid this visit is over: back / reload lands on the thank-you page, a fresh QR scan starts again ----
+  const doneKey = `restropi.done.${table}`;
+  const thanksUrl = () => `/order/${encodeURIComponent(params?.table ?? table)}/thanks${window.location.search}`;
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const check = (fromCache: boolean) => {
+      try {
+        const raw = localStorage.getItem(doneKey);
+        if (!raw) return;
+        const at = Number(JSON.parse(raw).at) || 0;
+        const nav = (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type;
+        const fresh = !fromCache && nav === "navigate"; // the QR was scanned again (or the link opened anew)
+        if (fresh || Date.now() - at > DONE_TTL) return localStorage.removeItem(doneKey);
+        setLeaving(true);
+        window.location.replace(thanksUrl());
+      } catch {}
+    };
+    check(false);
+    const onShow = (e: PageTransitionEvent) => e.persisted && check(true); // restored from the back/forward cache
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doneKey]);
   const [view, setView] = useState<"menu" | "browse" | "orders">("menu");
   const [moreOpen, setMoreOpen] = useState(false);
   const [game, setGame] = useState<GameId | null>(null);
@@ -301,6 +325,37 @@ export default function GuestOrder() {
   const paidOrders = myOrders.filter((o) => o.status === "paid");
   const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
   const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
+  // Bill settled (pay at the end): close this visit on the phone and go to the thank-you page.
+  const finishing = useRef(false);
+  const finishVisit = (pays: Payment[], orderNo?: number) => {
+    if (finishing.current) return;
+    finishing.current = true;
+    try {
+      localStorage.setItem(doneKey, JSON.stringify({ at: Date.now() }));
+      localStorage.setItem(
+        `restropi.thanks.${table}`,
+        JSON.stringify({ place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: pays, orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now() }),
+      );
+    } catch {}
+    setLeaving(true);
+    window.location.replace(thanksUrl());
+  };
+  // The restaurant marked the bill paid while this page was open (e.g. paid to the captain without tapping Pay here).
+  const lastBill = useRef(billState);
+  const lastOpen = useRef<string[]>([]);
+  useEffect(() => {
+    const was = lastBill.current;
+    lastBill.current = billState;
+    const openIds = lastOpen.current;
+    if (payNow || counter || billState !== "paid" || (was !== "open" && was !== "sent")) return;
+    const settled = paidOrders.filter((o) => openIds.includes(o.id));
+    const pays = (settled.length ? settled : paidOrders).flatMap((o) => o.payments ?? []);
+    finishVisit(pays, (settled[0] ?? paidOrders[0])?.number);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billState]);
+  useEffect(() => {
+    if (openOrders.length) lastOpen.current = openOrders.map((o) => o.id); // the bill that's being settled
+  }, [openOrders]);
 
   // ---- settling: show the thank-you once the money is confirmed ----
   // Remember a payment we are waiting on, so a reload keeps the "being confirmed" screen.
@@ -344,10 +399,9 @@ export default function GuestOrder() {
     // Pay at the end: say thank you only once the owner has confirmed the money (the bill is paid).
     if (os.every((o) => o.status === "paid" || o.status === "cancelled") && os.some((o) => o.status === "paid")) {
       const paid = os.find((o) => o.status === "paid")!;
-      setThanks({ payments: paid.payments ?? payments, orderNo: paid.number, orderId: paid.id });
       setWaiting(null);
-      setConfirmed(null);
-      setBillOpen(false);
+      try { localStorage.removeItem(waitKey); } catch {}
+      finishVisit(paid.payments ?? payments, paid.number);
       return;
     }
     const claimed = os.some((o) => !!o.payClaim);
@@ -574,6 +628,7 @@ export default function GuestOrder() {
   const confirmedOrder = allOrders.find((o) => o.id === confirmed);
   const thanksOrder = thanks?.orderId ? allOrders.find((o) => o.id === thanks.orderId) : undefined;
 
+  if (leaving) return <FullLoader label="Thank you" />;
   if (cloudLoading) {
     return (
       <FullLoader label="Loading menu" />
