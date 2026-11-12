@@ -84,6 +84,19 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
   started = true;
   // Read the email link before Supabase takes the tokens out of the address bar.
   const h = new URLSearchParams(window.location.hash.replace(/^#/, "") + "&" + window.location.search.replace(/^\?/, ""));
+  // Our own emails (Resend) carry ?token_hash=…&type=recovery: sign in with it here, then ask for a new password.
+  const tokenHash = h.get("token_hash");
+  if (tokenHash && h.get("type") === "recovery") {
+    window.history.replaceState(null, "", window.location.pathname); // the token never stays in the address bar
+    void sb()
+      .auth.verifyOtp({ token_hash: tokenHash, type: "recovery" })
+      .then(({ error }) => {
+        if (!error) return;
+        emailLink = "expired";
+        setRecovering(false);
+        window.location.replace("/login?link=expired");
+      });
+  }
   if (h.get("type") === "recovery") {
     emailLink = "recovery";
     setRecovering(true);
@@ -214,10 +227,45 @@ export async function signInWithGoogle() {
   const { error } = await sb().auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/login` } });
   if (error) throw new Error(friendly(error.message));
 }
+/** POST to one of our own email routes (app/api/...). Returns null when the route isn't set up (fall back). */
+async function emailApi<T>(path: string, body: unknown, withUser = false): Promise<T | null> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (withUser) {
+    const { data } = await sb().auth.getSession();
+    if (data.session) headers.authorization = `Bearer ${data.session.access_token}`;
+  }
+  let r: Response;
+  try {
+    r = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  } catch {
+    return null;
+  }
+  const j = (await r.json().catch(() => ({}))) as { error?: string };
+  if (r.status === 503 || r.status === 404) return null; // email keys not added yet
+  if (!r.ok) throw new Error(j.error ?? "Something went wrong");
+  return j as T;
+}
+
+/** Forgot password: a branded email from support@restropi.com (Resend); Supabase's own email only as a fallback. */
 export async function sendPasswordReset(email: string) {
+  const done = await emailApi<{ ok: boolean }>("/api/auth/reset", { email: email.trim() });
+  if (done) return;
   const { error } = await sb().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/login` });
   if (error) throw new Error(friendly(error.message));
 }
+
+/** Owner sign-in with a 6-digit code sent to their email. */
+export async function sendSignInCode(email: string) {
+  const done = await emailApi<{ ok: boolean }>("/api/auth/code", { email: email.trim() });
+  if (!done) throw new Error("Email sign-in isn't available right now. Use your password.");
+}
+export async function signInWithCode(email: string, code: string) {
+  const { error } = await sb().auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.replace(/\D/g, ""), type: "email" });
+  if (error) throw new Error(/expired|invalid/i.test(error.message) ? "That code is wrong or has expired. Ask for a new one." : friendly(error.message));
+}
+
+/** Super admin: email the new owner a welcome with a one-time "set your password" link. */
+export const sendWelcomeEmail = (rid: string, resend = false) => emailApi<{ ok: boolean; to?: string; already?: boolean }>("/api/email/welcome", { rid, resend }, true);
 
 async function callFn<T>(name: string, body: unknown, withUser = false): Promise<T> {
   const headers: Record<string, string> = { "content-type": "application/json", apikey: KEY };

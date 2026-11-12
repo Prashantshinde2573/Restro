@@ -10,6 +10,8 @@ import { useToast } from "@/components/toast";
 import { orderActions, useCurrentOutlet, useOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
 import { orderWhere, useTables } from "@/lib/tables";
+import { useT } from "@/lib/i18n";
+import { speak, ticketText, voiceOnText } from "@/lib/speak";
 import type { MenuItem, Order } from "@/lib/types";
 
 type Station = "all" | MenuItem["station"];
@@ -39,6 +41,7 @@ export default function KitchenPage() {
   }, []);
 
   // new ticket: chime, and (when on) read it aloud — "Table T5. 2 Paneer Tikka, 1 Butter Naan"
+  const { lang } = useT(); // tickets are read in the app's language (English / हिंदी / मराठी)
   const [voice, setVoiceRaw] = useState(false);
   useEffect(() => {
     try {
@@ -51,7 +54,7 @@ export default function KitchenPage() {
       try {
         localStorage.setItem("restropi.kotVoice", n ? "1" : "0");
       } catch {}
-      if (n && "speechSynthesis" in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance("Orders will be read aloud"));
+      if (n) speak(voiceOnText(lang), lang);
       return n;
     });
   const seen = useRef<Set<string> | null>(null);
@@ -66,15 +69,8 @@ export default function KitchenPage() {
     if (!fresh.length) return;
     chime("kitchen");
     if (!voice || !("speechSynthesis" in window)) return;
-    for (const o of fresh) {
-      const where = o.tableName ? `Table ${o.tableName}` : o.type === "takeaway" ? `Parcel, token ${o.number || ""}` : `Order ${o.number || ""}`;
-      const items = o.lines.map((l) => `${l.qty} ${l.name}${l.note ? `, ${l.note}` : ""}`).join(". ");
-      const u = new SpeechSynthesisUtterance(`New order. ${where}. ${items}`);
-      u.lang = "en-IN";
-      u.rate = 0.95;
-      window.speechSynthesis.speak(u);
-    }
-  }, [orders, voice]);
+    for (const o of fresh) speak(ticketText(o, lang), lang);
+  }, [orders, voice, lang]);
 
   const visible = useMemo(
     () =>

@@ -4,7 +4,7 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
@@ -21,6 +21,7 @@ import {
   adminUpdate,
   cloudSignOut,
   useCloud,
+  sendWelcomeEmail,
   verifyMyPassword,
   type AdminRestaurant,
 } from "@/lib/cloud";
@@ -55,7 +56,7 @@ export default function AdminPage() {
   const [f, setF] = useState<Filter>("all");
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [creds, setCreds] = useState<{ title: string; email: string; password: string } | null>(null);
+  const [creds, setCreds] = useState<{ title: string; email: string; password: string; welcome?: "sending" | "sent" | "off" | "failed" } | null>(null);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [couponsOpen, setCouponsOpen] = useState(false);
   const [revenueOpen, setRevenueOpen] = useState(false);
@@ -238,8 +239,12 @@ export default function AdminPage() {
         onClose={() => setAdding(false)}
         onCreated={(res, name) => {
           setAdding(false);
-          setCreds({ title: `${name} is ready`, email: res.ownerEmail, password: res.tempPassword });
+          setCreds({ title: `${name} is ready`, email: res.ownerEmail, password: res.tempPassword, welcome: "sending" });
           void load();
+          // the restaurant is saved: now email the owner a welcome with a "set your password" link (no password in it)
+          sendWelcomeEmail(res.rid)
+            .then((r) => setCreds((c) => (c && c.email === res.ownerEmail ? { ...c, welcome: r ? "sent" : "off" } : c)))
+            .catch(() => setCreds((c) => (c && c.email === res.ownerEmail ? { ...c, welcome: "failed" } : c)));
         }}
       />
 
@@ -254,7 +259,7 @@ export default function AdminPage() {
       )}
 
       <Sheet open={!!creds} onClose={() => setCreds(null)} title={creds?.title ?? ""}>
-        {creds && <Credentials email={creds.email} password={creds.password} />}
+        {creds && <Credentials email={creds.email} password={creds.password} welcome={creds.welcome} />}
       </Sheet>
 
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
@@ -269,12 +274,24 @@ export default function AdminPage() {
 }
 
 /* ---------------- owner login to hand over ---------------- */
-function Credentials({ email, password }: { email: string; password: string }) {
+function Credentials({ email, password, welcome }: { email: string; password: string; welcome?: "sending" | "sent" | "off" | "failed" }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
   const text = `Your Restropi login\n${url}\nEmail: ${email}\nTemporary password: ${password}\nYou'll be asked to set your own password the first time.`;
   return (
     <div className="space-y-4">
+      {welcome && (
+        <p className={clsx("flex items-start gap-2 rounded-group p-3 text-[14px]", welcome === "sent" ? "bg-jade-soft text-ink" : welcome === "sending" ? "bg-surface text-muted" : "bg-saffron-soft text-ink")}>
+          <Mail size={17} className="mt-0.5 shrink-0" />
+          {welcome === "sent"
+            ? `Welcome email sent to ${email} with a link to set their password.`
+            : welcome === "sending"
+              ? "Sending the welcome email…"
+              : welcome === "off"
+                ? "Welcome emails aren't set up yet (email keys missing). Share the details below instead."
+                : "The welcome email couldn't be sent. Share the details below, or send it again from the restaurant's page."}
+        </p>
+      )}
       <p className="text-[14.5px] text-muted">Send this to the owner. The password is shown only now — they&apos;ll set their own when they first sign in.</p>
       <div className="space-y-2 rounded-group bg-surface p-4 font-mono text-[14px]">
         <div className="break-all"><span className="text-muted">Link </span>{url}</div>
@@ -324,7 +341,7 @@ const blank = {
   notes: "",
 };
 
-function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (r: { ownerEmail: string; tempPassword: string }, name: string) => void }) {
+function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (r: { rid: string; ownerEmail: string; tempPassword: string }, name: string) => void }) {
   const [d, setD] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -625,6 +642,25 @@ function RestaurantSheet({
               className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] font-medium"
             >
               <KeyRound size={18} className="text-jade" /> Reset owner password
+            </button>
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setErr("");
+                try {
+                  const res = await sendWelcomeEmail(r.id, true);
+                  if (!res) setErr("Email isn't set up yet (add the Resend keys in Vercel).");
+                  else onChanged(`Welcome email sent to ${res.to ?? "the owner"}`);
+                } catch (e) {
+                  setErr((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left text-[15px] font-medium"
+            >
+              <Mail size={18} className="text-jade" /> Email the owner a sign-in link
             </button>
           </div>
         </Section>
