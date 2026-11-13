@@ -13,6 +13,7 @@ import { isValidUpi } from "@/components/upi";
 import { ChangePassword, PasswordInput } from "@/components/owner-auth";
 import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
 import { planStatus } from "@/lib/plan-status";
+import { fitLogo } from "@/lib/fit-logo";
 import { RevenueSheet } from "@/components/admin-revenue";
 import {
   adminCreate,
@@ -23,6 +24,9 @@ import {
   cloudSignOut,
   useCloud,
   sendWelcomeEmail,
+  adminSetLogo,
+  adminRemoveLogo,
+  adminSyncOwner,
   adminPlanEmail,
   verifyMyPassword,
   type AdminRestaurant,
@@ -546,6 +550,28 @@ function RestaurantSheet({
   };
   // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
   const [graceDate, setGraceDate] = useState("");
+  // logo: picked here, shrunk in the browser, stored by our server
+  const [logo, setLogo] = useState<string | null>(r.logo ?? null);
+  useEffect(() => setLogo(r.logo ?? null), [r.logo]);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const pickLogo = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return setErr("Choose an image (PNG or JPG)");
+    const png = await fitLogo(f).catch(() => null);
+    if (!png) return setErr("Couldn't read that image");
+    confirmThen("Change the logo", async () => {
+      setLogoBusy(true);
+      setErr("");
+      try {
+        setLogo(await adminSetLogo(r.id, png));
+        onChanged("Logo saved · guests and bills show it now");
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setLogoBusy(false);
+      }
+    });
+  };
   const giveGrace = (days: number) => {
     const base = Math.max(Date.now(), new Date(r.renewsAt).getTime(), r.graceUntil ? new Date(r.graceUntil).getTime() : 0);
     const iso = new Date(base + days * DAY).toISOString();
@@ -632,6 +658,31 @@ function RestaurantSheet({
           </div>
         </Section>
 
+        <Section title="Logo">
+          <p className="text-[13.5px] text-muted">Shown next to the restaurant&apos;s name on the guest QR menu and on printed bills. Owners can&apos;t change it; they send you a request on WhatsApp.</p>
+          <div className="flex items-center gap-4">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-white ring-1 ring-line">
+              {logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logo} alt={`${r.name} logo`} className="h-full w-full object-contain p-1" />
+              ) : (
+                <span className="text-[24px] font-bold text-muted">{r.name.trim().charAt(0).toUpperCase() || "R"}</span>
+              )}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <label className={clsx("inline-flex h-11 cursor-pointer items-center rounded-ctl bg-surface px-4 text-[15px] font-semibold", logoBusy && "pointer-events-none opacity-60")}>
+                {logoBusy ? "Uploading…" : logo ? "Change logo" : "Upload logo"}
+                <input type="file" accept="image/*" className="sr-only" disabled={logoBusy} onChange={(e) => { void pickLogo(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              {logo && !logoBusy && (
+                <Button variant="plain" className="!bg-surface" onClick={() => confirmThen("Remove the logo", async () => { setLogoBusy(true); setErr(""); try { await adminRemoveLogo(r.id); setLogo(null); onChanged("Logo removed"); } catch (e) { setErr((e as Error).message); } finally { setLogoBusy(false); } })}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+        </Section>
+
         <Section title="Details">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Restaurant name"><input className={inputCls} value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} /></Field>
@@ -643,7 +694,12 @@ function RestaurantSheet({
             <input className={clsx(inputCls, "text-muted")} value={r.ownerEmail} readOnly />
           </Field>
           <Field label="Notes"><input className={inputCls} value={info.notes} onChange={(e) => setInfo({ ...info, notes: e.target.value })} /></Field>
-          <Button disabled={busy || !infoChanged || info.name.trim().length < 2} onClick={() => run(() => adminUpdate(r.id, info), "Details saved")}>Save details</Button>
+          <Button
+            disabled={busy || !infoChanged || info.name.trim().length < 2}
+            onClick={() => run(() => adminUpdate(r.id, info).then(() => (info.owner !== r.owner ? adminSyncOwner(r.id) : undefined)), "Details saved")}
+          >
+            Save details
+          </Button>
         </Section>
 
         <Section title="Access">

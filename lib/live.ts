@@ -17,15 +17,6 @@ export { hydrateStores };
 const blankAccount: Account = { name: "", owner: "", plan: "growth", renewsAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), status: "active" };
 const accountStore = createStore<Account>(blankAccount, "account", { kind: "doc", guest: "read" });
 export const useAccount = () => accountStore.use();
-export const accountActions = {
-  rename(name: string) {
-    accountStore.set({ ...accountStore.get(), name });
-  },
-  setLogo(logo: string | undefined) {
-    accountStore.set({ ...accountStore.get(), logo: logo ?? "" });
-    logActivity("settings", logo ? "Changed the logo" : "Removed the logo");
-  },
-};
 
 const outletStore = createStore<Outlet[]>([], "outlets", { kind: "collection", coll: "outlets", guest: "read" });
 export const useOutlets = () => outletStore.use();
@@ -157,12 +148,11 @@ export function useSettings(): OutletSettings {
 export const settingsActions = {
   /** Brand name goes on the account; the rest on the current outlet. */
   update(patch: Partial<OutletSettings>) {
-    const { name, ...rest } = patch;
-    if (name !== undefined) accountActions.rename(name);
+    const { name: _name, logo: _logo, ...rest } = patch; // name + logo: only the Restropi team changes them
     const id = sessionStore.get().outletId || outletStore.get()[0]?.id;
     if (Object.keys(rest).length) outletActions.update(id, rest);
     const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", stamps: "stamp card", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
-    const what = [...new Set([...(name !== undefined ? ["name"] : []), ...Object.keys(rest).map((k) => names[k] ?? k)])];
+    const what = [...new Set(Object.keys(rest).map((k) => names[k] ?? k))];
     if (what.length) logActivity("settings", `Changed settings: ${what.join(", ")}${rest.gstRate !== undefined ? ` (GST ${Math.round(rest.gstRate * 100)}%)` : ""}${rest.ordersPaused !== undefined ? (rest.ordersPaused ? " (paused)" : " (back on)") : ""}`, id);
   },
 };

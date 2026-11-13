@@ -48,6 +48,7 @@ export function printReceipt(r: ReceiptData) {
     .foot{margin-top:8px;font-weight:600}
   </style></head><body>
     <div class=center>
+      ${s.logo ? `<img src="${esc(s.logo)}" alt="" style="display:block;margin:0 auto 4px;max-height:52px;max-width:60%;filter:grayscale(1) contrast(1.2)">` : ""}
       <h1>${esc(s.name || r.outletName)}</h1>
       ${r.outletName && s.name && r.outletName !== s.name ? `<div class=sm>${esc(r.outletName)}</div>` : ""}
       ${s.address ? `<div class=xs>${esc(s.address)}</div>` : ""}

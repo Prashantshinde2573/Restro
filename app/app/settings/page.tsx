@@ -1,18 +1,17 @@
 "use client";
 
-import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, QrCode, Receipt, ShieldCheck, Stamp as StampIcon, Store, Users } from "lucide-react";
+import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, MessageCircle, QrCode, Receipt, ShieldCheck, Stamp as StampIcon, Store, Users } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { UpiPayCard, isValidUpi } from "@/components/upi";
-import { openPlanSheet } from "@/components/plan-sheet";
+import { openPlanSheet, teamWhatsApp, usePlatform } from "@/components/plan-sheet";
 import { dateIN, planStatus } from "@/lib/plan-status";
 import { ChangePassword } from "@/components/owner-auth";
 import { StampSettings } from "@/components/stamps";
 import { useToast } from "@/components/toast";
 import {
-  accountActions,
   billOf,
   memberActions,
   niceTime,
@@ -32,7 +31,7 @@ import {
   useSettings,
 } from "@/lib/live";
 import { useAllTables } from "@/lib/tables";
-import { cloudSignOut, signOutEverywhere, uploadLogo, uploadProfilePhoto, useCloud } from "@/lib/cloud";
+import { cloudSignOut, signOutEverywhere, uploadProfilePhoto, useCloud } from "@/lib/cloud";
 import { RENEW_WARN_DAYS, daysLeft, isMixed, isOwner } from "@/lib/access";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
@@ -200,9 +199,10 @@ export default function SettingsPage() {
             <Button
               size="lg"
               className="w-full"
-              disabled={(panel === "payments" && !!draft.upi && !upiOk) || (panel === "restaurant" && draft.name.trim().length < 2)}
+              disabled={panel === "payments" && !!draft.upi && !upiOk}
               onClick={() => {
-                settingsActions.update(draft);
+                const { name: _name, logo: _logo, ...rest } = draft; // name + logo come from the Restropi team
+                settingsActions.update(rest);
                 setPanel(null);
                 toast(panel === "payments" ? "Saved · every new bill QR uses this UPI ID" : "Saved");
               }}
@@ -214,8 +214,7 @@ export default function SettingsPage() {
       >
         {panel === "restaurant" && (
           <div className="space-y-4">
-            {owner && <LogoField name={draft.name || settings.name} />}
-            <Field label="Name on bills and the guest menu"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
+            {owner ? <BrandField /> : <Field label="Name on bills and the guest menu"><input className={inputCls} value={settings.name} readOnly /></Field>}
             <Field label="Outlet address"><input className={inputCls} value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Phone"><input className={inputCls} inputMode="tel" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} /></Field>
@@ -435,54 +434,55 @@ async function squarePhoto(file: File, side = 320): Promise<Blob> {
 }
 
 /** Shrink a logo to fit 400 × 400, keeping its shape and transparent background. */
-async function fitLogo(file: File, max = 400): Promise<Blob> {
-  const bmp = await createImageBitmap(file);
-  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * k);
-  c.height = Math.round(bmp.height * k);
-  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read the image"))), "image/png"));
-}
-
-/** The restaurant's logo: shown on the guest menu next to its name. */
-function LogoField({ name }: { name: string }) {
-  const { logo } = useAccount();
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const pick = async (f?: File) => {
-    if (!f) return;
-    if (!f.type.startsWith("image/")) return toast("Choose an image (PNG or JPG)");
-    setBusy(true);
-    try {
-      accountActions.setLogo(await uploadLogo(await fitLogo(f)));
-      toast("Logo saved · guests see it on the QR menu");
-    } catch (e) {
-      toast(`Couldn't upload the logo: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
+/** Name and logo are set by the Restropi team (super admin). The owner asks for a change on WhatsApp. */
+function BrandField() {
+  const account = useAccount();
+  const cloud = useCloud();
+  const platform = usePlatform();
+  const [newName, setNewName] = useState("");
+  const [logoToo, setLogoToo] = useState(false);
+  const msg = [
+    "Hi Restropi team, please change our restaurant details.",
+    "",
+    `Restaurant: ${account.name || "-"}`,
+    `Restaurant ID: ${cloud.rid ?? "-"}`,
+    `Login: ${cloud.email ?? "-"}`,
+    ...(newName.trim() ? [`New name: ${newName.trim()}`] : []),
+    ...(logoToo ? ["New logo: I'm sending the logo image in this chat."] : []),
+  ].join("\n");
+  const ready = !!newName.trim() || logoToo;
   return (
-    <Field label="Logo" hint="Shown next to your name on the guest QR menu. A square PNG works best.">
-      <div className="flex items-center gap-4">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-sunken ring-1 ring-line">
-          {logo ? (
+    <div className="space-y-3 rounded-group bg-surface p-4">
+      <div className="flex items-center gap-3">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-white ring-1 ring-line">
+          {account.logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo} alt={`${name} logo`} className="h-full w-full object-contain" />
+            <img src={account.logo} alt={`${account.name} logo`} className="h-full w-full object-contain p-1" />
           ) : (
-            <span className="text-[24px] font-bold text-muted">{name.trim().charAt(0).toUpperCase() || "R"}</span>
+            <span className="text-[22px] font-bold text-muted">{account.name.trim().charAt(0).toUpperCase() || "R"}</span>
           )}
         </span>
-        <div className="flex flex-wrap gap-3 text-[14px] font-semibold">
-          <label className={clsx("cursor-pointer text-jade hover:underline", busy && "pointer-events-none opacity-60")}>
-            {busy ? "Uploading…" : logo ? "Change logo" : "Upload logo"}
-            <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
-          </label>
-          {logo && !busy && <button type="button" onClick={() => { accountActions.setLogo(undefined); toast("Logo removed"); }} className="text-muted hover:text-rose">Remove</button>}
+        <div className="min-w-0">
+          <div className="truncate text-[17px] font-semibold">{account.name}</div>
+          <div className="text-[12.5px] text-muted">Name and logo on the guest menu and bills. Set by the Restropi team.</div>
         </div>
       </div>
-    </Field>
+      <div className="border-t border-line/80 pt-3">
+        <div className="mb-2 text-[14px] font-semibold">Want to change them?</div>
+        <input className={inputCls} placeholder="New name (leave empty to keep it)" value={newName} onChange={(e) => setNewName(e.target.value.slice(0, 80))} aria-label="New restaurant name" />
+        <label className="mt-2 flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={logoToo} onChange={(e) => setLogoToo(e.target.checked)} className="h-4 w-4 accent-[var(--jade,#0e7a5f)]" />
+          I want a new logo (I&apos;ll send the image on WhatsApp)
+        </label>
+        {platform?.whatsapp ? (
+          <a href={ready ? teamWhatsApp(platform.whatsapp, msg) : undefined} target="_blank" rel="noreferrer" aria-disabled={!ready} className={clsx("mt-3 block", !ready && "pointer-events-none opacity-50")}>
+            <Button className="w-full !bg-[#25D366] hover:!bg-[#1fb757]"><MessageCircle size={17} /> Send the request on WhatsApp</Button>
+          </a>
+        ) : (
+          <p className="mt-3 text-[13px] text-muted">{platform ? "The Restropi team hasn't added their WhatsApp number yet." : "Loading…"}</p>
+        )}
+      </div>
+    </div>
   );
 }
 

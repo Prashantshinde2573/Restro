@@ -327,15 +327,6 @@ export async function uploadMenuPhoto(blob: Blob): Promise<string> {
   if (error) throw new Error(error.message);
   return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
 }
-/** Upload the restaurant logo (already shrunk) and get its public link. */
-export async function uploadLogo(blob: Blob): Promise<string> {
-  const rid = stateStore.get().rid;
-  if (!rid) throw new Error("Not signed in");
-  const path = `${rid}/logo-${Date.now().toString(36)}.png`;
-  const { error } = await sb().storage.from("menu-photos").upload(path, blob, { contentType: "image/png", cacheControl: "31536000", upsert: false });
-  if (error) throw new Error(error.message);
-  return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
-}
 /** Upload a profile photo (already cropped and shrunk) and get its public link. */
 export async function uploadProfilePhoto(blob: Blob, memberId: string): Promise<string> {
   const rid = stateStore.get().rid;
@@ -561,12 +552,8 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
   if (role === "guest" && g === "none") return;
   const client = sb();
 
-  if (b.spec.kind === "doc") {
-    if (role !== "owner") return; // only the owner renames; plan changes go through billing
-    const n = next as { name?: string; owner?: string; logo?: string };
-    track(client.from("restaurants").update({ name: n.name, owner: n.owner, logo: n.logo || null }).eq("id", rid).then(check));
-    return;
-  }
+  // the restaurant row (name, owner, logo, plan) is changed only by the Restropi team (super admin)
+  if (b.spec.kind === "doc") return;
   const table = TABLE[b.key];
   if (!table) return;
   const before = new Map(((prev as { id: string }[]) ?? []).map((x) => [x.id, x]));
@@ -657,6 +644,7 @@ export interface AdminRestaurant {
   city: string;
   notes: string;
   plan: "starter" | "growth" | "pro" | "chain";
+  logo?: string | null;
   renewsAt: string;
   graceUntil: string | null;
   status: "active" | "suspended";
@@ -714,6 +702,28 @@ export async function adminPlanEmail(rid: string, event: "renewed" | "grace" | "
     return false;
   }
 }
+/** Super admin: the restaurant's brand (logo, owner name on the team list). Goes through our server. */
+async function brandApi(body: Record<string, unknown>) {
+  const { data } = await sb().auth.getSession();
+  const r = await fetch("/api/admin/brand", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  const j = (await r.json().catch(() => ({}))) as { error?: string; logo?: string | null };
+  if (r.status === 503) throw new Error("Add SUPABASE_SERVICE_ROLE_KEY in Vercel to change logos.");
+  if (!r.ok) throw new Error(j.error ?? "Could not save");
+  return j;
+}
+export async function adminSetLogo(rid: string, png: Blob): Promise<string> {
+  const buf = new Uint8Array(await png.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return (await brandApi({ rid, action: "logo", png: btoa(bin) })).logo ?? "";
+}
+export const adminRemoveLogo = (rid: string) => brandApi({ rid, action: "removeLogo" });
+/** After the super admin renames the owner: the owner's name in the team list follows. */
+export const adminSyncOwner = (rid: string) => brandApi({ rid, action: "syncOwner" }).catch(() => undefined);
 export const adminResetOwnerPassword = (rid: string) =>
   callFn<{ ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "reset_owner_password", rid }, true);
 export const adminDelete = (rid: string, confirmName: string) =>
