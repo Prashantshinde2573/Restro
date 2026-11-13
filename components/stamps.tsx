@@ -11,15 +11,37 @@ import { DEFAULT_PROGRAM, WHO_LABEL, programOf, rewardText } from "@/lib/stamps"
 import type { StampProgram } from "@/lib/types";
 
 /** The card: one circle per stamp, the last one is the reward. */
-export function StampCard({ have, needed, reward, title, note, className, dark }: { have: number; needed: number; reward: string; title?: ReactNode; note?: ReactNode; className?: string; dark?: boolean }) {
+export function StampCard({ have, needed, reward, title, note, className, dark, compact }: { have: number; needed: number; reward: string; title?: ReactNode; note?: ReactNode; className?: string; dark?: boolean; compact?: boolean }) {
   const full = have >= needed;
+  const n = Math.min(have, needed);
+  if (compact)
+    // a slim black card for the guest menu: title + count, the stamps in one row, one short line
+    return (
+      <div className={clsx("rounded-[16px] bg-[#0a0a0a] px-3.5 py-3 text-white", className)}>
+        <div className="flex items-center gap-2">
+          <span className="text-[13.5px] font-bold">{title ?? "Stamp card"}</span>
+          <span className="text-[12.5px] font-semibold tnum text-white/60">{n}/{needed}</span>
+          <span className={clsx("ml-auto flex h-6 items-center gap-1 rounded-full px-2 text-[11.5px] font-bold", full ? "bg-[#ffd25e] text-ink" : "bg-white/10 text-white/85")}>
+            <Gift size={12} /> {reward}
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1" aria-label={`${n} of ${needed} stamps`}>
+          {Array.from({ length: needed }).map((_, i) => (
+            <span key={i} className={clsx("flex h-5 w-5 items-center justify-center rounded-full", i < have ? "bg-white text-[#0a0a0a]" : "border border-dashed border-white/35")}>
+              {i < have ? <Check size={12} strokeWidth={3.2} /> : null}
+            </span>
+          ))}
+        </div>
+        {note && <div className="mt-2 text-[12px] leading-snug text-white/70">{note}</div>}
+      </div>
+    );
   return (
     <div className={clsx("rounded-[18px] p-4", dark ? "bg-ink text-canvas" : "bg-[linear-gradient(135deg,#0e7a5f,#0b5e49)] text-white", className)}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[14.5px] font-bold">{title ?? "Stamp card"}</span>
-        <span className="text-[13px] font-semibold tnum opacity-85">{Math.min(have, needed)}/{needed}</span>
+        <span className="text-[13px] font-semibold tnum opacity-85">{n}/{needed}</span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`${Math.min(have, needed)} of ${needed} stamps`}>
+      <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`${n} of ${needed} stamps`}>
         {Array.from({ length: needed }).map((_, i) => (
           <span key={i} className={clsx("flex h-7 w-7 items-center justify-center rounded-full border-2 text-[13px]", i < have ? "border-white bg-white text-[#0b5e49]" : "border-white/35 border-dashed")}>
             {i < have ? <Check size={15} strokeWidth={3} /> : null}

@@ -543,9 +543,9 @@ function MobileTopBar() {
     return () => window.removeEventListener("scroll", on);
   }, []);
   return (
-    <div className="pt-safe sticky top-0 z-30 bg-canvas/90 backdrop-blur-xl lg:hidden">
-      {/* floating dark bar: logo on the left; outlet, alerts and you on the right */}
-      <div className={clsx("mx-2 mt-2 flex h-[52px] items-center gap-2 rounded-[18px] bg-[#0a0a0a] pl-4 pr-2 text-white transition-shadow", scrolled && "shadow-[0_10px_24px_-12px_rgb(0_0_0/.55)]")}>
+    <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] transition-shadow lg:hidden", scrolled && "shadow-[0_10px_24px_-12px_rgb(0_0_0/.55)]")}>
+      {/* dark bar, edge to edge: logo on the left; outlet, alerts and you on the right */}
+      <div className="flex h-[54px] items-center gap-2 pl-4 pr-2 text-white">
         <Link href="/app" aria-label="Restropi home" className="mr-auto shrink-0">
           <Wordmark light className="h-[26px]" />
         </Link>

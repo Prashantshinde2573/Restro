@@ -59,9 +59,9 @@ export function CouponsPanel() {
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[14px] text-muted">Guests show the code when paying. Staff type it at checkout.</p>
-        <Button size="sm" onClick={() => setEdit(blank())}><Plus size={16} /> New coupon</Button>
+        {coupons.length > 0 && <Button size="sm" className="w-full shrink-0 whitespace-nowrap sm:w-auto" onClick={() => setEdit(blank())}><Plus size={16} /> New coupon</Button>}
       </div>
 
       {coupons.length === 0 ? (

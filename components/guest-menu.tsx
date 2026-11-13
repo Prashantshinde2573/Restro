@@ -433,11 +433,11 @@ export function GuestTabs({
   ];
   return (
     <nav aria-label={tx(lang, "Sections", "विभाग")} className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[20px] border-t border-line bg-surface [--safe-pb:4px] sm:max-w-2xl">
-      <div className="mx-auto flex max-w-[420px] px-2">
+      <div className="mx-auto flex h-14 max-w-[420px] px-2">
         {items.map((it) => {
           const on = tab === it.id;
           return (
-            <button key={it.id} onClick={() => onTab(it.id)} aria-current={on ? "page" : undefined} className={clsx("relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11.5px]", on ? "font-bold text-jade-deep" : "font-medium text-ink/80")}>
+            <button key={it.id} onClick={() => onTab(it.id)} aria-current={on ? "page" : undefined} className={clsx("relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11.5px]", on ? "font-bold text-jade-deep" : "font-medium text-ink/80")}>
               <span className="relative">
                 {it.icon}
                 {!!it.badge && (
@@ -452,7 +452,7 @@ export function GuestTabs({
           <button
             onClick={onWaiter}
             aria-label={waiter === "open" ? tx(lang, "Cancel waiter call", "वेटर कॉल रद्द करा") : tx(lang, "Call a waiter", "वेटरला बोलवा")}
-            className={clsx("relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11.5px]", waiter === "idle" ? "font-medium text-ink/80" : waiter === "open" ? "font-bold text-saffron" : "font-bold text-jade-deep")}
+            className={clsx("relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11.5px]", waiter === "idle" ? "font-medium text-ink/80" : waiter === "open" ? "font-bold text-saffron" : "font-bold text-jade-deep")}
           >
             <BellRing size={21} strokeWidth={waiter === "idle" ? 1.8 : 2.4} className={clsx(waiter === "open" && "animate-pulse")} />
             {waiter === "open" ? tx(lang, "Calling…", "बोलावत आहे…") : waiter === "taken" ? tx(lang, "Coming", "येत आहे") : tx(lang, "Waiter", "वेटर")}

@@ -279,6 +279,25 @@ export function Avatar({ name, hue = 160, size = 36, photo }: { name: string; hu
 const sheetStack: number[] = [];
 let sheetSeq = 0;
 
+/**
+ * A sheet closed by its button leaves its history entry behind, marked spent. When the user next
+ * presses back from it, we skip the same-page entry underneath so one back press is enough.
+ */
+let onSpent = false; // the screen we're on is a spent sheet entry
+let spentHref = "";
+let watching = false;
+function watchSpent() {
+  if (watching || typeof window === "undefined") return;
+  watching = true;
+  window.addEventListener("popstate", () => {
+    const arrivedSpent = !!(window.history.state as { __spent?: boolean } | null)?.__spent;
+    const leftSpent = onSpent;
+    onSpent = arrivedSpent;
+    // back from a spent entry lands on the same page underneath: take one more step
+    if (leftSpent && !arrivedSpent && window.location.href === spentHref) window.history.back();
+  });
+}
+
 export function Sheet({
   open,
   onClose,
@@ -313,9 +332,14 @@ export function Sheet({
     document.body.style.overflow = "hidden";
     // Phone back button / swipe-back closes the sheet instead of leaving the page.
     // The extra history entry keeps the router's own state so going back stays on this page.
+    watchSpent();
     let mine = false;
     try {
-      window.history.pushState({ ...(window.history.state ?? {}), __sheet: id }, "", window.location.href);
+      const { __spent: spent, ...base } = (window.history.state ?? {}) as Record<string, unknown>;
+      // reuse a spent entry (from a sheet closed earlier) instead of stacking up new ones
+      if (spent) window.history.replaceState({ ...base, __sheet: id }, "", window.location.href);
+      else window.history.pushState({ ...base, __sheet: id }, "", window.location.href);
+      onSpent = false;
       mine = true;
     } catch {}
     const onPop = () => {
@@ -331,8 +355,18 @@ export function Sheet({
       const i = sheetStack.indexOf(id);
       if (i >= 0) sheetStack.splice(i, 1);
       if (sheetStack.length === 0) document.body.style.overflow = "";
-      // closed by a button: take our history entry back off (only if it's still on top)
-      if (mine && (window.history.state as { __sheet?: number } | null)?.__sheet === id) window.history.back();
+      // Closed by a button. Going back here (history.back) is async: a tap on a tab right after it
+      // got undone ("tabs sometimes don't work"). Instead the entry is marked spent; the next back
+      // press skips over it.
+      const st = window.history.state as { __sheet?: number } | null;
+      if (mine && st?.__sheet === id) {
+        const { __sheet: _s, ...rest } = st;
+        try {
+          window.history.replaceState({ ...rest, __spent: true }, "", window.location.href);
+          onSpent = true;
+          spentHref = window.location.href;
+        } catch {}
+      }
     };
   }, [open, setLayer]);
 

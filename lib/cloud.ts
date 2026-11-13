@@ -395,7 +395,12 @@ const pending = new Set<Promise<unknown>>();
 /** Rows this device just wrote (kept even if the first load doesn't have them yet). */
 const pendingIds = new Set<string>();
 
+/** Stops the catch-up listeners of the current connection. */
+let stopSync: (() => void) | null = null;
+
 function disconnect() {
+  stopSync?.();
+  stopSync = null;
   if (channel) void sb().removeChannel(channel);
   channel = null;
   connected = null;
@@ -424,6 +429,8 @@ export function connect(rid: string, role: Role, uid: string) {
   };
 
   const ch = client.channel(`restropi:${rid}:${uid}`);
+  // Reloaders per list: used to catch up after the phone slept, lost signal, or the live link dropped.
+  const reloads = new Map<string, () => void>();
   for (const b of remoteBindings) {
     const g = b.spec.guest ?? "none";
     if (role === "guest" && g === "none") {
@@ -451,6 +458,7 @@ export function connect(rid: string, role: Role, uid: string) {
             if (data) got(fromAccount(data as AccountRow));
           });
       loadAccount(3);
+      reloads.set(b.key, () => loadAccount(1));
       continue;
     }
     const table = TABLE[b.key];
@@ -496,7 +504,9 @@ export function connect(rid: string, role: Role, uid: string) {
       if (b.key === "calls") q = q.order("updated_at", { ascending: false }).limit(100);
       return q;
     };
-    const load = (tries: number): void => void query().then(({ data, error }) => {
+    const load = (tries: number): void => {
+      touched.clear(); // only changes that arrive while this load is on its way beat it
+      void query().then(({ data, error }) => {
       if (connected?.rid !== rid) return;
       // a network hiccup (not a "not allowed"): try again before giving up
       if (error && tries > 0 && /fetch|network|timeout|Failed|503|502|504/i.test(`${error.message} ${error.code ?? ""}`)) {
@@ -519,10 +529,47 @@ export function connect(rid: string, role: Role, uid: string) {
       for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id)) map.delete(id);
       publish(b);
       setReady(b.key, true);
-    });
+      });
+    };
     load(3);
+    reloads.set(b.key, () => load(1));
   }
-  ch.subscribe();
+
+  // ---- catch up: live changes missed while the screen was off or the connection dropped ----
+  let lastSync = Date.now();
+  let wasDown = false;
+  const resync = (keys?: string[]) => {
+    if (connected?.rid !== rid || connected.uid !== uid) return;
+    if (!keys && Date.now() - lastSync < 4000) return;
+    if (!keys) lastSync = Date.now();
+    for (const [k, f] of reloads) if (!keys || keys.includes(k)) f();
+  };
+  const onVisible = () => document.visibilityState === "visible" && resync();
+  const onOnline = () => resync();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("pageshow", onOnline);
+  // a quiet safety net: guests' order status every 20 s, the team's lists every 2 min (only while on screen)
+  const tick = window.setInterval(
+    () => {
+      if (document.visibilityState !== "visible") return;
+      if (role === "guest") resync(["orders", "calls", "tables"]);
+      else resync();
+    },
+    role === "guest" ? 20_000 : 120_000,
+  );
+  stopSync = () => {
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("online", onOnline);
+    window.removeEventListener("pageshow", onOnline);
+    window.clearInterval(tick);
+  };
+  ch.subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      if (wasDown) resync(); // back online after a drop: fetch what we missed
+      wasDown = false;
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") wasDown = true;
+  });
   channel = ch;
   setRemoteWriter((b, prev, next) => write(rid, role, uid, b, prev, next));
 }

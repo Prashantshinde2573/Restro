@@ -107,6 +107,14 @@ select:focus-visible {
   padding-bottom: max(env(safe-area-inset-bottom), var(--safe-pb, 0px));
 }
 
+/* guest menu: things that sit just above the bottom tabs (56 px + the phone's home-bar area) */
+.above-tabs {
+  bottom: calc(57px + max(env(safe-area-inset-bottom), 4px));
+}
+.pad-tabs {
+  padding-bottom: calc(170px + max(env(safe-area-inset-bottom), 4px));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

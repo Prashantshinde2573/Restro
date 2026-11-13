@@ -285,22 +285,23 @@ export default function GuestOrder() {
   }, [!!stampProg, myOrders.length, openOrders.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const stampCard = stampProg ? (
     <div>
-      <StampCard
-        have={myStamps ?? 0}
-        needed={stampProg.needed}
-        reward={stampProg.reward}
-        title={tx(lang, "Your stamp card", "तुमचं स्टॅम्प कार्ड")}
-        note={
-          myStamps == null
-            ? tx(lang, `A stamp on every bill with your number. ${stampProg.needed} stamps = ${stampProg.reward}.`, `तुमच्या नंबरच्या प्रत्येक बिलावर एक स्टॅम्प. ${stampProg.needed} स्टॅम्प = ${stampProg.reward}.`)
-            : myStamps >= stampProg.needed
-              ? payNow || counter
-                ? tx(lang, `Card full! Show this to our staff when you pay — ${stampProg.reward} on this bill.`, `कार्ड भरलं! पैसे भरताना हे स्टाफला दाखवा — या बिलावर ${stampProg.reward}.`)
-                : tx(lang, `Card full! When you tap Pay, your ${stampProg.reward} comes off the bill.`, `कार्ड भरलं! "भरा" दाबल्यावर ${stampProg.reward} बिलातून कमी होईल.`)
-              : tx(lang, `${stampProg.needed - myStamps} more to go for ${stampProg.reward}`, `${stampProg.reward} साठी अजून ${stampProg.needed - myStamps}`)
-        }
-      />
-      {stampProg.terms && <p className="mt-1.5 px-1 text-[12px] text-muted">{stampProg.terms}</p>}
+    <StampCard
+      compact
+      have={myStamps ?? 0}
+      needed={stampProg.needed}
+      reward={stampProg.reward}
+      title={tx(lang, "Your stamp card", "तुमचं स्टॅम्प कार्ड")}
+      note={
+        myStamps == null
+          ? tx(lang, "A stamp on every bill with your number.", "तुमच्या नंबरच्या प्रत्येक बिलावर एक स्टॅम्प.")
+          : myStamps >= stampProg.needed
+            ? payNow || counter
+              ? tx(lang, "Card full! Show this when you pay.", "कार्ड भरलं! पैसे भरताना हे दाखवा.")
+              : tx(lang, "Card full! It comes off the bill when you tap Pay.", "कार्ड भरलं! \"भरा\" दाबल्यावर बिलातून कमी होईल.")
+            : null
+      }
+    />
+    {stampProg.terms && <p className="mt-1 px-1 text-[11.5px] text-faint">{stampProg.terms}</p>}
     </div>
   ) : null;
   // When an order reaches the table, open "My orders": that's where the bill and Pay are.
@@ -709,7 +710,7 @@ export default function GuestOrder() {
   const cashWhere = payNow ? "counter" : "table";
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-[140px] sm:max-w-2xl">
+    <div className="pad-tabs mx-auto min-h-dvh max-w-md bg-canvas sm:max-w-2xl">
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
       {t && !counter && qrOn && isOpen && !thanks && !waiting && ((needCount && !skipAsk) || countOpen) && (
         <GuestCountScreen
@@ -963,23 +964,6 @@ export default function GuestOrder() {
             </div>
           )}
           {openOrders.some((o) => o.status !== "served") && <GamesCard onGame={setGame} lang={lang} />}
-          {!counter && (
-            myCall?.status === "taken" ? (
-              <div className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-jade-soft py-3.5 text-[15px] font-semibold text-jade-deep">
-                <Check size={17} /> {tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}
-              </div>
-            ) : myCall?.status === "open" ? (
-              <div className="flex w-full items-center gap-2 rounded-[18px] bg-saffron-soft py-2 pl-4 pr-2 text-saffron">
-                <BellRing size={17} className="animate-pulse" />
-                <span className="flex-1 text-[15px] font-semibold">{tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…")}</span>
-                <button onClick={() => callActions.cancel(myCall.id)} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink">{tx(lang, "Cancel", "रद्द करा")}</button>
-              </div>
-            ) : (
-              <button onClick={callWaiter} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
-                <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
-              </button>
-            )
-          )}
           {stampCard}
           {pastOrders.length > 0 && (
             <div className="overflow-hidden rounded-[22px] bg-surface">
@@ -1010,7 +994,7 @@ export default function GuestOrder() {
       )}
 
       {/* ---------- above the tabs: cart total, or where the bill stands ---------- */}
-      <div className="fixed inset-x-0 bottom-[60px] z-30 mx-auto max-w-md px-4 pb-2 sm:max-w-2xl">
+      <div className="above-tabs pointer-events-none fixed inset-x-0 z-30 mx-auto max-w-md bg-gradient-to-t from-canvas via-canvas/95 to-canvas/0 px-4 pb-2 pt-5 sm:max-w-2xl [&>*]:pointer-events-auto empty:hidden">
         {count > 0 && view !== "orders" ? (
           <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[16px] bg-jade-deep px-4 py-3 text-white">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
