@@ -69,7 +69,7 @@ export function Checkout({
   const canDiscount = useCan("discount");
   const couponsOn = useFeature("coupons") === "ok" && canDiscount;
   // stamp card
-  const [useReward, setUseReward] = useState(false);
+  const [useRewardRaw, setUseReward] = useState<boolean | null>(null); // null = on whenever the card is full
   const [giveStamp, setGiveStamp] = useState<boolean | null>(null); // null = the program's default
   const menu = useMenu();
   const guestsList = useGuests();
@@ -89,7 +89,7 @@ export function Checkout({
       setCustom({ on: false, kind: "pct", value: "" });
       setPhone(guest?.phone ?? "");
       setGuestName(guest?.name ?? "");
-      setUseReward(false);
+      setUseReward(null);
       setGiveStamp(null);
       setCoupon(null);
       setCode("");
@@ -119,10 +119,12 @@ export function Checkout({
   const stampGuest = stampsOn && phoneKey.length === 10 ? guestsList.find((c) => c.phone.replace(/\D/g, "").slice(-10) === phoneKey) : undefined;
   const liveCount = liveStamps(stampGuest, prog).length;
   const canRedeem = stampsOn && liveCount >= prog.needed && mayAct(meEarly, prog.redeemers);
-  const rewardAmt = canRedeem && useReward ? rewardOff(prog, subtotal, menu) : 0;
+  const useReward = canRedeem && (useRewardRaw ?? true);
+  const rewardAmt = useReward ? rewardOff(prog, subtotal, menu) : 0;
   const stampWhyNot = stampsOn && phoneKey.length === 10 ? stampProblem(prog, stampGuest, subtotal) : null;
   const mayGive = mayAct(meEarly, prog.givers);
-  const willStamp = stampsOn && phoneKey.length === 10 && !stampWhyNot && mayGive && (giveStamp ?? prog.auto);
+  // the bill that uses the reward earns no stamp: the new card starts at 0
+  const willStamp = stampsOn && phoneKey.length === 10 && !stampWhyNot && mayGive && !(rewardAmt > 0) && (giveStamp ?? prog.auto);
   const baseOff = coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100);
   const t = billTotals(subtotal, Math.min(subtotal, baseOff + rewardAmt));
   const perGuest = Math.ceil(t.total / guests);
@@ -277,7 +279,7 @@ export function Checkout({
               useReward={useReward}
               onUseReward={setUseReward}
               mayGive={mayGive}
-              whyNot={stampWhyNot}
+              whyNot={rewardAmt > 0 ? "No stamp on the reward bill · the card starts again at 0" : stampWhyNot}
               give={willStamp}
               onGive={(v) => setGiveStamp(v)}
             />

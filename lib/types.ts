@@ -49,6 +49,8 @@ export interface Account {
   plan: "starter" | "growth" | "pro" | "chain";
   renewsAt: string; // ISO
   status?: "active" | "suspended"; // set by the super admin
+  /** after the plan ended, the super admin may let the store run until this date (grace period) */
+  graceUntil?: string;
   /** Logo on the guest menu, next to the name (public image link). */
   logo?: string;
 }
@@ -174,6 +176,8 @@ export interface PayClaim {
   source: "staff" | "guest";
   discount?: number;
   coupon?: string;
+  /** the guest used their full stamp card on this bill (its amount is in `discount`) */
+  reward?: { name: string; amount: number };
 }
 
 /** One line in the activity log: who did what, when. */
@@ -220,6 +224,7 @@ export interface Order {
   payments?: Payment[]; // how the bill was actually settled (can be mixed)
   paymentLog?: PaymentLogEntry[]; // every later change, for the owner
   payPreference?: PayMethod; // what the guest chose when asking for the bill
+  wantsReward?: boolean; // the guest asked to use their full stamp card on this bill
   guestPhone?: string; // OTP-verified number of the guest who ordered (QR)
   guestUid?: string; // Supabase user id of the guest's phone (cloud mode)
   prepaid?: Payment[]; // part the guest already paid from their phone (e.g. UPI half of "Cash + UPI")

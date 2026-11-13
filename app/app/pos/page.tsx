@@ -15,7 +15,7 @@ import { ItemSheet } from "@/components/item-sheet";
 import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
-import { getTable, isShared, seatsFree, tableActions, tableState, useTables } from "@/lib/tables";
+import { getTable, isShared, seatsFree, tableActions, tableState, useLiveTables } from "@/lib/tables";
 import { closeBill, partyOpenOrders } from "@/lib/billing";
 import { inr, gstLabel } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
@@ -38,7 +38,7 @@ function PosScreen() {
   const me = useMe();
   const menu = useMenu();
   const cats = useCategories();
-  const tables = useTables();
+  const tables = useLiveTables();
 
   const [cat, setCat] = useState<string>("all");
   const [q, setQ] = useState("");

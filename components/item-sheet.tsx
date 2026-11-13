@@ -74,10 +74,11 @@ export function ItemSheet({
     return { extra, labels };
   }, [item, picked]);
 
-  const toggle = (gid: string, cid: string, single: boolean) =>
+  // Pick-one groups: tapping another choice swaps it; tapping the chosen one again clears it (unless the group is required).
+  const toggle = (gid: string, cid: string, single: boolean, required = false) =>
     setPicked((p) => {
       const cur = p[gid] ?? [];
-      if (single) return { ...p, [gid]: [cid] };
+      if (single) return { ...p, [gid]: cur.includes(cid) && !required ? [] : [cid] };
       return { ...p, [gid]: cur.includes(cid) ? cur.filter((x) => x !== cid) : [...cur, cid] };
     });
 
@@ -146,7 +147,7 @@ export function ItemSheet({
               <section key={g.id}>
                 <div className="mb-2 flex items-baseline justify-between">
                   <h3 className="text-[16px] font-semibold">{g.name}</h3>
-                  <span className="text-[12.5px] text-muted">{g.required ? "Pick one" : "Optional · pick any"}</span>
+                  <span className="text-[12.5px] text-muted">{g.required ? "Pick one" : g.type === "single" ? "Optional · pick one" : "Optional · pick any"}</span>
                 </div>
                 <div className="overflow-hidden rounded-group bg-surface">
                   {g.choices.map((c) => {
@@ -154,7 +155,7 @@ export function ItemSheet({
                     return (
                       <button
                         key={c.id}
-                        onClick={() => toggle(g.id, c.id, g.type === "single")}
+                        onClick={() => toggle(g.id, c.id, g.type === "single", !!g.required)}
                         className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3.5 text-left last:border-0"
                         aria-pressed={on}
                       >

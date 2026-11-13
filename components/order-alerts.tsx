@@ -77,8 +77,8 @@ export function OrderAlerts() {
     const ring = (ev: SoundEvent) => {
       if (!ping || RANK.indexOf(ev) < RANK.indexOf(ping)) ping = ev;
     };
-    const SOUND_OF: Record<Notice["kind"], SoundEvent> = { order: "order", call: "waiter", kitchen: "kitchen", bill: "bill", claim: "payment", ready: "ready", review: "review" };
-    const say = (kind: Notice["kind"], title: string, body: string, href: string, short = body) => {
+    const SOUND_OF: Record<Exclude<Notice["kind"], "plan">, SoundEvent> = { order: "order", call: "waiter", kitchen: "kitchen", bill: "bill", claim: "payment", ready: "ready", review: "review" };
+    const say = (kind: Exclude<Notice["kind"], "plan">, title: string, body: string, href: string, short = body) => {
       pushNotice({ kind, title, body, href });
       notify(title, body);
       toast(short);

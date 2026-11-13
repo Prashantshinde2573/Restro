@@ -188,3 +188,76 @@ export function inboundForward(m: { from: string; to: string[]; cc?: string[]; s
     text: `New email received\n\n${txtRows(pairs)}\n\n${body}`,
   };
 }
+
+/* ---------------- plan emails (to the restaurant owner, from support@) ---------------- */
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+const inDays = (d: number) => (d <= 0 ? "today" : d === 1 ? "tomorrow" : `in ${d} days`);
+
+export type PlanMailInfo = { restaurant: string; owner: string; plan: string; renewUrl: string };
+
+/** Before the plan ends (on the reminder days). */
+export function planEndingEmail(o: PlanMailInfo & { endsAt: string; daysLeft: number }): Mail {
+  const first = o.owner.split(" ")[0] || "there";
+  return {
+    subject: `Your Restropi ${o.plan} plan ends ${inDays(o.daysLeft)} — ${o.restaurant}`,
+    html: layout({
+      preheader: `Renew before ${fmtDate(o.endsAt)} to keep billing and your QR menu running.`,
+      title: `Your plan ends ${inDays(o.daysLeft)}`,
+      body:
+        p(`Hi ${esc(first)}, the <b>${esc(o.plan)}</b> plan for <b>${esc(o.restaurant)}</b> ends on <b>${esc(fmtDate(o.endsAt))}</b>.`) +
+        p("Renew before then so billing, KOT and your QR menu keep running without a break.") +
+        button(o.renewUrl, "Renew my plan") +
+        muted("Already paid? Thank you — we'll switch it on shortly. Questions: just reply to this email."),
+    }),
+    text: `Hi ${first},\n\nThe ${o.plan} plan for ${o.restaurant} ends on ${fmtDate(o.endsAt)}. Renew so billing and your QR menu keep running:\n${o.renewUrl}\n\nQuestions? Reply to this email.`,
+  };
+}
+
+/** The plan ended, but the store runs on a grace period. */
+export function graceEmail(o: PlanMailInfo & { graceUntil: string; daysLeft: number; given?: boolean }): Mail {
+  const first = o.owner.split(" ")[0] || "there";
+  return {
+    subject: o.given ? `Grace period until ${fmtDate(o.graceUntil)} — ${o.restaurant}` : `Your store is on a grace period · ends ${inDays(o.daysLeft)} — please renew`,
+    html: layout({
+      preheader: `${o.restaurant} runs until ${fmtDate(o.graceUntil)}. Please renew to keep it on.`,
+      title: o.given ? "We've given you a grace period" : "Your store is on a grace period",
+      body:
+        p(`Hi ${esc(first)}, the <b>${esc(o.plan)}</b> plan for <b>${esc(o.restaurant)}</b> has ended. Your store is running on a <b>grace period until ${esc(fmtDate(o.graceUntil))}</b> (${esc(inDays(o.daysLeft))}).`) +
+        p("After that, billing and the QR menu will stop until the plan is renewed. Your data stays safe.") +
+        button(o.renewUrl, "Renew now"),
+    }),
+    text: `Hi ${first},\n\nThe ${o.plan} plan for ${o.restaurant} has ended. Your store runs on a grace period until ${fmtDate(o.graceUntil)} (${inDays(o.daysLeft)}). After that billing and the QR menu stop until you renew:\n${o.renewUrl}`,
+  };
+}
+
+/** The Restropi team renewed or changed the plan. */
+export function planUpdatedEmail(o: PlanMailInfo & { until: string; changed: boolean }): Mail {
+  const first = o.owner.split(" ")[0] || "there";
+  return {
+    subject: o.changed ? `Your Restropi plan is now ${o.plan} — ${o.restaurant}` : `Plan renewed till ${fmtDate(o.until)} — ${o.restaurant}`,
+    html: layout({
+      preheader: `${o.plan} plan · runs until ${fmtDate(o.until)}.`,
+      title: o.changed ? `You're on the ${o.plan} plan` : "Your plan is renewed",
+      body:
+        p(`Hi ${esc(first)}, thank you! <b>${esc(o.restaurant)}</b> is on the <b>${esc(o.plan)}</b> plan.`) +
+        rows([["Plan", o.plan], ["Runs until", fmtDate(o.until)]]) +
+        button(o.renewUrl, "Open Restropi"),
+    }),
+    text: `Hi ${first},\n\nThank you! ${o.restaurant} is on the ${o.plan} plan, running until ${fmtDate(o.until)}.\n${o.renewUrl}`,
+  };
+}
+
+/** Daily note to the Restropi team: which plans got reminders today. */
+export function teamPlanSummary(lines: { restaurant: string; what: string }[]): Mail {
+  return {
+    subject: `Restropi plans today: ${lines.length} reminder${lines.length === 1 ? "" : "s"} sent`,
+    html: layout({
+      preheader: "Plan reminders sent to owners today.",
+      title: "Plan reminders sent today",
+      body: rows(lines.map((l) => [l.restaurant, l.what] as [string, string])),
+      footer: "Sent by the daily plan check.",
+    }),
+    text: lines.map((l) => `${l.restaurant}: ${l.what}`).join("\n"),
+  };
+}

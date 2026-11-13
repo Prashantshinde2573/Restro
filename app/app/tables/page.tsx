@@ -12,7 +12,7 @@ import { useToast } from "@/components/toast";
 import { gstRate, inr, minutesSince, timeAgo } from "@/lib/format";
 import { getOrders, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";
 import { closeBill, confirmPayment, rejectPayment } from "@/lib/billing";
-import { isShared, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useTables } from "@/lib/tables";
+import { isShared, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useLiveTables } from "@/lib/tables";
 import { TableManager } from "@/components/table-manager";
 import { CookingLoader } from "@/components/loader";
 import { useReady } from "@/lib/store";
@@ -39,7 +39,7 @@ function Stepper({ value, onChange, min = 1, max = 20 }: { value: number; onChan
 export default function TablesPage() {
   const cloud = useCloud();
   const toast = useToast();
-  const tables = useTables();
+  const tables = useLiveTables();
   const tablesReady = useReady("tables");
   const [zone, setZone] = useState("all");
   const [selId, setSelId] = useState<string | null>(null);

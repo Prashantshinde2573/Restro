@@ -3,8 +3,10 @@
 // Table + party helpers and the shared tables store (Tables screen, POS and
 // the guest QR page all read the same live state).
 import { createStore } from "./store";
-import { logActivity, useCurrentOutlet } from "./live";
-import type { Party, Table, TableStatus } from "./types";
+import { useMemo } from "react";
+import { logActivity, useCurrentOutlet, useOrders } from "./live";
+import { orderTotal } from "./format";
+import type { Order, Party, Table, TableStatus } from "./types";
 
 const rank: Record<Party["status"], number> = { seated: 1, ordered: 2, billing: 3 };
 
@@ -41,6 +43,35 @@ export function useTables() {
   const all = tableStore.use();
   const outlet = useCurrentOutlet();
   return all.filter((t) => !t.outletId || !outlet.id || t.outletId === outlet.id).sort(byTableName);
+}
+
+/**
+ * The orders are the truth for "has this group ordered, and how much". A party's own status/total can lag
+ * (two quick writes from a guest's phone can arrive out of order), so staff screens read them from the orders.
+ */
+export function withOrders(tables: Table[], orders: Order[]): Table[] {
+  return tables.map((t) => {
+    if (!t.parties.length) return t;
+    let changed = false;
+    const parties = t.parties.map((p) => {
+      const from = Date.parse(p.since) - 2 * 60_000; // orders of this sitting only
+      const mine = orders.filter((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id && o.status !== "cancelled" && Date.parse(o.createdAt) >= from);
+      if (!mine.length) return p;
+      const total = mine.reduce((s, o) => s + orderTotal(o.lines), 0);
+      const status: Party["status"] = p.status === "billing" || mine.every((o) => o.status === "paid") ? "billing" : "ordered";
+      if (status === p.status && total === p.total) return p;
+      changed = true;
+      return { ...p, status, total };
+    });
+    return changed ? { ...t, parties } : t;
+  });
+}
+
+/** Tables of the outlet on screen with each group's status and bill worked out from its orders (staff screens). */
+export function useLiveTables() {
+  const tables = useTables();
+  const orders = useOrders();
+  return useMemo(() => withOrders(tables, orders), [tables, orders]);
 }
 
 export const getTable = (nameOrId: string) =>

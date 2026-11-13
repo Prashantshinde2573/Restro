@@ -203,7 +203,7 @@ export function StampBox({
     );
   }
   const full = have >= p.needed;
-  const after = useReward ? have - p.needed + (give ? 1 : 0) : have + (give ? 1 : 0);
+  const after = useReward ? Math.max(0, have - p.needed) : have + (give ? 1 : 0);
   return (
     <div className="overflow-hidden rounded-group bg-surface">
       <div className="flex items-center gap-3 px-4 pt-3.5">
@@ -221,7 +221,7 @@ export function StampBox({
           <Gift size={18} className="shrink-0 text-saffron" />
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-semibold">Card full · {p.reward}</div>
-            <div className="text-[12.5px] text-muted">{canRedeem ? `Takes ₹${rewardAmt} off this bill` : "Ask the owner to give the reward"}</div>
+            <div className="text-[12.5px] text-muted">{canRedeem ? (useReward ? `₹${rewardAmt} off this bill · card goes back to ${after}/${p.needed}` : `Switch on to take ₹${rewardAmt} off this bill`) : "Ask the owner to give the reward"}</div>
           </div>
           {canRedeem && <Toggle checked={useReward} onChange={onUseReward} label="Use the reward on this bill" />}
         </div>

@@ -3,36 +3,10 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Activity,
-  BarChart3,
-  Boxes,
-  ChefHat,
-  ChevronsUpDown,
-  LayoutGrid,
-  Megaphone,
-  MoreHorizontal,
-  ReceiptText,
-  Settings,
-  Sparkles,
-  SquarePlus,
-  UtensilsCrossed,
-  Users,
-  UserRound,
-  Check,
-  Lock,
-  KeyRound,
-  BellRing,
-  X,
-  Plus,
-  History,
-  CircleHelp,
-  Store,
-  ChevronDown,
-} from "lucide-react";
+import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
-import { FEATURES, PLAN_NAME, RENEW_WARN_DAYS, daysLeft, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
+import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
 import { sessionActions, useAccount, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { ChangePassword } from "./owner-auth";
@@ -45,6 +19,8 @@ import { TableJanitor } from "./table-janitor";
 import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
+import { PlanNotice, RenewBanner, usePlanStatus, useRenewBadge } from "./plan-reminder";
+import { dateIN } from "@/lib/plan-status";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
 
@@ -136,13 +112,8 @@ function useNav() {
   return { navGroups, state };
 }
 
-/** Days until the plan ends, when the owner should be reminded (≤ 10), else null. */
-function useRenewDays() {
-  const me = useMe();
-  const { renewsAt } = useAccount();
-  const d = daysLeft(renewsAt);
-  return isOwner(me) && d <= RENEW_WARN_DAYS ? d : null;
-}
+/** Days left on the plan (or grace period) on a reminder day, for the owner's badge; else null. */
+const useRenewDays = useRenewBadge;
 
 function Badge({ n }: { n: number }) {
   return (
@@ -415,50 +386,6 @@ function TabBar() {
   );
 }
 
-/** Owner reminder from 10 days before the plan ends. Hidden for the day once closed. */
-function RenewBanner() {
-  const days = useRenewDays();
-  const { plan, renewsAt } = useAccount();
-  const key = `restropi.renewHidden.${new Date().toDateString()}`;
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(key) === "1";
-    } catch {
-      return false;
-    }
-  });
-  if (days === null || (hidden && days > 0)) return null;
-  const date = new Date(renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  const ended = days <= 0;
-  return (
-    <div className={clsx("flex items-center gap-3 px-4 py-2.5 text-[13.5px] lg:rounded-t-[28px] lg:px-6", ended ? "bg-rose text-white" : "bg-rose-soft text-rose")} role="status">
-      <BellRing size={16} className="shrink-0" />
-      <span className="min-w-0 flex-1">
-        {ended ? (
-          <><b>Your {PLAN_NAME[plan]} plan has ended.</b> Renew to keep billing running.</>
-        ) : (
-          <><b>{PLAN_NAME[plan]} plan ends in {days} {days === 1 ? "day" : "days"}</b> ({date}). Renew to avoid any break.</>
-        )}
-      </span>
-      <button onClick={() => openPlanSheet()} className={clsx("shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold", ended ? "bg-white text-rose" : "bg-rose text-white")}>Renew</button>
-      {!ended && (
-        <button
-          aria-label="Hide for today"
-          onClick={() => {
-            setHidden(true);
-            try {
-              localStorage.setItem(key, "1");
-            } catch {}
-          }}
-          className="shrink-0 p-1"
-        >
-          <X size={15} />
-        </button>
-      )}
-    </div>
-  );
-}
-
 /** Blocks a screen the plan, outlet type or person's access doesn't allow. */
 function RouteGate({ children }: { children: ReactNode }) {
   const path = usePathname();
@@ -524,6 +451,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   const cloud = useCloud();
   const me = useMe();
   const account = useAccount();
+  const plan = usePlanStatus();
   const router = useRouter();
   const [waited, setWaited] = useState(false);
   useEffect(() => {
@@ -550,6 +478,20 @@ function AuthGate({ children }: { children: ReactNode }) {
         <h1 className="text-[22px] font-semibold">No restaurant on this login</h1>
         <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Restropi support to set up your restaurant.</p>
         <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+      </Centered>
+    );
+  }
+  if (cloud.status === "ready" && (cloud.role === "owner" || cloud.role === "staff") && account.status !== "suspended" && plan.locked && account.name) {
+    return (
+      <Centered>
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
+        <h1 className="mt-4 text-[22px] font-semibold">The {PLAN_NAME[account.plan]} plan has ended</h1>
+        <p className="mt-2 text-[15px] text-muted">
+          {account.name || "This restaurant"}&apos;s plan ended on {dateIN(account.renewsAt)}{account.graceUntil ? ` and the grace period on ${dateIN(account.graceUntil)}` : ""}. Billing and the QR menu are off until it&apos;s renewed. Your data is safe.
+        </p>
+        {cloud.role === "owner" ? <Button className="mt-6" onClick={() => openPlanSheet()}>Renew plan</Button> : <p className="mt-4 text-[14px] text-muted">Please ask the owner to renew.</p>}
+        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        {cloud.role === "owner" && <PlanSheet />}
       </Centered>
     );
   }
@@ -627,6 +569,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <MobileTopBar />
             <div aria-hidden className="h-3 lg:hidden" />
             <RenewBanner />
+            <PlanNotice />
             <RouteGate>{children}</RouteGate>
             <PlanSheet />
             <OrderAlerts />

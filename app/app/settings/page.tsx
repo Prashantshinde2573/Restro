@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { UpiPayCard, isValidUpi } from "@/components/upi";
 import { openPlanSheet } from "@/components/plan-sheet";
+import { dateIN, planStatus } from "@/lib/plan-status";
 import { ChangePassword } from "@/components/owner-auth";
 import { StampSettings } from "@/components/stamps";
 import { useToast } from "@/components/toast";
@@ -70,6 +71,7 @@ export default function SettingsPage() {
   const days = daysLeft(account.renewsAt);
   const renewDate = new Date(account.renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   const [planOpen, setPlanOpen] = useState(false);
+  const pst = planStatus(account);
   useEffect(() => {
     if (owner && window.location.hash === "#plan") setPlanOpen(true);
   }, [owner]);
@@ -116,9 +118,14 @@ export default function SettingsPage() {
                 <div className="text-[24px] font-semibold tracking-tight">{plan.name}</div>
                 <div className="text-[14px] text-canvas/70">{plan.monthly ? `${inr(plan.monthly)} per outlet / month · ` : ""}{outlets.length} outlet{outlets.length === 1 ? "" : "s"}</div>
               </div>
-              <Pill tone={days < 0 ? "rose" : days <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{days < 0 ? "Ended" : days <= RENEW_WARN_DAYS ? `${days} days left` : "Active"}</Pill>
+              <Pill tone={pst.inGrace || days < 0 ? "rose" : days <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{pst.inGrace ? "Grace period" : days < 0 ? "Ended" : days <= RENEW_WARN_DAYS ? `${days} days left` : "Active"}</Pill>
             </div>
             <div className="mt-4 text-[13px] text-canvas/70">{days < 0 ? `Ended on ${renewDate}` : `Runs until ${renewDate}`}</div>
+            {pst.inGrace && account.graceUntil && (
+              <div className="mt-2 rounded-[12px] bg-white/10 px-3 py-2 text-[13px] text-canvas">
+                Your store is running on a grace period until <b>{dateIN(account.graceUntil)}</b> ({pst.daysLeft <= 0 ? "ends today" : `${pst.daysLeft} day${pst.daysLeft === 1 ? "" : "s"} left`}). Please renew to keep it on.
+              </div>
+            )}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button size="sm" className="!bg-canvas !text-ink hover:!bg-canvas/90" onClick={() => openPlanSheet()}>{days < 0 ? "Restart plan" : "Renew"}</Button>
               <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>Change plan</Button>
@@ -176,7 +183,7 @@ export default function SettingsPage() {
                 <ul className="mt-2 space-y-1 text-[13.5px]">
                   {p.features.map((f) => <li key={f} className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-jade" />{f}</li>)}
                 </ul>
-                <Button size="sm" variant={cur ? "tinted" : "primary"} className="mt-3 w-full" onClick={() => { setPlanOpen(false); openPlanSheet(p.id); }}>{cur ? "Renew this plan" : p.monthly ? `Switch to ${p.name}` : "Talk to us"}</Button>
+                <Button size="sm" variant={cur ? "tinted" : "primary"} className="mt-3 w-full" onClick={() => { setPlanOpen(false); window.setTimeout(() => openPlanSheet(p.id), 350); }}>{cur ? "Renew this plan" : p.monthly ? `Switch to ${p.name}` : "Talk to us"}</Button>
               </div>
             );
           })}

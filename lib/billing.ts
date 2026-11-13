@@ -5,7 +5,7 @@
 // The owner, or a member the owner ticked "Confirm payments" for, closes a bill
 // straight away. Anyone else's "paid" waits for their OK: the table stays busy and
 // the bill shows under "Payments to confirm" until someone confirms it.
-import { getOrders, orderActions } from "./live";
+import { getOrders, orderActions, stampsForGuestPayment } from "./live";
 import { getTable, tableActions } from "./tables";
 import type { Order, Payment } from "./types";
 
@@ -40,7 +40,9 @@ function freeIfSettled(o: Order | undefined) {
 }
 
 export function confirmPayment(claimId: string) {
+  const claim = getOrders().find((o) => o.payClaim?.id === claimId)?.payClaim;
   const list = orderActions.confirm(claimId);
+  if (claim && list.length) stampsForGuestPayment(list, claim); // QR payments get their stamp (or use the reward) too
   freeIfSettled(list[0]);
   return list;
 }

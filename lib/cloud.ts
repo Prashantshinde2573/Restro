@@ -26,6 +26,9 @@ export function sb(): SupabaseClient {
 }
 
 /** Store key → table name. */
+/** Guest table writes, chained per table so they reach the server in order. */
+const partyChain = new Map<string, Promise<unknown>>();
+
 const TABLE: Record<string, string> = {
   outlets: "outlets",
   members: "members",
@@ -411,8 +414,8 @@ function disconnect() {
 type Row = { id: string; data: Record<string, unknown>; number?: number };
 const fromRow = (key: string, r: Row) => (key === "orders" ? { ...r.data, id: r.id, number: r.number ?? r.data.number ?? 0 } : { ...r.data, id: r.id });
 
-type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string; logo?: string | null };
-const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status, logo: r.logo ?? "" });
+type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string; logo?: string | null; grace_until?: string | null };
+const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status, logo: r.logo ?? "", graceUntil: r.grace_until ?? undefined });
 
 export function connect(rid: string, role: Role, uid: string) {
   if (connected && connected.rid === rid && connected.role === role && connected.uid === uid) return;
@@ -448,7 +451,7 @@ export function connect(rid: string, role: Role, uid: string) {
       const loadAccount = (tries: number) =>
         void client
           .from("restaurants")
-          .select("name, owner, plan, renews_at, status, logo")
+          .select("name, owner, plan, renews_at, status, logo, grace_until")
           .eq("id", rid)
           .maybeSingle()
           .then(({ data, error }) => {
@@ -579,7 +582,13 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
   if (role === "guest") {
     // Guests: tables only change through a narrow server function; orders are their own.
     if (b.key === "tables") {
-      for (const t of changed) track(client.rpc("guest_set_parties", { r: rid, t: t.id, parties: t.parties ?? [] }).then(check));
+      // one write at a time per table, in order — two quick changes (seat, then "ordered") must not land the wrong way round
+      for (const t of changed) {
+        const id = String(t.id);
+        const run = (partyChain.get(id) ?? Promise.resolve()).then(() => client.rpc("guest_set_parties", { r: rid, t: id, parties: t.parties ?? [] }).then(check));
+        partyChain.set(id, run.catch(() => undefined));
+        track(run);
+      }
       return;
     }
     if (b.key !== "orders" && b.key !== "calls") return;
@@ -649,6 +658,7 @@ export interface AdminRestaurant {
   notes: string;
   plan: "starter" | "growth" | "pro" | "chain";
   renewsAt: string;
+  graceUntil: string | null;
   status: "active" | "suspended";
   createdAt: string;
   outlets: number;
@@ -668,7 +678,10 @@ export async function adminSales(from: Date, to: Date): Promise<{ rid: string; b
   if (error) throw new Error(error.message);
   return ((data as { rid: string; bills: number; sales: number | string }[]) ?? []).map((r) => ({ rid: r.rid, bills: Number(r.bills), sales: Number(r.sales) }));
 }
-export async function adminUpdate(rid: string, patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">>) {
+export async function adminUpdate(
+  rid: string,
+  patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">> & { graceUntil?: string | null },
+) {
   const { error } = await sb().rpc("admin_update_restaurant", { r: rid, patch });
   if (error) throw new Error(error.message);
 }
@@ -687,24 +700,48 @@ export interface NewRestaurant {
 }
 export const adminCreate = (r: NewRestaurant) =>
   callFn<{ rid: string; ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "create", ...r }, true);
+/** Super admin: email the owner about a plan change (renewed / grace given / plan switched). */
+export async function adminPlanEmail(rid: string, event: "renewed" | "grace" | "plan") {
+  const { data } = await sb().auth.getSession();
+  try {
+    const r = await fetch("/api/email/plan", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
+      body: JSON.stringify({ rid, event }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 export const adminResetOwnerPassword = (rid: string) =>
   callFn<{ ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "reset_owner_password", rid }, true);
 export const adminDelete = (rid: string, confirmName: string) =>
   callFn<{ ok: true }>("admin-restaurants", { action: "delete", rid, confirmName }, true);
 
 /* ---------------- platform (Restropi team) ---------------- */
-export interface PlatformSettings { whatsapp: string; upi: string; payee: string }
+import { DEFAULT_REMINDERS, remindersOf, type PlanReminders } from "./plan-status";
+export { DEFAULT_REMINDERS, remindersOf, type PlanReminders };
+export interface PlatformSettings { whatsapp: string; upi: string; payee: string; reminders?: PlanReminders }
 export interface PlanCoupon { code: string; kind: "percent" | "flat"; value: number; plans: string[]; valid_to: string | null; max_uses: number | null; uses: number; active: boolean; note: string | null }
 
 /** Where owners send plan requests and pay. Any signed-in person can read it. */
 export async function getPlatformSettings(): Promise<PlatformSettings> {
-  const { data } = await sb().from("platform_settings").select("whatsapp, upi, payee").eq("id", 1).maybeSingle();
-  return { whatsapp: data?.whatsapp ?? "", upi: data?.upi ?? "", payee: data?.payee ?? "" };
+  const { data } = await sb().from("platform_settings").select("*").eq("id", 1).maybeSingle();
+  return { whatsapp: data?.whatsapp ?? "", upi: data?.upi ?? "", payee: data?.payee ?? "", reminders: remindersOf(data) };
 }
 export async function savePlatformSettings(p: PlatformSettings) {
   const { error } = await sb()
     .from("platform_settings")
-    .update({ whatsapp: p.whatsapp || null, upi: p.upi || null, payee: p.payee || null, updated_at: new Date().toISOString() })
+    .update({
+      whatsapp: p.whatsapp || null,
+      upi: p.upi || null,
+      payee: p.payee || null,
+      ...(p.reminders
+        ? { remind_days: p.reminders.days, remind_from: p.reminders.from, remind_email: p.reminders.email, remind_app: p.reminders.app }
+        : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", 1);
   if (error) throw error;
 }

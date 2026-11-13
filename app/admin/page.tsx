@@ -12,6 +12,7 @@ import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import { ChangePassword, PasswordInput } from "@/components/owner-auth";
 import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
+import { planStatus } from "@/lib/plan-status";
 import { RevenueSheet } from "@/components/admin-revenue";
 import {
   adminCreate,
@@ -22,6 +23,7 @@ import {
   cloudSignOut,
   useCloud,
   sendWelcomeEmail,
+  adminPlanEmail,
   verifyMyPassword,
   type AdminRestaurant,
 } from "@/lib/cloud";
@@ -40,6 +42,8 @@ const planPrice = (id: string) => plans.find((p) => p.id === id)?.monthly ?? 0;
 
 function renewState(r: AdminRestaurant): { tone: "jade" | "saffron" | "rose" | "neutral"; text: string } {
   if (r.status === "suspended") return { tone: "neutral", text: "Suspended" };
+  const g = planStatus(r);
+  if (g.inGrace) return { tone: "saffron", text: `Grace · ${g.daysLeft <= 0 ? "ends today" : `${g.daysLeft}d left`}` };
   const d = daysLeft(r.renewsAt);
   if (d < 0) return { tone: "rose", text: `Expired ${-d}d ago` };
   if (d <= RENEW_WARN_DAYS) return { tone: "saffron", text: d === 0 ? "Ends today" : `${d}d left` };
@@ -147,7 +151,7 @@ export default function AdminPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
-            <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & WhatsApp</Button>
+            <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & reminders</Button>
             <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
             <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
           </div>
@@ -538,7 +542,14 @@ function RestaurantSheet({
   const extend = (months: number) => {
     const from = Math.max(Date.now(), new Date(r.renewsAt).getTime());
     const iso = new Date(from + months * 30 * DAY).toISOString();
-    return run(() => adminUpdate(r.id, { renewsAt: iso }), `Renewed till ${dateText(iso)}`);
+    return run(() => adminUpdate(r.id, { renewsAt: iso }).then(() => adminPlanEmail(r.id, "renewed")), `Renewed till ${dateText(iso)}`);
+  };
+  // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
+  const [graceDate, setGraceDate] = useState("");
+  const giveGrace = (days: number) => {
+    const base = Math.max(Date.now(), new Date(r.renewsAt).getTime(), r.graceUntil ? new Date(r.graceUntil).getTime() : 0);
+    const iso = new Date(base + days * DAY).toISOString();
+    return run(() => adminUpdate(r.id, { graceUntil: iso }).then(() => adminPlanEmail(r.id, "grace")), `Grace period till ${dateText(iso)}`);
   };
   const s = renewState(r);
   const infoChanged = info.name !== r.name || info.owner !== r.owner || info.phone !== r.phone || info.city !== r.city || info.notes !== r.notes;
@@ -571,7 +582,7 @@ function RestaurantSheet({
         {err && <p className="rounded-group bg-rose-soft p-3 text-[14px] text-rose">{err}</p>}
 
         <Section title="Plan">
-          <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }), `Plan changed to ${planName(v)}`)} />
+          <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }).then(() => adminPlanEmail(r.id, "plan")), `Plan changed to ${planName(v)}`)} />
         </Section>
 
         <Section title="Renewal">
@@ -589,9 +600,34 @@ function RestaurantSheet({
             <input type="date" className={clsx(inputCls, "flex-1")} value={date} onChange={(e) => setDate(e.target.value)} />
             <Button
               disabled={busy || !date || date === r.renewsAt.slice(0, 10)}
-              onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }), "Renewal date saved")}
+              onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "renewed")), "Renewal date saved")}
             >
               Set date
+            </Button>
+          </div>
+        </Section>
+
+        <Section title="Grace period">
+          <p className="text-[13.5px] text-muted">
+            After the plan ends the store stops (billing and the QR menu). A grace period keeps it running a few more days. The owner gets one email and sees a banner in the app every day until it ends.
+          </p>
+          {r.graceUntil && new Date(r.graceUntil).getTime() > Date.now() ? (
+            <div className="flex flex-wrap items-center gap-2 text-[14.5px]">
+              <Pill tone="saffron">Grace till {dateText(r.graceUntil)}</Pill>
+              <Button variant="plain" className="!bg-surface" disabled={busy} onClick={() => run(() => adminUpdate(r.id, { graceUntil: null }), "Grace period removed")}>Remove grace</Button>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {[3, 7, 15].map((n) => (
+              <Button key={n} variant="plain" className="!bg-surface" disabled={busy} onClick={() => giveGrace(n)}>
+                +{n} days
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input type="date" className={clsx(inputCls, "flex-1")} value={graceDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setGraceDate(e.target.value)} aria-label="Grace period until" />
+            <Button disabled={busy || !graceDate} onClick={() => run(() => adminUpdate(r.id, { graceUntil: new Date(`${graceDate}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "grace")), `Grace period till ${dateText(`${graceDate}T23:59:00+05:30`)}`)}>
+              Set grace
             </Button>
           </div>
         </Section>

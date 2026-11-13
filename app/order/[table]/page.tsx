@@ -3,7 +3,8 @@
 import { GUEST_LANGS, tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import { GamesCard, GamesSheet, type GameId } from "@/components/games/games-sheet";
 import { StampCard } from "@/components/stamps";
-import { liveStamps, programOf } from "@/lib/stamps";
+import { liveStamps, programOf, rewardOff } from "@/lib/stamps";
+import { planStatus } from "@/lib/plan-status";
 import { hasSizes, sizedName } from "@/lib/sizes";
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
@@ -186,6 +187,7 @@ export default function GuestOrder() {
   const [billOpen, setBillOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false); // pay-first: pay for the cart
   const [tipPct, setTipPct] = useState(0);
+  const [useReward, setUseReward] = useState(true);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [thanks, setThanks] = useState<Thanks | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -292,7 +294,9 @@ export default function GuestOrder() {
           myStamps == null
             ? tx(lang, `A stamp on every bill with your number. ${stampProg.needed} stamps = ${stampProg.reward}.`, `तुमच्या नंबरच्या प्रत्येक बिलावर एक स्टॅम्प. ${stampProg.needed} स्टॅम्प = ${stampProg.reward}.`)
             : myStamps >= stampProg.needed
-              ? tx(lang, `Card full! ${stampProg.reward} on this bill — tell our staff.`, `कार्ड भरलं! या बिलावर ${stampProg.reward} — स्टाफला सांगा.`)
+              ? payNow || counter
+                ? tx(lang, `Card full! Show this to our staff when you pay — ${stampProg.reward} on this bill.`, `कार्ड भरलं! पैसे भरताना हे स्टाफला दाखवा — या बिलावर ${stampProg.reward}.`)
+                : tx(lang, `Card full! When you tap Pay, your ${stampProg.reward} comes off the bill.`, `कार्ड भरलं! "भरा" दाबल्यावर ${stampProg.reward} बिलातून कमी होईल.`)
               : tx(lang, `${stampProg.needed - myStamps} more to go for ${stampProg.reward}`, `${stampProg.reward} साठी अजून ${stampProg.needed - myStamps}`)
         }
       />
@@ -322,6 +326,8 @@ export default function GuestOrder() {
   const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !o.payClaim && !(payNow && o.payPreference)), [openOrders, payNow]);
   // where this phone's bill stands: nothing to pay / payment sent (restaurant confirms) / paid
   const sentClaim = openOrders.find((o) => o.payClaim)?.payClaim;
+  // pay at the end: the bill opens only once the kitchen has accepted every order on it
+  const awaitingKitchen = !payNow && unbilled.some((o) => o.status === "new");
   const paidOrders = myOrders.filter((o) => o.status === "paid");
   const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
   const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
@@ -566,6 +572,13 @@ export default function GuestOrder() {
     : hours.why === "paused"
       ? tx(lang, "Ordering from the phone is paused right now. Please order with our staff.", "आत्ता फोनवरून ऑर्डर बंद आहे. कृपया स्टाफकडे ऑर्डर द्या.")
       : tx(lang, `You can browse the menu — ordering opens at ${hours.opensAt}.`, `मेनू पाहू शकता — ऑर्डर ${hours.opensAt} पासून.`);
+  // After a table order: straight to My orders — live status, the bill so far and the games are all there.
+  const showMyOrders = () => {
+    setCartOpen(false);
+    setView("orders");
+    window.scrollTo({ top: 0 });
+    toast(tx(lang, "Order placed", "ऑर्डर पाठवली"));
+  };
   const placeOrder = () => {
     if (!isOpen) return toast(closedText);
     if (payNow) {
@@ -580,7 +593,8 @@ export default function GuestOrder() {
       afterOtp.current = "order";
       return setOtpOpen(true);
     }
-    setConfirmed(sendOrder(guest).id);
+    sendOrder(guest);
+    showMyOrders();
   };
 
   // ---- pay-first outcomes (café) ----
@@ -604,21 +618,29 @@ export default function GuestOrder() {
 
   // ---- the group's bill (restaurant flow) ----
   const billItems = unbilled.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
-  const billGst = Math.round(billItems * gstRate() * 100) / 100;
+  // a full stamp card: the guest can use the reward on this bill (on by default; the restaurant confirms it with the payment)
+  const rewardReady = !!stampProg && myStamps != null && myStamps >= stampProg.needed;
+  const rewardAmt = rewardReady && useReward ? rewardOff(stampProg!, billItems, menuAll) : 0;
+  const billTaxable = Math.max(0, billItems - rewardAmt);
+  const billGst = Math.round(billTaxable * gstRate() * 100) / 100;
   const tip = Math.round((billItems * tipPct) / 100);
-  const billTotal = Math.round(billItems + billGst + tip);
+  const billTotal = Math.round(billTaxable + billGst + tip);
   const billIds = unbilled.map((o) => o.id);
   const who = guest?.name ?? "Guest";
 
   const billUpi = () => {
     orderActions.setPreference(billIds, "upi");
     // The restaurant checks the money came in and confirms; the table closes then.
-    orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, { source: "guest" });
+    orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, {
+      source: "guest",
+      ...(rewardAmt > 0 ? { discount: rewardAmt, reward: { name: stampProg!.reward, amount: rewardAmt } } : {}),
+    });
     if (t && party) tableActions.update(t.id, party.id, { status: "billing", paymentPending: true });
     // stay on the bill: it says "being confirmed" until the owner confirms, then thank you
     setWaiting({ ids: billIds, kind: "upi", amount: billTotal, payFirst: false, claimSeen: true });
   };
   const billLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
+    if (rewardReady) orderActions.askReward(billIds, rewardAmt > 0); // staff see "use the reward" already on at checkout
     if (kind === "mixed" && upiPart) orderActions.prepay(billIds, { method: "upi", amount: upiPart }, who);
     else orderActions.setPreference(billIds, kind === "card" ? "card" : "cash");
     if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
@@ -634,7 +656,7 @@ export default function GuestOrder() {
       <FullLoader label="Loading menu" />
     );
   }
-  if (cloudErr || !account.name || (!t && !counter)) {
+  if (cloudErr || !account.name || (!t && !counter) || planStatus(account).locked) {
     // say what actually went wrong, so the guest (or the owner testing) knows what to do
     const why: { title: string; body: string; action?: { label: string; run: () => void } } =
       cloudErr === "other"
@@ -651,7 +673,7 @@ export default function GuestOrder() {
             }
           : cloudErr === "link"
             ? { title: "This QR code isn't complete", body: "It is missing the restaurant link. Please ask a staff member for a new QR code." }
-            : account.status === "suspended"
+            : account.status === "suspended" || planStatus(account).locked
               ? { title: "Ordering is paused", body: "This restaurant isn't taking orders on this QR right now. Please order with our staff." }
               : {
                   title: "This QR code isn't active",
@@ -998,9 +1020,15 @@ export default function GuestOrder() {
         ) : view === "orders" && !payNow && billState !== "none" ? (
           <div className="grid grid-cols-1 gap-2">
             {/* where the bill stands: pay it / already paid, owner confirming / paid */}
-            {!payNow && billState === "open" && (
-              <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setBillOpen(true); }}>
-                {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span></>}
+            {!payNow && billState === "open" && awaitingKitchen && !waiting && (
+              <div className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-3 text-center shadow-float ring-1 ring-line">
+                <span className="text-[14.5px] font-semibold">{tx(lang, "Waiting for the kitchen to accept", "किचनकडून ऑर्डर स्वीकारली जाण्याची वाट")}</span>
+                <span className="text-[11.5px] font-medium leading-tight text-muted">{tx(lang, "You can pay once your order is accepted", "ऑर्डर स्वीकारली की पैसे भरता येतील")}</span>
+              </div>
+            )}
+            {!payNow && billState === "open" && (!awaitingKitchen || waiting) && (
+              <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setUseReward(true); setBillOpen(true); }}>
+                {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
               </Button>
             )}
             {!payNow && billState === "sent" && (
@@ -1206,7 +1234,8 @@ export default function GuestOrder() {
             setCartOpen(false);
             setPayOpen(true);
           } else {
-            setConfirmed(sendOrder(g).id);
+            sendOrder(g);
+            showMyOrders();
           }
         }}
       />
@@ -1311,6 +1340,25 @@ export default function GuestOrder() {
                 </div>
               ))}
             </div>
+            {rewardReady && (
+              <button
+                type="button"
+                onClick={() => setUseReward((v) => !v)}
+                aria-pressed={useReward}
+                className={clsx("flex w-full items-center gap-3 rounded-group p-4 text-left ring-1", useReward ? "bg-[#fff7e0] ring-saffron/40" : "bg-surface ring-line")}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[20px]">🎁</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">{tx(lang, `Use my reward: ${stampProg!.reward}`, `माझं बक्षीस वापरा: ${stampProg!.reward}`)}</span>
+                  <span className="block text-[12.5px] text-muted">
+                    {useReward
+                      ? tx(lang, `−${inr(rewardOff(stampProg!, billItems, menuAll))} on this bill · your card starts again after this`, `या बिलावर −${inr(rewardOff(stampProg!, billItems, menuAll))} · यानंतर कार्ड पुन्हा सुरू`)
+                      : tx(lang, "Tap to use it on this bill", "या बिलावर वापरण्यासाठी टॅप करा")}
+                  </span>
+                </span>
+                <span className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2", useReward ? "border-jade bg-jade text-white" : "border-line")}>{useReward && <Check size={14} strokeWidth={3} />}</span>
+              </button>
+            )}
             <div>
               <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Tip for the staff (optional)", "स्टाफसाठी टिप (ऐच्छिक)")}</div>
               <div className="grid grid-cols-4 gap-2">
@@ -1323,6 +1371,7 @@ export default function GuestOrder() {
             </div>
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(billItems, { decimals: true })}</dd></div>
+              {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Stamp card reward", "स्टॅम्प कार्ड बक्षीस")} · {stampProg!.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(billGst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
               {tip > 0 && <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Tip", "टिप")}</dt><dd className="tnum">{inr(tip)}</dd></div>}

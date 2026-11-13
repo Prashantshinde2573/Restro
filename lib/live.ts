@@ -8,6 +8,7 @@ import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
+import { liveStamps, mayAct, programOf, stampProblem } from "./stamps";
 import { canConfirmPay, featureState, hasPerm, inOutlet, isMixed, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
 import type { Account, ActivityEntry, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
@@ -270,6 +271,10 @@ export const orderActions = {
       ),
     );
   },
+  /** Guest: "use my stamp card reward on this bill" (staff see it at checkout, already switched on). */
+  askReward(ids: string[], on: boolean) {
+    orderStore.set(orderStore.get().map((o) => (ids.includes(o.id) ? { ...o, wantsReward: on || undefined } : o)));
+  },
   setPreference(ids: string[], pref: PayMethod) {
     orderStore.set(orderStore.get().map((o) => (ids.includes(o.id) ? { ...o, payPreference: pref } : o)));
   },
@@ -278,7 +283,7 @@ export const orderActions = {
    * closes it straight away; anyone else's "paid" waits for their OK.
    * Returns "paid" or "waiting".
    */
-  settle(ids: string[], payments: Payment[], by: string, opts: { source?: PayClaim["source"]; discount?: number; coupon?: string } = {}): "paid" | "waiting" {
+  settle(ids: string[], payments: Payment[], by: string, opts: { source?: PayClaim["source"]; discount?: number; coupon?: string; reward?: PayClaim["reward"] } = {}): "paid" | "waiting" {
     const c = getCloud();
     const trusted = c.role !== "guest" && opts.source !== "guest" && canConfirmPay(currentMember());
     if (trusted) {
@@ -293,6 +298,7 @@ export const orderActions = {
       source: opts.source ?? (c.role === "guest" ? "guest" : "staff"),
       ...(opts.discount ? { discount: opts.discount } : {}),
       ...(opts.coupon ? { coupon: opts.coupon } : {}),
+      ...(opts.reward ? { reward: opts.reward } : {}),
     };
     const at = claim.at;
     const list = orderStore.get().filter((o) => ids.includes(o.id));
@@ -542,6 +548,33 @@ export const stampActions = {
     logActivity("guest", `${delta > 0 ? "Added" : "Removed"} ${Math.abs(delta)} stamp${Math.abs(delta) > 1 ? "s" : ""} for ${c?.name || phone} by hand`);
   },
 };
+
+/**
+ * A guest paid from their phone (QR) and the restaurant just confirmed the money: the stamp card follows the
+ * same rules as a bill charged at the counter. If the guest used their full card, the reward is booked and
+ * the card starts again at 0 (no new stamp on the reward bill). Otherwise this bill earns its stamp.
+ */
+export function stampsForGuestPayment(list: Order[], claim: PayClaim) {
+  const phone = list.find((o) => o.guestPhone)?.guestPhone;
+  if (!phone || claim.source !== "guest") return;
+  const outlet = outletStore.get().find((x) => x.id === list[0]?.outletId) ?? outletStore.get()[0];
+  if (!outlet?.stamps?.on) return;
+  if (featureState("stamps", accountStore.get().plan, outletKinds(outlet)) !== "ok") return;
+  const p = programOf(outlet.stamps);
+  const me = currentMember();
+  const guest = findGuest(phone);
+  const have = liveStamps(guest, p).length;
+  const info = { orderNo: list[0]?.number, by: me?.name, outletId: outlet.id };
+  if (claim.reward && have >= p.needed) {
+    // the confirm is the restaurant's OK for the reward: the guest already paid the lower amount
+    stampActions.redeem(phone, have, p.needed, { reward: claim.reward.name, amount: claim.reward.amount, ...info });
+    return;
+  }
+  if (!p.auto || !mayAct(me, p.givers)) return;
+  const subtotal = list.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0) - (claim.discount ?? 0);
+  if (stampProblem(p, guest, subtotal)) return;
+  stampActions.give(phone, info);
+}
 
 /* ---------------- menu ---------------- */
 const menuStore = createStore<MenuItem[]>([], "menu", { kind: "collection", coll: "menu", guest: "read" });

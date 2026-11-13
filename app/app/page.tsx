@@ -9,7 +9,7 @@ import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { BarChart, TrendChart } from "@/components/charts";
 import { UserChip } from "@/components/shell";
 import { DAY_MS, between, byChannel, byDay, byHour, change, inOutlet, startOfDay, topDishes, totals } from "@/lib/stats";
-import { isShared, useTables } from "@/lib/tables";
+import { isShared, useLiveTables } from "@/lib/tables";
 import { inr, minutesSince } from "@/lib/format";
 import { NeedsYou } from "@/components/notifications";
 
@@ -55,7 +55,7 @@ function OwnerHome() {
   const outlet = useCurrentOutlet();
   const cafe = !hasTables(outlet); // counter only
   const pulseOn = useFeature("pulse") === "ok";
-  const tables = useTables();
+  const tables = useLiveTables();
   const menu = useMenu();
   const members = useMembers();
   const orders = inOutlet(useOrders(), outlet.id);

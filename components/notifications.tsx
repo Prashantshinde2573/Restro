@@ -4,7 +4,7 @@
 // payments to confirm), and "Needs you now" on the home screen.
 import clsx from "clsx";
 import Link from "next/link";
-import { Bell, BellOff, BellRing, ChefHat, Check, ChevronDown, Clock3, Play, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, BellOff, BellRing, CalendarClock, ChefHat, Check, ChevronDown, Clock3, Play, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createStore } from "@/lib/store";
@@ -20,7 +20,7 @@ import { playSound, setSound, setSoundFor, SOUND_EVENTS, SOUNDS, useSound, useSo
 export interface Notice {
   id: string;
   at: string;
-  kind: "order" | "call" | "bill" | "claim" | "ready" | "kitchen" | "review";
+  kind: "order" | "call" | "bill" | "claim" | "ready" | "kitchen" | "review" | "plan";
   title: string;
   body: string;
   href: string;
@@ -34,7 +34,7 @@ export function pushNotice(n: Omit<Notice, "id" | "at">) {
   noticeStore.set([item, ...noticeStore.get()].slice(0, 60));
 }
 
-const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star };
+const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star, plan: CalendarClock };
 
 /** Bell with the unread count; opens the list. */
 export function NoticeBell({ dark = false }: { dark?: boolean }) {
@@ -80,7 +80,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
                   onClick={markAll}
                   className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40"
                 >
-                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "claim" || n.kind === "review" || n.kind === "call" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
+                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "plan" ? "bg-rose-soft text-rose" : n.kind === "claim" || n.kind === "review" || n.kind === "call" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
                     <I size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
