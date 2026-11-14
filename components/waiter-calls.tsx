@@ -55,7 +55,7 @@ export function CallAlerts() {
         // a new call: every waiter here, and whoever hands out calls
         if (answersCalls(me, c.outletId) || assignsCalls(me)) {
           const title = `${where} is calling a waiter`;
-          const body = `${c.customer ? `${c.customer} · ` : ""}tap “I'll go” so the others know${tag(c.outletId)}`;
+          const body = `${c.reason ? `${c.reason} · ` : ""}${c.customer ? `${c.customer} · ` : ""}tap “I'll go” so the others know${tag(c.outletId)}`;
           pushNotice({ kind: "call", title, body, href: "/app" });
           notify(title, body);
           toast(`🔔 ${where} is calling a waiter`);
@@ -135,6 +135,7 @@ function CallCard({ c, onAssign }: { c: WaiterCall; onAssign: (c: WaiterCall) =>
         <BellRing size={17} className={clsx("mt-0.5 shrink-0", c.status === "open" ? "animate-pulse text-saffron" : "text-jade")} />
         <div className="min-w-0 flex-1 text-[14px]">
           <b>{where}</b> {c.status === "open" ? "is calling a waiter" : "called a waiter"}
+          {c.reason && <span className="ml-1.5 rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">{c.reason}</span>}
           <div className="text-[12.5px] text-muted">
             {c.customer ? `${c.customer} · ` : ""}
             {timeAgo(c.at)}

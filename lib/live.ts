@@ -743,6 +743,8 @@ export interface WaiterCall {
   tableName: string;
   partyId?: string;
   customer?: string;
+  /** what the guest needs (water, the bill, …) — picked when calling */
+  reason?: string;
   status: "open" | "taken" | "done" | "cancelled";
   /** the member going to the table */
   to?: string;
@@ -766,7 +768,7 @@ export const assignsCalls = (m: Member | null | undefined) => !!m && m.active &&
 const patchCall = (id: string, fn: (c: WaiterCall) => WaiterCall) => callStore.set(callStore.get().map((c) => (c.id === id ? fn(c) : c)));
 export const callActions = {
   /** Guest: call a waiter to this table. */
-  call(c: Pick<WaiterCall, "outletId" | "tableId" | "tableName" | "partyId" | "customer">): WaiterCall {
+  call(c: Pick<WaiterCall, "outletId" | "tableId" | "tableName" | "partyId" | "customer" | "reason">): WaiterCall {
     const call: WaiterCall = { ...c, id: `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: new Date().toISOString(), status: "open" };
     // a guest can't write "to" (the server refuses it), so leave empty keys out
     for (const k of Object.keys(call) as (keyof WaiterCall)[]) if (call[k] === undefined) delete call[k];

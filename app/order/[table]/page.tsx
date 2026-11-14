@@ -42,6 +42,13 @@ const STEPS_MR = ["मिळाली", "स्वीकारली", "बन�
 const stepOf = (s: Order["status"]) => (s === "new" ? 0 : s === "accepted" ? 1 : s === "preparing" ? 2 : s === "ready" ? 3 : 4);
 const PAIRINGS: Record<string, string> = { mains: "m10", starters: "m19", rice: "m16", breads: "m6", desserts: "m21", drinks: "m4", hot: "m16" };
 const sumOf = (p: Payment[]) => p.reduce((s, x) => s + x.amount, 0);
+const WAITER_REASONS = [
+  { en: "Water", mr: "पाणी", icon: "💧" },
+  { en: "Order more", mr: "अजून ऑर्डर", icon: "🍽️" },
+  { en: "Need help", mr: "मदत हवी", icon: "🙋" },
+  { en: "Cutlery / tissues", mr: "चमचे / टिश्यू", icon: "🥄" },
+  { en: "Bill", mr: "बिल", icon: "🧾" },
+];
 const DONE_TTL = 6 * 60 * 60 * 1000; // a finished visit stays closed on this phone for 6 hours (unless the QR is scanned again)
 const num = (n: number) => (n ? n : "…"); // cloud: number arrives a moment after the order
 
@@ -242,9 +249,20 @@ export default function GuestOrder() {
   // "Call a waiter": this phone's latest call to this table that is still going
   const calls = useCalls();
   const myCall = t ? liveCalls(calls).find((c) => c.tableId === t.id) : undefined;
+  // The Waiter tab never calls at once (it was easy to tap by mistake): it opens a sheet to confirm,
+  // with an optional reason. A fresh call can't follow within 20 s of the last one.
+  const [waiterOpen, setWaiterOpen] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (!cooldown) return;
+    const t = window.setTimeout(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => window.clearTimeout(t);
+  }, [cooldown]);
   const callWaiter = () => {
     if (!t) return;
-    callActions.call({ outletId: t.outletId, tableId: t.id, tableName: t.name, partyId: myParty ?? undefined, customer: guest?.name });
+    callActions.call({ outletId: t.outletId, tableId: t.id, tableName: t.name, partyId: myParty ?? undefined, customer: guest?.name, reason: reason ?? undefined });
+    setCooldown(20);
     toast(tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…"));
   };
   // a new group at this table: ask how many guests before the menu
@@ -1042,15 +1060,47 @@ export default function GuestOrder() {
         ordersBadge={openOrders.length}
         showCart={qrOn}
         waiter={counter || !t ? null : myCall ? myCall.status as "open" | "taken" : "idle"}
-        onWaiter={() => {
-          if (!myCall) return callWaiter();
-          if (myCall.status === "open") {
-            callActions.cancel(myCall.id);
-            toast(tx(lang, "Waiter call cancelled", "वेटर कॉल रद्द केला"));
-          } else toast(tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`));
-        }}
+        onWaiter={() => { setReason(null); setWaiterOpen(true); }}
         lang={lang}
       />
+      <Sheet open={waiterOpen} onClose={() => setWaiterOpen(false)} title={tx(lang, "Call a waiter", "वेटरला बोलवा")}>
+        {myCall?.status === "taken" ? (
+          <div className="space-y-4 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><Check size={26} /></span>
+            <p className="text-[17px] font-semibold">{tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}</p>
+            <Button size="lg" variant="plain" className="w-full !bg-surface" onClick={() => setWaiterOpen(false)}>{tx(lang, "OK", "ठीक आहे")}</Button>
+          </div>
+        ) : myCall?.status === "open" ? (
+          <div className="space-y-4 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-saffron-soft text-saffron"><BellRing size={26} className="animate-pulse" /></span>
+            <div>
+              <p className="text-[17px] font-semibold">{tx(lang, "A waiter has been called", "वेटरला बोलावलं आहे")}</p>
+              <p className="mt-1 text-[14px] text-muted">{myCall.reason ? `${myCall.reason} · ` : ""}{tx(lang, "Someone will come to your table shortly.", "थोड्याच वेळात कोणीतरी तुमच्या टेबलवर येईल.")}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="lg" variant="plain" className="!bg-surface" onClick={() => { callActions.cancel(myCall.id); setWaiterOpen(false); toast(tx(lang, "Call cancelled", "कॉल रद्द केला")); }}>{tx(lang, "Cancel call", "कॉल रद्द करा")}</Button>
+              <Button size="lg" onClick={() => setWaiterOpen(false)}>{tx(lang, "OK", "ठीक आहे")}</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-[15px] text-muted">{tx(lang, `A waiter will come to table ${t?.name ?? ""}. What do you need? (optional)`, `वेटर टेबल ${t?.name ?? ""} वर येईल. काय हवं आहे? (ऐच्छिक)`)}</p>
+            <div className="flex flex-wrap gap-2">
+              {WAITER_REASONS.map((r) => {
+                const label = tx(lang, r.en, r.mr);
+                return (
+                  <button key={r.en} type="button" aria-pressed={reason === r.en} onClick={() => setReason((x) => (x === r.en ? null : r.en))} className={clsx("rounded-full px-3.5 py-2 text-[14px] font-semibold ring-1", reason === r.en ? "bg-ink text-canvas ring-ink" : "bg-surface ring-line")}>
+                    {r.icon} {label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button size="lg" className="w-full" disabled={cooldown > 0} onClick={() => { callWaiter(); setWaiterOpen(false); toast(tx(lang, "Waiter called", "वेटरला बोलावलं")); }}>
+              <BellRing size={18} /> {cooldown > 0 ? tx(lang, `You just called · wait ${cooldown}s`, `आत्ताच बोलावलं · ${cooldown} सेकंद थांबा`) : tx(lang, "Call waiter", "वेटरला बोलवा")}
+            </Button>
+          </div>
+        )}
+      </Sheet>
 
       <GamesSheet game={game} onGame={setGame} onClose={() => setGame(null)} lang={lang} />
 
@@ -1089,7 +1139,7 @@ export default function GuestOrder() {
                   <button onClick={() => callActions.cancel(myCall.id)} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink">{tx(lang, "Cancel", "रद्द करा")}</button>
                 </div>
               ) : (
-                <button onClick={() => { callWaiter(); setMoreOpen(false); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+                <button onClick={() => { setMoreOpen(false); setReason(null); window.setTimeout(() => setWaiterOpen(true), 350); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
                   <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
                 </button>
               )
