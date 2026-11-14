@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { ClaimCheck } from "@/components/claim-check";
 import { Check, History, PenLine, Phone, Printer, RotateCcw, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Chips, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
@@ -192,6 +193,7 @@ export default function OrdersPage() {
               <div className="rounded-ctl bg-saffron-soft px-3 py-2.5 text-[13.5px]">
                 <b>{sel.payClaim.by}</b> marked this bill paid · {paymentsText(sel.payClaim.payments)} · {timeAgo(sel.payClaim.at)}.{" "}
                 {canConfirm ? "Check the money came in (UPI app, cash drawer), then confirm." : "Waiting for the owner to confirm."}
+                <ClaimCheck claimId={sel.payClaim.id} />
               </div>
             )}
             {sel.payPreference && sel.status !== "paid" && !sel.payClaim && (

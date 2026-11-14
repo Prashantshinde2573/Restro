@@ -1,5 +1,6 @@
 "use client";
 
+import { ClaimCheck } from "@/components/claim-check";
 import { useCloud } from "@/lib/cloud";
 import clsx from "clsx";
 import Link from "next/link";
@@ -221,6 +222,7 @@ export default function TablesPage() {
                     <div className="border-t border-line/80 bg-saffron-soft/60 px-4 py-3 text-[13.5px]">
                       <b>{claim.by}</b> marked this paid · {paymentsText(claim.payments)} · {minutesSince(claim.at)} min ago.
                       {canConfirm ? " Check the money came in, then confirm." : " Waiting for the owner to confirm."}
+                      <ClaimCheck claimId={claim.id} />
                       {canConfirm && (
                         <div className="mt-2 flex gap-2">
                           <Button size="sm" onClick={() => { confirmPayment(claim.id); toast(`Payment confirmed · ${label} closed`); }}><Check size={15} /> Money received</Button>

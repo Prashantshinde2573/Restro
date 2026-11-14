@@ -15,6 +15,7 @@ import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
 import { planStatus } from "@/lib/plan-status";
 import { fitLogo } from "@/lib/fit-logo";
 import { RevenueSheet } from "@/components/admin-revenue";
+import { ErrorsSheet } from "@/components/admin-errors";
 import {
   adminCreate,
   adminDelete,
@@ -68,6 +69,7 @@ export default function AdminPage() {
   const [platformOpen, setPlatformOpen] = useState(false);
   const [couponsOpen, setCouponsOpen] = useState(false);
   const [revenueOpen, setRevenueOpen] = useState(false);
+  const [errorsOpen, setErrorsOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
@@ -155,6 +157,7 @@ export default function AdminPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
+            <Button variant="tinted" onClick={() => setErrorsOpen(true)}><AlertTriangle size={17} /> App errors</Button>
             <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & reminders</Button>
             <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
             <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
@@ -273,6 +276,7 @@ export default function AdminPage() {
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
       <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
       <RevenueSheet open={revenueOpen} onClose={() => setRevenueOpen(false)} list={list ?? []} />
+      <ErrorsSheet open={errorsOpen} onClose={() => setErrorsOpen(false)} names={Object.fromEntries((list ?? []).map((r) => [r.id, r.name]))} />
 
       <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change password">
         <ChangePassword title="" onDone={() => { setPwOpen(false); toast("Password changed"); }} />

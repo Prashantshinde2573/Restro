@@ -226,7 +226,7 @@ function DemoDialog() {
   return (
     <div role="dialog" aria-modal="true" aria-label="Book a free demo" className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/40 p-2 backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setOpen(false)}>
       <div className="relative w-full max-w-[460px] animate-[sheet-in_.45s_cubic-bezier(.2,.8,.2,1)]" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => setOpen(false)} aria-label="Close" className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f5f3] text-ink/60 hover:text-ink">
+        <button onClick={() => setOpen(false)} aria-label="Close" className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f5f3] text-ink/70 hover:text-ink">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
         <LeadForm />
@@ -271,25 +271,25 @@ export function SiteFooter() {
               <Brand className="h-9" />
               <p className="mt-7 text-[16px] font-semibold">Want a call from us?</p>
               <div className="mt-3 max-w-[440px]"><CallBack /></div>
-              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/45">We only use your number to call you about Restropi. No spam, no sharing.</p>
+              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/65">We only use your number to call you about Restropi. No spam, no sharing.</p>
             </div>
             <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
               {footerCols.map((c) => (
                 <div key={c.t}>
                   <div className="text-[15px] font-semibold">{c.t}</div>
-                  <ul className="mt-4 space-y-3 text-[15px] text-ink/60">
+                  <ul className="mt-4 space-y-3 text-[15px] text-ink/70">
                     {c.links.map((l) => (
-                      <li key={l.label}><Link href={l.href} className="transition hover:text-jade">{l.label}</Link></li>
+                      <li key={l.label}><Link href={l.href} className="inline-block py-1 transition hover:text-jade">{l.label}</Link></li>
                     ))}
                     {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
                     {c.t === "Restropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
-                    {c.t === "Restropi" && <li className="text-ink/45">Pune · Satara · Kolhapur</li>}
+                    {c.t === "Restropi" && <li className="text-ink/65">Pune · Satara · Kolhapur</li>}
                   </ul>
                 </div>
               ))}
             </div>
           </div>
-          <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/45 sm:flex-row sm:items-center">
+          <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/65 sm:flex-row sm:items-center">
             <span>© {new Date().getFullYear()} Restropi. All rights reserved. · UPI payments go straight to your bank.</span>
             <span className="sm:ml-auto">Made in Pune for Indian restaurants</span>
           </div>

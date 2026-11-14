@@ -37,7 +37,13 @@ function BackgroundVideo({ base }: { base: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [phone, setPhone] = useState<boolean | null>(null);
-  useEffect(() => setPhone(window.matchMedia("(max-width: 767px)").matches), []);
+  const [skip, setSkip] = useState(false);
+  useEffect(() => {
+    setPhone(window.matchMedia("(max-width: 767px)").matches);
+    // data saver on, or a slow connection: keep the photo, don't download the video
+    const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (c?.saveData || /(^|-)2g|3g/.test(c?.effectiveType ?? "")) setSkip(true);
+  }, []);
   useEffect(() => {
     const v = ref.current;
     if (!v || phone === null) return;
@@ -45,7 +51,7 @@ function BackgroundVideo({ base }: { base: string }) {
     v.play().catch(() => {});
   }, [phone]);
   // pick the file only on the client, so phones never download the big one
-  if (phone === null) return null;
+  if (phone === null || skip) return null;
   return (
     <video
       ref={ref}
@@ -54,7 +60,7 @@ function BackgroundVideo({ base }: { base: string }) {
       loop
       playsInline
       autoPlay={!reducedMotion()}
-      preload="auto"
+      preload="metadata"
       poster={HERO_IMAGE || undefined}
       onPlaying={() => setReady(true)}
       onLoadedData={(e) => reducedMotion() && setReady(!!e.currentTarget)}
@@ -246,7 +252,7 @@ function KindCard({ k, i }: { k: (typeof kinds)[number]; i: number }) {
         <div className="flex items-end justify-between gap-3 px-3 pb-2 pt-4">
           <div className="min-w-0">
             <div className="text-[20px] font-semibold leading-tight tracking-[-0.02em]">{k.t}</div>
-            <div className="mt-1 text-[13.5px] leading-snug text-ink/55">{k.d}</div>
+            <div className="mt-1 text-[13.5px] leading-snug text-ink/70">{k.d}</div>
           </div>
           <span className="flex h-9 w-9 shrink-0 -rotate-45 items-center justify-center rounded-full bg-white/70 ring-1 ring-line transition-[transform,background-color,color] duration-500 group-hover:rotate-0 group-hover:bg-jade group-hover:text-white">
             <IconArrow size={15} />
@@ -274,7 +280,7 @@ function KindTile({ k }: { k: (typeof kinds)[number] }) {
       </div>
       <div className="px-2 pb-2 pt-2.5">
         <div className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">{k.t}</div>
-        <div className="mt-0.5 text-[12px] leading-snug text-ink/55">{k.d}</div>
+        <div className="mt-0.5 text-[12px] leading-snug text-ink/70">{k.d}</div>
       </div>
     </div>
   );

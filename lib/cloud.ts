@@ -14,6 +14,7 @@
 //   guest  → anonymous sign-in, no screen
 import { createClient, type RealtimeChannel, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { cloudConfigured, createStore, remoteBindings, setReady, setRemoteWriter, type RemoteBinding } from "./store";
+import { diffFields, flushAll, initQueue, send, setQueueScope, waitingIds } from "./sync-queue";
 
 export { cloudConfigured };
 
@@ -85,6 +86,8 @@ export let emailLink: "recovery" | "expired" | null = null;
 export function startCloud(onSignedIn: (s: CloudState) => void) {
   if (!cloudConfigured || started || typeof window === "undefined") return;
   started = true;
+  initQueue(sb, logError);
+  watchCrashes();
   // Read the email link before Supabase takes the tokens out of the address bar.
   const h = new URLSearchParams(window.location.hash.replace(/^#/, "") + "&" + window.location.search.replace(/^\?/, ""));
   // Our own emails (Resend) carry ?token_hash=…&type=recovery: sign in with it here, then ask for a new password.
@@ -417,6 +420,7 @@ export function connect(rid: string, role: Role, uid: string) {
   if (connected && connected.rid === rid && connected.role === role && connected.uid === uid) return;
   disconnect();
   connected = { rid, role, uid };
+  setQueueScope(`${uid}.${rid}`);
   const client = sb();
   const cached = role === "owner" || role === "staff";
   const scope = `${uid}.${rid}`; // per person: staff never see the owner's copy on a shared device
@@ -526,7 +530,8 @@ export function connect(rid: string, role: Role, uid: string) {
       const onServer = new Set(rows.map((r) => r.id));
       // the server wins over this device's old copy; live changes win over both
       for (const r of rows) if (!touched.has(r.id)) map.set(r.id, fromRow(b.key, r));
-      for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id)) map.delete(id);
+      const waiting = waitingIds();
+      for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id) && !waiting.has(id)) map.delete(id);
       publish(b);
       setReady(b.key, true);
       });
@@ -592,12 +597,12 @@ const track = <T,>(p: PromiseLike<T>) => {
 /** Wait for writes still on their way (e.g. save a person before setting their PIN). */
 export const flushWrites = async () => {
   await Promise.allSettled([...pending]);
+  await flushAll();
 };
 
 function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unknown, next: unknown) {
   const g = b.spec.guest ?? "none";
   if (role === "guest" && g === "none") return;
-  const client = sb();
 
   // the restaurant row (name, owner, logo, plan) is changed only by the Restropi team (super admin)
   if (b.spec.kind === "doc") return;
@@ -613,13 +618,15 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
     changed.push(data);
   });
 
+  // Every save goes through the queue (lib/sync-queue.ts): sent at once, or kept and
+  // sent again when the internet is back, and never lost silently.
   if (role === "guest") {
     // Guests: tables only change through a narrow server function; orders are their own.
     if (b.key === "tables") {
       // one write at a time per table, in order — two quick changes (seat, then "ordered") must not land the wrong way round
       for (const t of changed) {
         const id = String(t.id);
-        const run = (partyChain.get(id) ?? Promise.resolve()).then(() => client.rpc("guest_set_parties", { r: rid, t: id, parties: t.parties ?? [] }).then(check));
+        const run = (partyChain.get(id) ?? Promise.resolve()).then(() => send({ op: "rpc", fn: "guest_set_parties", args: { r: rid, t: id, parties: t.parties ?? [] } }));
         partyChain.set(id, run.catch(() => undefined));
         track(run);
       }
@@ -628,8 +635,11 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
     if (b.key !== "orders" && b.key !== "calls") return;
     for (const o of changed) {
       const isNew = !before.has(String(o.id));
-      const row = { rid, id: String(o.id), data: o, guest_uid: uid };
-      track((isNew ? client.from(table).insert(row) : client.from(table).update({ data: o }).eq("rid", rid).eq("id", String(o.id))).then(check));
+      track(
+        isNew
+          ? send({ op: "insert", table, rows: [{ rid, id: String(o.id), data: o, guest_uid: uid }] })
+          : send({ op: "update", table, rid, id: String(o.id), data: o }),
+      );
     }
     return;
   }
@@ -642,27 +652,120 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
   if (b.key === "activity") {
     // the log only grows: new lines are added, nothing is changed or removed
     const fresh = changed.filter((d) => !before.has(String(d.id)));
-    if (fresh.length) track(client.from(table).insert(fresh.map((d) => ({ rid, id: String(d.id), data: d }))).then(check));
+    if (fresh.length) track(send({ op: "insert", table, rows: fresh.map((d) => ({ rid, id: String(d.id), data: d })) }));
     return;
   }
   if (b.key === "orders") {
     // insert new ones and update the rest separately, so an update never uses up an order number
     const fresh = changed.filter((o) => !before.has(String(o.id)));
     const edits = changed.filter((o) => before.has(String(o.id)));
-    if (fresh.length) track(client.from(table).insert(fresh.map((d) => ({ rid, id: String(d.id), data: d }))).then(check));
-    for (const d of edits) track(client.from(table).update({ data: d }).eq("rid", rid).eq("id", String(d.id)).then(check));
+    if (fresh.length) track(send({ op: "insert", table, rows: fresh.map((d) => ({ rid, id: String(d.id), data: d })) }));
+    // an edit sends only the fields that changed, so two phones changing one order
+    // (kitchen marks it ready while a captain adds a dish) keep both changes
+    for (const d of edits) {
+      const id = String(d.id);
+      const { set, drop } = diffFields(before.get(id) as Record<string, unknown> | undefined, d);
+      if (!Object.keys(set).length && !drop.length) continue;
+      track(send({ op: "patchOrder", rid, id, set, drop, full: d }));
+    }
   } else if (changed.length) {
     const rows = changed.map((d) => ({ rid, id: String(d.id), data: d, updated_at: new Date().toISOString() }));
-    track(client.from(table).upsert(rows, { onConflict: "rid,id" }).then(check));
+    track(send({ op: "upsert", table, rows }));
   }
   const gone = [...before.keys()].filter((id) => !keep.has(id));
-  if (gone.length) track(client.from(table).delete().eq("rid", rid).in("id", gone).then(check));
+  if (gone.length) track(send({ op: "delete", table, rid, ids: gone }));
 }
 
-const check = ({ error }: { error: unknown }) => {
-  if (error) report(error);
-};
 const report = (e: unknown) => console.error("[restropi] cloud write failed", e);
+
+/* ---------------- error tracking (Admin → App errors) ---------------- */
+let errorsSent = 0;
+const lastErrors = new Map<string, number>();
+/** Report a problem to the super admin. At most 20 a page load; the same message once a minute. */
+export function logError(kind: string, message: string, context: Record<string, unknown> = {}) {
+  try {
+    if (!cloudConfigured || errorsSent >= 20) return;
+    const key = `${kind}:${message}`.slice(0, 200);
+    const now = Date.now();
+    if (now - (lastErrors.get(key) ?? 0) < 60_000) return;
+    lastErrors.set(key, now);
+    errorsSent += 1;
+    const rid = connected?.rid ?? stateStore.get().rid ?? null;
+    const page = typeof window !== "undefined" ? window.location.pathname : "";
+    void sb()
+      .rpc("log_error", { p_rid: rid, p_kind: kind, p_message: message.slice(0, 1000), p_context: { ...context, page, ua: navigator.userAgent.slice(0, 160), online: navigator.onLine } })
+      .then(() => undefined, () => undefined);
+  } catch {
+    /* never let error reporting break the app */
+  }
+}
+let watching = false;
+function watchCrashes() {
+  if (watching) return;
+  watching = true;
+  const noise = /ResizeObserver loop|Script error\.?$|chrome-extension:|moz-extension:|Non-Error promise rejection/i;
+  window.addEventListener("error", (e) => {
+    const msg = String(e.message || e.error?.message || "");
+    if (!msg || noise.test(msg) || noise.test(String(e.filename ?? ""))) return;
+    logError("crash", msg, { file: String(e.filename ?? "").slice(-120), line: e.lineno, stack: String(e.error?.stack ?? "").slice(0, 800) });
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = e.reason as { message?: string; stack?: string } | string | undefined;
+    const msg = typeof r === "string" ? r : String(r?.message ?? "");
+    if (!msg || noise.test(msg)) return;
+    logError("crash", msg, { stack: typeof r === "object" ? String(r?.stack ?? "").slice(0, 800) : "" });
+  });
+}
+
+/**
+ * Orders made between two moments, straight from the server, for reports.
+ * The app itself keeps only the latest 1,000 orders; a report over a longer
+ * time needs the rest. Null when it could not load (offline, not signed in).
+ */
+export async function fetchOrdersBetween(fromIso: string, toIso: string): Promise<Record<string, unknown>[] | null> {
+  const rid = connected?.rid;
+  if (!rid || !cloudConfigured || connected?.role === "guest") return null;
+  const out: Record<string, unknown>[] = [];
+  const PAGE = 1000;
+  for (let i = 0; i < 200; i++) {
+    const { data, error } = await sb()
+      .from("orders")
+      .select("id, data, number")
+      .eq("rid", rid)
+      .gte("data->>createdAt", fromIso)
+      .lt("data->>createdAt", toIso)
+      .order("id")
+      .range(i * PAGE, i * PAGE + PAGE - 1);
+    if (error) {
+      report(error);
+      return null;
+    }
+    const rows = (data as unknown as Row[]) ?? [];
+    for (const r of rows) out.push(fromRow("orders", r) as Record<string, unknown>);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+export interface AppError {
+  id: number;
+  at: string;
+  rid: string | null;
+  role: string | null;
+  kind: string;
+  message: string;
+  context: Record<string, unknown>;
+}
+/** Super admin: the latest problems the app reported (crashes, saves the server refused). */
+export async function adminErrors(limit = 200): Promise<AppError[]> {
+  const { data, error } = await sb().from("app_errors").select("id, at, rid, role, kind, message, context").order("at", { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AppError[];
+}
+export async function adminClearErrors(): Promise<void> {
+  const { error } = await sb().from("app_errors").delete().gt("id", 0);
+  if (error) throw new Error(error.message);
+}
 
 export const isConnected = () => !!connected;
 
@@ -677,8 +780,8 @@ export async function guestStamps(): Promise<{ stamps: { at: string }[]; rewards
 }
 
 export function guestUpsert(rid: string, id: string, data: Record<string, unknown>, coll: "guests" | "feedback" | "activity" = "guests") {
-  if (coll === "guests") track(sb().rpc("guest_touch", { r: rid, rec: { ...data, id } }).then(check));
-  else track(sb().from(coll).insert({ rid, id, data }).then(check));
+  if (coll === "guests") track(send({ op: "rpc", fn: "guest_touch", args: { r: rid, rec: { ...data, id } } }));
+  else track(send({ op: "insert", table: coll, rows: [{ rid, id, data }] }));
 }
 
 /* ---------------- super admin ---------------- */

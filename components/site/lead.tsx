@@ -62,7 +62,7 @@ export function LeadForm({ flat = false }: { flat?: boolean }) {
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5 9-10" /></svg>
         </span>
         <h3 className="mt-5 text-[24px] font-semibold tracking-[-0.02em]">Thank you, {f.name.split(" ")[0]}!</h3>
-        <p className="mt-2 text-[15.5px] text-ink/60">We will call you on {phone} within one working day.{f.email.trim() ? ` A confirmation is on its way to ${f.email.trim()}.` : ""}</p>
+        <p className="mt-2 text-[15.5px] text-ink/70">We will call you on {phone} within one working day.{f.email.trim() ? ` A confirmation is on its way to ${f.email.trim()}.` : ""}</p>
       </div>
     );
 
@@ -70,7 +70,7 @@ export function LeadForm({ flat = false }: { flat?: boolean }) {
   return (
     <form onSubmit={submit} className={clsx("rounded-[28px] bg-white p-6 text-ink sm:p-8", !flat && "shadow-[0_40px_80px_-40px_rgb(0_0_0/.5)]")}>
       <h3 className="text-[22px] font-semibold tracking-[-0.02em]">Book a free demo</h3>
-      <p className="mt-1 text-[14.5px] text-ink/55">Takes 30 seconds. We call you back.</p>
+      <p className="mt-1 text-[14.5px] text-ink/70">Takes 30 seconds. We call you back.</p>
       <div className="mt-5 flex flex-wrap gap-2">
         {kindsOf.map((k) => (
           <button type="button" key={k} onClick={() => setF({ ...f, kind: k })} className={clsx("rounded-full px-3.5 py-1.5 text-[13.5px] font-medium transition", f.kind === k ? "bg-ink text-white" : "bg-[#f4f5f3] text-ink/70 hover:bg-[#ebede9]")}>
@@ -93,7 +93,7 @@ export function LeadForm({ flat = false }: { flat?: boolean }) {
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
       </button>
       {state === "error" && <p className="mt-3 text-center text-[13.5px] text-rose">Could not send right now. Please try again in a minute.</p>}
-      <p className="mt-3 text-center text-[12.5px] text-ink/45">We only use your details to contact you about Restropi.</p>
+      <p className="mt-3 text-center text-[12.5px] text-ink/65">We only use your details to contact you about Restropi.</p>
     </form>
   );
 }
@@ -123,7 +123,7 @@ export function CallBack() {
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Your mobile number"
           maxLength={16}
-          className="min-w-0 flex-1 bg-transparent text-[15.5px] outline-none placeholder:text-ink/40"
+          className="min-w-0 flex-1 bg-transparent text-[15.5px] outline-none placeholder:text-ink/65"
           aria-label="Your mobile number"
         />
         <button type="submit" disabled={!ok || state === "sending"} className="h-11 rounded-full bg-ink px-5 text-[14.5px] font-semibold text-white transition hover:bg-jade-deep disabled:opacity-40">

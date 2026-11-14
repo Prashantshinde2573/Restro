@@ -144,8 +144,8 @@ function FeatureCard({ f, className }: { f: (typeof FEATURES)[number]; className
 function QrCard({ className }: { className?: string }) {
   return (
     <div className={clsx("w-[210px] rounded-[26px] bg-white p-5 text-center text-ink shadow-[0_40px_80px_-30px_rgb(0_0_0/.6)]", className)}>
-      <div className="text-[13px] font-medium text-ink/55">MS Cafe</div>
-      <div className="text-[10.5px] font-semibold tracking-[.2em] text-ink/40">TABLE</div>
+      <div className="text-[13px] font-medium text-ink/70">MS Cafe</div>
+      <div className="text-[10.5px] font-semibold tracking-[.2em] text-ink/65">TABLE</div>
       <div className="text-[34px] font-bold leading-none tracking-tight">T1</div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/site/app/qr.webp" alt="Restropi table QR code" width={480} height={480} className="mx-auto mt-3 w-[150px]" />
@@ -176,7 +176,7 @@ function Phone({ className }: { className?: string }) {
         {/* found it */}
         <div data-found className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 items-center gap-2.5 rounded-[18px] bg-white px-4 py-3 text-ink opacity-0 shadow-xl">
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-jade text-white"><Check size={17} strokeWidth={3} /></span>
-          <span className="text-[13.5px] font-semibold leading-tight">Table T1 · MS Cafe<span className="block text-[11.5px] font-medium text-ink/50">Opening the menu…</span></span>
+          <span className="text-[13.5px] font-semibold leading-tight">Table T1 · MS Cafe<span className="block text-[11.5px] font-medium text-ink/65">Opening the menu…</span></span>
         </div>
       </div>
       <span aria-hidden className="absolute left-1/2 top-[15px] h-[18px] w-[86px] -translate-x-1/2 rounded-full bg-[#0d1311]" />

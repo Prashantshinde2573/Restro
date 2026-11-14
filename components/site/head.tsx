@@ -55,7 +55,7 @@ export function SectionHead({
           dark && "text-white [&_.text-jade]:text-saffron",
         )}
       />
-      {sub && <p data-reveal className={clsx("mt-4 text-[16px] leading-relaxed lg:text-[17px]", align === "center" && "mx-auto max-w-xl", dark ? "text-white/65" : "text-ink/60")}>{sub}</p>}
+      {sub && <p data-reveal className={clsx("mt-4 text-[16px] leading-relaxed lg:text-[17px]", align === "center" && "mx-auto max-w-xl", dark ? "text-white/65" : "text-ink/70")}>{sub}</p>}
     </div>
   );
 }

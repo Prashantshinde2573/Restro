@@ -63,8 +63,8 @@ export default function PrivacyPage() {
             <nav className="hidden lg:block" aria-label="On this page">
               <div className="sticky top-28 space-y-1 text-[14px]">
                 {toc.map(([id, label], i) => (
-                  <a key={id} href={`#${id}`} className="block rounded-[10px] px-3 py-1.5 text-ink/60 transition hover:bg-white hover:text-ink">
-                    <span className="mr-2 text-ink/35 tnum">{String(i + 1).padStart(2, "0")}</span>
+                  <a key={id} href={`#${id}`} className="block rounded-[10px] px-3 py-1.5 text-ink/70 transition hover:bg-white hover:text-ink">
+                    <span className="mr-2 text-ink/65 tnum">{String(i + 1).padStart(2, "0")}</span>
                     {label}
                   </a>
                 ))}
@@ -210,7 +210,7 @@ export default function PrivacyPage() {
                 <p>
                   For any question about privacy or this policy, write to <a href={`mailto:${EMAIL}`} className="font-semibold text-jade underline-offset-4 hover:underline">{EMAIL}</a>. We reply within 7 working days.
                 </p>
-                <p className="text-[13.5px] text-ink/50">Last updated: {UPDATED}</p>
+                <p className="text-[13.5px] text-ink/65">Last updated: {UPDATED}</p>
               </Sec>
             </article>
           </div>
