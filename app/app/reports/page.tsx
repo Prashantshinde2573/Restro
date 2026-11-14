@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { Button, Group, Page, PageHeader, Segmented, inputCls } from "@/components/ui";
 import { Donut, TrendChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
-import { paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu, useOrders } from "@/lib/live";
+import { paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu } from "@/lib/live";
+import { useOrdersForRange } from "@/lib/report-orders";
 import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import type { Order } from "@/lib/types";
@@ -55,7 +56,6 @@ export default function ReportsPage() {
   const toast = useToast();
   const account = useAccount();
   const outlet = useCurrentOutlet();
-  const all = inOutlet(useOrders(), outlet.id);
   const menu = useMenu();
   const cats = useCategories();
   const catName = (id: string) => cats.find((c) => c.id === id)?.name ?? "";
@@ -72,6 +72,9 @@ export default function ReportsPage() {
     from = startOfDay(now) - (DAYS[period] - 1) * DAY_MS;
     to = now + 1;
   }
+  // every bill in the range and the same length before it (to compare), not only the ones loaded in the app
+  const range = useOrdersForRange(from - (to - from), to);
+  const all = inOutlet(range.orders, outlet.id);
   const end = Math.min(to - 1, now);
   const days = Math.max(1, Math.round((startOfDay(end) - from) / DAY_MS) + 1);
   const orders = useMemo(() => between(all, from, to), [all, from, to]);
@@ -247,6 +250,8 @@ export default function ReportsPage() {
             </div>
           )}
         </div>
+        {range.loading && <p className="mt-2 text-[13px] text-muted">Loading every bill in this range…</p>}
+        {range.failed && <p className="mt-2 text-[13px] font-medium text-[#B54708]">Couldn&apos;t load older bills. These numbers count only the latest 1,000 orders. Check the internet and open Reports again.</p>}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
           <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> Build report</Button>
           <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> WhatsApp</Button>

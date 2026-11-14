@@ -5,6 +5,7 @@ import { hydrateStores, sessionActions } from "@/lib/live";
 import { emailLink, startCloud } from "@/lib/cloud";
 import { LangProvider } from "@/lib/i18n";
 import { ToastProvider } from "./toast";
+import { SyncBanner } from "./sync-banner";
 
 export function Providers({ children }: { children: ReactNode }) {
   // Saved data loads after the first paint, so server and client render the
@@ -19,7 +20,10 @@ export function Providers({ children }: { children: ReactNode }) {
   }, []);
   return (
     <LangProvider>
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        {children}
+        <SyncBanner />
+      </ToastProvider>
     </LangProvider>
   );
 }

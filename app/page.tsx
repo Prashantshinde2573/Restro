@@ -41,7 +41,7 @@ export default function Landing() {
                     <ArrowRight size={17} />
                   </span>
                 </Link>
-                <span className="text-[13px] text-ink/50">Every feature, side by side</span>
+                <span className="text-[13px] text-ink/65">Every feature, side by side</span>
               </div>
             </div>
           </section>

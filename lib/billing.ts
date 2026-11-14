@@ -5,9 +5,10 @@
 // The owner, or a member the owner ticked "Confirm payments" for, closes a bill
 // straight away. Anyone else's "paid" waits for their OK: the table stays busy and
 // the bill shows under "Payments to confirm" until someone confirms it.
-import { getOrders, orderActions, stampsForGuestPayment } from "./live";
+import { billOf, getOrders, orderActions, stampsForGuestPayment } from "./live";
 import { getTable, tableActions } from "./tables";
 import type { Order, Payment } from "./types";
+import { gstRate } from "./format";
 
 /** Unpaid orders of one party at a table. */
 export const partyOpenOrders = (tableId: string, partyId: string) =>
@@ -75,4 +76,24 @@ export function markUnpaid(ids: string[]) {
     if (p.id !== pid) orderActions.moveParty(t.id, pid, { tableId: t.id, tableName: t.name, partyId: p.id });
   }
   return list;
+}
+
+/**
+ * For the "Money received" check: what the bill comes to, and what the claim says was paid.
+ * A guest's phone sends the amount, discount and reward of its own claim, so staff compare
+ * them with the bill before they confirm.
+ */
+export function claimSummary(claimId: string) {
+  const list = getOrders().filter((o) => o.payClaim?.id === claimId && o.status !== "paid" && o.status !== "cancelled");
+  const claim = list[0]?.payClaim;
+  if (!claim) return null;
+  const bill = list.reduce((s, o) => s + billOf(o), 0);
+  const paid = claim.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const discount = Math.max(0, Number(claim.discount) || 0);
+  // the same sum as the checkout: discount off the items, then GST, rounded to the rupee
+  const subtotal = list.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
+  const taxable = Math.max(0, subtotal - discount);
+  const due = Math.round(taxable + Math.round(taxable * gstRate() * 100) / 100);
+  const short = Math.round(due - paid);
+  return { bill, paid, discount, reward: claim.reward?.name, coupon: claim.coupon, short: short > 1 ? short : 0, guest: claim.source === "guest" };
 }

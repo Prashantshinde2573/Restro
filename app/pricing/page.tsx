@@ -77,7 +77,7 @@ export default function PricingPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-4 text-center text-[12px] text-ink/40">* Prices are per outlet. Plans and offerings are indicative and subject to change.</p>
+              <p className="mt-4 text-center text-[12px] text-ink/65">* Prices are per outlet. Plans and offerings are indicative and subject to change.</p>
             </div>
           </section>
         </main>
