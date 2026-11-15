@@ -1,7 +1,7 @@
 // Sending and reading email through Resend's REST API (no extra package needed).
 import { env, log } from "./env";
 
-type Mail = { from: string; to: string | string[]; subject: string; html: string; text: string; replyTo?: string; tag?: string };
+type Mail = { from: string; to: string | string[]; subject: string; html: string; text: string; replyTo?: string; tag?: string; attachments?: { filename: string; content: string }[] };
 
 export async function sendEmail(m: Mail): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!env.resendKey) return { ok: false, error: "RESEND_API_KEY is not set" };
@@ -17,6 +17,7 @@ export async function sendEmail(m: Mail): Promise<{ ok: true; id: string } | { o
         text: m.text,
         ...(m.replyTo ? { reply_to: m.replyTo } : {}),
         ...(m.tag ? { tags: [{ name: "kind", value: m.tag }] } : {}),
+        ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };

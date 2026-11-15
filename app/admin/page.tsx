@@ -4,7 +4,7 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
@@ -16,6 +16,7 @@ import { planStatus } from "@/lib/plan-status";
 import { fitLogo } from "@/lib/fit-logo";
 import { RevenueSheet } from "@/components/admin-revenue";
 import { ErrorsSheet } from "@/components/admin-errors";
+import { BackupsSheet } from "@/components/admin-backups";
 import {
   adminCreate,
   adminDelete,
@@ -70,6 +71,7 @@ export default function AdminPage() {
   const [couponsOpen, setCouponsOpen] = useState(false);
   const [revenueOpen, setRevenueOpen] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
@@ -158,6 +160,7 @@ export default function AdminPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
             <Button variant="tinted" onClick={() => setErrorsOpen(true)}><AlertTriangle size={17} /> App errors</Button>
+            <Button variant="tinted" onClick={() => setBackupsOpen(true)}><Archive size={17} /> Backups</Button>
             <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & reminders</Button>
             <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
             <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
@@ -276,6 +279,7 @@ export default function AdminPage() {
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
       <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
       <RevenueSheet open={revenueOpen} onClose={() => setRevenueOpen(false)} list={list ?? []} />
+      <BackupsSheet open={backupsOpen} onClose={() => setBackupsOpen(false)} />
       <ErrorsSheet open={errorsOpen} onClose={() => setErrorsOpen(false)} names={Object.fromEntries((list ?? []).map((r) => [r.id, r.name]))} />
 
       <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change password">
