@@ -52,7 +52,7 @@ export function Features() {
         >
           <Card t="Tables and QR orders" d="See every table at a glance. Guests scan, order and pay from their phone." art={<ArtTables />} />
           <Card t="Sales, reports, GST." d="Today’s sales the moment you close, with GST on every bill." art={<ArtInsights />} />
-          <Card t="Your whole team" d="A PIN for every captain, chef and cashier. Each sees only their part." art={<ArtTeam />} />
+          <Card t="Your whole team" d="A PIN for every captain, chef and cashier. Each sees only their part. Attendance and salary slips too." art={<ArtTeam />} />
           <Card artFirst t="Get paid by UPI" d="Every bill carries a QR with the exact amount. No typing, no mistakes." art={<ArtUpi />} />
           <Card artFirst t="Stock and buy list" d="Track stock in, used and waste. A buy list for each supplier, ready to send on WhatsApp." art={<ArtStock />} />
         </Swipe>

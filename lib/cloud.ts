@@ -65,6 +65,9 @@ const TABLE: Record<string, string> = {
   coupons: "coupons",
   activity: "activity",
   calls: "waiter_calls",
+  attendance: "attendance",
+  staffPay: "staff_pay",
+  payEntries: "pay_entries",
 };
 
 /* ---------------- who is signed in on this device ---------------- */
@@ -605,6 +608,7 @@ const sortLike = (key: string, list: unknown[]) => {
   const l = list as Record<string, unknown>[];
   if (key === "orders") return l.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   if (key === "calls") return l.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (key === "attendance" || key === "payEntries") return l.sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
   if (key === "categories" || key === "outlets") return l.sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0));
   if (key === "tables" || key === "members") return l.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
   return l;
