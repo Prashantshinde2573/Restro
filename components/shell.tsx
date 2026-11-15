@@ -137,7 +137,15 @@ function useNav() {
 /** A small red number on an icon (tab bar, More). */
 function Bubble({ n, className }: { n: number; className?: string }) {
   return (
-    <span className={clsx("absolute flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold leading-none text-white ring-2 ring-canvas tnum", className)} aria-label={`${n} waiting`}>
+    <span className={clsx("absolute", className)}>
+      <Count n={n} />
+    </span>
+  );
+}
+/** The round red number: the same look everywhere (side menu, tabs, More, Settings). */
+function Count({ n }: { n: number }) {
+  return (
+    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold leading-none text-white tnum" aria-label={`${n} waiting`}>
       {n > 99 ? "99+" : n}
     </span>
   );
@@ -315,7 +323,7 @@ function Sidebar() {
                 >
                   <Icon size={18} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-jade" : undefined} />
                   <span className="flex-1">{t(it.key)}</span>
-                  {it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <span className="min-w-[20px] rounded-full bg-rose px-1.5 text-center text-[11px] font-bold text-white tnum">{it.badge > 99 ? "99+" : it.badge}</span> : null}
+                  {it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <Count n={it.badge} /> : null}
                 </Link>
               );
             })}
@@ -374,7 +382,7 @@ function TabBar() {
             return (
               <Link key={it.href} href={it.href} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
                 <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : "text-faint"} />
-                {!!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="left-[calc(50%+4px)] top-1" />}
+                {!!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-[calc(50%-20px)] top-1" />}
                 <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : "text-faint")}>{t(it.key)}</span>
               </Link>
             );
@@ -385,7 +393,7 @@ function TabBar() {
             {renew !== null ? (
               <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>
             ) : moreCount > 0 ? (
-              <Bubble n={moreCount} className="left-[calc(50%+4px)] top-1" />
+              <Bubble n={moreCount} className="right-[calc(50%-20px)] top-1" />
             ) : null}
           </button>
         </div>
@@ -409,7 +417,7 @@ function TabBar() {
                 <span className="text-center text-[13px] font-medium">{t(it.key)}</span>
                 {it.state === "locked" && <Lock size={12} className="absolute right-2.5 top-2.5 text-faint" />}
                 {it.href === "/app/settings" && renew !== null && <span className="absolute right-2 top-2"><Badge n={renew} /></span>}
-                {it.state === "ok" && !!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-2.5 top-2.5" />}
+                {it.state === "ok" && !!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-2 top-2" />}
               </Link>
             );
           })}
