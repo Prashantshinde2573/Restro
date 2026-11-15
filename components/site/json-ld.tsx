@@ -1,7 +1,7 @@
 // Structured data (schema.org) so Google understands who we are and what we sell.
 import { plans } from "@/lib/plans";
 import { DEFAULT_CONTACT_EMAIL } from "@/lib/config";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
+import { INSTAGRAM_URL, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 const org = {
   "@type": "Organization",
@@ -11,6 +11,7 @@ const org = {
   logo: `${SITE_URL}/brand/icon-512.png`,
   email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL,
   areaServed: "IN",
+  sameAs: [INSTAGRAM_URL],
 };
 
 const app = {

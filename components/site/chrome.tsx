@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { IconArrow, IconMenu } from "./icons";
 import { Brand } from "./mockups";
 import { SectionHead } from "./head";
+import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/lib/site";
 import { CallBack, LeadForm } from "./lead";
 import { SCROLL_LOCK_EVENT, gsap, lockScroll, pageScrollY, reducedMotion, scrollLocked, useLenis } from "./motion";
 
@@ -120,6 +121,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           <div className="mt-auto grid gap-3">
             <div className="overflow-hidden"><Link data-m href="/login" className="glass flex h-14 items-center justify-center rounded-full text-[16px] font-semibold">Sign in</Link></div>
             <div className="overflow-hidden"><Link data-m href="/#contact" onClick={() => setOpen(false)} className="flex h-14 items-center justify-center rounded-full bg-jade text-[16px] font-semibold text-white">Book a free demo</Link></div>
+            <div className="overflow-hidden"><div data-m className="flex justify-center pt-2"><Socials /></div></div>
           </div>
         </div>
       )}
@@ -238,6 +240,23 @@ function DemoDialog() {
   );
 }
 
+/** Round social buttons: Instagram, and WhatsApp when a number is set. */
+function Socials({ className }: { className?: string }) {
+  const btn = "flex h-11 w-11 items-center justify-center rounded-full bg-ink text-white transition hover:-translate-y-0.5 hover:bg-jade";
+  return (
+    <div className={clsx("flex items-center gap-2.5", className)}>
+      <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" aria-label={`Restropi on Instagram (${INSTAGRAM_HANDLE})`} title={`Instagram ${INSTAGRAM_HANDLE}`} className={btn}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" /></svg>
+      </a>
+      {CONTACT_WA && (
+        <a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" aria-label="Message Restropi on WhatsApp" title="WhatsApp" className={btn}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.6 11.6 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.7-1.2 2.2 2.2 0 0 0 .2-1.2c0-.1-.2-.2-.5-.3Z" /></svg>
+        </a>
+      )}
+    </div>
+  );
+}
+
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
   { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/pricing", label: "Pricing" }, { href: "/pricing#compare", label: "Compare plans" }] },
   { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
@@ -272,6 +291,7 @@ export function SiteFooter() {
           <div className="grid gap-10 lg:grid-cols-[1.1fr_1.6fr] lg:gap-16">
             <div>
               <Brand className="h-9" />
+              <Socials className="mt-5" />
               <p className="mt-7 text-[16px] font-semibold">Want a call from us?</p>
               <div className="mt-3 max-w-[440px]"><CallBack /></div>
               <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/65">We only use your number to call you about Restropi. No spam, no sharing.</p>
@@ -286,6 +306,7 @@ export function SiteFooter() {
                     ))}
                     {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
                     {c.t === "Restropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
+                    {c.t === "Restropi" && <li><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" className="transition hover:text-jade">Instagram</a></li>}
                     {c.t === "Restropi" && <li className="text-ink/65">Pune · Satara · Kolhapur</li>}
                   </ul>
                 </div>
