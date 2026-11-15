@@ -305,8 +305,6 @@ export function SiteFooter() {
                       <li key={l.label}><Link href={l.href} className="inline-block py-1 transition hover:text-jade">{l.label}</Link></li>
                     ))}
                     {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
-                    {c.t === "Restropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
-                    {c.t === "Restropi" && <li><a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" className="transition hover:text-jade">Instagram</a></li>}
                     {c.t === "Restropi" && <li className="text-ink/65">Pune · Satara · Kolhapur</li>}
                   </ul>
                 </div>
