@@ -874,6 +874,24 @@ export async function adminPlanEmail(rid: string, event: "renewed" | "grace" | "
     return false;
   }
 }
+export interface BackupList {
+  rid: string;
+  name: string;
+  files: { date: string; size: number; url: string | null }[];
+}
+/** Super admin: the nightly restaurant-wise backups (Admin → Backups). */
+export async function adminBackups(action?: "run"): Promise<BackupList[] | { saved: number; failed: { rid: string; reason: string }[] }> {
+  const { data } = await sb().auth.getSession();
+  const r = await fetch("/api/admin/backups", {
+    method: action ? "POST" : "GET",
+    headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
+    ...(action ? { body: JSON.stringify({ action }) } : {}),
+  });
+  const j = (await r.json().catch(() => ({}))) as { error?: string; restaurants?: BackupList[]; saved?: number; failed?: { rid: string; reason: string }[] };
+  if (r.status === 503) throw new Error("Add SUPABASE_SERVICE_ROLE_KEY in Vercel to use backups.");
+  if (!r.ok) throw new Error(j.error ?? "Could not load backups");
+  return action ? { saved: j.saved ?? 0, failed: j.failed ?? [] } : (j.restaurants ?? []);
+}
 /** Super admin: the restaurant's brand (logo, owner name on the team list). Goes through our server. */
 async function brandApi(body: Record<string, unknown>) {
   const { data } = await sb().auth.getSession();
