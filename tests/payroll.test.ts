@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysInMonth, payslip, payslipText, shiftMonth, type Attendance, type PayEntry, type StaffPay } from "@/lib/payroll-math";
+import { daysInMonth, daysText, explainSalary, payslip, payslipText, shiftMonth, type Attendance, type PayEntry, type StaffPay } from "@/lib/payroll-math";
 
 const day = (date: string, kind: "full" | "half" = "full", status: Attendance["status"] = "approved", otHours?: number): Attendance => ({
   id: `m1_${date}`, memberId: "m1", date, kind, status, requestedAt: date, ...(otHours ? { otHours } : {}),
@@ -92,5 +92,24 @@ describe("payroll math", () => {
     expect(t).toContain("Ravi (Captain)");
     expect(t).toContain("Total salary: ₹560");
     expect(t).toContain("Fully paid");
+  });
+
+  it("explains ₹10,000 with 1 day worked and Sunday holidays (mid-month) in plain steps", () => {
+    const pay: StaffPay = { id: "m1", type: "monthly", amount: 10000, weeklyOff: 0 };
+    const p = payslip(NOV, pay, [day("2026-11-10")], [], "2026-11-15");
+    expect(p.base).toBe(1333);
+    expect(p.inProgress).toBe(true);
+    const steps = explainSalary(p, pay).map((x) => `${x.label} = ${x.value}`);
+    expect(steps).toEqual([
+      "Per day: ₹10,000 ÷ 30 days = ₹333.33",
+      "Days to pay: 1 day worked + 3 Sundays (holiday) = 4 days",
+      "Salary: ₹333.33 × 4 days = ₹1,333",
+    ]);
+  });
+
+  it("writes half days as ½", () => {
+    expect(daysText(1.5)).toBe("1½");
+    expect(daysText(0.5)).toBe("½");
+    expect(daysText(3)).toBe("3");
   });
 });
