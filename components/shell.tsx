@@ -7,7 +7,7 @@ import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaph
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
-import { sessionActions, useAccount, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
+import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
@@ -22,6 +22,7 @@ import { PlanSheet, openPlanSheet } from "./plan-sheet";
 import { PlanNotice, RenewBanner, usePlanStatus, useRenewBadge } from "./plan-reminder";
 import { dateIN } from "@/lib/plan-status";
 import { useAttendance } from "@/lib/payroll";
+import { useTables } from "@/lib/tables";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
 
@@ -109,13 +110,37 @@ function useNav() {
     if (r.perm && r.perm !== "ownerOrSettings" && !owner && !(hasPerm(me, r.perm) && inOutlet(me, outlet.id))) return null;
     return "ok";
   };
-  const waiting = useOrders().filter((o) => o.status === "new" && (!o.outletId || o.outletId === outlet.id)).length;
+  // number bubbles: things waiting for someone in this outlet
+  const here = (o?: string) => !o || o === outlet.id;
+  const orders = useOrders().filter((o) => here(o.outletId));
+  const waiting = orders.filter((o) => o.status === "new").length; // to accept
+  const cooking = orders.filter((o) => o.status === "accepted" || o.status === "preparing").length; // in the kitchen
+  const tables = useTables().filter((t) => here(t.outletId));
+  const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
+  const tableAsks = tables.reduce((n, t) => n + t.parties.filter((p) => p.pendingApproval || p.status === "billing" || p.paymentPending).length, 0);
+  const lowStock = useStock().filter((x) => here(x.outletId) && x.par > 0 && x.stock < x.par).length;
   const asks = useAttendance().filter((a) => a.status === "pending" && a.memberId !== me?.id).length;
-  const badgeOf = (href: string) => (href === "/app/orders" && waiting ? waiting : href === "/app/payroll" && asks ? asks : undefined);
+  const counts: Record<string, number> = {
+    "/app/orders": waiting,
+    "/app/kitchen": cooking,
+    "/app/tables": calls + tableAsks,
+    "/app/inventory": lowStock,
+    "/app/payroll": asks,
+  };
+  const badgeOf = (href: string) => counts[href] || undefined;
   const navGroups = groups
     .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)!, badge: badgeOf(it.href) }] : [])) }))
     .filter((g) => g.items.length);
-  return { navGroups, state };
+  return { navGroups, state, badgeOf };
+}
+
+/** A small red number on an icon (tab bar, More). */
+function Bubble({ n, className }: { n: number; className?: string }) {
+  return (
+    <span className={clsx("absolute flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold leading-none text-white ring-2 ring-canvas tnum", className)} aria-label={`${n} waiting`}>
+      {n > 99 ? "99+" : n}
+    </span>
+  );
 }
 
 /** Days left on the plan (or grace period) on a reminder day, for the owner's badge; else null. */
@@ -256,6 +281,12 @@ function Sidebar() {
   const { t } = useT();
   const { navGroups } = useNav();
   const renew = useRenewDays();
+  // the browser tab shows how many orders and waiter calls are waiting: "(2) Restropi"
+  const urgent = navGroups.flatMap((g) => g.items).filter((i) => i.state === "ok" && (i.href === "/app/orders" || i.href === "/app/tables")).reduce((n, i) => n + (i.badge ?? 0), 0);
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\)\s*/, "");
+    document.title = urgent ? `(${urgent > 99 ? "99+" : urgent}) ${base}` : base;
+  }, [urgent, path]);
   return (
     <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col px-3 py-5 lg:flex">
       <div className="flex items-center justify-between px-2 pb-5">
@@ -284,7 +315,7 @@ function Sidebar() {
                 >
                   <Icon size={18} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-jade" : undefined} />
                   <span className="flex-1">{t(it.key)}</span>
-                  {it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <span className="rounded-full bg-saffron px-1.5 text-[11px] font-bold text-white tnum">{it.badge}</span> : null}
+                  {it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <span className="min-w-[20px] rounded-full bg-rose px-1.5 text-center text-[11px] font-bold text-white tnum">{it.badge > 99 ? "99+" : it.badge}</span> : null}
                 </Link>
               );
             })}
@@ -323,13 +354,14 @@ function TabBar() {
   const path = usePathname();
   const { t, lang, setLang } = useT();
   const [more, setMore] = useState(false);
-  const { navGroups, state } = useNav();
+  const { navGroups, state, badgeOf } = useNav();
   const renew = useRenewDays();
   const myTabs = tabs.filter((tb) => state(tb.href) === "ok");
   const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }, { href: "/app/help", key: "help" as TKey, icon: CircleHelp, state: "ok" as NavState }].filter(
     (i) => !myTabs.some((tb) => tb.href === i.href),
   );
   const moreActive = moreItems.some((i) => isActive(path, i.href));
+  const moreCount = moreItems.reduce((n, i) => n + (i.state === "ok" ? badgeOf(i.href) ?? 0 : 0), 0);
   // a link in "More" was tapped: close it once the new page is showing
   useEffect(() => setMore(false), [path]);
   return (
@@ -340,8 +372,9 @@ function TabBar() {
             const active = isActive(path, it.href);
             const Icon = it.icon;
             return (
-              <Link key={it.href} href={it.href} className="flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
+              <Link key={it.href} href={it.href} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
                 <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : "text-faint"} />
+                {!!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="left-[calc(50%+4px)] top-1" />}
                 <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : "text-faint")}>{t(it.key)}</span>
               </Link>
             );
@@ -349,7 +382,11 @@ function TabBar() {
           <button onClick={() => setMore(true)} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
             <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : "text-faint"} />
             <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : "text-faint")}>{t("more")}</span>
-            {renew !== null && <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>}
+            {renew !== null ? (
+              <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>
+            ) : moreCount > 0 ? (
+              <Bubble n={moreCount} className="left-[calc(50%+4px)] top-1" />
+            ) : null}
           </button>
         </div>
       </nav>
@@ -372,6 +409,7 @@ function TabBar() {
                 <span className="text-center text-[13px] font-medium">{t(it.key)}</span>
                 {it.state === "locked" && <Lock size={12} className="absolute right-2.5 top-2.5 text-faint" />}
                 {it.href === "/app/settings" && renew !== null && <span className="absolute right-2 top-2"><Badge n={renew} /></span>}
+                {it.state === "ok" && !!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-2.5 top-2.5" />}
               </Link>
             );
           })}
