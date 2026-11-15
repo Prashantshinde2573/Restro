@@ -2,6 +2,9 @@
 // NEXT_PUBLIC_SITE_URL on Vercel can change the address (e.g. a preview domain); no trailing slash.
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.restropi.com").replace(/\/$/, "");
 export const SITE_NAME = "Restropi";
+/** Restropi on Instagram (footer icon, mobile menu, and "sameAs" for Google). */
+export const INSTAGRAM_URL = "https://www.instagram.com/restropi.com_";
+export const INSTAGRAM_HANDLE = "@restropi.com_";
 export const SITE_TITLE = "Restropi · Restaurant billing, KOT & QR ordering app";
 export const SITE_DESCRIPTION =
   "Restropi is a restaurant and café management app for India: billing with UPI QR and GST, kitchen orders (KOT), tables, QR ordering and payment from the table, stock, staff and guests, in English, मराठी and हिंदी.";
