@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown } from "lucide-react";
+import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
@@ -21,6 +21,7 @@ import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
 import { PlanNotice, RenewBanner, usePlanStatus, useRenewBadge } from "./plan-reminder";
 import { dateIN } from "@/lib/plan-status";
+import { useAttendance } from "@/lib/payroll";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
 
@@ -42,6 +43,8 @@ const groups: { key: TKey; items: NavItem[] }[] = [
       { href: "/app/inventory", key: "inventory", icon: Boxes },
       { href: "/app/team", key: "staff", icon: UserRound },
       { href: "/app/access", key: "access", icon: KeyRound },
+      { href: "/app/payroll", key: "payroll", icon: Wallet },
+      { href: "/app/attendance", key: "attendance", icon: CalendarCheck },
     ],
   },
   {
@@ -97,6 +100,7 @@ function useNav() {
   const state = (href: string): NavState | null => {
     const r = routeFor(href);
     if (!r) return "ok"; // home
+    if (href === "/app/attendance" && owner) return null; // the owner doesn't ask for days
     if (r.feature) {
       const f = featureState(r.feature, plan, outletKinds(outlet));
       if (f === "type") return null; // not used in this kind of outlet — hidden
@@ -106,8 +110,10 @@ function useNav() {
     return "ok";
   };
   const waiting = useOrders().filter((o) => o.status === "new" && (!o.outletId || o.outletId === outlet.id)).length;
+  const asks = useAttendance().filter((a) => a.status === "pending" && a.memberId !== me?.id).length;
+  const badgeOf = (href: string) => (href === "/app/orders" && waiting ? waiting : href === "/app/payroll" && asks ? asks : undefined);
   const navGroups = groups
-    .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)!, badge: it.href === "/app/orders" && waiting ? waiting : undefined }] : [])) }))
+    .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)!, badge: badgeOf(it.href) }] : [])) }))
     .filter((g) => g.items.length);
   return { navGroups, state };
 }

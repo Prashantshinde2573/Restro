@@ -8,7 +8,7 @@ import { sendEmail } from "./resend";
 
 const BUCKET = "backups";
 const KEEP_DAYS = 30;
-const TABLES = ["outlets", "members", "categories", "menu_items", "dining_tables", "orders", "guests", "feedback", "stock_items", "coupons", "activity", "waiter_calls"] as const;
+const TABLES = ["outlets", "members", "categories", "menu_items", "dining_tables", "orders", "guests", "feedback", "stock_items", "coupons", "activity", "waiter_calls", "attendance", "staff_pay", "pay_entries"] as const;
 
 const today = () => new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10); // India date
 

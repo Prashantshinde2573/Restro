@@ -36,7 +36,8 @@ export type Feature =
   | "voice"
   | "prepForecast"
   | "insights"
-  | "menuEngineering";
+  | "menuEngineering"
+  | "payroll";
 
 const BOTH: BusinessType[] = ["restaurant", "cafe"];
 export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: BusinessType[] }> = {
@@ -61,6 +62,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   prepForecast: { label: "Prep forecast", plan: "pro", types: BOTH },
   insights: { label: "Insights and Leak guard", plan: "pro", types: BOTH },
   menuEngineering: { label: "What's working (menu engineering)", plan: "pro", types: BOTH },
+  payroll: { label: "Staff attendance and salary", plan: "growth", types: BOTH },
 };
 
 /** The ways an outlet serves guests. `mixed` outlets run both. */
@@ -101,7 +103,8 @@ export type Perm =
   | "insights"
   | "reports"
   | "activity"
-  | "outletSettings";
+  | "outletSettings"
+  | "payroll";
 
 export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; feature?: Feature }[] }[] = [
   {
@@ -129,6 +132,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "menu", label: "Edit menu and prices", feature: "menu" },
       { key: "stock", label: "Stock and purchases", feature: "stock" },
       { key: "team", label: "Manage staff and their access", feature: "team" },
+      { key: "payroll", label: "Staff attendance and salary (approve days, pay)", feature: "payroll" },
       { key: "outletSettings", label: "Outlet settings (UPI, GST, QR ordering)" },
     ],
   },
@@ -204,6 +208,8 @@ export const ROUTES: { href: string; feature?: Feature; perm?: Perm | "ownerOrSe
   { href: "/app/inventory", feature: "stock", perm: "stock" },
   { href: "/app/team", feature: "team", perm: "team" },
   { href: "/app/access", feature: "team", perm: "team" },
+  { href: "/app/payroll", feature: "payroll", perm: "payroll" },
+  { href: "/app/attendance", feature: "payroll" },
   { href: "/app/guests", feature: "guests", perm: "guests" },
   { href: "/app/campaigns", feature: "campaigns", perm: "campaigns" },
   { href: "/app/insights", feature: "insights", perm: "insights" },

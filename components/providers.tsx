@@ -2,6 +2,8 @@
 
 import { useEffect, type ReactNode } from "react";
 import { hydrateStores, sessionActions } from "@/lib/live";
+// registers the attendance and salary lists before the live sync starts
+import "@/lib/payroll";
 import { emailLink, startCloud } from "@/lib/cloud";
 import { LangProvider } from "@/lib/i18n";
 import { ToastProvider } from "./toast";
