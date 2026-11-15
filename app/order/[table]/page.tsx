@@ -91,7 +91,7 @@ export default function GuestOrder() {
   const settings = useSettings();
   const cafe = settings.businessType === "cafe" && !settings.mixed; // counter only, no tables
   const payNow = counter || settings.payFirst; // pay before the order goes to the kitchen
-  // QR ordering is a Growth feature; on Starter the QR shows the menu only.
+  // QR ordering is in every plan (it is the Restropi USP); the check stays for outlet types and future plans.
   const qrOn = useFeature("qrOrdering") === "ok";
   const menuAll = useMenu();
   const menu = useMemo(() => menuAll.filter((m) => m.available), [menuAll]);

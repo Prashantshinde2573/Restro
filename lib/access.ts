@@ -50,7 +50,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   tableSharing: { label: "Shared tables", plan: "starter", types: ["restaurant"] },
   splitByGuest: { label: "Split bill by guest", plan: "growth", types: ["restaurant"] },
   counterToken: { label: "Counter orders with token", plan: "starter", types: ["cafe"] },
-  qrOrdering: { label: "QR ordering", plan: "growth", types: BOTH },
+  qrOrdering: { label: "QR ordering", plan: "starter", types: BOTH },
   stock: { label: "Stock and recipes", plan: "growth", types: BOTH },
   pulse: { label: "Restropi Pulse briefing", plan: "growth", types: BOTH },
   team: { label: "Team", plan: "starter", types: BOTH },

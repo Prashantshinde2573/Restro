@@ -9,7 +9,7 @@ export const plans: Plan[] = [
     yearly: 6990,
     blurb: "For a café or a single small outlet.",
     outlets: "1 outlet · 3 staff logins",
-    features: ["Billing with UPI QR and GST", "Menu and tables", "Kitchen orders (KOT) on phone or tablet", "WhatsApp e-bills", "Daily sales report"],
+    features: ["QR ordering and payment from the table", "Billing with UPI QR and GST", "Menu and tables", "Kitchen orders (KOT) on phone or tablet", "WhatsApp e-bills", "Daily sales report"],
   },
   {
     id: "growth",
@@ -18,7 +18,7 @@ export const plans: Plan[] = [
     yearly: 19990,
     blurb: "For a busy restaurant that wants fewer leaks.",
     outlets: "1 outlet · unlimited staff",
-    features: ["Everything in Starter", "QR ordering and payment from the table", "Split the bill equally by guest", "Stock and dish costing", "Staff attendance and salary slips", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests", "Stamp card for regulars"],
+    features: ["Everything in Starter", "Split the bill equally by guest", "Stock and dish costing", "Staff attendance and salary slips", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests", "Stamp card for regulars"],
     highlight: true,
   },
   {
