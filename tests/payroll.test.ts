@@ -112,4 +112,20 @@ describe("payroll math", () => {
     expect(daysText(0.5)).toBe("½");
     expect(daysText(3)).toBe("3");
   });
+
+  it("doesn't pay holidays before joining or after leaving", () => {
+    // joined Sat 14 Nov: only Sunday 15 is a paid holiday so far
+    const pay: StaffPay = { id: "m1", type: "monthly", amount: 10000, weeklyOff: 0, joinedOn: "2026-11-14" };
+    const p = payslip(NOV, pay, [day("2026-11-14")], [], "2026-11-15");
+    expect(p.paidOffs).toBe(1);
+    expect(p.paidDays).toBe(2);
+    expect(p.base).toBe(667);
+    expect(explainSalary(p, pay)[0].label).toBe("Joined on 14 Nov: holidays before that are not paid");
+    // left on 10 Nov: Sundays 1 and 8 only
+    const left: StaffPay = { id: "m1", type: "monthly", amount: 3000, weeklyOff: 0, leftOn: "2026-11-10" };
+    expect(payslip(NOV, left, [], [], AFTER).paidOffs).toBe(2);
+    // joined next month / left last month: nothing
+    expect(payslip(NOV, { ...pay, joinedOn: "2026-12-01" }, [], [], AFTER).employed).toBe(false);
+    expect(payslip(NOV, { ...pay, joinedOn: undefined, leftOn: "2026-10-31" }, [], [], AFTER).paidOffs).toBe(0);
+  });
 });
