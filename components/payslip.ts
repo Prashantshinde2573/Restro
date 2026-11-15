@@ -1,6 +1,6 @@
 // Salary slip as a print-ready page (the browser's print box saves it as PDF).
 import { inr } from "@/lib/format";
-import { dayLabel, monthLabel, PAY_ENTRY_LABEL, type Attendance, type PayEntry, type Payslip, type StaffPay } from "@/lib/payroll-math";
+import { dayLabel, explainSalary, monthLabel, PAY_ENTRY_LABEL, type Attendance, type PayEntry, type Payslip, type StaffPay } from "@/lib/payroll-math";
 
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
@@ -19,13 +19,7 @@ export function openPayslipPdf(args: {
   const money = (n: number) => esc(inr(Math.round(n)));
   const d1 = (n: number) => esc(+n.toFixed(1));
   const row = (label: string, value: string, cls = "") => `<tr class="${cls}"><td>${esc(label)}</td><td class="n">${value}</td></tr>`;
-  const earn = [
-    row(pay?.type === "daily" ? `Pay: ${inr(pay.amount)} × ${+p.workedDays.toFixed(1)} days` : `Salary for ${+p.paidDays.toFixed(1)} of ${p.daysInMonth} days${pay ? ` (${inr(pay.amount)} a month)` : ""}`, money(p.base)),
-    p.ot ? row(`Overtime: ${+p.otHours.toFixed(1)} h${pay?.otRate ? ` × ${inr(pay.otRate)}` : ""}`, money(p.ot)) : "",
-    p.bonus ? row("Bonus", money(p.bonus)) : "",
-    p.fine ? row("Fine", `− ${money(p.fine)}`) : "",
-    p.advance ? row("Advance taken", `− ${money(p.advance)}`) : "",
-  ].join("");
+  const earn = explainSalary(p, pay).map((x) => row(x.label, esc(x.value))).join("");
   const dayRows = days
     .filter((d) => d.status === "approved" && d.date.startsWith(p.month))
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -65,7 +59,7 @@ export function openPayslipPdf(args: {
     @media print{.wrap{padding:0}}
   </style></head><body><div class="wrap">
     <header>
-      <div><h1>${esc(restaurant || "Salary slip")}</h1><div class="sub">${outlet ? `${esc(outlet)} · ` : ""}Salary slip · ${esc(monthLabel(p.month))}</div></div>
+      <div><h1>${esc(restaurant || "Salary slip")}</h1><div class="sub">${outlet ? `${esc(outlet)} · ` : ""}Salary slip · ${esc(monthLabel(p.month))}${p.inProgress ? " (till today)" : ""}</div></div>
       <div class="meta"><img src="${logo}" alt="Restropi">Made ${esc(new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }))}</div>
     </header>
     <div class="who"><div><b>${esc(who.name)}</b><br><span>${esc(who.title ?? "")}</span></div><div style="text-align:right"><span>${esc(who.phone ?? "")}</span></div></div>
@@ -76,7 +70,7 @@ export function openPayslipPdf(args: {
     </div>
     <h2>Salary</h2>
     <table>${earn}${row("Total salary", money(p.net), "total")}${p.paid ? row("Paid", money(p.paid)) + row(p.due > 0 ? "Still to pay" : p.due < 0 ? "Paid extra" : "Fully paid", money(Math.abs(p.due)), "due") : ""}</table>
-    <h2>Days (${p.fullDays} full${p.halfDays ? `, ${p.halfDays} half` : ""}${p.paidOffs ? `, ${p.paidOffs} paid weekly off${p.paidOffs === 1 ? "" : "s"}` : ""})</h2>
+    <h2>Days (${p.fullDays} full${p.halfDays ? `, ${p.halfDays} half` : ""}${p.paidOffs ? `, ${p.paidOffs} paid holiday${p.paidOffs === 1 ? "" : "s"}` : ""})</h2>
     <table>${dayRows || '<tr><td colspan="3" style="color:#8b938f">No approved days this month.</td></tr>'}</table>
     ${lines ? `<h2>Advance, bonus, fine and payments</h2><table>${lines}</table>` : ""}
     <div class="sign"><div>Employee signature</div><div style="text-align:right">For ${esc(restaurant)}</div></div>

@@ -106,6 +106,8 @@ export interface Payslip {
   /** still to pay (negative = paid more than earned) */
   due: number;
   pending: number;
+  /** the month isn't over yet: the numbers are "till today" */
+  inProgress: boolean;
 }
 
 /**
@@ -147,25 +149,55 @@ export function payslip(month: string, pay: StaffPay | undefined, days: Attendan
     month, daysInMonth: D, fullDays, halfDays, workedDays, paidOffs, paidDays, otHours,
     base, ot, bonus, fine, advance, net, paid, due: net - paid,
     pending: mine.filter((d) => d.status === "pending").length,
+    inProgress: month === monthOf(today),
   };
+}
+
+const rupees = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+/** ₹333.33 when the per-day pay isn't a whole number. */
+const rupees2 = (n: number) => `₹${(Math.round(n * 100) / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+/** 1.5 → "1½" */
+export const daysText = (n: number) => {
+  const whole = Math.floor(n + 1e-9);
+  const half = n - whole >= 0.5 - 1e-9;
+  return `${whole || !half ? whole : ""}${half ? "½" : ""}`;
+};
+const plural = (n: number, one: string, many: string) => `${daysText(n)} ${n === 1 ? one : many}`;
+const PLURAL_DAY = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+
+/** The salary worked out step by step, in plain words, for the screen, the PDF and WhatsApp. */
+export function explainSalary(p: Payslip, pay: StaffPay | undefined): { label: string; value: string; strong?: boolean }[] {
+  if (!pay) return [];
+  const steps: { label: string; value: string; strong?: boolean }[] = [];
+  if (pay.type === "monthly") {
+    const perDay = pay.amount / p.daysInMonth;
+    steps.push({ label: `Per day: ${rupees(pay.amount)} ÷ ${p.daysInMonth} days`, value: rupees2(perDay) });
+    const off = pay.weeklyOff !== undefined && pay.weeklyOff !== null && pay.weeklyOff >= 0 ? pay.weeklyOff : null;
+    const parts = [plural(p.workedDays, "day worked", "days worked")];
+    if (p.paidOffs) parts.push(`${p.paidOffs} ${p.paidOffs === 1 ? WEEKDAYS[off ?? 0] : PLURAL_DAY[off ?? 0]} (holiday)`);
+    steps.push({ label: `Days to pay: ${parts.join(" + ")}`, value: plural(p.paidDays, "day", "days") });
+    steps.push({ label: `Salary: ${rupees2(perDay)} × ${plural(p.paidDays, "day", "days")}`, value: rupees(p.base) });
+  } else {
+    steps.push({ label: "Pay per day", value: rupees(pay.amount) });
+    steps.push({ label: "Days worked", value: plural(p.workedDays, "day", "days") });
+    steps.push({ label: `Salary: ${rupees(pay.amount)} × ${plural(p.workedDays, "day", "days")}`, value: rupees(p.base) });
+  }
+  if (p.ot) steps.push({ label: `Overtime: ${+p.otHours.toFixed(1)} h × ${rupees(pay.otRate ?? 0)}`, value: `+ ${rupees(p.ot)}` });
+  if (p.bonus) steps.push({ label: "Bonus", value: `+ ${rupees(p.bonus)}` });
+  if (p.fine) steps.push({ label: "Fine", value: `− ${rupees(p.fine)}` });
+  if (p.advance) steps.push({ label: "Advance taken", value: `− ${rupees(p.advance)}` });
+  return steps;
 }
 
 /** WhatsApp / text payslip. */
 export function payslipText(p: Payslip, who: { name: string; title?: string }, restaurant: string, pay?: StaffPay) {
-  const r = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
-  const days = (n: number) => `${+n.toFixed(1)}`;
+  const r = rupees;
   const lines = [
-    `*Salary slip · ${monthLabel(p.month)}*`,
+    `*Salary slip · ${monthLabel(p.month)}*${p.inProgress ? " (till today)" : ""}`,
     `${restaurant}`,
     `${who.name}${who.title ? ` (${who.title})` : ""}`,
     "",
-    `Days worked: ${days(p.workedDays)} (${p.fullDays} full${p.halfDays ? `, ${p.halfDays} half` : ""})`,
-    ...(p.paidOffs ? [`Paid weekly offs: ${p.paidOffs}`] : []),
-    pay?.type === "daily" ? `Pay: ${r(pay.amount)} × ${days(p.workedDays)} days = ${r(p.base)}` : `Salary for ${days(p.paidDays)} of ${p.daysInMonth} days: ${r(p.base)}`,
-    ...(p.ot ? [`Overtime: ${+p.otHours.toFixed(1)} h = ${r(p.ot)}`] : []),
-    ...(p.bonus ? [`Bonus: + ${r(p.bonus)}`] : []),
-    ...(p.fine ? [`Fine: − ${r(p.fine)}`] : []),
-    ...(p.advance ? [`Advance taken: − ${r(p.advance)}`] : []),
+    ...explainSalary(p, pay).map((x) => `${x.label}: ${x.value}`),
     "",
     `*Total salary: ${r(p.net)}*`,
     ...(p.paid ? [`Paid: ${r(p.paid)}`] : []),

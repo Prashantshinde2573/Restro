@@ -20,6 +20,8 @@ import {
   WEEKDAYS,
   attendanceActions,
   dayLabel,
+  daysText,
+  explainSalary,
   daysInMonth,
   monthLabel,
   monthOf,
@@ -96,7 +98,7 @@ export default function PayrollPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-[15px] font-medium">{m.name}{!m.active && <Pill>Off</Pill>}</div>
                     <div className="truncate text-[13px] text-muted">
-                      {pay ? `${+slip.workedDays.toFixed(1)} days${slip.otHours ? ` · OT ${+slip.otHours.toFixed(1)} h` : ""}${slip.pending ? ` · ${slip.pending} waiting` : ""}` : "Set salary"}
+                      {pay ? `${daysText(slip.workedDays)} day${slip.workedDays === 1 ? "" : "s"} worked${slip.paidOffs ? ` + ${slip.paidOffs} holiday${slip.paidOffs === 1 ? "" : "s"}` : ""}${slip.otHours ? ` · OT ${+slip.otHours.toFixed(1)} h` : ""}${slip.pending ? ` · ${slip.pending} waiting` : ""}` : "Tap to set salary"}
                     </div>
                   </div>
                   <div className="text-right">
@@ -106,7 +108,7 @@ export default function PayrollPage() {
                 </button>
               ))}
             </Group>
-            <p className="px-1 text-[13px] text-muted">Monthly salary: pay for days worked (a half day counts ½) plus weekly offs, out of the days in the month. Per-day pay: days worked × daily pay. Only approved days count.</p>
+            <p className="px-1 text-[13px] text-muted">Only approved days count. A half day counts as ½ day. Tap a name to see how the salary is worked out.</p>
           </>
         )}
       </Page>
@@ -252,18 +254,25 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
           {!pay ? (
             <p className="text-[14px] text-muted">Set how {m.name} is paid below to see the salary.</p>
           ) : (
-            <dl className="space-y-1.5 text-[14.5px]">
-              <Line k={`Days worked (${slip.fullDays} full${slip.halfDays ? `, ${slip.halfDays} half` : ""})`} v={`${+slip.workedDays.toFixed(1)}`} />
-              {slip.paidOffs > 0 && <Line k="Paid weekly offs" v={String(slip.paidOffs)} />}
-              <Line k={pay.type === "daily" ? `${r(pay.amount)} × ${+slip.workedDays.toFixed(1)} days` : `Salary for ${+slip.paidDays.toFixed(1)} of ${slip.daysInMonth} days`} v={r(slip.base)} />
-              {slip.ot > 0 && <Line k={`Overtime ${+slip.otHours.toFixed(1)} h`} v={r(slip.ot)} />}
-              {slip.bonus > 0 && <Line k="Bonus" v={`+ ${r(slip.bonus)}`} />}
-              {slip.fine > 0 && <Line k="Fine" v={`− ${r(slip.fine)}`} />}
-              {slip.advance > 0 && <Line k="Advance taken" v={`− ${r(slip.advance)}`} />}
-              <div className="!mt-2 flex justify-between border-t border-line pt-2 text-[16px] font-semibold"><dt>Total salary</dt><dd className="tnum">{r(slip.net)}</dd></div>
-              {slip.paid > 0 && <Line k="Paid" v={r(slip.paid)} />}
-              {slip.paid > 0 && <div className={clsx("flex justify-between font-semibold", slip.due > 0 ? "text-saffron" : "text-jade")}><dt>{slip.due > 0 ? "Still to pay" : slip.due < 0 ? "Paid extra" : "Fully paid"}</dt><dd className="tnum">{r(Math.abs(slip.due))}</dd></div>}
-            </dl>
+            <>
+              <div className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-muted">How the salary is worked out</div>
+              <ol className="space-y-2 text-[14.5px]">
+                {explainSalary(slip, pay).map((x, i) => (
+                  <li key={i} className="flex items-baseline justify-between gap-3">
+                    <span className="text-muted">{x.label}</span>
+                    <span className="shrink-0 font-medium tnum">{x.value}</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-3 flex justify-between border-t border-line pt-2.5 text-[17px] font-semibold"><span>Total salary</span><span className="tnum">{r(slip.net)}</span></div>
+              {slip.paid > 0 && <div className="mt-1 flex justify-between text-[14.5px]"><span className="text-muted">Paid</span><span className="tnum">{r(slip.paid)}</span></div>}
+              {slip.paid > 0 && <div className={clsx("mt-1 flex justify-between text-[14.5px] font-semibold", slip.due > 0 ? "text-saffron" : "text-jade")}><span>{slip.due > 0 ? "Still to pay" : slip.due < 0 ? "Paid extra" : "Fully paid"}</span><span className="tnum">{r(Math.abs(slip.due))}</span></div>}
+              {slip.inProgress && (
+                <p className="mt-3 rounded-ctl bg-sky-soft px-3 py-2 text-[13px] text-sky">
+                  {monthLabel(month)} isn&apos;t over yet, so this is the salary <b>till today</b>.{pay.type === "monthly" ? ` A full month with no leave = ${r(pay.amount)}.` : ""}
+                </p>
+              )}
+            </>
           )}
           {slip.pending > 0 && <p className="mt-2 text-[13px] text-saffron">{slip.pending} day{slip.pending === 1 ? "" : "s"} waiting for approval (not counted yet).</p>}
           {pay && (
@@ -284,9 +293,12 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
             <p className="px-1 text-[14px] text-muted">Only the owner can change your own salary.</p>
           ) : pay && !editPay ? (
             <div className="rounded-group bg-surface px-4 py-3 text-[14.5px]">
-              {pay.type === "monthly" ? `${r(pay.amount)} a month` : `${r(pay.amount)} a day`}
-              {pay.otRate ? ` · OT ${r(pay.otRate)}/hour` : ""}
-              {pay.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null ? ` · ${WEEKDAYS[pay.weeklyOff]} off (paid)` : ""}
+              <div className="font-medium">{pay.type === "monthly" ? `${r(pay.amount)} a month` : `${r(pay.amount)} a day`}</div>
+              <div className="mt-0.5 text-[13px] text-muted">
+                {pay.otRate ? `Overtime ${r(pay.otRate)} an hour` : "No overtime pay"}
+                {" · "}
+                {pay.type === "monthly" ? (pay.weeklyOff !== undefined && pay.weeklyOff !== null ? `Holiday every ${WEEKDAYS[pay.weeklyOff]} (paid)` : "No weekly holiday") : "Paid only for days worked"}
+              </div>
             </div>
           ) : (
             <div className="space-y-3 rounded-group bg-surface p-4">
@@ -300,10 +312,10 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
                 </Field>
               </div>
               {type === "monthly" && (
-                <Field label="Weekly off (paid)" hint="That day is paid even without attendance">
+                <Field label="Weekly holiday" hint={off === "" ? "Paid only for the days they come." : `Every ${WEEKDAYS[Number(off)]} counts as a paid day, even without coming.`}>
                   <select className={inputCls} value={off} onChange={(e) => setOff(e.target.value)}>
-                    <option value="">No weekly off</option>
-                    {WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                    <option value="">No weekly holiday</option>
+                    {WEEKDAYS.map((d, i) => <option key={d} value={i}>{d} (paid holiday)</option>)}
                   </select>
                 </Field>
               )}
@@ -384,14 +396,5 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
         </section>
       </div>
     </Sheet>
-  );
-}
-
-function Line({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-muted">{k}</dt>
-      <dd className="tnum">{v}</dd>
-    </div>
   );
 }

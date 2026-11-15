@@ -127,7 +127,7 @@ export default function MyAttendancePage() {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div><div className="text-[22px] font-semibold tnum">{+slip.workedDays.toFixed(1)}</div><div className="text-[12.5px] text-muted">days approved</div></div>
               <div><div className="text-[22px] font-semibold tnum">{+slip.otHours.toFixed(1)} h</div><div className="text-[12.5px] text-muted">overtime</div></div>
-              <div><div className="text-[22px] font-semibold tnum">{inr(slip.net)}</div><div className="text-[12.5px] text-muted">salary so far</div></div>
+              <div><div className="text-[22px] font-semibold tnum">{inr(slip.net)}</div><div className="text-[12.5px] text-muted">salary till today</div></div>
             </div>
             {slip.pending > 0 && <p className="mt-3 text-center text-[13px] text-muted">{slip.pending} day{slip.pending === 1 ? "" : "s"} still waiting for approval.</p>}
           </Group>
