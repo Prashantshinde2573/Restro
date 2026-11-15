@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* A fallback sized like Instrument Sans, so text doesn't jump when the web font arrives (layout shift). */
+@font-face {
+  font-family: "Instrument Sans Fallback";
+  src: local("Arial"), local("ArialMT"), local("Helvetica"), local("Liberation Sans");
+  size-adjust: 104.4%;
+  ascent-override: 93.4%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+
 /*
   Restropi design tokens.
   Porcelain canvas + white grouped surfaces (iOS inset-group feel),

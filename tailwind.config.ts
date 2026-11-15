@@ -31,7 +31,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Instrument Sans Variable"', "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ['"Instrument Sans Variable"', '"Instrument Sans Fallback"', "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         group: "20px",
