@@ -13,6 +13,10 @@ export interface StaffPay {
   otRate?: number;
   /** weekday off, paid for monthly staff: 0 = Sunday … 6 = Saturday; empty = none */
   weeklyOff?: number;
+  /** YYYY-MM-DD: first day at work. Holidays before it are not paid. */
+  joinedOn?: string;
+  /** YYYY-MM-DD: last day at work (left the job). Holidays after it are not paid. */
+  leftOn?: string;
   updatedAt?: string;
 }
 
@@ -108,6 +112,11 @@ export interface Payslip {
   pending: number;
   /** the month isn't over yet: the numbers are "till today" */
   inProgress: boolean;
+  /** joined / left during this month (YYYY-MM-DD), for the explanation */
+  joinedInMonth?: string;
+  leftInMonth?: string;
+  /** worked here at all this month (false: joined later or left before it) */
+  employed: boolean;
 }
 
 /**
@@ -127,12 +136,22 @@ export function payslip(month: string, pay: StaffPay | undefined, days: Attendan
   const otHours = ok.reduce((s, d) => s + Math.max(0, Number(d.otHours) || 0), 0);
   const D = daysInMonth(month);
 
+  // the days of this month the person worked here: from joining to leaving
+  const monthStart = `${month}-01`, monthEnd = `${month}-${String(D).padStart(2, "0")}`;
+  const joined = pay?.joinedOn && /^\d{4}-\d{2}-\d{2}$/.test(pay.joinedOn) ? pay.joinedOn : undefined;
+  const left = pay?.leftOn && /^\d{4}-\d{2}-\d{2}$/.test(pay.leftOn) ? pay.leftOn : undefined;
+  const employed = !(joined && joined > monthEnd) && !(left && left < monthStart);
+  const firstDay = joined && joined > monthStart ? Number(joined.slice(8, 10)) : 1;
+  const lastEmployed = left && left < monthEnd ? Number(left.slice(8, 10)) : D;
+
   let paidOffs = 0;
-  if (pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && pay.weeklyOff >= 0) {
+  if (employed && pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && pay.weeklyOff >= 0) {
     const worked = new Set(ok.map((d) => d.date));
-    // only offs that have already come (a month in progress pays for days so far)
-    const last = month === monthOf(today) ? Number(today.slice(8, 10)) : month < monthOf(today) ? D : 0;
-    for (let i = 1; i <= last; i++) {
+    // only offs that have already come (a month in progress pays for days so far),
+    // and only while the person worked here
+    const soFar = month === monthOf(today) ? Number(today.slice(8, 10)) : month < monthOf(today) ? D : 0;
+    const last = Math.min(soFar, lastEmployed);
+    for (let i = firstDay; i <= last; i++) {
       const date = `${month}-${String(i).padStart(2, "0")}`;
       if (weekday(date) === pay.weeklyOff && !worked.has(date)) paidOffs++;
     }
@@ -150,12 +169,17 @@ export function payslip(month: string, pay: StaffPay | undefined, days: Attendan
     base, ot, bonus, fine, advance, net, paid, due: net - paid,
     pending: mine.filter((d) => d.status === "pending").length,
     inProgress: month === monthOf(today),
+    employed,
+    ...(joined && joined >= monthStart && joined <= monthEnd ? { joinedInMonth: joined } : {}),
+    ...(left && left >= monthStart && left <= monthEnd ? { leftInMonth: left } : {}),
   };
 }
 
 const rupees = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 /** ₹333.33 when the per-day pay isn't a whole number. */
 const rupees2 = (n: number) => `₹${(Math.round(n * 100) / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+/** "2026-11-14" → "14 Nov" */
+export const shortDate = (date: string) => new Date(date + "T00:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
 /** 1.5 → "1½" */
 export const daysText = (n: number) => {
   const whole = Math.floor(n + 1e-9);
@@ -169,6 +193,9 @@ const PLURAL_DAY = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays",
 export function explainSalary(p: Payslip, pay: StaffPay | undefined): { label: string; value: string; strong?: boolean }[] {
   if (!pay) return [];
   const steps: { label: string; value: string; strong?: boolean }[] = [];
+  const holidays = pay.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && pay.weeklyOff >= 0;
+  if (p.joinedInMonth) steps.push({ label: `Joined on ${shortDate(p.joinedInMonth)}${holidays ? ": holidays before that are not paid" : ""}`, value: "" });
+  if (p.leftInMonth) steps.push({ label: `Last working day ${shortDate(p.leftInMonth)}${holidays ? ": holidays after that are not paid" : ""}`, value: "" });
   if (pay.type === "monthly") {
     const perDay = pay.amount / p.daysInMonth;
     steps.push({ label: `Per day: ${rupees(pay.amount)} ÷ ${p.daysInMonth} days`, value: rupees2(perDay) });
@@ -197,7 +224,7 @@ export function payslipText(p: Payslip, who: { name: string; title?: string }, r
     `${restaurant}`,
     `${who.name}${who.title ? ` (${who.title})` : ""}`,
     "",
-    ...explainSalary(p, pay).map((x) => `${x.label}: ${x.value}`),
+    ...explainSalary(p, pay).map((x) => (x.value ? `${x.label}: ${x.value}` : x.label)),
     "",
     `*Total salary: ${r(p.net)}*`,
     ...(p.paid ? [`Paid: ${r(p.paid)}`] : []),

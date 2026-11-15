@@ -39,6 +39,7 @@ import {
 } from "@/lib/payroll";
 
 type Tab = "requests" | "salary";
+const fullDate = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export default function PayrollPage() {
   const me = useMe();
@@ -56,7 +57,7 @@ export default function PayrollPage() {
 
   const pending = att.filter((a) => a.status === "pending" && people.some((m) => m.id === a.memberId)).sort((a, b) => a.date.localeCompare(b.date));
   const rows = people
-    .filter((m) => m.active || att.some((a) => a.memberId === m.id && monthOf(a.date) === month) || entries.some((e) => e.memberId === m.id && e.month === month))
+    .filter((m) => (m.active && payslip(month, pays.find((p) => p.id === m.id), [], [], today).employed) || att.some((a) => a.memberId === m.id && monthOf(a.date) === month) || entries.some((e) => e.memberId === m.id && e.month === month))
     .map((m) => ({ m, pay: pays.find((p) => p.id === m.id), slip: payslip(month, pays.find((p) => p.id === m.id), att.filter((a) => a.memberId === m.id), entries.filter((e) => e.memberId === m.id), today) }));
   const total = rows.reduce((s, r) => ({ net: s.net + r.slip.net, paid: s.paid + r.slip.paid, due: s.due + Math.max(0, r.slip.due) }), { net: 0, paid: 0, due: 0 });
   const person = people.find((m) => m.id === open) ?? null;
@@ -96,7 +97,7 @@ export default function PayrollPage() {
                 <button key={m.id} onClick={() => setOpen(m.id)} className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 hover:bg-sunken/40 lg:px-5">
                   <Avatar name={m.name} hue={m.hue} photo={m.photo} size={40} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[15px] font-medium">{m.name}{!m.active && <Pill>Off</Pill>}</div>
+                    <div className="flex items-center gap-2 text-[15px] font-medium">{m.name}{pay?.leftOn && pay.leftOn <= today ? <Pill>Left</Pill> : !m.active && <Pill>Off</Pill>}</div>
                     <div className="truncate text-[13px] text-muted">
                       {pay ? `${daysText(slip.workedDays)} day${slip.workedDays === 1 ? "" : "s"} worked${slip.paidOffs ? ` + ${slip.paidOffs} holiday${slip.paidOffs === 1 ? "" : "s"}` : ""}${slip.otHours ? ` · OT ${+slip.otHours.toFixed(1)} h` : ""}${slip.pending ? ` · ${slip.pending} waiting` : ""}` : "Tap to set salary"}
                     </div>
@@ -196,13 +197,16 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
   const [amount, setAmount] = useState(pay ? String(pay.amount) : "");
   const [otRate, setOtRate] = useState(pay?.otRate ? String(pay.otRate) : "");
   const [off, setOff] = useState(pay?.weeklyOff !== undefined && pay.weeklyOff !== null ? String(pay.weeklyOff) : "");
+  const [joinedOn, setJoinedOn] = useState(pay?.joinedOn ?? "");
+  const [leftOn, setLeftOn] = useState(pay?.leftOn ?? "");
   const [editPay, setEditPay] = useState(!pay);
   const savePay = () => {
     const a = Number(amount);
     if (!Number.isFinite(a) || a <= 0) return toast(type === "monthly" ? "Enter the monthly salary" : "Enter the pay per day");
     const r = Number(otRate || 0);
     if (!Number.isFinite(r) || r < 0) return toast("Overtime rate looks wrong");
-    payActions.setPay({ id: m.id, type, amount: a, ...(r ? { otRate: r } : {}), ...(off !== "" && type === "monthly" ? { weeklyOff: Number(off) } : {}) }, names);
+    if (joinedOn && leftOn && leftOn < joinedOn) return toast("Last working day is before the joining date");
+    payActions.setPay({ id: m.id, type, amount: a, ...(r ? { otRate: r } : {}), ...(off !== "" && type === "monthly" ? { weeklyOff: Number(off) } : {}), ...(joinedOn ? { joinedOn } : {}), ...(leftOn ? { leftOn } : {}) }, names);
     setEditPay(false);
     toast("Salary saved");
   };
@@ -257,12 +261,16 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
             <>
               <div className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-muted">How the salary is worked out</div>
               <ol className="space-y-2 text-[14.5px]">
-                {explainSalary(slip, pay).map((x, i) => (
-                  <li key={i} className="flex items-baseline justify-between gap-3">
-                    <span className="text-muted">{x.label}</span>
-                    <span className="shrink-0 font-medium tnum">{x.value}</span>
-                  </li>
-                ))}
+                {explainSalary(slip, pay).map((x, i) =>
+                  x.value ? (
+                    <li key={i} className="flex items-baseline justify-between gap-3">
+                      <span className="text-muted">{x.label}</span>
+                      <span className="shrink-0 font-medium tnum">{x.value}</span>
+                    </li>
+                  ) : (
+                    <li key={i} className="rounded-ctl bg-sunken/70 px-3 py-1.5 text-[13px] text-muted">{x.label}</li>
+                  ),
+                )}
               </ol>
               <div className="mt-3 flex justify-between border-t border-line pt-2.5 text-[17px] font-semibold"><span>Total salary</span><span className="tnum">{r(slip.net)}</span></div>
               {slip.paid > 0 && <div className="mt-1 flex justify-between text-[14.5px]"><span className="text-muted">Paid</span><span className="tnum">{r(slip.paid)}</span></div>}
@@ -299,6 +307,10 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
                 {" · "}
                 {pay.type === "monthly" ? (pay.weeklyOff !== undefined && pay.weeklyOff !== null ? `Holiday every ${WEEKDAYS[pay.weeklyOff]} (paid)` : "No weekly holiday") : "Paid only for days worked"}
               </div>
+              <div className="mt-0.5 text-[13px] text-muted">
+                {pay.joinedOn ? `Joined ${fullDate(pay.joinedOn)}` : "Joining date not set"}
+                {pay.leftOn ? ` · Left ${fullDate(pay.leftOn)}` : ""}
+              </div>
             </div>
           ) : (
             <div className="space-y-3 rounded-group bg-surface p-4">
@@ -319,6 +331,14 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
                   </select>
                 </Field>
               )}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Joining date" hint="Holidays before it aren't paid">
+                  <input type="date" className={inputCls} value={joinedOn} max={leftOn || undefined} onChange={(e) => setJoinedOn(e.target.value)} />
+                </Field>
+                <Field label="Last working day" hint="Only if they left the job">
+                  <input type="date" className={inputCls} value={leftOn} min={joinedOn || undefined} onChange={(e) => setLeftOn(e.target.value)} />
+                </Field>
+              </div>
               <div className="flex gap-2">
                 <Button onClick={savePay}>Save salary</Button>
                 {pay && <Button variant="tinted" onClick={() => setEditPay(false)}>Cancel</Button>}
