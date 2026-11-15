@@ -21,7 +21,29 @@ export { cloudConfigured };
 import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_ } from "./config";
 
 let _sb: SupabaseClient | null = null;
+
+/**
+ * A sign-in saved on this device for a different Supabase project (e.g. after the
+ * move to the Mumbai project) is useless there: every request fails with 401 and the
+ * app waits forever. Drop it, so the person simply sees the sign-in screen again.
+ */
+function dropForeignSession() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("restropi.auth");
+    if (!raw) return;
+    const token = (JSON.parse(raw) as { access_token?: string })?.access_token;
+    const part = token?.split(".")[1];
+    if (!part) return;
+    const iss = (JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/"))) as { iss?: string })?.iss;
+    if (typeof iss === "string" && !iss.startsWith(URL_)) localStorage.removeItem("restropi.auth");
+  } catch {
+    /* unreadable: leave it to the client */
+  }
+}
+
 export function sb(): SupabaseClient {
+  if (!_sb) dropForeignSession();
   if (!_sb) _sb = createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "restropi.auth" } });
   return _sb;
 }
