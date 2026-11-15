@@ -67,10 +67,12 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           light && "text-white",
         )}
       >
+        {/* same width and side space as the page content below it (hero: 1400px, sections: 1240px) */}
+        <div className={clsx("mx-auto mt-3 transition-[max-width,padding] duration-500", light ? "max-w-[1400px] px-3 sm:px-8 lg:px-14" : "max-w-[1240px] px-3 sm:px-5 lg:px-8")}>
         <div
           className={clsx(
-            "mx-3 mt-3 flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:mx-6 sm:px-4",
-            light ? "max-w-[1400px] border border-transparent sm:mx-8 sm:px-6 lg:mx-auto lg:px-10" : "max-w-6xl lg:mx-auto",
+            "flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:px-4",
+            light ? "border border-transparent sm:px-2 lg:px-0" : "",
             !light && (scrolled || open ? "nav-solid" : "glass"),
           )}
         >
@@ -99,6 +101,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
               <IconMenu open={open} />
             </button>
           </div>
+        </div>
         </div>
       </header>
 
