@@ -50,7 +50,7 @@ export const en: Manual = {
           "**Owner** — signs in with email and password at the login page. The first time, you set your own password. The owner can see and change everything.",
           "**Sub admin (manager)** — runs one or more outlets. Signs in with a 4-digit PIN.",
           "**Staff** (captain, cashier, chef…) — signs in with a 4-digit PIN and sees only what the owner allows.",
-          "**Guests** — no login. They scan the table or counter QR, see your menu, and order and pay from their phone (Growth plan and above).",
+          "**Guests** — no login. They scan the table or counter QR, see your menu, and order and pay from their phone (every plan).",
         ] },
         { tip: "Restropi works in any modern browser (Chrome is best). On a phone, open the menu of your browser and tap “Add to Home screen” to open Restropi like an app." },
         { warn: "Restropi needs internet to save orders and bills. Keep Wi-Fi or mobile data on at the counter." },
@@ -93,7 +93,7 @@ export const en: Manual = {
             ["WhatsApp e-bill, PDF bill, printing", "✓", "✓", "✓", "✓"],
             ["Reports, Excel, PDF report", "✓", "✓", "✓", "✓"],
             ["Staff access, payment confirmation, activity log", "✓", "✓", "✓", "✓"],
-            ["QR ordering and payment from the table", "—", "✓", "✓", "✓"],
+            ["QR ordering and payment from the table", "✓", "✓", "✓", "✓"],
             ["Split the bill equally by guest", "—", "✓", "✓", "✓"],
             ["Stock and dish costing", "—", "✓", "✓", "✓"],
             ["Staff attendance and salary slips", "—", "✓", "✓", "✓"],
@@ -261,7 +261,7 @@ export const en: Manual = {
     },
     {
       id: "qr",
-      title: "10. QR ordering for guests (Growth and above)",
+      title: "10. QR ordering for guests (every plan)",
       summary: "What guests see and do, and how you control it",
       blocks: [
         { h: "What the guest does" },
@@ -284,7 +284,6 @@ export const en: Manual = {
           "**Opening hours** — Settings → Details on bills → **Opens at** / **Closes at**. Table QR orders work only between these times (closing after midnight works too). The counter QR works any time, and staff can always take orders.",
           "Dishes marked sold out can't be ordered.",
         ] },
-        { tip: "On the Starter plan the QR shows your menu only; guests order with staff." },
       ],
     },
     {
@@ -487,7 +486,7 @@ export const en: Manual = {
     { id: "gst", area: "billing", pages: ["/app/settings", "/app/reports"], q: "GST is wrong, or I'm not registered for GST.", a: "Settings → Details on bills → **GST on bills**: 0% (not registered), 5%, 12% or 18%. New bills use it at once. Bills already paid don't change." },
     { id: "print", area: "billing", q: "How do I print bills? Which printer?", a: "Tap **Print receipt** after payment, or Print bill on an order. Your browser's print window opens; choose your printer. Bills are sized for 80 mm receipt printers and also print on A4. Any printer installed on that phone, tablet or computer works (USB, Wi-Fi or Bluetooth printers that the device can print to)." },
     { id: "qr-inactive", area: "qr", q: "Guests scan the QR and see “This QR code isn't active”.", a: "Usually: the plan has ended or the restaurant is paused (renew in Settings → Your plan), the table was removed, or the QR is from a different outlet. Print the QR again from Tables → QR codes." },
-    { id: "qr-no-add", area: "qr", pages: ["/app/settings"], q: "Guests can see the menu but there's no ADD button.", a: "One of these: QR ordering is paused (Settings → Ordering → Pause QR orders), it's outside your opening hours (table QR only — set in Settings → Details on bills), the dish is sold out, or your plan is Starter (QR shows the menu only — ordering from the table is in Growth)." },
+    { id: "qr-no-add", area: "qr", pages: ["/app/settings"], q: "Guests can see the menu but there's no ADD button.", a: "One of these: QR ordering is paused (Settings → Ordering → Pause QR orders), it's outside your opening hours (table QR only — set in Settings → Details on bills), or the dish is sold out." },
     { id: "qr-group", area: "qr", pages: ["/app/tables"], q: "A QR order is stuck at “Waiting for staff to accept”.", a: "The first order from a new group waits so staff can check the guests are really seated. Tables → the amber card → **Accept** (or Orders → **Accept & send to kitchen**)." },
     { id: "two-groups", area: "tables", pages: ["/app/tables"], q: "Two different groups are at one table.", a: "Tap the table → “Share table · seat another party”. Each party (A, B) gets its own order and bill. From the QR, the second phone taps “No, we're a separate group”." },
     { id: "notify", area: "orders", q: "I don't hear or see new orders.", a: "Keep Restropi open with the volume up, and tap **Turn on** when it asks about notifications (or allow notifications for the site in your browser settings). New orders also show in the 🔔 bell and on Home under Needs you now. On iPhone, add Restropi to the Home Screen first." },
