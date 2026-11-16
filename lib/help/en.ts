@@ -369,7 +369,7 @@ export const en: Manual = {
           "**Someone left** — turn off “Can sign in” (keeps their history) or Remove from team.",
           "**5 wrong PIN tries** lock that person for 5 minutes.",
           "**Team** shows orders taken by each person today or in 7 days.",
-          "**Attendance & salary** (Growth and above): staff open **My attendance**, pick Full day or Half day (and overtime hours) and send it. The owner, or someone with “Staff attendance and salary”, approves it under **Attendance & salary → Requests**. Under **Salary**, set each person's monthly or per-day pay, overtime rate and weekly off, add advance, bonus, fine or salary paid, and send the salary slip as a PDF or on WhatsApp.",
+          "**Attendance & salary** (Growth and above): staff open **My attendance**, pick Full day or Half day (and overtime hours) and send it. The owner, or someone with “Staff attendance and salary”, approves it in **Attendance & salary → Attendance** (amber ? boxes). There the **Month** view shows everyone's whole month (P present, ½ half day, A absent, H holiday): tap any box to mark that day. **Day** marks everyone for one day with Full / Half / Absent, and **Person** shows one person's calendar. Under **Salary**, set each person's monthly or per-day pay, overtime rate and weekly off, add advance, bonus, fine or salary paid, and send the salary slip as a PDF or on WhatsApp.",
         ] },
         { h: "More than one outlet (Pro: up to 3; Chain: 4 or more)" },
         { p: "Members & access → **Add outlet**: name, address, Restaurant or Café, UPI ID. Switch outlet from the box at the top of the menu. Each outlet has its own tables, settings and UPI; reports are per outlet." },
