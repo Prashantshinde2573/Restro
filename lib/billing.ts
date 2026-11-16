@@ -5,7 +5,7 @@
 // The owner, or a member the owner ticked "Confirm payments" for, closes a bill
 // straight away. Anyone else's "paid" waits for their OK: the table stays busy and
 // the bill shows under "Payments to confirm" until someone confirms it.
-import { billOf, getOrders, orderActions, stampsForGuestPayment } from "./live";
+import { billOf, couponActions, getCoupons, getOrders, normCode, orderActions, stampsForGuestPayment } from "./live";
 import { getTable, tableActions } from "./tables";
 import type { Order, Payment } from "./types";
 import { gstRate } from "./format";
@@ -44,6 +44,11 @@ export function confirmPayment(claimId: string) {
   const claim = getOrders().find((o) => o.payClaim?.id === claimId)?.payClaim;
   const list = orderActions.confirm(claimId);
   if (claim && list.length) stampsForGuestPayment(list, claim); // QR payments get their stamp (or use the reward) too
+  // a coupon the guest used from their phone counts once the money is confirmed (staff checkout counts its own)
+  if (claim?.coupon && claim.source === "guest" && list.length) {
+    const c = getCoupons().find((x) => x.code === normCode(claim.coupon!));
+    if (c) couponActions.used(c.id);
+  }
   freeIfSettled(list[0]);
   return list;
 }

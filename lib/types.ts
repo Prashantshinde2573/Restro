@@ -225,6 +225,7 @@ export interface Order {
   paymentLog?: PaymentLogEntry[]; // every later change, for the owner
   payPreference?: PayMethod; // what the guest chose when asking for the bill
   wantsReward?: boolean; // the guest asked to use their full stamp card on this bill
+  wantsCoupon?: string; // coupon code the guest applied from their phone (cash/card: staff apply it at checkout)
   guestPhone?: string; // OTP-verified number of the guest who ordered (QR)
   guestUid?: string; // Supabase user id of the guest's phone (cloud mode)
   prepaid?: Payment[]; // part the guest already paid from their phone (e.g. UPI half of "Cash + UPI")

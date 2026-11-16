@@ -262,6 +262,9 @@ export const orderActions = {
     );
   },
   /** Guest: "use my stamp card reward on this bill" (staff see it at checkout, already switched on). */
+  askCoupon(ids: string[], code?: string) {
+    orderStore.set(orderStore.get().map((o) => (ids.includes(o.id) ? { ...o, wantsCoupon: code || undefined } : o)));
+  },
   askReward(ids: string[], on: boolean) {
     orderStore.set(orderStore.get().map((o) => (ids.includes(o.id) ? { ...o, wantsReward: on || undefined } : o)));
   },
@@ -675,6 +678,7 @@ export const stockActions = {
 /* ---------------- coupons (guest discounts) ---------------- */
 const couponStore = createStore<Coupon[]>([], "coupons", { kind: "collection", coll: "coupons" });
 export const useCoupons = () => couponStore.use();
+export const getCoupons = () => couponStore.get();
 export const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
 export const couponActions = {
   save(c: Omit<Coupon, "id" | "uses" | "createdAt"> & { id?: string }) {

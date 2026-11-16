@@ -28,13 +28,13 @@ import {
   sheetFilterCount,
   type MenuFilters,
 } from "@/components/guest-menu";
-import { PayPanel, ThankYou } from "@/components/guest-pay";
+import { CouponBox, PayPanel, ThankYou, guestCouponOff } from "@/components/guest-pay";
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { cloudSignOut, ensureGuest, guestStamps, useCloud } from "@/lib/cloud";
+import { cloudSignOut, ensureGuest, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
 const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
@@ -195,6 +195,9 @@ export default function GuestOrder() {
   const [payOpen, setPayOpen] = useState(false); // pay-first: pay for the cart
   const [tipPct, setTipPct] = useState(0);
   const [useReward, setUseReward] = useState(true);
+  // coupon code from the restaurant's WhatsApp offer: shown only when the restaurant has one running
+  const [couponsOn, setCouponsOn] = useState(false);
+  const [coupon, setCoupon] = useState<GuestCoupon | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [thanks, setThanks] = useState<Thanks | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -301,6 +304,14 @@ export default function GuestOrder() {
       live = false;
     };
   }, [!!stampProg, myOrders.length, openOrders.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (cloud.status !== "ready" || !cloud.rid) return;
+    let live = true;
+    guestCouponsOn().then((on) => live && setCouponsOn(on)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [cloud.status, cloud.rid]);
   const stampCard = stampProg ? (
     <div>
     <StampCard
@@ -345,8 +356,9 @@ export default function GuestOrder() {
   const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !o.payClaim && !(payNow && o.payPreference)), [openOrders, payNow]);
   // where this phone's bill stands: nothing to pay / payment sent (restaurant confirms) / paid
   const sentClaim = openOrders.find((o) => o.payClaim)?.payClaim;
-  // pay at the end: the bill opens only once the kitchen has accepted every order on it
+  // pay at the end: Pay shows only once every order on the bill is served at the table
   const awaitingKitchen = !payNow && unbilled.some((o) => o.status === "new");
+  const awaitingServe = !payNow && unbilled.some((o) => o.status !== "served");
   const paidOrders = myOrders.filter((o) => o.status === "paid");
   const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
   const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
@@ -521,8 +533,10 @@ export default function GuestOrder() {
 
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const itemTotal = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-  const gst = Math.round(itemTotal * gstRate() * 100) / 100;
-  const payable = Math.round(itemTotal + gst);
+  // pay first (café / counter): the coupon comes off before GST, like the bill at the counter
+  const cartOff = payNow ? guestCouponOff(coupon, itemTotal) : 0;
+  const gst = Math.round(Math.max(0, itemTotal - cartOff) * gstRate() * 100) / 100;
+  const payable = Math.round(Math.max(0, itemTotal - cartOff) + gst);
 
   const pairing = useMemo(() => {
     if (!cart.length) return null;
@@ -619,7 +633,8 @@ export default function GuestOrder() {
   // ---- pay-first outcomes (café) ----
   const payFirstUpi = () => {
     if (!guest) return;
-    const o = sendOrder(guest, { prepaid: [{ method: "upi", amount: payable }], payPreference: "upi", status: "accepted" });
+    const o = sendOrder(guest, { prepaid: [{ method: "upi", amount: payable }], payPreference: "upi", status: "accepted", ...(cartOff > 0 ? { wantsCoupon: coupon!.code } : {}) });
+    if (cartOff > 0) setCoupon(null);
     setPayOpen(false);
     setThanks({ payments: [{ method: "upi", amount: payable }], orderNo: o.number, orderId: o.id, token: true });
   };
@@ -629,7 +644,9 @@ export default function GuestOrder() {
       status: "new",
       payPreference: kind === "card" ? "card" : "cash",
       ...(kind === "mixed" && upiPart ? { prepaid: [{ method: "upi" as const, amount: upiPart }] } : {}),
+      ...(cartOff > 0 ? { wantsCoupon: coupon!.code } : {}),
     });
+    if (cartOff > 0) setCoupon(null);
     setPayOpen(false);
     setWaiting({ ids: [o.id], kind, amount: payable, upiPart, payFirst: true });
     setConfirmed(o.id);
@@ -640,7 +657,8 @@ export default function GuestOrder() {
   // a full stamp card: the guest can use the reward on this bill (on by default; the restaurant confirms it with the payment)
   const rewardReady = !!stampProg && myStamps != null && myStamps >= stampProg.needed;
   const rewardAmt = rewardReady && useReward ? rewardOff(stampProg!, billItems, menuAll) : 0;
-  const billTaxable = Math.max(0, billItems - rewardAmt);
+  const couponAmt = payNow ? 0 : Math.min(Math.max(0, billItems - rewardAmt), guestCouponOff(coupon, billItems));
+  const billTaxable = Math.max(0, billItems - rewardAmt - couponAmt);
   const billGst = Math.round(billTaxable * gstRate() * 100) / 100;
   const tip = Math.round((billItems * tipPct) / 100);
   const billTotal = Math.round(billTaxable + billGst + tip);
@@ -652,7 +670,9 @@ export default function GuestOrder() {
     // The restaurant checks the money came in and confirms; the table closes then.
     orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, {
       source: "guest",
-      ...(rewardAmt > 0 ? { discount: rewardAmt, reward: { name: stampProg!.reward, amount: rewardAmt } } : {}),
+      ...(rewardAmt + couponAmt > 0 ? { discount: rewardAmt + couponAmt } : {}),
+      ...(rewardAmt > 0 ? { reward: { name: stampProg!.reward, amount: rewardAmt } } : {}),
+      ...(couponAmt > 0 ? { coupon: coupon!.code } : {}),
     });
     if (t && party) tableActions.update(t.id, party.id, { status: "billing", paymentPending: true });
     // stay on the bill: it says "being confirmed" until the owner confirms, then thank you
@@ -660,6 +680,7 @@ export default function GuestOrder() {
   };
   const billLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
     if (rewardReady) orderActions.askReward(billIds, rewardAmt > 0); // staff see "use the reward" already on at checkout
+    orderActions.askCoupon(billIds, couponAmt > 0 ? coupon!.code : undefined); // and the guest's coupon already on the bill
     if (kind === "mixed" && upiPart) orderActions.prepay(billIds, { method: "upi", amount: upiPart }, who);
     else orderActions.setPreference(billIds, kind === "card" ? "card" : "cash");
     if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
@@ -1022,13 +1043,15 @@ export default function GuestOrder() {
         ) : view === "orders" && !payNow && billState !== "none" ? (
           <div className="grid grid-cols-1 gap-2">
             {/* where the bill stands: pay it / already paid, owner confirming / paid */}
-            {!payNow && billState === "open" && awaitingKitchen && !waiting && (
+            {!payNow && billState === "open" && awaitingServe && !waiting && (
               <div className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-3 text-center shadow-float ring-1 ring-line">
-                <span className="text-[14.5px] font-semibold">{tx(lang, "Waiting for the kitchen to accept", "किचनकडून ऑर्डर स्वीकारली जाण्याची वाट")}</span>
-                <span className="text-[11.5px] font-medium leading-tight text-muted">{tx(lang, "You can pay once your order is accepted", "ऑर्डर स्वीकारली की पैसे भरता येतील")}</span>
+                <span className="text-[14.5px] font-semibold">
+                  {awaitingKitchen ? tx(lang, "Waiting for the kitchen to accept", "किचनकडून ऑर्डर स्वीकारली जाण्याची वाट") : tx(lang, "Your food is on the way", "तुमचं जेवण तयार होत आहे")}
+                </span>
+                <span className="text-[11.5px] font-medium leading-tight text-muted">{tx(lang, "You can pay once your food is served", "जेवण टेबलवर आलं की पैसे भरता येतील")}</span>
               </div>
             )}
-            {!payNow && billState === "open" && (!awaitingKitchen || waiting) && (
+            {!payNow && billState === "open" && (!awaitingServe || waiting) && (
               <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setUseReward(true); setBillOpen(true); }}>
                 {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
               </Button>
@@ -1223,8 +1246,10 @@ export default function GuestOrder() {
 
           <input value={note} onChange={(e) => setNote(e.target.value)} className="h-12 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40" placeholder={tx(lang, "Note for the kitchen (no onion, less sugar…)", "किचनसाठी सूचना (कमी तिखट, कांदा नको…)")} />
 
+          {payNow && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={itemTotal} applied={coupon} onChange={setCoupon} />}
           <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(itemTotal, { decimals: true })}</dd></div>
+            {cartOff > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Coupon", "कूपन")} {coupon!.code}</dt><dd className="tnum">−{inr(cartOff, { decimals: true })}</dd></div>}
             <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(gst, { decimals: true })}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
             <div className="flex justify-between border-t border-line pt-2 text-[16px] font-semibold"><dt>{tx(lang, "To pay", "एकूण")}</dt><dd className="tnum">{inr(payable)}</dd></div>
@@ -1393,6 +1418,7 @@ export default function GuestOrder() {
                 <span className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2", useReward ? "border-jade bg-jade text-white" : "border-line")}>{useReward && <Check size={14} strokeWidth={3} />}</span>
               </button>
             )}
+            {(couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={setCoupon} />}
             <div>
               <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Tip for the staff (optional)", "स्टाफसाठी टिप (ऐच्छिक)")}</div>
               <div className="grid grid-cols-4 gap-2">
@@ -1406,6 +1432,7 @@ export default function GuestOrder() {
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(billItems, { decimals: true })}</dd></div>
               {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Stamp card reward", "स्टॅम्प कार्ड बक्षीस")} · {stampProg!.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
+              {couponAmt > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Coupon", "कूपन")} {coupon!.code}</dt><dd className="tnum">−{inr(couponAmt, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(billGst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
               {tip > 0 && <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Tip", "टिप")}</dt><dd className="tnum">{inr(tip)}</dd></div>}

@@ -108,13 +108,16 @@ export default function AccessPage() {
   };
   const togglePerm = (p: Perm) => draft && setDraft({ ...draft, perms: draft.perms.includes(p) ? draft.perms.filter((x) => x !== p) : [...draft.perms, p] });
   const applyPreset = (name: string, perms: Perm[]) => draft && setDraft({ ...draft, title: name, perms: perms.filter((p) => !permState(p).disabled) });
-  const phoneOk = (draft?.phone.replace(/\D/g, "").length ?? 0) === 10;
+  const phoneDigits = draft?.phone.replace(/\D/g, "") ?? "";
+  // staff sign in with mobile + PIN, so two people here can't share a number
+  const phoneTaken = !!draft && phoneDigits.length === 10 && members.some((m) => m.id !== draft.id && m.role !== "owner" && (m.phone ?? "").replace(/\D/g, "").slice(-10) === phoneDigits);
+  const phoneOk = phoneDigits.length === 10 && !phoneTaken;
   const pinOk = !cloud.rid || (draft?.isNew ? /^\d{4}$/.test(pin) : pin === "" || /^\d{4}$/.test(pin));
   const draftOk = !!draft && draft.name.trim().length > 1 && phoneOk && draft.outletIds.length > 0 && (draft.role === "subadmin" || draft.perms.length > 0) && pinOk;
 
   const staffLink = typeof window !== "undefined" && cloud.rid ? `${window.location.origin}/login?r=${cloud.rid}` : "";
   const inviteText = (name?: string) =>
-    [`Hi${name ? ` ${name.split(" ")[0]}` : ""},`, "", `Sign in to *${account.name || "our restaurant"}* on Restropi:`, staffLink, "", "Open the link, tap your name and enter your 4-digit PIN. Save the page to your home screen for next time."].join("\n");
+    [`Hi${name ? ` ${name.split(" ")[0]}` : ""},`, "", `Sign in to *${account.name || "our restaurant"}* on Restropi:`, staffLink, "", "Open the link, tap *Staff*, then enter your mobile number and 4-digit PIN. It works on any phone or tablet."].join("\n");
   const [inviteFor, setInviteFor] = useState<{ name: string; phone: string } | null>(null);
   const save = () => {
     if (!draft || !draftOk) return;
@@ -169,7 +172,7 @@ export default function AccessPage() {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-jade-soft text-jade"><Link2 size={19} /></span>
             <div className="min-w-0 flex-1">
               <div className="text-[15px] font-semibold">Staff sign-in link</div>
-              <p className="text-[13px] text-muted">Send it to your staff once. They open it on their phone or tablet, tap their name and enter their 4-digit PIN.</p>
+              <p className="text-[13px] text-muted">Send it to your staff once. On any phone or tablet they sign in with their mobile number and 4-digit PIN.</p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button size="sm" variant="tinted" onClick={() => { navigator.clipboard?.writeText(staffLink).then(() => toast("Link copied"), () => toast(staffLink)); }}><Copy size={15} /> Copy</Button>
@@ -265,7 +268,7 @@ export default function AccessPage() {
         wide
         footer={
           <Button size="lg" className="w-full" disabled={!draftOk} onClick={save}>
-            {!draft ? "" : !draft.name.trim() || !phoneOk ? "Add name and 10-digit mobile" : !pinOk ? "Set a 4-digit PIN" : !draft.outletIds.length ? "Pick at least one outlet" : draft.role === "staff" && !draft.perms.length ? "Tick at least one box" : draft.isNew ? "Add member" : "Save access"}
+            {!draft ? "" : phoneTaken ? "That mobile is already used by someone else" : !draft.name.trim() || !phoneOk ? "Add name and 10-digit mobile" : !pinOk ? "Set a 4-digit PIN" : !draft.outletIds.length ? "Pick at least one outlet" : draft.role === "staff" && !draft.perms.length ? "Tick at least one box" : draft.isNew ? "Add member" : "Save access"}
           </Button>
         }
       >
@@ -273,7 +276,7 @@ export default function AccessPage() {
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Name"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Full name" /></Field>
-              <Field label="Mobile (WhatsApp)"><input className={inputCls} inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/[^\d ]/g, "").slice(0, 11) })} placeholder="98xxx xxxxx" /></Field>
+              <Field label="Mobile (WhatsApp)" hint={phoneTaken ? "Someone else here already has this number" : "They sign in with this number and their PIN"}><input className={inputCls} inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/[^\d ]/g, "").slice(0, 11) })} placeholder="98xxx xxxxx" /></Field>
             </div>
 
             {cloud.rid && (

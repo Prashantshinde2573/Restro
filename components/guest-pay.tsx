@@ -5,13 +5,14 @@
 
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { Banknote, Check, CreditCard, Layers, QrCode, Star } from "lucide-react";
+import { Banknote, Check, CreditCard, Layers, QrCode, Star, Ticket, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./ui";
 import { UpiPayCard } from "./upi";
 import { useToast } from "./toast";
 import { inr } from "@/lib/format";
 import type { Payment } from "@/lib/types";
+import { guestCoupon, type GuestCoupon } from "@/lib/cloud";
 
 
 export type GuestPayChoice = "upi" | "cash" | "mixed" | "card";
@@ -268,5 +269,82 @@ export function ThankYou({
         <Button size="lg" className="mt-6 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
       )}
     </div>
+  );
+}
+
+/** Discount of a coupon on this many rupees of food (0 when the bill is too small). */
+export function guestCouponOff(c: GuestCoupon | null, subtotal: number) {
+  if (!c || (c.minBill && subtotal < c.minBill)) return 0;
+  const raw = c.kind === "percent" ? (subtotal * c.value) / 100 : c.value;
+  return Math.max(0, Math.min(subtotal, Math.round(c.kind === "percent" && c.maxOff ? Math.min(raw, c.maxOff) : raw)));
+}
+const couponText = (c: GuestCoupon, lang: Lang) =>
+  c.kind === "percent"
+    ? tx(lang, `${c.value}% off${c.maxOff ? ` (up to ${inr(c.maxOff)})` : ""}`, `${c.value}% सूट${c.maxOff ? ` (${inr(c.maxOff)} पर्यंत)` : ""}`)
+    : tx(lang, `${inr(c.value)} off`, `${inr(c.value)} सूट`);
+
+/** "Have a coupon code?" on the guest's bill: type the code from the restaurant's WhatsApp message. */
+export function CouponBox({ lang, subtotal, applied, onChange }: { lang: Lang; subtotal: number; applied: GuestCoupon | null; onChange: (c: GuestCoupon | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (applied) {
+    const off = guestCouponOff(applied, subtotal);
+    return (
+      <div className="flex items-center gap-3 rounded-group bg-jade-soft p-3.5 text-jade-deep">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white"><Ticket size={17} /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold">{applied.code} · {couponText(applied, lang)}</div>
+          <div className="text-[12.5px] text-jade-deep/80">
+            {off > 0
+              ? tx(lang, `You save ${inr(off)} on this bill`, `या बिलावर ${inr(off)} वाचले`)
+              : tx(lang, `Works on bills of ${inr(applied.minBill ?? 0)} or more`, `${inr(applied.minBill ?? 0)} किंवा जास्तच्या बिलावर`)}
+          </div>
+        </div>
+        <button type="button" aria-label={tx(lang, "Remove coupon", "कूपन काढा")} onClick={() => onChange(null)} className="p-1.5"><X size={16} /></button>
+      </div>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-3 rounded-group border-[1.5px] border-dashed border-line bg-surface p-3.5 text-left">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade"><Ticket size={17} /></span>
+        <span className="flex-1 text-[15px] font-semibold">{tx(lang, "Have a coupon code?", "कूपन कोड आहे?")}</span>
+        <span className="text-[13.5px] font-semibold text-jade">{tx(lang, "Apply", "वापरा")}</span>
+      </button>
+    );
+  }
+  const apply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const c = code.trim();
+    if (c.length < 3) return setErr(tx(lang, "Enter the code", "कोड टाका"));
+    setBusy(true);
+    setErr("");
+    const r = await guestCoupon(c).catch(() => ({ problem: "Couldn't check the code. Try again." }) as { coupon?: GuestCoupon; problem?: string });
+    setBusy(false);
+    if (!r.coupon) return setErr(r.problem ?? "No coupon with this code");
+    if (r.coupon.minBill && subtotal < r.coupon.minBill) return setErr(tx(lang, `Works on bills of ${inr(r.coupon.minBill)} or more`, `${inr(r.coupon.minBill)} किंवा जास्तच्या बिलावरच चालतो`));
+    onChange(r.coupon);
+    setOpen(false);
+    setCode("");
+  };
+  return (
+    <form onSubmit={apply} className="rounded-group bg-surface p-3.5">
+      <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Coupon code", "कूपन कोड")}</div>
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          value={code}
+          onChange={(e) => { setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)); setErr(""); }}
+          placeholder={tx(lang, "e.g. WELCOME10", "उदा. WELCOME10")}
+          aria-label={tx(lang, "Coupon code", "कूपन कोड")}
+          autoCapitalize="characters"
+          className="h-11 min-w-0 flex-1 rounded-ctl bg-canvas px-3.5 text-[15px] font-semibold uppercase tracking-wide outline-none ring-1 ring-line focus:ring-jade/40"
+        />
+        <Button type="submit" disabled={busy}>{busy ? "…" : tx(lang, "Apply", "वापरा")}</Button>
+      </div>
+      {err && <p className="mt-2 text-[13px] font-medium text-rose">{err}</p>}
+    </form>
   );
 }

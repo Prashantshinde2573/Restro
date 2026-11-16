@@ -35,6 +35,7 @@ export function Checkout({
   lines,
   billNo,
   guest,
+  couponCode,
 }: {
   open: boolean;
   onClose: () => void;
@@ -48,6 +49,8 @@ export function Checkout({
   billNo?: number;
   /** the guest on this bill, when known (QR orders): fills in the name and number */
   guest?: { name?: string; phone?: string };
+  /** coupon code the guest applied on their phone: put on the bill when it still works */
+  couponCode?: string;
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
@@ -67,7 +70,8 @@ export function Checkout({
   const [codeErr, setCodeErr] = useState("");
   const coupons = useCoupons();
   const canDiscount = useCan("discount");
-  const couponsOn = useFeature("coupons") === "ok" && canDiscount;
+  const couponFeature = useFeature("coupons") === "ok";
+  const couponsOn = couponFeature && canDiscount;
   // stamp card
   const [useRewardRaw, setUseReward] = useState<boolean | null>(null); // null = on whenever the card is full
   const [giveStamp, setGiveStamp] = useState<boolean | null>(null); // null = the program's default
@@ -91,9 +95,11 @@ export function Checkout({
       setGuestName(guest?.name ?? "");
       setUseReward(null);
       setGiveStamp(null);
-      setCoupon(null);
-      setCode("");
-      setCodeErr("");
+      const asked = couponCode && couponFeature ? coupons.find((x) => x.code === normCode(couponCode)) : undefined;
+      const ok = asked && !couponProblem(asked, subtotal);
+      setCoupon(ok ? asked! : null);
+      setCode(ok ? asked!.code : "");
+      setCodeErr(asked && !ok ? `Guest's coupon ${asked.code}: ${couponProblem(asked, subtotal)}` : "");
       const pre = paidSum(prepaid ?? []);
       if (pre > 0) {
         // Guest paid part by UPI from their phone: open on "UPI + Cash" with that part filled in.
