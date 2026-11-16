@@ -4,10 +4,11 @@
 // set how each person is paid, add advance / bonus / fine / salary paid, and send the
 // month's salary slip as a PDF or on WhatsApp.
 import clsx from "clsx";
-import { Check, ChevronLeft, ChevronRight, FileText, MessageCircle, Plus, Trash2, Users, Wallet, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FileText, MessageCircle, Plus, Trash2, Users, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Empty, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, inputCls } from "@/components/ui";
 import { StatusPill } from "@/components/attendance-bits";
+import { AttendanceBoard } from "@/components/attendance-board";
 import { useToast } from "@/components/toast";
 import { openPayslipPdf } from "@/components/payslip";
 import { isOwner, type Member } from "@/lib/access";
@@ -33,19 +34,17 @@ import {
   useAttendance,
   usePayEntries,
   useStaffPay,
-  type Attendance,
   type PayEntryType,
   type StaffPay,
 } from "@/lib/payroll";
 
-type Tab = "requests" | "salary";
+type Tab = "attendance" | "salary";
 const fullDate = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export default function PayrollPage() {
-  const me = useMe();
   const today = todayIN();
   const [month, setMonth] = useState(monthOf(today));
-  const [tab, setTab] = useState<Tab>("requests");
+  const [tab, setTab] = useState<Tab>("attendance");
   const [open, setOpen] = useState<string | null>(null);
   const members = useMembers();
   const people = members.filter((m) => m.role !== "owner");
@@ -61,13 +60,15 @@ export default function PayrollPage() {
     .map((m) => ({ m, pay: pays.find((p) => p.id === m.id), slip: payslip(month, pays.find((p) => p.id === m.id), att.filter((a) => a.memberId === m.id), entries.filter((e) => e.memberId === m.id), today) }));
   const total = rows.reduce((s, r) => ({ net: s.net + r.slip.net, paid: s.paid + r.slip.paid, due: s.due + Math.max(0, r.slip.due) }), { net: 0, paid: 0, due: 0 });
   const person = people.find((m) => m.id === open) ?? null;
+  // the register: everyone still working, plus anyone with days this month
+  const boardPeople = people.filter((m) => m.active || att.some((a) => a.memberId === m.id && monthOf(a.date) === month));
 
   return (
     <>
       <PageHeader title="Attendance & salary" subtitle={`${people.filter((m) => m.active).length} people · ${monthLabel(month)}`}>
         <div className="flex flex-wrap items-center gap-3">
-          <Segmented value={tab} onChange={setTab} options={[{ value: "requests", label: `Requests${pending.length ? ` (${pending.length})` : ""}` }, { value: "salary", label: "Salary" }]} />
-          {tab === "salary" && <MonthSwitch month={month} onChange={setMonth} max={monthOf(today)} />}
+          <Segmented value={tab} onChange={setTab} options={[{ value: "attendance", label: `Attendance${pending.length ? ` (${pending.length})` : ""}` }, { value: "salary", label: "Salary" }]} />
+          <MonthSwitch month={month} onChange={setMonth} max={monthOf(today)} />
         </div>
       </PageHeader>
       <Page className="space-y-6">
@@ -75,16 +76,8 @@ export default function PayrollPage() {
           <Group>
             <Empty icon={<Users size={22} />} title="No staff yet" body="Add your team in Members & access. Then they can ask for their days here." />
           </Group>
-        ) : tab === "requests" ? (
-          <Group title="Waiting for approval" flush>
-            {!ready ? (
-              <p className="px-5 py-6 text-[14px] text-muted">Loading…</p>
-            ) : !pending.length ? (
-              <Empty icon={<Check size={22} />} title="All done" body="New attendance requests from your staff show up here." />
-            ) : (
-              pending.map((a) => <RequestRow key={a.id} a={a} m={people.find((x) => x.id === a.memberId)!} names={names} self={a.memberId === me?.id && !isOwner(me)} />)
-            )}
-          </Group>
+        ) : tab === "attendance" ? (
+          !ready ? <p className="px-1 py-6 text-[14px] text-muted">Loading…</p> : <AttendanceBoard people={boardPeople} month={month} names={names} />
         ) : (
           <>
             <div className="grid grid-cols-3 gap-3">
@@ -137,46 +130,6 @@ function MonthSwitch({ month, onChange, max }: { month: string; onChange: (m: st
   );
 }
 
-/** One waiting request: change full ↔ half or the overtime, then approve or reject. */
-function RequestRow({ a, m, names, self }: { a: Attendance; m: Member; names: Record<string, string>; self: boolean }) {
-  const toast = useToast();
-  const [kind, setKind] = useState<"full" | "half">(a.kind);
-  const [ot, setOt] = useState(a.otHours ? String(a.otHours) : "");
-  const decide = (status: "approved" | "rejected") => {
-    const hours = Number(ot || 0);
-    if (!Number.isFinite(hours) || hours < 0 || hours > 16) return toast("Overtime: 0 to 16 hours");
-    attendanceActions.decide(a.id, status, names, { kind, otHours: hours });
-    toast(status === "approved" ? `Approved ${m.name}'s ${kind === "half" ? "half day" : "day"}` : "Rejected");
-  };
-  return (
-    <div className="border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
-      <div className="flex items-center gap-3">
-        <Avatar name={m.name} hue={m.hue} photo={m.photo} size={38} />
-        <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-medium">{m.name}</div>
-          <div className="text-[13px] text-muted">{dayLabel(a.date)} · asked {a.kind === "half" ? "half day" : "full day"}{a.otHours ? ` + OT ${a.otHours} h` : ""}{a.note ? ` · “${a.note}”` : ""}</div>
-        </div>
-      </div>
-      {self ? (
-        <p className="mt-2 text-[13px] text-muted">Your own request: the owner approves it.</p>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Segmented value={kind} onChange={setKind} options={[{ value: "full", label: "Full" }, { value: "half", label: "Half" }]} />
-          <label className="flex items-center gap-1.5 text-[13px] text-muted">
-            OT
-            <input className="h-9 w-16 rounded-ctl bg-surface px-2 text-[14px] ring-1 ring-line outline-none focus:ring-jade/40" inputMode="decimal" type="number" min={0} max={16} step={0.5} value={ot} onChange={(e) => setOt(e.target.value)} placeholder="0" aria-label="Overtime hours" />
-            h
-          </label>
-          <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="tinted" onClick={() => decide("rejected")}><X size={15} /> Reject</Button>
-            <Button size="sm" onClick={() => decide("approved")}><Check size={15} /> Approve</Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Everything about one person for the month: pay settings, days, money lines, payslip. */
 function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; onClose: () => void; names: Record<string, string> }) {
   const me = useMe();
@@ -211,19 +164,7 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
     toast("Salary saved");
   };
 
-  // mark a day
   const lastDay = month === monthOf(today) ? today : `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
-  const [dDate, setDDate] = useState(lastDay);
-  const [dKind, setDKind] = useState<"full" | "half">("full");
-  const [dOt, setDOt] = useState("");
-  const markDay = () => {
-    if (!dDate.startsWith(month) || dDate > today) return toast("Pick a day in this month, up to today");
-    const h = Number(dOt || 0);
-    if (!Number.isFinite(h) || h < 0 || h > 16) return toast("Overtime: 0 to 16 hours");
-    attendanceActions.mark(m.id, dDate, dKind, h, names);
-    setDOt("");
-    toast(`${dayLabel(dDate)} marked`);
-  };
 
   // money lines
   const [eType, setEType] = useState<PayEntryType>("advance");
@@ -350,17 +291,7 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
         {/* days */}
         <section>
           <h3 className="mb-2 px-1 text-[15px] font-semibold">Days in {monthLabel(month)}</h3>
-          {canEdit && (
-            <div className="mb-3 flex flex-wrap items-end gap-2 rounded-group bg-surface p-3">
-              <label className="min-w-[150px] flex-1">
-                <span className="mb-1 block text-[12.5px] font-medium text-muted">Mark a day</span>
-                <input type="date" className={inputCls} value={dDate} min={`${month}-01`} max={lastDay} onChange={(e) => setDDate(e.target.value)} />
-              </label>
-              <Segmented value={dKind} onChange={setDKind} options={[{ value: "full", label: "Full" }, { value: "half", label: "Half" }]} />
-              <input className="h-12 w-20 rounded-ctl bg-surface px-3 text-[15px] ring-1 ring-line outline-none" inputMode="decimal" type="number" min={0} max={16} step={0.5} value={dOt} onChange={(e) => setDOt(e.target.value)} placeholder="OT h" aria-label="Overtime hours" />
-              <Button onClick={markDay}><Plus size={16} /> Mark</Button>
-            </div>
-          )}
+          <p className="mb-2 px-1 text-[13px] text-muted">Mark or change days in the <b>Attendance</b> tab.</p>
           <div className="overflow-hidden rounded-group bg-surface">
             {!monthDays.length ? (
               <p className="px-4 py-4 text-[14px] text-muted">No days this month yet.</p>
