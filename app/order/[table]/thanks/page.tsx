@@ -5,12 +5,15 @@ import { ThankYou } from "@/components/guest-pay";
 import { FullLoader } from "@/components/loader";
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import { cloudConfigured, feedbackActions } from "@/lib/live";
-import { guestUpsert } from "@/lib/cloud";
+import { guestStampsFor, guestUpsert } from "@/lib/cloud";
+import { StampCard } from "@/components/stamps";
+import { liveStamps } from "@/lib/stamps";
+import type { Stamp, StampProgram } from "@/lib/types";
 import { useParams } from "next/navigation";
 import { QrCode } from "lucide-react";
 import type { Payment } from "@/lib/types";
 
-type Saved = { place: string; logo: string; name: string; payments: Payment[]; orderNo: number; lang: Lang; rid: string; at: number };
+type Saved = { place: string; logo: string; name: string; payments: Payment[]; orderNo: number; lang: Lang; rid: string; at: number; stampProg?: StampProgram; stampsHave?: number | null };
 
 /**
  * After the bill is paid the guest lands here, on its own page. The menu is closed for this visit:
@@ -28,6 +31,25 @@ export default function GuestThanks() {
       setSaved(null);
     }
   }, [table]);
+
+  // the stamp for this bill is added when the restaurant takes the money: look a few times
+  const [have, setHave] = useState<number | null>(null);
+  useEffect(() => {
+    const prog = saved?.stampProg;
+    if (!saved || !prog) return;
+    if (saved.stampsHave != null) setHave(saved.stampsHave);
+    let live = true;
+    const load = () =>
+      guestStampsFor(saved.rid).then((r) => {
+        if (live && r) setHave(r.stamps.length ? liveStamps({ stamps: r.stamps as Stamp[] }, prog).length : r.rewards ? 0 : null);
+      }).catch(() => {});
+    void load();
+    const ts = [2500, 7000, 15000, 30000].map((ms) => window.setTimeout(load, ms));
+    return () => {
+      live = false;
+      ts.forEach((t) => window.clearTimeout(t));
+    };
+  }, [saved]);
 
   if (saved === undefined) return <FullLoader label="Thank you" />;
 
@@ -54,6 +76,17 @@ export default function GuestThanks() {
       payments={saved.payments ?? []}
       orderNo={saved.orderNo || undefined}
       lang={saved.lang ?? "en"}
+      stamp={saved.stampProg && have != null ? (
+        <StampCard
+          compact
+          className="mt-4"
+          have={have}
+          needed={saved.stampProg.needed}
+          reward={saved.stampProg.reward}
+          title={tx(saved.lang ?? "en", "Your stamp card", "तुमचं स्टॅम्प कार्ड")}
+          note={have >= saved.stampProg.needed ? tx(saved.lang ?? "en", "Card full! Use it on your next bill.", "कार्ड भरलं! पुढच्या बिलावर वापरा.") : tx(saved.lang ?? "en", `${saved.stampProg.needed - have} more for ${saved.stampProg.reward}`, `${saved.stampProg.reward} साठी अजून ${saved.stampProg.needed - have}`)}
+        />
+      ) : undefined}
       onRate={(stars, text) => {
         const f = { customer: saved.name || "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: (stars >= 4 ? "google" : "private") as "google" | "private" };
         if (cloudConfigured && saved.rid) {

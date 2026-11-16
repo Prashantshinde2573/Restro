@@ -180,7 +180,10 @@ export function ThankYou({
   onRate,
   onClose,
   children,
+  stamp,
 }: {
+  /** the guest's stamp card, shown under the rating */
+  stamp?: ReactNode;
   /** the visit is over (own page): no "Done", ask to scan the QR to order again */
   closed?: boolean;
   /** the guest says they paid; the owner hasn't confirmed it yet */
@@ -257,6 +260,7 @@ export function ThankYou({
           </>
         )}
       </div>
+      {stamp}
       {closed ? (
         <div className="mt-6 flex w-full items-center gap-3 rounded-[18px] bg-surface p-4 text-left">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><QrCode size={20} /></span>

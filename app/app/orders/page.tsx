@@ -309,6 +309,7 @@ export default function OrdersPage() {
         lines={pay?.flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })))}
         billNo={pay?.[0]?.number}
         couponCode={pay?.find((o) => o.wantsCoupon)?.wantsCoupon}
+        onCoupon={(code) => { if (pay?.length) orderActions.askCoupon(pay.map((o) => o.id), code); }}
         guest={(() => {
           const o = pay?.find((x) => x.guestPhone);
           return o ? { name: o.customer, phone: o.guestPhone } : undefined;

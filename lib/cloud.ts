@@ -807,6 +807,13 @@ export async function guestStamps(): Promise<{ stamps: { at: string }[]; rewards
   return data as { stamps: { at: string }[]; rewards: number };
 }
 
+/** Thank-you page (no live connection): this guest's stamp card at this restaurant. */
+export async function guestStampsFor(rid: string): Promise<{ stamps: { at: string }[]; rewards: number } | null> {
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("guest_stamps", { r: rid });
+  if (error || !data) return null;
+  return data as { stamps: { at: string }[]; rewards: number };
+}
 /** Guest QR page: does this restaurant have a coupon the guest could use? */
 export async function guestCouponsOn(): Promise<boolean> {
   const rid = stateStore.get().rid;
