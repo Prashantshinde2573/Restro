@@ -34,7 +34,7 @@ import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { isShared, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { cloudSignOut, ensureGuest, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
+import { cloudSignOut, ensureGuest, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
 const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
@@ -294,16 +294,25 @@ export default function GuestOrder() {
   const stampsFeature = useFeature("stamps") === "ok";
   const stampProg = stampsFeature && settings.stamps?.on ? programOf(settings.stamps) : null;
   const [myStamps, setMyStamps] = useState<number | null>(null);
+  // The restaurant adds the stamp when it takes the money, a moment after the bill changes here:
+  // look again when any order changes (and once more a little later), and every 30 s while open.
+  const orderSig = myOrders.map((o) => `${o.id}:${o.status}`).join(",");
   useEffect(() => {
-    if (!stampProg) return;
+    if (!stampProg || cloud.status !== "ready") return;
     let live = true;
-    guestStamps().then((r) => {
-      if (live && r) setMyStamps(r.stamps.length ? liveStamps({ stamps: r.stamps as Stamp[] }, stampProg).length : r.rewards ? 0 : null);
-    });
+    const load = () =>
+      guestStamps().then((r) => {
+        if (live && r) setMyStamps(r.stamps.length ? liveStamps({ stamps: r.stamps as Stamp[] }, stampProg).length : r.rewards ? 0 : null);
+      });
+    void load();
+    const later = [window.setTimeout(load, 4000), window.setTimeout(load, 12000)];
+    const every = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30000);
     return () => {
       live = false;
+      later.forEach((t) => window.clearTimeout(t));
+      window.clearInterval(every);
     };
-  }, [!!stampProg, myOrders.length, openOrders.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [!!stampProg, orderSig, cloud.status]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (cloud.status !== "ready" || !cloud.rid) return;
     let live = true;
@@ -371,7 +380,10 @@ export default function GuestOrder() {
       localStorage.setItem(doneKey, JSON.stringify({ at: Date.now() }));
       localStorage.setItem(
         `restropi.thanks.${table}`,
-        JSON.stringify({ place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: pays, orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now() }),
+        JSON.stringify({
+          place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: pays, orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now(),
+          ...(stampProg ? { stampProg, stampsHave: myStamps } : {}),
+        }),
       );
     } catch {}
     setLeaving(true);
@@ -658,6 +670,27 @@ export default function GuestOrder() {
   const rewardReady = !!stampProg && myStamps != null && myStamps >= stampProg.needed;
   const rewardAmt = rewardReady && useReward ? rewardOff(stampProg!, billItems, menuAll) : 0;
   const couponAmt = payNow ? 0 : Math.min(Math.max(0, billItems - rewardAmt), guestCouponOff(coupon, billItems));
+  // One coupon per bill, the same on the phone and at the counter: a code the staff put on the
+  // bill shows here, and a code the guest applies here is put on the bill for the staff.
+  const billCode = payNow ? undefined : unbilled.find((o) => o.wantsCoupon)?.wantsCoupon;
+  const lastBillCode = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const was = lastBillCode.current;
+    lastBillCode.current = billCode;
+    if (billCode === was) return;
+    if (!billCode) {
+      if (was && coupon?.code === was) setCoupon(null); // the staff took it off
+      return;
+    }
+    if (coupon?.code === billCode) return;
+    let live = true;
+    guestCoupon(billCode).then((r) => { if (live && r.coupon) setCoupon(r.coupon); }).catch(() => {});
+    return () => { live = false; };
+  }, [billCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const changeCoupon = (c: GuestCoupon | null) => {
+    setCoupon(c);
+    if (!payNow && unbilled.length) orderActions.askCoupon(unbilled.map((o) => o.id), c?.code);
+  };
   const billTaxable = Math.max(0, billItems - rewardAmt - couponAmt);
   const billGst = Math.round(billTaxable * gstRate() * 100) / 100;
   const tip = Math.round((billItems * tipPct) / 100);
@@ -997,11 +1030,17 @@ export default function GuestOrder() {
             </section>
           ))}
           {!payNow && unbilled.length > 0 && (
-            <div className="flex items-baseline justify-between px-1 pt-1 text-[15px]">
-              <span className="text-muted">{tx(lang, "Bill so far", "आतापर्यंतचं बिल")} · incl. GST</span>
-              <span className="text-[20px] font-semibold tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span>
+            <div className="px-1 pt-1">
+              <div className="flex items-baseline justify-between text-[15px]">
+                <span className="text-muted">{tx(lang, "Bill so far", "आतापर्यंतचं बिल")} · incl. GST</span>
+                <span className="text-[20px] font-semibold tnum">
+                  {couponAmt > 0 && <span className="mr-2 text-[14px] font-medium text-faint line-through">{inr(Math.round(billItems * (1 + gstRate())))}</span>}
+                  {inr(Math.round(Math.max(0, billItems - couponAmt) * (1 + gstRate())))}
+                </span>
+              </div>
             </div>
           )}
+          {!payNow && unbilled.length > 0 && !waiting && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} />}
           {openOrders.some((o) => o.status !== "served") && <GamesCard onGame={setGame} lang={lang} />}
           {stampCard}
           {pastOrders.length > 0 && (
@@ -1418,7 +1457,7 @@ export default function GuestOrder() {
                 <span className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2", useReward ? "border-jade bg-jade text-white" : "border-line")}>{useReward && <Check size={14} strokeWidth={3} />}</span>
               </button>
             )}
-            {(couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={setCoupon} />}
+            {(couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} />}
             <div>
               <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Tip for the staff (optional)", "स्टाफसाठी टिप (ऐच्छिक)")}</div>
               <div className="grid grid-cols-4 gap-2">

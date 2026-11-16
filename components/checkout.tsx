@@ -36,6 +36,7 @@ export function Checkout({
   billNo,
   guest,
   couponCode,
+  onCoupon,
 }: {
   open: boolean;
   onClose: () => void;
@@ -51,6 +52,8 @@ export function Checkout({
   guest?: { name?: string; phone?: string };
   /** coupon code the guest applied on their phone: put on the bill when it still works */
   couponCode?: string;
+  /** a coupon was put on or taken off this bill here: the guest's phone shows the same bill */
+  onCoupon?: (code?: string) => void;
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
@@ -308,7 +311,7 @@ export function Checkout({
               {[0, 5, 10].map((p) => (
                 <button
                   key={p}
-                  onClick={() => { setDiscountPct(p); setCoupon(null); setCustom((c) => ({ ...c, on: false })); }}
+                  onClick={() => { setDiscountPct(p); if (coupon) onCoupon?.(undefined); setCoupon(null); setCustom((c) => ({ ...c, on: false })); }}
                   className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", !coupon && !custom.on && discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
                 >
                   <Percent size={13} />
@@ -316,7 +319,7 @@ export function Checkout({
                 </button>
               ))}
               <button
-                onClick={() => { setCoupon(null); setCustom((c) => ({ ...c, on: true })); }}
+                onClick={() => { if (coupon) onCoupon?.(undefined); setCoupon(null); setCustom((c) => ({ ...c, on: true })); }}
                 className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", custom.on && !coupon ? "bg-ink text-canvas" : "bg-sunken text-muted")}
               >
                 Custom
@@ -348,7 +351,7 @@ export function Checkout({
                 <div className="mt-3 flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
                   <Ticket size={16} />
                   <span className="flex-1"><b>{coupon.code}</b> · {couponLabel(coupon)}</span>
-                  <button aria-label="Remove coupon" onClick={() => setCoupon(null)} className="p-1"><X size={15} /></button>
+                  <button aria-label="Remove coupon" onClick={() => { setCoupon(null); onCoupon?.(undefined); }} className="p-1"><X size={15} /></button>
                 </div>
               ) : (
                 <form
@@ -362,6 +365,7 @@ export function Checkout({
                     setDiscountPct(0);
                     setCustom((x) => ({ ...x, on: false }));
                     setCoupon(c!);
+                    onCoupon?.(c!.code);
                   }}
                 >
                   <input

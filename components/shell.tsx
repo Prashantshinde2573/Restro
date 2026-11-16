@@ -3,12 +3,13 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck } from "lucide-react";
+import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
 import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
+import { useReady } from "@/lib/store";
 import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
@@ -286,8 +287,18 @@ function MeButton({ compact }: { compact?: boolean }) {
 
 function Sidebar() {
   const path = usePathname();
+  const router = useRouter();
   const { t } = useT();
   const { navGroups } = useNav();
+  // Load every page in the menu ahead of time (the lower ones are out of view, so Next.js
+  // didn't fetch them), and show at once that a tap was taken while a page opens.
+  const hrefs = navGroups.flatMap((g) => g.items.map((i) => i.href)).join("|");
+  useEffect(() => {
+    const id = window.setTimeout(() => hrefs.split("|").forEach((h) => h && router.prefetch(h)), 1200);
+    return () => window.clearTimeout(id);
+  }, [hrefs, router]);
+  const [opening, setOpening] = useState<string | null>(null);
+  useEffect(() => setOpening(null), [path]);
   const renew = useRenewDays();
   // the browser tab shows how many orders and waiter calls are waiting: "(2) Restropi"
   const urgent = navGroups.flatMap((g) => g.items).filter((i) => i.state === "ok" && (i.href === "/app/orders" || i.href === "/app/tables")).reduce((n, i) => n + (i.badge ?? 0), 0);
@@ -315,6 +326,7 @@ function Sidebar() {
                 <Link
                   key={it.href}
                   href={it.href}
+                  onClick={() => { if (!active) setOpening(it.href); }}
                   className={clsx(
                     "flex items-center gap-3 rounded-[10px] px-3 py-[7px] text-[14.5px] font-medium transition-colors",
                     active ? "bg-surface text-ink shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
@@ -323,7 +335,7 @@ function Sidebar() {
                 >
                   <Icon size={18} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-jade" : undefined} />
                   <span className="flex-1">{t(it.key)}</span>
-                  {it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <Count n={it.badge} /> : null}
+                  {opening === it.href ? <Loader2 size={15} className="animate-spin text-jade" /> : it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <Count n={it.badge} /> : null}
                 </Link>
               );
             })}
@@ -445,7 +457,10 @@ function RouteGate({ children }: { children: ReactNode }) {
   const outlet = useCurrentOutlet();
   const { plan } = useAccount();
   const r = routeFor(path);
+  const membersReady = useReady("members");
   if (!r) return <>{children}</>;
+  // who you are isn't known for a moment after opening: wait, don't say "No access"
+  if (!me && !membersReady) return <FullLoader />;
   const f = r.feature ? featureState(r.feature, plan, outletKinds(outlet)) : "ok";
   const allowed = isOwner(me) || (r.perm && r.perm !== "ownerOrSettings" ? hasPerm(me, r.perm) && inOutlet(me, outlet.id) : true);
   if (f === "ok" && allowed) return <>{children}</>;
