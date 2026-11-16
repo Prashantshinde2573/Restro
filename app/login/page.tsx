@@ -2,47 +2,44 @@
 
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Delete } from "lucide-react";
+import { ArrowLeft, LogIn } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Wordmark } from "@/components/shell";
 import { KotTicket, PhoneOwner, UpiCard } from "@/components/site/mockups";
 import { RiseText } from "@/components/site/motion";
 import { Mesh } from "@/components/site/hero";
-import { Avatar, Segmented } from "@/components/ui";
+import { Button, Field, Segmented, inputCls } from "@/components/ui";
 import { ChangePassword, OwnerAuth } from "@/components/owner-auth";
-import { cloudSignOut, publicInfo, publicStaff, signInStaff, useCloud } from "@/lib/cloud";
+import { cloudSignOut, publicInfo, signInStaff, useCloud } from "@/lib/cloud";
 import { sessionActions } from "@/lib/live";
 
-type StaffFace = { id: string; name: string; hue: number; outletIds: string[] };
-const RID_KEY = "restropi.rid"; // which restaurant this device belongs to (for the staff PIN screen)
+const RID_KEY = "restropi.rid"; // the restaurant this device last signed in to (shows its name)
+const PHONE_KEY = "restropi.staffPhone"; // last staff mobile used here, so they only type the PIN
 
 export default function LoginPage() {
   const router = useRouter();
   const cloud = useCloud();
   const [mode, setMode] = useState<"owner" | "staff">("owner");
-  const [who, setWho] = useState<StaffFace | null>(null);
+  const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [rid, setRid] = useState<string | null>(null);
   const [place, setPlace] = useState("");
-  const [faces, setFaces] = useState<StaffFace[]>([]);
 
-  // which restaurant is this device for? (for the staff PIN screen)
+  // opens on Owner; the staff sign-in link (…/login?r=…) or a phone used by staff before opens on Staff
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("r");
     let r = fromUrl;
+    let saved = "";
     try {
       if (fromUrl) localStorage.setItem(RID_KEY, fromUrl);
       r = r ?? localStorage.getItem(RID_KEY);
+      saved = localStorage.getItem(PHONE_KEY) ?? "";
     } catch {}
-    if (!r) return;
-    setRid(r);
-    // opens on Owner; only the staff sign-in link (…/login?r=…) opens on Staff PIN
-    if (fromUrl) setMode("staff");
-    publicInfo(r).then((i) => setPlace(i?.name ?? "")).catch(() => {});
-    publicStaff(r).then(setFaces).catch(() => {});
+    if (saved) setPhone(saved);
+    if (fromUrl || saved) setMode("staff");
+    if (r) publicInfo(r).then((i) => setPlace(i?.name ?? "")).catch(() => {});
   }, []);
 
   // already signed in → straight in (after setting their own password)
@@ -54,21 +51,31 @@ export default function LoginPage() {
     router.replace(cloud.role === "superadmin" ? "/admin" : "/app");
   }, [cloud, router]);
 
-  // PIN complete
-  useEffect(() => {
-    if (pin.length !== 4 || !who) return;
+  // staff: mobile number + PIN, on any phone or tablet
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  const canStaff = digits.length === 10 && /^\d{4}$/.test(pin) && !busy;
+  const staffSignIn = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!canStaff) {
+      setError(digits.length !== 10 ? "Enter your 10-digit mobile number" : "Enter your 4-digit PIN");
+      return;
+    }
     setBusy(true);
     setError("");
-    signInStaff(rid!, who.id, pin)
-      .then(() => sessionActions.setMember(who.id))
-      .catch((e: Error) => {
-        setError(e.message);
+    signInStaff(digits, pin)
+      .then(({ rid, memberId }) => {
+        try {
+          localStorage.setItem(PHONE_KEY, digits);
+          localStorage.setItem(RID_KEY, rid);
+        } catch {}
+        sessionActions.setMember(memberId);
+      })
+      .catch((err: Error) => {
+        setError(err.message);
         setPin("");
       })
       .finally(() => setBusy(false));
-  }, [pin, who, rid]);
-
-  const staff = faces;
+  };
   const [linkExpired, setLinkExpired] = useState(false);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -138,7 +145,7 @@ export default function LoginPage() {
           <Segmented
             className="mt-6 w-full !rounded-[14px] !p-1 [&_button]:!rounded-[11px] [&_button]:!py-3 [&_button]:!text-[15.5px]"
             value={mode}
-            onChange={(v) => { setMode(v); setPin(""); setWho(null); setError(""); }}
+            onChange={(v) => { setMode(v); setPin(""); setError(""); }}
             options={[{ value: "owner", label: "Owner" }, { value: "staff", label: "Staff PIN" }]}
           />
 
@@ -147,49 +154,38 @@ export default function LoginPage() {
               <OwnerAuth />
               <p className="text-center text-[13px] text-faint">Restaurant logins are given by Restropi. Staff sign in with their PIN.</p>
             </div>
-          ) : !rid ? (
-            <p className="mt-6 rounded-group bg-surface p-4 text-[14px] text-muted">
-              Open the staff sign-in link from your owner once on this device (or the owner signs in here once). After that, staff sign in here with their PIN.
-            </p>
-          ) : !who ? (
-            staff.length ? (
-              <div className="mt-6 grid grid-cols-3 gap-3">
-                {staff.map((s) => (
-                  <button key={s.id} onClick={() => { setWho(s); setPin(""); setError(""); }} className="flex flex-col items-center gap-2 rounded-group bg-surface px-2 py-4 active:scale-[.97]">
-                    <Avatar name={s.name} hue={s.hue} photo={(s as { photo?: string }).photo} size={48} />
-                    <span className="text-center text-[13px] font-medium leading-tight">{s.name.split(" ")[0]}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-6 rounded-group bg-surface p-4 text-[14px] text-muted">No staff added yet. The owner adds staff in Members &amp; access.</p>
-            )
           ) : (
-            <div className="mt-6 flex flex-col items-center">
-              <div className="text-[15px] font-medium">Hi {who.name.split(" ")[0]}, enter your PIN</div>
-              <div className="my-6 flex gap-4">
-                {[0, 1, 2, 3].map((i) => (
-                  <span key={i} className={clsx("h-3.5 w-3.5 rounded-full transition", i < pin.length ? "scale-110 bg-ink" : "bg-line")} />
-                ))}
-              </div>
-              <div className="grid w-full max-w-[280px] grid-cols-3 gap-3">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"].map((k) =>
-                  k === "" ? (
-                    <button key="back" onClick={() => setWho(null)} className="text-[14px] font-medium text-jade">Back</button>
-                  ) : (
-                    <button
-                      key={k}
-                      disabled={busy}
-                      aria-label={k === "del" ? "Delete" : k}
-                      onClick={() => setPin((p) => (k === "del" ? p.slice(0, -1) : p.length < 4 ? p + k : p))}
-                      className="flex aspect-square items-center justify-center rounded-full bg-surface text-[26px] font-medium transition active:scale-95 active:bg-sunken"
-                    >
-                      {k === "del" ? <Delete size={22} /> : k}
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
+            <form onSubmit={staffSignIn} className="mt-6 space-y-4">
+              <Field label="Mobile number">
+                <input
+                  className={inputCls}
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={14}
+                  value={phone}
+                  onChange={(e) => { setPhone(e.target.value.replace(/[^\d ]/g, "")); setError(""); }}
+                  placeholder="98xxx xxxxx"
+                />
+              </Field>
+              <Field label="PIN">
+                <input
+                  className={clsx(inputCls, "tracking-[0.5em]")}
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="current-password"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }}
+                  placeholder="••••"
+                />
+              </Field>
+              <Button type="submit" className="w-full" disabled={busy}>
+                <LogIn size={17} /> {busy ? "Signing in…" : "Sign in"}
+              </Button>
+              <p className="text-center text-[13px] text-faint">Use the mobile number your manager added for you and your 4-digit PIN.</p>
+            </form>
           )}
           {error && <p className="mt-4 text-center text-[14px] font-medium text-rose">{error}</p>}
           </>

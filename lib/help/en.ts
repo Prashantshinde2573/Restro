@@ -344,7 +344,7 @@ export const en: Manual = {
           "Set a **4-digit PIN** and tap Add member. Then send them the sign-in link on WhatsApp.",
         ] },
         { h: "Staff sign-in link" },
-        { p: "At the top of Members & access there is the **Staff sign-in link** with Copy and WhatsApp buttons. Staff open it once on their phone or tablet, tap their name and enter their PIN. After that the device remembers your restaurant." },
+        { p: "Staff sign in on any phone or tablet: open the sign-in page, tap **Staff**, enter their mobile number and 4-digit PIN. The link just opens that page; no one needs to set up the device first." },
         { h: "What each permission allows" },
         { table: { head: ["Permission", "Allows"], rows: [
           ["Take orders", "New order screen"],
@@ -471,7 +471,7 @@ export const en: Manual = {
   ],
   faq: [
     { id: "tables-slow", area: "tables", pages: ["/app/tables"], q: "Tables (or orders) take long to appear, or show a loader.", a: "The first time on a device Restropi loads everything from the server; after that the screen opens at once from the last copy and refreshes in a moment.\nIf it keeps loading: check the internet, then pull down or reload the page. If you just changed your plan, sign out and sign in once." },
-    { id: "staff-no-pin", area: "team", pages: ["/app/access"], q: "My staff can't see the PIN screen on their phone.", a: "That device doesn't know your restaurant yet. Members & access → **Staff sign-in link** → send it on WhatsApp. They open it once, tap their name and enter the PIN. (Or the owner signs in once on that device.)" },
+    { id: "staff-no-pin", area: "team", pages: ["/app/access"], q: "My staff can't sign in on their phone.", a: "On the sign-in page tap **Staff**, then enter the mobile number you added for them in Members & access and their 4-digit PIN. It works on any phone or tablet. If it says wrong number or PIN, check the mobile in Members & access or set a new PIN there. 5 wrong tries lock it for 15 minutes." },
     { id: "pin-forgot", area: "team", pages: ["/app/access"], q: "A staff member forgot their PIN, or is locked out.", a: "Members & access → tap the person → type a new 4-digit PIN → Save access.\nAfter 5 wrong tries the person is locked for 5 minutes; wait and try again." },
     { id: "owner-password", area: "account", q: "I forgot my owner password.", a: "On the login page, choose **Owner** → **Forgot password?** → enter your email. Open the link in the email (check Spam) and set a new password. The link works once and for a short time." },
     { id: "staff-limit", area: "plans", pages: ["/app/access"], q: "I can't add more staff.", a: `The Starter plan allows ${LIMIT.starterStaff} staff logins besides the owner. Turn off someone who left, or upgrade to Growth for unlimited staff.` },

@@ -310,10 +310,12 @@ async function callFn<T>(name: string, body: unknown, withUser = false): Promise
   return j as T;
 }
 
-export async function signInStaff(rid: string, memberId: string, pin: string) {
-  const t = await callFn<{ access_token: string; refresh_token: string }>("staff-login", { rid, memberId, pin });
-  const { error } = await sb().auth.setSession(t);
+/** Staff sign in with their mobile number + 4-digit PIN, on any phone or tablet. */
+export async function signInStaff(phone: string, pin: string) {
+  const t = await callFn<{ access_token: string; refresh_token: string; rid: string; memberId: string }>("staff-login", { phone, pin });
+  const { error } = await sb().auth.setSession({ access_token: t.access_token, refresh_token: t.refresh_token });
   if (error) throw new Error(error.message);
+  return { rid: t.rid, memberId: t.memberId };
 }
 /** Guests on the QR page: an anonymous account, no login screen. */
 export async function ensureGuest(rid: string) {
@@ -803,6 +805,25 @@ export async function guestStamps(): Promise<{ stamps: { at: string }[]; rewards
   const { data, error } = await sb().rpc("guest_stamps", { r: rid });
   if (error || !data) return null;
   return data as { stamps: { at: string }[]; rewards: number };
+}
+
+/** Guest QR page: does this restaurant have a coupon the guest could use? */
+export async function guestCouponsOn(): Promise<boolean> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return false;
+  const { data, error } = await sb().rpc("guest_coupons_on", { r: rid });
+  return !error && data === true;
+}
+export type GuestCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number };
+/** Guest QR page: check one coupon code. Returns the coupon, or why it can't be used. */
+export async function guestCoupon(code: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return { problem: "Coupons are not available here" };
+  const { data, error } = await sb().rpc("guest_coupon", { r: rid, p_code: code });
+  if (error || !data) return { problem: "Couldn't check the code. Try again." };
+  const d = data as GuestCoupon & { problem?: string };
+  if (d.problem) return { problem: d.problem };
+  return { coupon: { code: d.code, kind: d.kind, value: Number(d.value) || 0, maxOff: d.maxOff ?? undefined, minBill: d.minBill ?? undefined } };
 }
 
 export function guestUpsert(rid: string, id: string, data: Record<string, unknown>, coll: "guests" | "feedback" | "activity" = "guests") {
