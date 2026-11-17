@@ -9,7 +9,7 @@ import { upiUri } from "./upi";
 import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, stampActions, useCan, useCoupons, useCurrentOutlet, useFeature, useGuests, useMe, useMenu, useSettings } from "@/lib/live";
 import { liveStamps, mayAct, programOf, rewardOff, stampProblem } from "@/lib/stamps";
 import { StampBox } from "./stamps";
-import { printReceipt, receiptPdfBlob, receiptText } from "./receipt";
+import { billFileName, printReceipt, receiptPdfBlob, receiptText } from "./receipt";
 import { useToast } from "./toast";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import { PaymentSplit, paidSum } from "./payment-split";
@@ -243,7 +243,7 @@ export function Checkout({
               className="w-full"
               onClick={async () => {
                 const r = receipt();
-                const name = `bill-${billNo ?? "receipt"}.pdf`;
+                const name = `${billFileName(r)}.pdf`;
                 const file = new File([receiptPdfBlob(r)], name, { type: "application/pdf" });
                 // phones: share sheet → pick WhatsApp and the guest; computers: download it
                 if (navigator.canShare?.({ files: [file] })) {

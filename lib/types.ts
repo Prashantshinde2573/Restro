@@ -154,6 +154,9 @@ export interface Table {
   // from the people who sat here before, so an old phone isn't put back into
   // a finished group's bill.
   visitId: string;
+  // Staff pushed this table up against another one for a big group: its seats count for that
+  // table (the "main" one, which holds the guests and the bill) until the group leaves.
+  joinedTo?: string;
 }
 
 export type OrderType = "dine-in" | "takeaway" | "delivery";

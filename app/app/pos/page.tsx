@@ -15,7 +15,7 @@ import { ItemSheet } from "@/components/item-sheet";
 import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
-import { getTable, isShared, seatsFree, tableActions, tableState, useLiveTables } from "@/lib/tables";
+import { capacity, getTable, isShared, joinedName, seatsFree, tableActions, tableState, useLiveTables } from "@/lib/tables";
 import { closeBill, partyOpenOrders } from "@/lib/billing";
 import { inr, gstLabel } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
@@ -350,7 +350,7 @@ function PosScreen() {
       {/* Table picker: a shared table lists each party separately */}
       <Sheet open={pickTable} onClose={() => setPickTable(false)} title="Choose table" wide>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {tables.map((tb) => {
+          {tables.filter((tb) => !tb.joinedTo).map((tb) => {
             const st = tableState(tb);
             const pick = (pid: string | null) => {
               setTable(tb.name);
@@ -362,8 +362,8 @@ function PosScreen() {
             return (
               <div key={tb.id} className={clsx("rounded-[16px] p-3", table === tb.name ? "bg-jade-soft ring-2 ring-jade" : "bg-surface")}>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[18px] font-semibold">{tb.name}</span>
-                  <span className="text-[11.5px] text-muted">{st === "free" ? `${tb.seats} seats` : st === "reserved" ? "reserved" : `${seatsFree(tb)} of ${tb.seats} free`}</span>
+                  <span className="text-[18px] font-semibold">{joinedName(tb, tables)}</span>
+                  <span className="text-[11.5px] text-muted">{st === "free" ? `${capacity(tb, tables)} seats` : st === "reserved" ? "reserved" : `${seatsFree(tb, tables)} of ${capacity(tb, tables)} free`}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {tb.parties.map((p) => (

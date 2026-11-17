@@ -23,14 +23,28 @@ const methodName = (m: string) => (m === "upi" ? "UPI" : m === "cash" ? "Cash" :
 const title = () => (gstRate() > 0 ? "TAX INVOICE" : "BILL");
 const whenText = (d: Date) => `${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}, ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
 
+/** File name for this bill when printed, saved as PDF or shared: "Chai_Point_Cafe_101". */
+export function billFileName(r: Pick<ReceiptData, "settings" | "outletName" | "billNo" | "when">) {
+  const cafe = (r.settings.name || r.outletName || "Bill")
+    .normalize("NFKD")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .slice(0, 40) || "Bill";
+  const d = r.when ?? new Date();
+  const no = r.billNo ?? `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${cafe}_${no}`;
+}
+
 export function printReceipt(r: ReceiptData) {
+  const file = billFileName(r);
   const s = r.settings;
   const now = r.when ?? new Date();
   const items = r.lines.reduce((a, l) => a + l.qty, 0);
   const rows = r.lines
     .map((l) => `<tr><td class=n>${esc(l.name)}</td><td class=c>${l.qty}</td><td class=r>${money(l.price)}</td><td class=r>${money(l.qty * l.price)}</td></tr>`)
     .join("");
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title()} ${r.billNo ?? ""}</title><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(file)}</title><style>
     @page{size:80mm auto;margin:3mm}
     *{box-sizing:border-box}
     body{font:12px/1.4 "Segoe UI",Roboto,Arial,sans-serif;color:#000;width:74mm;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -81,6 +95,11 @@ export function printReceipt(r: ReceiptData) {
   if (!w) return false;
   w.document.write(html);
   w.document.close();
+  // "Save as PDF" names the file after the page title. Some phones and the installed app
+  // print from this window's title instead, so name it the same for a minute.
+  const before = document.title;
+  document.title = file;
+  window.setTimeout(() => { if (document.title === file) document.title = before; }, 60_000);
   return true;
 }
 
