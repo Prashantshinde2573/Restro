@@ -37,6 +37,46 @@ export const outletActions = {
   update(id: string, patch: Partial<Outlet>) {
     outletStore.set(outletStore.get().map((o) => (o.id === id ? { ...o, ...patch } : o)));
   },
+  /** Why this outlet can't be deleted right now, or null. */
+  removeProblem(id: string): string | null {
+    if (outletStore.get().length <= 1) return "You need at least one outlet.";
+    const open = orderStore.get().filter((o) => o.outletId === id && o.status !== "paid" && o.status !== "cancelled").length;
+    if (open) return `${open} order${open === 1 ? " is" : "s are"} still open here. Close or cancel ${open === 1 ? "it" : "them"} first.`;
+    return null;
+  },
+  /**
+   * Delete an outlet (owner). Its own menu, stock and coupons go with it; people who worked only
+   * here lose access (their record stays, turned off); past bills stay in reports and exports.
+   * The tables are removed by the caller (lib/tables).
+   */
+  remove(id: string) {
+    const o = outletStore.get().find((x) => x.id === id);
+    if (!o || outletActions.removeProblem(id)) return false;
+    outletStore.set(outletStore.get().filter((x) => x.id !== id));
+    memberStore.set(
+      memberStore.get().map((m) => {
+        if (!m.outletIds.includes(id)) return m;
+        const outletIds = m.outletIds.filter((x) => x !== id);
+        return { ...m, outletIds, active: m.role === "owner" || outletIds.length > 0 ? m.active : false };
+      }),
+    );
+    menuStore.set(
+      menuStore
+        .get()
+        .filter((m) => !(m.outletIds?.length && m.outletIds.every((x) => x === id)))
+        .map((m) => (m.outletIds?.includes(id) || m.offIn?.includes(id) ? { ...m, outletIds: m.outletIds?.filter((x) => x !== id), offIn: m.offIn?.filter((x) => x !== id) } : m)),
+    );
+    couponStore.set(
+      couponStore
+        .get()
+        .filter((c) => !(c.outletIds?.length && c.outletIds.every((x) => x === id)))
+        .map((c) => (c.outletIds?.includes(id) ? { ...c, outletIds: c.outletIds.filter((x) => x !== id) } : c)),
+    );
+    stockStore.set(stockStore.get().filter((x) => x.outletId !== id));
+    if (sessionStore.get().outletId === id) sessionActions.setOutlet(outletStore.get()[0]?.id ?? "");
+    logActivity("settings", `Deleted outlet ${o.name}`, outletStore.get()[0]?.id);
+    return true;
+  },
 };
 
 const memberStore = createStore<Member[]>([], "members", { kind: "collection", coll: "members" });

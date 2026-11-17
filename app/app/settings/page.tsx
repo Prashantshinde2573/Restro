@@ -132,12 +132,12 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {owner && (
+        {(owner || me?.role === "subadmin") && (
           <div className="overflow-hidden rounded-group bg-surface">
             <Link href="/app/access" className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40">
               <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#2C6EC8] text-white"><Users size={16} /></span>
-              <span className="flex-1 text-[15px]">Outlets, members & access</span>
-              <span className="text-[14px] text-muted">{outlets.length} outlet{outlets.length === 1 ? "" : "s"}</span>
+              <span className="flex-1 text-[15px]">{owner ? "Outlets, members & access" : "Staff & access"}</span>
+              <span className="text-[14px] text-muted">{owner ? `${outlets.length} outlet${outlets.length === 1 ? "" : "s"}` : outlet.name}</span>
               <ChevronRight size={17} className="text-faint" />
             </Link>
           </div>
@@ -150,7 +150,7 @@ export default function SettingsPage() {
               <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi || "Add UPI ID"} onClick={() => setPanel("payments")} />
               <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo && settings.orderFrom !== settings.orderTo ? `Table QR ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
               <Item icon={<Receipt size={16} />} tint="#DE9122" title="Details on bills" value={settings.gstin || "GSTIN, FSSAI, address"} onClick={() => setPanel("restaurant")} />
-              {owner && stampsFeature === "ok" && (
+              {(owner || me?.role === "subadmin") && stampsFeature === "ok" && (
                 <Item icon={<StampIcon size={16} />} tint="#8A4FD1" title="Stamp card" value={settings.stamps?.on ? `${settings.stamps.needed} stamps → ${settings.stamps.reward}` : "Off"} onClick={() => setPanel("stamps")} />
               )}
             </div>
