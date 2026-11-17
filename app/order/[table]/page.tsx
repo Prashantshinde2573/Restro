@@ -31,7 +31,7 @@ import {
 import { CouponBox, PayPanel, ThankYou, guestCouponOff } from "@/components/guest-pay";
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
-import { isShared, tableActions, useAllTables } from "@/lib/tables";
+import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
 import { cloudSignOut, ensureGuest, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
@@ -99,6 +99,11 @@ export default function GuestOrder() {
   const tables = useAllTables(); // every outlet: the QR link names the table
   const allOrders = useOrders();
   const t = counter ? undefined : tables.find((x) => x.id.toUpperCase() === table) ?? tables.find((x) => x.name.toUpperCase() === table);
+  // this table is pushed up against another one: the group orders and pays on that table's QR
+  const joinedMain = t?.joinedTo ? tables.find((x) => x.id === t.joinedTo) : undefined;
+  useEffect(() => {
+    if (joinedMain) window.location.replace(`/order/${encodeURIComponent(joinedMain.id)}${window.location.search}`);
+  }, [joinedMain?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cloud: sign this phone in as a guest of the restaurant in the QR link (?r=…).
   const cloud = useCloud();
@@ -230,7 +235,10 @@ export default function GuestOrder() {
     },
     [storeKey],
   );
+  // most guests this group can pick: the table's seats (with any joined tables), less other groups there
+  const maxGuests = t ? Math.max(1, capacity(t, tables) - t.parties.filter((x) => x.id !== myParty).reduce((a, x) => a + x.guests, 0)) : 40;
   const pickGuests = (n: number) => {
+    n = Math.min(n, maxGuests);
     setGuestCount(n);
     setCountOpen(false);
     window.scrollTo({ top: 0 }); // start the menu from the top
@@ -778,7 +786,7 @@ export default function GuestOrder() {
               ? tx(lang, "Done. Enjoy!", "झालं. आनंद घ्या!")
               : tx(lang, "Served. Enjoy your meal!", "टेबलवर आली");
 
-  const placeLabel = counter ? tx(lang, "Counter", "काउंटर") : `${tx(lang, "Table", "टेबल")} ${t!.name}`;
+  const placeLabel = counter ? tx(lang, "Counter", "काउंटर") : `${tx(lang, "Table", "टेबल")} ${joinedName(t!, tables)}`;
   const cashWhere = payNow ? "counter" : "table";
 
   return (
@@ -790,6 +798,8 @@ export default function GuestOrder() {
           restaurant={settings.name}
           lang={lang}
           initial={party?.guests ?? guestCount}
+          max={maxGuests}
+          seats={t ? capacity(t, tables) : undefined}
           onPick={pickGuests}
           onClose={countOpen ? () => setCountOpen(false) : ownBill && !party ? () => setOwnBill(false) : undefined}
         />

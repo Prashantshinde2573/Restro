@@ -42,7 +42,7 @@ export function GuestCount({ value, onChange, className }: { value: number | nul
   );
 }
 
-function Stepper({ value, onChange, large }: { value: number; onChange: (n: number) => void; large?: boolean }) {
+function Stepper({ value, onChange, large, max = MAX }: { value: number; onChange: (n: number) => void; large?: boolean; max?: number }) {
   const s = large ? "h-14 w-14" : "h-8 w-8";
   return (
     <div className={clsx("flex items-center rounded-full bg-sunken p-1", large ? "gap-4" : "gap-2")}>
@@ -50,7 +50,7 @@ function Stepper({ value, onChange, large }: { value: number; onChange: (n: numb
         <Minus size={large ? 20 : 14} />
       </button>
       <span className={clsx("text-center font-semibold tnum", large ? "w-14 text-[30px]" : "w-7 text-[15px]")}>{value}</span>
-      <button type="button" aria-label="More guests" disabled={value >= MAX} onClick={() => onChange(Math.min(MAX, value + 1))} className={clsx("flex items-center justify-center rounded-full bg-surface shadow-float disabled:opacity-40", s)}>
+      <button type="button" aria-label="More guests" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))} className={clsx("flex items-center justify-center rounded-full bg-surface shadow-float disabled:opacity-40", s)}>
         <Plus size={large ? 20 : 14} />
       </button>
     </div>
@@ -59,9 +59,18 @@ function Stepper({ value, onChange, large }: { value: number; onChange: (n: numb
 
 
 /** Full screen on the guest's phone, before the menu. */
-export function GuestCountScreen({ place, restaurant, lang, initial, onPick, onClose }: { place: string; restaurant: string; lang: Lang; initial?: number | null; onPick: (n: number) => void; onClose?: () => void }) {
-  const [more, setMore] = useState((initial ?? 0) > 8);
-  const [n, setN] = useState(Math.max(9, initial ?? 9));
+export function GuestCountScreen({
+  place, restaurant, lang, initial, onPick, onClose, max = MAX, seats,
+}: {
+  place: string; restaurant: string; lang: Lang; initial?: number | null; onPick: (n: number) => void; onClose?: () => void;
+  /** most guests this group can pick (seats at the table, with joined tables, less other groups there) */
+  max?: number;
+  /** seats at the table, for the note under the numbers */
+  seats?: number;
+}) {
+  const top = Math.max(1, Math.min(MAX, max));
+  const [more, setMore] = useState((initial ?? 0) > 8 && top > 8);
+  const [n, setN] = useState(Math.min(top, Math.max(9, initial ?? 9)));
   return (
     <div className="fixed inset-0 z-[60] mx-auto flex max-w-md animate-fade-in flex-col bg-canvas px-5 pb-8 pt-8 sm:max-w-2xl" role="dialog" aria-label={tx(lang, "How many guests?", "किती जण आहात?")}>
       <div className="flex items-center justify-between">
@@ -78,7 +87,7 @@ export function GuestCountScreen({ place, restaurant, lang, initial, onPick, onC
 
         {!more ? (
           <div className="mt-7 grid grid-cols-4 gap-2.5">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((k) => (
+            {Array.from({ length: Math.min(8, top) }, (_, i) => i + 1).map((k) => (
               <button
                 key={k}
                 onClick={() => onPick(k)}
@@ -87,18 +96,27 @@ export function GuestCountScreen({ place, restaurant, lang, initial, onPick, onC
                 {k}
               </button>
             ))}
-            <button onClick={() => setMore(true)} className="col-span-4 h-14 rounded-[18px] bg-surface text-[15.5px] font-semibold ring-1 ring-line/70 hover:ring-jade/50">
-              {tx(lang, "More than 8", "8 पेक्षा जास्त")}
-            </button>
+            {top > 8 && (
+              <button onClick={() => setMore(true)} className="col-span-4 h-14 rounded-[18px] bg-surface text-[15.5px] font-semibold ring-1 ring-line/70 hover:ring-jade/50">
+                {tx(lang, "More than 8", "8 पेक्षा जास्त")}
+              </button>
+            )}
           </div>
         ) : (
           <div className="mt-8 flex flex-col items-center gap-6">
-            <Stepper value={n} onChange={setN} large />
+            <Stepper value={n} onChange={setN} large max={top} />
             <button onClick={() => onPick(n)} className="h-14 w-full rounded-[18px] bg-jade text-[16px] font-semibold text-white shadow-float">
               {tx(lang, `We are ${n} · see the menu`, `आम्ही ${n} जण · मेनू पहा`)}
             </button>
             <button onClick={() => setMore(false)} className="text-[14px] font-semibold text-muted">{tx(lang, "Back", "मागे")}</button>
           </div>
+        )}
+        {seats !== undefined && top < MAX && (
+          <p className="mt-5 text-center text-[13.5px] text-muted">
+            {top < seats
+              ? tx(lang, `${top} seat${top > 1 ? "s" : ""} free at this table. More of you? Ask the staff to join a table.`, `या टेबलवर ${top} जागा रिकाम्या. जास्त जण आहात? स्टाफला टेबल जोडायला सांगा.`)
+              : tx(lang, `This table seats ${seats}. More of you? Ask the staff to join a table.`, `या टेबलवर ${seats} जण बसू शकतात. जास्त जण आहात? स्टाफला टेबल जोडायला सांगा.`)}
+          </p>
         )}
       </div>
     </div>
