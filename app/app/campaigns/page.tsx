@@ -10,7 +10,11 @@ import { CouponsPanel, couponState } from "@/components/coupons";
 import { couponLabel, useAccount, useCoupons, useFeature, useGuests } from "@/lib/live";
 import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
 import { timeAgo } from "@/lib/format";
-import { TEMPLATES, fillTemplate, type TemplateLang } from "@/lib/wa-templates";
+import { TEMPLATES, fillTemplate, offerBlock, withOffer, type TemplateLang } from "@/lib/wa-templates";
+
+/** The preview shows *bold* the way WhatsApp does. */
+const waBold = (text: string) =>
+  text.split(/(\*[^*\n]+\*)/g).map((part, i) => (/^\*[^*\n]+\*$/.test(part) ? <b key={i}>{part.slice(1, -1)}</b> : part));
 
 export default function CampaignsPage() {
   const account = useAccount();
@@ -21,11 +25,15 @@ export default function CampaignsPage() {
   const [tab, setTab] = useState<"messages" | "coupons">("messages");
   const [tLang, setTLang] = useState<TemplateLang>("en");
   const [tId, setTId] = useState<string | null>(null);
+  const [offerId, setOfferId] = useState<string | null>(null); // the coupon added to the message
   const applyTemplate = (id: string, lang = tLang) => {
     const t = TEMPLATES.find((x) => x.id === id);
     if (!t) return;
     setTId(id);
-    setMsg(fillTemplate(t, lang, account.name));
+    // keep the offer under the new text, in the new language
+    const c = live.find((x) => x.id === offerId);
+    const text = fillTemplate(t, lang, account.name);
+    setMsg(c && msg.includes("━━") ? withOffer(text, offerBlock(c, lang, account.name)) : text);
   };
   const blanks = msg.match(/\[[^\]]+\]/g) ?? [];
   const couponsOn = useFeature("coupons") === "ok";
@@ -74,7 +82,12 @@ export default function CampaignsPage() {
                     key={v}
                     type="button"
                     aria-pressed={tLang === v}
-                    onClick={() => { setTLang(v); if (tId) applyTemplate(tId, v); }}
+                    onClick={() => {
+                      setTLang(v);
+                      const c = live.find((x) => x.id === offerId);
+                      if (tId) applyTemplate(tId, v);
+                      else if (c && msg.includes("━━")) setMsg((m) => withOffer(m, offerBlock(c, v, account.name)));
+                    }}
                     className={clsx("rounded-full px-2.5 py-1 text-[12.5px] font-semibold", tLang === v ? "bg-surface text-ink shadow-sm" : "text-muted")}
                   >
                     {label}
@@ -106,8 +119,8 @@ export default function CampaignsPage() {
           {couponsOn && live.length > 0 && (
             <div className="-mt-2 flex flex-wrap gap-2">
               {live.slice(0, 4).map((c) => (
-                <button key={c.id} onClick={() => setMsg((m) => `${m.trimEnd()}\n\n🎁 ${couponLabel(c)} with code *${c.code}*`)} className="flex items-center gap-1.5 rounded-full bg-jade-soft px-3 py-1.5 text-[12.5px] font-semibold text-jade-deep">
-                  <Ticket size={13} /> Add {c.code}
+                <button key={c.id} title={couponLabel(c)} onClick={() => { setOfferId(c.id); setMsg((m) => withOffer(m, offerBlock(c, tLang, account.name))); }} className="flex items-center gap-1.5 rounded-full bg-jade-soft px-3 py-1.5 text-[12.5px] font-semibold text-jade-deep">
+                  <Ticket size={13} /> Add offer {c.code}
                 </button>
               ))}
             </div>
@@ -116,7 +129,7 @@ export default function CampaignsPage() {
             <div className="mb-1.5 text-[13px] font-medium text-muted">Preview</div>
             <div className="rounded-[22px] bg-[#E7DED3] p-3">
               <div className="ml-auto max-w-[95%] whitespace-pre-wrap rounded-[14px] rounded-tr-[4px] bg-white p-3 text-[13.5px] leading-snug text-[#111] shadow-sm">
-                {msg.replaceAll("{name}", first(list[0]?.name ?? "Neha"))}
+                {waBold(msg.replaceAll("{name}", first(list[0]?.name ?? "Neha")))}
               </div>
             </div>
           </div>
