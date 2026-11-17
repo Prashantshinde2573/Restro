@@ -25,7 +25,7 @@ import {
   useFeedback,
   useGuests,
   useMe,
-  useMenu,
+  useAllMenu,
   useOrders,
   useOutlets,
   useSettings,
@@ -375,7 +375,7 @@ function Export() {
   const account = useAccount();
   const outlets = useOutlets();
   const orders = useOrders();
-  const menu = useMenu();
+  const menu = useAllMenu(); // every outlet's dishes
   const categories = useCategories();
   const guests = useGuests();
   const feedback = useFeedback();

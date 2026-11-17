@@ -7,7 +7,8 @@ import { Copy, Plus, Share2, Ticket, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button, Empty, Field, Segmented, Sheet, Toggle, inputCls } from "./ui";
 import { useToast } from "./toast";
-import { couponActions, couponLabel, normCode, useAccount, useCoupons } from "@/lib/live";
+import { couponActions, couponLabel, couponWorksIn, normCode, useAccount, useCoupons, useCurrentOutlet, useMe, useOutlets } from "@/lib/live";
+import { inOutlet } from "@/lib/access";
 import type { Coupon } from "@/lib/types";
 
 type Draft = Omit<Coupon, "id" | "uses" | "createdAt"> & { id?: string };
@@ -36,9 +37,20 @@ export function couponMessage(c: Coupon, restaurant: string) {
 }
 
 export function CouponsPanel() {
-  const coupons = useCoupons();
+  const allCoupons = useCoupons();
   const account = useAccount();
   const toast = useToast();
+  const me = useMe();
+  const outlets = useOutlets();
+  const outlet = useCurrentOutlet();
+  const owner = me?.role === "owner";
+  const many = outlets.length > 1;
+  // the owner sees every coupon; others the ones that work in their outlet
+  const coupons = owner ? allCoupons : allCoupons.filter((c) => couponWorksIn(c, outlet.id));
+  // someone else changes only coupons made for their own outlets (not brand-wide ones)
+  const canEdit = (c: Coupon) => owner || (!!c.outletIds?.length && c.outletIds.every((id) => inOutlet(me, id)));
+  const where = (c: Coupon) => (!many ? "" : !c.outletIds?.length ? "All outlets" : c.outletIds.map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", "));
+  const newDraft = (): Draft => ({ ...blank(), ...(owner ? {} : { outletIds: [outlet.id] }) });
   const [edit, setEdit] = useState<Draft | null>(null);
 
   const share = async (c: Coupon) => {
@@ -61,12 +73,12 @@ export function CouponsPanel() {
     <>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[14px] text-muted">Guests show the code when paying. Staff type it at checkout.</p>
-        {coupons.length > 0 && <Button size="sm" className="w-full shrink-0 whitespace-nowrap sm:w-auto" onClick={() => setEdit(blank())}><Plus size={16} /> New coupon</Button>}
+        {coupons.length > 0 && <Button size="sm" className="w-full shrink-0 whitespace-nowrap sm:w-auto" onClick={() => setEdit(newDraft())}><Plus size={16} /> New coupon</Button>}
       </div>
 
       {coupons.length === 0 ? (
         <div className="rounded-group bg-surface">
-          <Empty icon={<Ticket size={22} />} title="No coupons yet" body="Make a code like WELCOME10 and send it to your guests on WhatsApp." action={<Button onClick={() => setEdit(blank())}><Plus size={16} /> New coupon</Button>} />
+          <Empty icon={<Ticket size={22} />} title="No coupons yet" body="Make a code like WELCOME10 and send it to your guests on WhatsApp." action={<Button onClick={() => setEdit(newDraft())}><Plus size={16} /> New coupon</Button>} />
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -74,7 +86,7 @@ export function CouponsPanel() {
             const st = couponState(c);
             return (
               <div key={c.id} className="rounded-group bg-surface p-4">
-                <button onClick={() => setEdit({ ...c })} className="block w-full text-left">
+                <button onClick={() => (canEdit(c) ? setEdit({ ...c }) : toast("The owner made this coupon for all outlets · only they can change it"))} className="block w-full text-left">
                   <div className="flex items-start justify-between gap-2">
                     <span className="rounded-[8px] border-2 border-dashed border-jade/50 px-2.5 py-1 font-mono text-[16px] font-bold tracking-wider text-jade-deep">{c.code}</span>
                     <span className={clsx("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", st.tone === "jade" ? "bg-jade-soft text-jade-deep" : st.tone === "rose" ? "bg-rose-soft text-rose" : "bg-sunken text-muted")}>{st.label}</span>
@@ -85,6 +97,7 @@ export function CouponsPanel() {
                     {c.validTo ? ` · till ${new Date(c.validTo).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
                   </div>
                   {c.note && <div className="mt-1 truncate text-[13px] text-faint">{c.note}</div>}
+                  {where(c) && <div className="mt-1 truncate text-[12.5px] font-medium text-jade">📍 {where(c)}</div>}
                 </button>
                 <div className="mt-3 flex gap-2">
                   <Button size="sm" className="flex-1 !bg-[#25D366] hover:!bg-[#1fb757]" onClick={() => share(c)}><Share2 size={15} /> Send</Button>
@@ -96,7 +109,7 @@ export function CouponsPanel() {
         </div>
       )}
 
-      <CouponSheet draft={edit} onClose={() => setEdit(null)} taken={(code, id) => coupons.some((x) => x.code === code && x.id !== id)} />
+      <CouponSheet draft={edit} onClose={() => setEdit(null)} taken={(code, id) => allCoupons.some((x) => x.code === code && x.id !== id)} />
     </>
   );
 }
@@ -113,6 +126,9 @@ function CouponSheet({ draft, onClose, taken }: { draft: Draft | null; onClose: 
   const err =
     code.length < 3 ? "Code needs 3 or more letters or numbers" : taken(code, d.id) ? "You already have this code" : !(d.value > 0) ? "Enter the discount" : d.kind === "percent" && d.value > 100 ? "Can't be more than 100%" : null;
   const num = (v: string) => (v === "" ? undefined : Math.max(0, Number(v)));
+  const me = useMe();
+  const outlets = useOutlets();
+  const owner = me?.role === "owner";
 
   return (
     <Sheet
@@ -154,6 +170,24 @@ function CouponSheet({ draft, onClose, taken }: { draft: Draft | null; onClose: 
             <input className={inputCls} type="number" inputMode="numeric" value={d.maxUses ?? ""} onChange={(e) => set({ maxUses: num(e.target.value) || undefined })} placeholder="No limit" />
           </Field>
         </div>
+        {outlets.length > 1 && (
+          <Field label="Works at">
+            {owner ? (
+              <div className="flex flex-wrap gap-2">
+                {[{ id: "", name: "All outlets" }, ...outlets].map((o) => {
+                  const on = o.id ? d.outletIds?.length === 1 && d.outletIds[0] === o.id : !d.outletIds?.length;
+                  return (
+                    <button key={o.id || "all"} type="button" aria-pressed={on} onClick={() => set({ outletIds: o.id ? [o.id] : undefined })} className={clsx("rounded-full px-3.5 py-1.5 text-[13.5px] font-semibold ring-1", on ? "bg-ink text-canvas ring-ink" : "bg-surface ring-line")}>
+                      {o.name}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-ctl bg-surface px-4 py-3 text-[14px] text-muted">{(d.outletIds ?? []).map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") || "Your outlet"} only</p>
+            )}
+          </Field>
+        )}
         <Field label="Note (optional)">
           <input className={inputCls} value={d.note ?? ""} onChange={(e) => set({ note: e.target.value || undefined })} placeholder="Diwali offer for regulars" />
         </Field>

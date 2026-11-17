@@ -13,7 +13,7 @@ import { printReceipt } from "@/components/receipt";
 import { PaymentSplit, paidSum } from "@/components/payment-split";
 import { useToast } from "@/components/toast";
 import { orderWhere, tableActions, useTables } from "@/lib/tables";
-import { billOf, methodLabel, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOrders, useSettings } from "@/lib/live";
+import { billOf, methodLabel, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOutletOrders, useSettings } from "@/lib/live";
 import { closeBill, confirmPayment, markUnpaid, partyOpenOrders, rejectPayment } from "@/lib/billing";
 import { PasswordCheck } from "@/components/password-check";
 import { isOwner } from "@/lib/access";
@@ -24,7 +24,7 @@ type Filter = "open" | "confirm" | "online" | "ready" | "paid" | "all";
 
 export default function OrdersPage() {
   const toast = useToast();
-  const list = useOrders();
+  const list = useOutletOrders();
   const [filter, setFilter] = useState<Filter>("open");
   const [selId, setSelId] = useState<string | null>(null);
   const [pay, setPay] = useState<Order[] | null>(null); // one bill: a table party's open orders, or one order

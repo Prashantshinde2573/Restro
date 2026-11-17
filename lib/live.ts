@@ -4,6 +4,7 @@
 //
 // Every store mirrors a Supabase table for this restaurant (rid), so all
 // phones and tablets see the same data live. A new restaurant starts empty.
+import { useMemo } from "react";
 import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
 import { getCloud, guestUpsert, isConnected } from "./cloud";
@@ -134,15 +135,23 @@ export function useCan(p: Perm): boolean {
   return hasPerm(me, p) && inOutlet(me, o.id);
 }
 
+/**
+ * The stamp card of an outlet. One loyalty card for the brand: an outlet that never set its own
+ * uses the card set at another outlet (so a new outlet has it from day one).
+ */
+export const stampProgramOf = (o: Outlet | undefined, all: Outlet[]) =>
+  o?.stamps ?? [...all].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).find((x) => x.stamps?.on)?.stamps;
+
 /** Brand name + current outlet's settings (what the guest QR page needs). */
 export function useSettings(): OutletSettings {
   const a = useAccount();
   const o = useCurrentOutlet();
+  const outlets = useOutlets();
   return {
     name: a.name, logo: a.logo || "", businessType: o.businessType, mixed: isMixed(o), upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
     orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, gstRate: o.gstRate ?? 0.05,
-    stamps: o.stamps,
+    stamps: stampProgramOf(o, outlets),
   };
 }
 export const settingsActions = {
@@ -164,6 +173,12 @@ export const paymentsText = (p?: Payment[]) => (p?.length ? p.map((x) => `${meth
 export const billOf = (o: Order) => Math.round(o.lines.reduce((s, l) => s + l.qty * l.price, 0) * (1 + gstRate()));
 const orderStore = createStore<Order[]>([], "orders", { kind: "collection", coll: "orders", guest: "own" });
 export const useOrders = () => orderStore.use();
+/** Orders of the outlet on screen (a sub admin's own outlet; the owner switches outlets at the top). */
+export function useOutletOrders() {
+  const all = orderStore.use();
+  const o = useCurrentOutlet();
+  return useMemo(() => (o.id ? all.filter((x) => !x.outletId || x.outletId === o.id) : all), [all, o.id]);
+}
 export const getOrders = () => orderStore.get();
 
 /** The outlet this device is working in (or the first one). */
@@ -416,6 +431,49 @@ export const orderActions = {
 const guestStore = createStore<Customer[]>([], "guests", { kind: "collection", coll: "guests" });
 export const useGuests = () => guestStore.use();
 
+/**
+ * Outlets a guest has eaten at: from their bills, stamps and orders. The guest book is one for
+ * the brand, but a sub admin sees only the guests of their own outlet.
+ */
+export function guestOutletIds(g: Customer, orders: Order[]): Set<string> {
+  const ids = new Set<string>();
+  const key = normPhone(g.phone);
+  const byNo = new Map(orders.map((o) => [o.number, o.outletId]));
+  for (const b of g.bills ?? []) {
+    const o = b.outletId ?? byNo.get(b.orderNo);
+    if (o) ids.add(o);
+  }
+  for (const s of g.stamps ?? []) if (s.outletId) ids.add(s.outletId);
+  for (const r of g.rewards ?? []) if (r.outletId) ids.add(r.outletId);
+  for (const o of orders) if (o.outletId && o.guestPhone && normPhone(o.guestPhone) === key) ids.add(o.outletId);
+  return ids;
+}
+
+/** Which outlets' guests and reviews someone sees: the owner can pick all; everyone else their outlet. */
+export type GuestScope = "outlet" | "all";
+export function useScopedGuests(scope: GuestScope) {
+  const all = guestStore.use();
+  const orders = orderStore.use();
+  const me = useMe();
+  const outlet = useCurrentOutlet();
+  const owner = me?.role === "owner";
+  return useMemo(() => {
+    if (owner && scope === "all") return all;
+    return all.filter((g) => {
+      const ids = guestOutletIds(g, orders);
+      // guests from before outlets were tracked: only the owner sees them
+      return ids.size ? ids.has(outlet.id) : owner;
+    });
+  }, [all, orders, owner, scope, outlet.id]);
+}
+export function useScopedFeedback(scope: GuestScope) {
+  const all = feedbackStore.use();
+  const me = useMe();
+  const outlet = useCurrentOutlet();
+  const owner = me?.role === "owner";
+  return useMemo(() => (owner && scope === "all" ? all : all.filter((f) => (f.outletId ? f.outletId === outlet.id : owner))), [all, owner, scope, outlet.id]);
+}
+
 const normPhone = (p: string) => p.replace(/\D/g, "").slice(-10);
 
 export const guestActions = {
@@ -461,7 +519,7 @@ export const guestActions = {
     const list = guestStore.get();
     const found = list.find((c) => normPhone(c.phone) === key);
     const now = new Date().toISOString();
-    const entry = { ...bill, at: now };
+    const entry = { ...bill, at: now, outletId: currentOutletId() };
     if (found) {
       guestStore.set(
         list.map((c) =>
@@ -496,7 +554,7 @@ export const guestActions = {
     guestStore.set(
       guestStore.get().map((c) =>
         normPhone(c.phone) === key
-          ? { ...c, visits: (c.bills?.length ?? 0) > 0 ? c.visits + 1 : c.visits, lastVisit: new Date().toISOString(), spend: c.spend + bill.amount, points: c.points + Math.floor(bill.amount / 10), bills: [{ ...bill, at: new Date().toISOString() }, ...(c.bills ?? [])] }
+          ? { ...c, visits: (c.bills?.length ?? 0) > 0 ? c.visits + 1 : c.visits, lastVisit: new Date().toISOString(), spend: c.spend + bill.amount, points: c.points + Math.floor(bill.amount / 10), bills: [{ ...bill, at: new Date().toISOString(), outletId: currentOutletId() }, ...(c.bills ?? [])] }
           : c,
       ),
     );
@@ -551,9 +609,10 @@ export function stampsForGuestPayment(list: Order[], claim: PayClaim) {
   const phone = list.find((o) => o.guestPhone)?.guestPhone;
   if (!phone || claim.source !== "guest") return;
   const outlet = outletStore.get().find((x) => x.id === list[0]?.outletId) ?? outletStore.get()[0];
-  if (!outlet?.stamps?.on) return;
+  const prog = stampProgramOf(outlet, outletStore.get());
+  if (!outlet || !prog?.on) return;
   if (featureState("stamps", accountStore.get().plan, outletKinds(outlet)) !== "ok") return;
-  const p = programOf(outlet.stamps);
+  const p = programOf(prog);
   const me = currentMember();
   const guest = findGuest(phone);
   const have = liveStamps(guest, p).length;
@@ -571,8 +630,57 @@ export function stampsForGuestPayment(list: Order[], claim: PayClaim) {
 
 /* ---------------- menu ---------------- */
 const menuStore = createStore<MenuItem[]>([], "menu", { kind: "collection", coll: "menu", guest: "read" });
-export const useMenu = () => menuStore.use();
+/**
+ * The dishes of one outlet. Outlets use the shared menu unless they turned on their own menu
+ * (Menu → "Own menu"). A shared dish can be sold out in one outlet only (offIn).
+ */
+export function menuFor(all: MenuItem[], o: Pick<Outlet, "id" | "ownMenu"> | undefined): MenuItem[] {
+  if (!o?.id) return all;
+  return all
+    .filter((m) => (o.ownMenu ? !!m.outletIds?.includes(o.id) : !m.outletIds?.length))
+    .map((m) => (m.available && m.offIn?.includes(o.id) ? { ...m, available: false } : m));
+}
+/** Dishes of the outlet on screen (or of the guest's QR outlet). */
+export function useMenu() {
+  const all = menuStore.use();
+  const o = useCurrentOutlet();
+  return useMemo(() => menuFor(all, o), [all, o.id, o.ownMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+/** A new dish goes on the menu of the outlet on screen: its own menu, or the shared one. */
+function withOutletMenu(m: MenuItem): MenuItem {
+  if (m.outletIds?.length) return m;
+  const o = outletStore.get().find((x) => x.id === currentOutletId());
+  return o?.ownMenu ? { ...m, outletIds: [o.id] } : m;
+}
+/** Every dish of every outlet. */
+export const useAllMenu = () => menuStore.use();
 export const menuActions = {
+  /** Sold out / back: a shared dish only in the outlet on screen; an outlet's own dish for that outlet. */
+  setAvailable(id: string, on: boolean) {
+    const m = menuStore.get().find((x) => x.id === id);
+    const oid = currentOutletId();
+    if (!m) return;
+    const shared = !m.outletIds?.length && outletStore.get().length > 1 && !!oid;
+    if (shared) {
+      // sold out everywhere from before: keep it sold out in the other outlets
+      const off = new Set(m.available ? (m.offIn ?? []) : outletStore.get().map((o) => o.id));
+      if (on) off.delete(oid!);
+      else off.add(oid!);
+      const next = { ...m, offIn: off.size ? [...off] : undefined, available: on ? true : m.available };
+      menuStore.set(menuStore.get().map((x) => (x.id === id ? next : x)));
+    } else {
+      menuStore.set(menuStore.get().map((x) => (x.id === id ? { ...x, available: on, offIn: undefined } : x)));
+    }
+    logActivity("menu", `${m.name} marked ${on ? "available" : "sold out"}`, oid);
+  },
+  /** Start an outlet's own menu as a copy of the shared one. */
+  copySharedTo(outletId: string) {
+    const shared = menuStore.get().filter((m) => !m.outletIds?.length);
+    const stamp = Date.now().toString(36);
+    const copies = shared.map((m, i) => ({ ...m, id: `m${stamp}${i.toString(36)}`, outletIds: [outletId], offIn: undefined, available: m.available && !m.offIn?.includes(outletId) }));
+    if (copies.length) menuStore.set([...menuStore.get(), ...copies]);
+    return copies.length;
+  },
   update(id: string, patch: Partial<MenuItem>) {
     const old = menuStore.get().find((m) => m.id === id);
     menuStore.set(menuStore.get().map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -581,12 +689,14 @@ export const menuActions = {
     if (patch.available !== undefined && patch.available !== old.available) logActivity("menu", `${old.name} marked ${patch.available ? "available" : "sold out"}`);
     if (patch.name && patch.name !== old.name) logActivity("menu", `Renamed ${old.name} to ${patch.name}`);
   },
-  add(item: MenuItem) {
+  add(itemIn: MenuItem) {
+    const item = withOutletMenu(itemIn);
     menuStore.set([...menuStore.get(), item]);
     logActivity("menu", `Added dish ${item.name} · ${rs(item.price)}`);
   },
   /** Many dishes in one go (menu read from a photo). */
-  addMany(items: MenuItem[]) {
+  addMany(itemsIn: MenuItem[]) {
+    const items = itemsIn.map(withOutletMenu);
     if (items.length) menuStore.set([...menuStore.get(), ...items]);
     if (items.length) logActivity("menu", `Added ${items.length} dishes from a menu photo`);
   },
@@ -634,7 +744,8 @@ export const categoryActions = {
 const feedbackStore = createStore<Feedback[]>([], "feedback", { kind: "collection", coll: "feedback" });
 export const useFeedback = () => feedbackStore.use();
 export const feedbackActions = {
-  add(f: Omit<Feedback, "id" | "at">) {
+  add(fIn: Omit<Feedback, "id" | "at">) {
+    const f = { ...fIn, outletId: fIn.outletId ?? currentOutletId() };
     const c = getCloud();
     if (c.role === "guest" && c.rid) {
       const id = `f${Date.now()}`;
@@ -680,6 +791,8 @@ const couponStore = createStore<Coupon[]>([], "coupons", { kind: "collection", c
 export const useCoupons = () => couponStore.use();
 export const getCoupons = () => couponStore.get();
 export const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
+/** Coupons made for some outlets only work there; the others work everywhere. */
+export const couponWorksIn = (c: Pick<Coupon, "outletIds">, outletId?: string) => !c.outletIds?.length || !outletId || c.outletIds.includes(outletId);
 export const couponActions = {
   save(c: Omit<Coupon, "id" | "uses" | "createdAt"> & { id?: string }) {
     const list = couponStore.get();
@@ -704,6 +817,7 @@ export function couponProblem(c: Coupon | undefined, subtotal: number): string |
   if (!c.active) return "This coupon is turned off";
   if (c.validTo && c.validTo < new Date().toISOString().slice(0, 10)) return "This coupon has expired";
   if (c.maxUses && c.uses >= c.maxUses) return "This coupon has been used up";
+  if (!couponWorksIn(c, currentOutletId())) return "This coupon is for another outlet";
   if (c.minBill && subtotal < c.minBill) return `Works on bills of ₹${c.minBill} or more`;
   return null;
 }

@@ -40,6 +40,8 @@ export interface Outlet {
   acceptCard?: boolean; // card machine at the counter
   stamps?: StampProgram; // stamp card (loyalty), set by the owner
   sort?: number;
+  /** This outlet has its own menu (dishes with outletIds = [this outlet]); otherwise it uses the shared menu. */
+  ownMenu?: boolean;
 }
 
 // The client's account: brand name, plan and when the plan has to be renewed.
@@ -99,6 +101,10 @@ export interface MenuItem {
   photos?: string[]; // uploaded photo URLs (Cloud Storage later)
   photoCount?: number; // sample-data stand-in for photos
   hue: number; // placeholder art colour until photos come from Storage
+  /** A dish of an outlet's own menu (missing = the shared menu every other outlet uses). */
+  outletIds?: string[];
+  /** Shared dish sold out only in these outlets. */
+  offIn?: string[];
 }
 
 export interface Size {
@@ -253,6 +259,7 @@ export interface Coupon {
   active: boolean;
   note?: string;
   createdAt: string;
+  outletIds?: string[]; // only these outlets (empty or missing: every outlet)
 }
 
 export interface StockItem {
@@ -324,7 +331,7 @@ export interface Customer {
   verified?: boolean; // phone confirmed by OTP
   source?: "qr" | "pos" | "whatsapp";
   optIn?: boolean; // agreed to offers on WhatsApp
-  bills?: { orderNo: number; at: string; amount: number; method: string }[];
+  bills?: { orderNo: number; at: string; amount: number; method: string; outletId?: string }[];
   /** stamp card: stamps on the current card (oldest first) and rewards given */
   stamps?: Stamp[];
   rewards?: { at: string; reward: string; amount: number; orderNo?: number; by?: string; outletId?: string }[];
@@ -338,6 +345,7 @@ export interface Feedback {
   at: string;
   routed: "google" | "private";
   replied?: boolean;
+  outletId?: string; // the outlet the guest ate at
 }
 
 export interface Plan {

@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { Check, Gift, Stamp as StampIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button, Segmented, Toggle, inputCls } from "./ui";
-import { useMenu, settingsActions, useSettings } from "@/lib/live";
+import { useMenu, settingsActions, useSettings, useCurrentOutlet, useOutlets, outletActions } from "@/lib/live";
 import { DEFAULT_PROGRAM, WHO_LABEL, programOf, rewardText } from "@/lib/stamps";
 import type { StampProgram } from "@/lib/types";
 
@@ -79,6 +79,12 @@ export function StampSettings({ onDone }: { onDone: (msg: string) => void }) {
   const settings = useSettings();
   const menu = useMenu();
   const [p, setP] = useState<StampProgram>(programOf(settings.stamps));
+  // one card for every outlet (the usual), or this outlet's own
+  const outlets = useOutlets();
+  const outlet = useCurrentOutlet();
+  const many = outlets.length > 1;
+  const sameEverywhere = outlets.every((o) => !o.stamps || JSON.stringify(o.stamps) === JSON.stringify(outlets.find((x) => x.stamps)?.stamps));
+  const [everywhere, setEverywhere] = useState(sameEverywhere);
   const set = (patch: Partial<StampProgram>) => setP((x) => ({ ...x, ...patch }));
   const reward = rewardText({ ...p, reward: p.reward }, menu);
   const valid = p.needed >= 2 && (p.rewardKind === "item" ? !!p.rewardItemId : (p.rewardValue ?? 0) > 0) && (p.reward.trim() || p.rewardKind !== "item" || !!p.rewardItemId);
@@ -93,6 +99,15 @@ export function StampSettings({ onDone }: { onDone: (msg: string) => void }) {
         </div>
         <Toggle checked={p.on} onChange={(v) => set({ on: v })} label="Stamp card on" />
       </div>
+
+      {many && (
+        <div className="rounded-group bg-surface p-4">
+          <Toggle checked={everywhere} onChange={setEverywhere} label="Same stamp card in all outlets" />
+          <p className="mt-1.5 text-[12.5px] text-muted">
+            {everywhere ? "Guests collect stamps at any outlet and use the reward at any outlet. New outlets get this card too." : `Only ${outlet.name} uses this card. Other outlets keep their own.`}
+          </p>
+        </div>
+      )}
 
       <StampCard have={Math.max(0, p.needed - 3)} needed={p.needed} reward={reward} title="What guests see" />
 
@@ -177,7 +192,9 @@ export function StampSettings({ onDone }: { onDone: (msg: string) => void }) {
           className="flex-1"
           disabled={p.on && !valid}
           onClick={() => {
-            settingsActions.update({ stamps: { ...p, reward: p.reward.trim() || reward } });
+            const prog = { ...p, reward: p.reward.trim() || reward };
+            if (many && everywhere) outlets.forEach((o) => outletActions.update(o.id, { stamps: prog }));
+            else settingsActions.update({ stamps: prog });
             onDone(p.on ? `Stamp card on · ${p.needed} stamps → ${p.reward.trim() || reward}` : "Stamp card off");
           }}
         >

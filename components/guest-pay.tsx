@@ -13,6 +13,7 @@ import { useToast } from "./toast";
 import { inr } from "@/lib/format";
 import type { Payment } from "@/lib/types";
 import { guestCoupon, type GuestCoupon } from "@/lib/cloud";
+import { currentOutletId } from "@/lib/live";
 
 
 export type GuestPayChoice = "upi" | "cash" | "mixed" | "card";
@@ -325,7 +326,7 @@ export function CouponBox({ lang, subtotal, applied, onChange }: { lang: Lang; s
     if (c.length < 3) return setErr(tx(lang, "Enter the code", "कोड टाका"));
     setBusy(true);
     setErr("");
-    const r = await guestCoupon(c).catch(() => ({ problem: "Couldn't check the code. Try again." }) as { coupon?: GuestCoupon; problem?: string });
+    const r = await guestCoupon(c, currentOutletId()).catch(() => ({ problem: "Couldn't check the code. Try again." }) as { coupon?: GuestCoupon; problem?: string });
     setBusy(false);
     if (!r.coupon) return setErr(r.problem ?? "No coupon with this code");
     if (r.coupon.minBill && subtotal < r.coupon.minBill) return setErr(tx(lang, `Works on bills of ${inr(r.coupon.minBill)} or more`, `${inr(r.coupon.minBill)} किंवा जास्तच्या बिलावरच चालतो`));
