@@ -144,7 +144,8 @@ export function OrderAlerts() {
     }
 
     // a low rating from a guest
-    for (const f of feedback.filter((f) => !seenReview.current!.has(f.id))) {
+    // reviews of this person's outlets (from before outlets were tracked: the owner)
+    for (const f of feedback.filter((f) => !seenReview.current!.has(f.id) && (f.outletId ? inOutlet(me, f.outletId) : me?.role === "owner"))) {
       seenReview.current!.add(f.id);
       if (f.stars <= 3 && (canGuests || me?.role === "owner")) say("review", `${f.stars}★ review · needs a look`, `${f.customer || "A guest"}${f.text ? `: “${f.text.slice(0, 80)}”` : ""}`, "/app/guests", `${f.stars}★ review from ${f.customer || "a guest"}`);
     }

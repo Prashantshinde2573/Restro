@@ -815,18 +815,18 @@ export async function guestStampsFor(rid: string): Promise<{ stamps: { at: strin
   return data as { stamps: { at: string }[]; rewards: number };
 }
 /** Guest QR page: does this restaurant have a coupon the guest could use? */
-export async function guestCouponsOn(): Promise<boolean> {
+export async function guestCouponsOn(outletId?: string): Promise<boolean> {
   const rid = stateStore.get().rid;
   if (!rid || !cloudConfigured) return false;
-  const { data, error } = await sb().rpc("guest_coupons_on", { r: rid });
+  const { data, error } = await sb().rpc("guest_coupons_on", { r: rid, ...(outletId ? { p_outlet: outletId } : {}) });
   return !error && data === true;
 }
 export type GuestCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number };
 /** Guest QR page: check one coupon code. Returns the coupon, or why it can't be used. */
-export async function guestCoupon(code: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {
+export async function guestCoupon(code: string, outletId?: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {
   const rid = stateStore.get().rid;
   if (!rid || !cloudConfigured) return { problem: "Coupons are not available here" };
-  const { data, error } = await sb().rpc("guest_coupon", { r: rid, p_code: code });
+  const { data, error } = await sb().rpc("guest_coupon", { r: rid, p_code: code, ...(outletId ? { p_outlet: outletId } : {}) });
   if (error || !data) return { problem: "Couldn't check the code. Try again." };
   const d = data as GuestCoupon & { problem?: string };
   if (d.problem) return { problem: d.problem };

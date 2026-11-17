@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { BadgeCheck, Gift, MessageCircle, QrCode, Search, Star, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Chips, Group, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
-import { stampActions, useFeature, useFeedback, useGuests, useMe, useSettings } from "@/lib/live";
+import { stampActions, useCurrentOutlet, useFeature, useMe, useOutlets, useScopedFeedback, useScopedGuests, useSettings, type GuestScope } from "@/lib/live";
 import { liveStamps, mayAct, programOf } from "@/lib/stamps";
 import { StampCard } from "@/components/stamps";
 import { inr, timeAgo } from "@/lib/format";
@@ -28,13 +28,18 @@ export default function GuestsPage() {
   const [seg, setSeg] = useState<Seg>("all");
   const [q, setQ] = useState("");
   const [selId, setSelId] = useState<string | null>(null);
-  const all = useGuests();
-  const fb = useFeedback().slice().sort((a, b) => b.at.localeCompare(a.at));
+  // owner: all outlets or the one on screen; a sub admin: only their outlet
+  const outlets = useOutlets();
+  const outlet = useCurrentOutlet();
+  const [scope, setScope] = useState<GuestScope>("all");
+  const all = useScopedGuests(scope);
+  const fb = useScopedFeedback(scope).slice().sort((a, b) => b.at.localeCompare(a.at));
 
   const sel: Customer | null = all.find((c) => c.id === selId) ?? null;
   // stamp card
   const settings = useSettings();
   const me = useMe();
+  const scopeChoice = me?.role === "owner" && outlets.length > 1;
   const stampsOn = useFeature("stamps") === "ok" && !!settings.stamps?.on;
   const prog = programOf(settings.stamps);
   const stampsOf = (c: Customer) => liveStamps(c, prog).length;
@@ -49,7 +54,10 @@ export default function GuestsPage() {
   return (
     <>
       <PageHeader title="Guests" subtitle={all.length ? `${all.length} guest${all.length === 1 ? "" : "s"} · ${back} came back in the last 30 days` : "Your guest book"}>
-        <Segmented value={tab} onChange={setTab} options={[{ value: "guests", label: "Guest book" }, { value: "reviews", label: `Feedback${fb.length ? ` · ${fb.length}` : ""}` }]} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Segmented value={tab} onChange={setTab} options={[{ value: "guests", label: "Guest book" }, { value: "reviews", label: `Feedback${fb.length ? ` · ${fb.length}` : ""}` }]} />
+          {scopeChoice && <Segmented value={scope} onChange={setScope} options={[{ value: "all", label: "All outlets" }, { value: "outlet", label: outlet.name || "This outlet" }]} />}
+        </div>
       </PageHeader>
       <Page>
         {tab === "guests" ? (

@@ -7,7 +7,7 @@ import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaph
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
-import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useOrders, useOutlets, useStock } from "@/lib/live";
+import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { useReady } from "@/lib/store";
 import { ChangePassword } from "./owner-auth";
@@ -120,7 +120,8 @@ function useNav() {
   const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
   const tableAsks = tables.reduce((n, t) => n + t.parties.filter((p) => p.pendingApproval || p.status === "billing" || p.paymentPending).length, 0);
   const lowStock = useStock().filter((x) => here(x.outletId) && x.par > 0 && x.stock < x.par).length;
-  const asks = useAttendance().filter((a) => a.status === "pending" && a.memberId !== me?.id).length;
+  const outletPeople = new Set(useMembers().filter((m) => m.role !== "owner" && m.outletIds.includes(outlet.id)).map((m) => m.id));
+  const asks = useAttendance().filter((a) => a.status === "pending" && a.memberId !== me?.id && outletPeople.has(a.memberId)).length;
   const counts: Record<string, number> = {
     "/app/orders": waiting,
     "/app/kitchen": cooking,

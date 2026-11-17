@@ -1,0 +1,4 @@
+-- Outlets (applied live as migration guest_order_outlet_menu):
+-- private.guard_guest_order also refuses a QR order line when the dish is sold out in that
+-- outlet only (menu data.offIn has the outlet) or belongs to another outlet's own menu
+-- (menu data.outletIds set and not this outlet). Coupons per outlet: see guest_coupons.sql.

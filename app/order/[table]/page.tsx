@@ -32,7 +32,7 @@ import { CouponBox, PayPanel, ThankYou, guestCouponOff } from "@/components/gues
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
-import { callActions, cloudConfigured, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
 import { cloudSignOut, ensureGuest, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
@@ -324,7 +324,7 @@ export default function GuestOrder() {
   useEffect(() => {
     if (cloud.status !== "ready" || !cloud.rid) return;
     let live = true;
-    guestCouponsOn().then((on) => live && setCouponsOn(on)).catch(() => {});
+    guestCouponsOn(t?.outletId ?? currentOutletId()).then((on) => live && setCouponsOn(on)).catch(() => {});
     return () => {
       live = false;
     };
@@ -391,6 +391,7 @@ export default function GuestOrder() {
         JSON.stringify({
           place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: pays, orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now(),
           ...(stampProg ? { stampProg, stampsHave: myStamps } : {}),
+          outletId: t?.outletId ?? currentOutletId() ?? "",
         }),
       );
     } catch {}
@@ -692,7 +693,7 @@ export default function GuestOrder() {
     }
     if (coupon?.code === billCode) return;
     let live = true;
-    guestCoupon(billCode).then((r) => { if (live && r.coupon) setCoupon(r.coupon); }).catch(() => {});
+    guestCoupon(billCode, t?.outletId ?? currentOutletId()).then((r) => { if (live && r.coupon) setCoupon(r.coupon); }).catch(() => {});
     return () => { live = false; };
   }, [billCode]); // eslint-disable-line react-hooks/exhaustive-deps
   const changeCoupon = (c: GuestCoupon | null) => {

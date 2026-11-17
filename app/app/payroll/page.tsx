@@ -47,7 +47,9 @@ export default function PayrollPage() {
   const [tab, setTab] = useState<Tab>("attendance");
   const [open, setOpen] = useState<string | null>(null);
   const members = useMembers();
-  const people = members.filter((m) => m.role !== "owner");
+  const outletNow = useCurrentOutlet();
+  // only the people of the outlet on screen (a sub admin's own outlet; the owner switches outlets at the top)
+  const people = members.filter((m) => m.role !== "owner" && (!outletNow.id || m.outletIds.includes(outletNow.id)));
   const names = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
   const att = useAttendance();
   const pays = useStaffPay();
@@ -65,7 +67,7 @@ export default function PayrollPage() {
 
   return (
     <>
-      <PageHeader title="Attendance & salary" subtitle={`${people.filter((m) => m.active).length} people · ${monthLabel(month)}`}>
+      <PageHeader title="Attendance & salary" subtitle={`${outletNow.name ? `${outletNow.name} · ` : ""}${people.filter((m) => m.active).length} people · ${monthLabel(month)}`}>
         <div className="flex flex-wrap items-center gap-3">
           <Segmented value={tab} onChange={setTab} options={[{ value: "attendance", label: `Attendance${pending.length ? ` (${pending.length})` : ""}` }, { value: "salary", label: "Salary" }]} />
           <MonthSwitch month={month} onChange={setMonth} max={monthOf(today)} />

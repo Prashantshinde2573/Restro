@@ -13,7 +13,7 @@ import { useParams } from "next/navigation";
 import { QrCode } from "lucide-react";
 import type { Payment } from "@/lib/types";
 
-type Saved = { place: string; logo: string; name: string; payments: Payment[]; orderNo: number; lang: Lang; rid: string; at: number; stampProg?: StampProgram; stampsHave?: number | null };
+type Saved = { place: string; logo: string; name: string; payments: Payment[]; orderNo: number; lang: Lang; rid: string; at: number; stampProg?: StampProgram; stampsHave?: number | null; outletId?: string };
 
 /**
  * After the bill is paid the guest lands here, on its own page. The menu is closed for this visit:
@@ -88,7 +88,7 @@ export default function GuestThanks() {
         />
       ) : undefined}
       onRate={(stars, text) => {
-        const f = { customer: saved.name || "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: (stars >= 4 ? "google" : "private") as "google" | "private" };
+        const f = { customer: saved.name || "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: (stars >= 4 ? "google" : "private") as "google" | "private", ...(saved.outletId ? { outletId: saved.outletId } : {}) };
         if (cloudConfigured && saved.rid) {
           const id = `f${Date.now()}`;
           guestUpsert(saved.rid, id, { ...f, id, at: new Date().toISOString() }, "feedback");
