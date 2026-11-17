@@ -119,3 +119,40 @@ export const TEMPLATES: Template[] = [
 ];
 
 export const fillTemplate = (t: Template, lang: TemplateLang, place: string) => t.text[lang].replaceAll("{place}", place || "us");
+
+/* ---------------- coupon offer block ---------------- */
+// WhatsApp click-to-chat carries text only, so the offer is laid out with WhatsApp's own
+// *bold* and emoji: what it is, the code, until when, on what bill, and how to use it.
+type OfferCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number; validTo?: string };
+const OFFER_RULE = "━━━━━━━━━━━━━━";
+const offerDate = (ymd: string) => {
+  const d = new Date(ymd + "T00:00:00Z");
+  const sameYear = d.getUTCFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" });
+};
+
+export function offerBlock(c: OfferCoupon, lang: TemplateLang, place: string) {
+  const name = place || (lang === "mr" ? "आमच्याकडे" : lang === "hi" ? "हमारे यहाँ" : "Our café");
+  const off =
+    c.kind === "percent"
+      ? { en: `*${c.value}% OFF*${c.maxOff ? ` (up to ₹${c.maxOff})` : ""}`, mr: `*${c.value}% सूट*${c.maxOff ? ` (₹${c.maxOff} पर्यंत)` : ""}`, hi: `*${c.value}% छूट*${c.maxOff ? ` (₹${c.maxOff} तक)` : ""}` }[lang]
+      : { en: `*₹${c.value} OFF*`, mr: `*₹${c.value} सूट*`, hi: `*₹${c.value} छूट*` }[lang];
+  const till = c.validTo ? { en: `Valid till ${offerDate(c.validTo)}`, mr: `${offerDate(c.validTo)} पर्यंत`, hi: `${offerDate(c.validTo)} तक` }[lang] : "";
+  const min = c.minBill ? { en: `on bills of ₹${c.minBill}+`, mr: `₹${c.minBill}+ बिलावर`, hi: `₹${c.minBill}+ के बिल पर` }[lang] : "";
+  const when = [till, min].filter(Boolean).join(" · ");
+  const lines = {
+    en: [`🎉 *${name} – Special offer!*`, OFFER_RULE, `🎁 ${off}`, `🔖 Code: *${c.code}*`, when ? `📅 ${when[0].toUpperCase()}${when.slice(1)}` : null, "", "*How to use:*", `Scan the QR on your table → when you pay, tap "Have a coupon code?" → enter *${c.code}* ✅`, "Or just show this message at the counter."],
+    mr: [`🎉 *${name} – खास ऑफर!*`, OFFER_RULE, `🎁 ${off}`, `🔖 कोड: *${c.code}*`, when ? `📅 ${when}` : null, "", "*कसा वापरायचा:*", `टेबलवरचा QR स्कॅन करा → पैसे भरताना "Have a coupon code?" वर दाबा → *${c.code}* टाका ✅`, "किंवा हा मेसेज काउंटरवर दाखवा."],
+    hi: [`🎉 *${name} – खास ऑफ़र!*`, OFFER_RULE, `🎁 ${off}`, `🔖 कोड: *${c.code}*`, when ? `📅 ${when}` : null, "", "*कैसे इस्तेमाल करें:*", `टेबल पर QR स्कैन करें → पेमेंट करते समय "Have a coupon code?" दबाएँ → *${c.code}* डालें ✅`, "या यह मैसेज काउंटर पर दिखाएँ।"],
+  }[lang];
+  return lines.filter((l): l is string => typeof l === "string").join("\n");
+}
+
+/** Put the offer under the message, replacing an offer block added before (one offer per message). */
+export function withOffer(msg: string, block: string) {
+  const at = msg.indexOf("\n\n🎉 *");
+  const base = (at >= 0 && msg.includes(OFFER_RULE, at) ? msg.slice(0, at) : msg.startsWith("🎉 *") && msg.includes(OFFER_RULE) ? "" : msg).trimEnd();
+  // drop the old one-line offer ("🎁 10% off with code *X*") if it is still there
+  const clean = base.replace(/\n*🎁 [^\n]* with code \*[A-Z0-9]+\*\s*$/u, "").trimEnd();
+  return clean ? `${clean}\n\n${block}` : block;
+}
