@@ -1,0 +1,5 @@
+-- Applied live (migrations subadmin_full_outlet_admin, outlets_owner_creates_deletes, outlets_edit_policy_active):
+-- * private.has_perm: a sub admin has every permission (screens and RLS keep them to their outlets).
+-- * private.can_pay_for: a sub admin approves days / pays only people who share one of their outlets.
+-- * outlets: only the owner adds or deletes; the owner or that outlet's sub admin edits it
+--   (private.works_in(rid, outlet_id)).

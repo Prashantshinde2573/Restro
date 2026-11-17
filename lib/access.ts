@@ -175,7 +175,8 @@ export interface Member {
 }
 
 export const isOwner = (m?: Member | null) => m?.role === "owner";
-export const hasPerm = (m: Member | null | undefined, p: Perm) => !!m && m.active && (m.role === "owner" || m.perms.includes(p));
+/** The owner can do everything; a sub admin everything in their own outlets (screens check the outlet); staff what is ticked. */
+export const hasPerm = (m: Member | null | undefined, p: Perm) => !!m && m.active && (m.role === "owner" || m.role === "subadmin" || m.perms.includes(p));
 /** Owner, or staff the owner trusts to confirm payments. Everyone else's "paid" waits for them. */
 export const canConfirmPay = (m: Member | null | undefined) => hasPerm(m, "confirmPay");
 export const inOutlet = (m: Member | null | undefined, outletId: string) => !!m && (m.role === "owner" || m.outletIds.includes(outletId));
@@ -189,11 +190,11 @@ export function canManage(editor: Member | null | undefined, target: Member) {
   if (!editor || !editor.active) return false;
   if (target.role === "owner") return false;
   if (editor.role === "owner") return true;
-  if (editor.role !== "subadmin" || !editor.perms.includes("team")) return false;
+  if (editor.role !== "subadmin") return false;
   return target.role === "staff" && target.outletIds.length > 0 && target.outletIds.every((o) => editor.outletIds.includes(o));
 }
 /** Which boxes `editor` may tick for someone else: never more than they have themselves. */
-export const grantable = (editor: Member | null | undefined): Perm[] => (!editor ? [] : editor.role === "owner" ? ALL_PERMS : editor.perms);
+export const grantable = (editor: Member | null | undefined): Perm[] => (!editor ? [] : editor.role === "owner" || editor.role === "subadmin" ? ALL_PERMS : editor.perms);
 /** Which outlets `editor` may assign. */
 export const assignableOutlets = (editor: Member | null | undefined, all: string[]) => (!editor ? [] : editor.role === "owner" ? all : all.filter((o) => editor.outletIds.includes(o)));
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText, CalendarDays, MapPin } from "lucide-react";
-import { hasTables, isOwner } from "@/lib/access";
+import { hasPerm, hasTables, isOwner } from "@/lib/access";
 import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders } from "@/lib/live";
 import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { BarChart, TrendChart } from "@/components/charts";
@@ -24,7 +24,7 @@ function StaffHome() {
     { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat },
     { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
     { href: "/app/activity", label: "Activity", perm: "activity" as const, icon: History },
-  ].filter((l) => me?.perms.includes(l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
+  ].filter((l) => hasPerm(me, l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
   return (
     <>
       <PageHeader title={`Hi, ${me?.name.split(" ")[0] ?? ""}`} subtitle={outlet.name} actions={<UserChip />} />

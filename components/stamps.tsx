@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { Check, Gift, Stamp as StampIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button, Segmented, Toggle, inputCls } from "./ui";
-import { useMenu, settingsActions, useSettings, useCurrentOutlet, useOutlets, outletActions } from "@/lib/live";
+import { useMenu, settingsActions, useSettings, useCurrentOutlet, useOutlets, outletActions, useMe } from "@/lib/live";
 import { DEFAULT_PROGRAM, WHO_LABEL, programOf, rewardText } from "@/lib/stamps";
 import type { StampProgram } from "@/lib/types";
 
@@ -82,7 +82,8 @@ export function StampSettings({ onDone }: { onDone: (msg: string) => void }) {
   // one card for every outlet (the usual), or this outlet's own
   const outlets = useOutlets();
   const outlet = useCurrentOutlet();
-  const many = outlets.length > 1;
+  const owner = useMe()?.role === "owner";
+  const many = outlets.length > 1 && owner; // only the owner sets the card for every outlet
   const sameEverywhere = outlets.every((o) => !o.stamps || JSON.stringify(o.stamps) === JSON.stringify(outlets.find((x) => x.stamps)?.stamps));
   const [everywhere, setEverywhere] = useState(sameEverywhere);
   const set = (patch: Partial<StampProgram>) => setP((x) => ({ ...x, ...patch }));

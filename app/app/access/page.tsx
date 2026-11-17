@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Store, UserPlus } from "lucide-react";
+import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Store, Trash2, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -27,6 +27,7 @@ import {
 } from "@/lib/access";
 import { memberActions, outletActions, useAccount, useMe, useMembers, useOutlets } from "@/lib/live";
 import { setStaffPin, useCloud } from "@/lib/cloud";
+import { tableActions, useAllTables } from "@/lib/tables";
 import type { BusinessType, Outlet } from "@/lib/types";
 
 const typeLabel = (t: BusinessType) => (t === "cafe" ? "Café" : "Restaurant");
@@ -145,6 +146,20 @@ export default function AccessPage() {
     setOutletDraft({ id: "", name: "", address: "", businessType: "restaurant", upi: "", payFirst: false, isNew: true });
   };
   const outletOk = !!outletDraft && outletDraft.name.trim().length > 1 && isValidUpi(outletDraft.upi);
+  // delete an outlet: the owner types its name to be sure
+  const allTables = useAllTables();
+  const [delName, setDelName] = useState<string | null>(null);
+  const deleteOutlet = () => {
+    if (!outletDraft || outletDraft.isNew) return;
+    const why = outletActions.removeProblem(outletDraft.id);
+    if (why) return toast(why);
+    const busy = allTables.filter((t) => t.outletId === outletDraft.id && t.parties.length).length;
+    if (busy) return toast(`${busy} table${busy === 1 ? " has" : "s have"} guests. Free ${busy === 1 ? "it" : "them"} first.`);
+    allTables.filter((t) => t.outletId === outletDraft.id).forEach((t) => tableActions.remove(t.id));
+    if (outletActions.remove(outletDraft.id)) toast(`${outletDraft.name} deleted`);
+    setDelName(null);
+    setOutletDraft(null);
+  };
   const saveOutlet = () => {
     if (!outletDraft || !outletOk) return;
     const { isNew, id, ...o } = outletDraft;
@@ -249,7 +264,7 @@ export default function AccessPage() {
                     </div>
                   </div>
                   <div className="hidden text-right text-[12.5px] text-muted sm:block tnum">
-                    {m.role === "owner" ? "Everything" : `${m.perms.length} of ${ALL_PERMS.length} access`}
+                    {m.role === "owner" ? "Everything" : m.role === "subadmin" ? "Everything in their outlet" : `${m.perms.length} of ${ALL_PERMS.length} access`}
                   </div>
                   <Pill tone={m.role === "owner" ? "jade" : m.role === "subadmin" ? "sky" : "neutral"}>{m.active ? roleLabel(m) : "Paused"}</Pill>
                 </button>
@@ -339,6 +354,16 @@ export default function AccessPage() {
               <input className={inputCls} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Or type a job name (e.g. Barista)" />
             </div>
 
+            {draft.role === "subadmin" ? (
+              <div className="rounded-group bg-sky-soft/60 p-4 text-[14px] leading-relaxed">
+                <div className="font-semibold">Admin of {draft.outletIds.length ? draft.outletIds.map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") : "their outlet"}</div>
+                <p className="mt-1 text-muted">
+                  Can do everything the owner does in this outlet: orders, bills and payments, tables, kitchen, stock, staff and their access, attendance and salary
+                  (approve days, pay), outlet settings, stamp card, guests, campaigns and coupons, reports, insights and activity.
+                </p>
+                <p className="mt-2 text-muted">Can&apos;t: see or change other outlets, the plan and billing, or the shared menu (they can mark dishes sold out, or turn on their outlet&apos;s own menu).</p>
+              </div>
+            ) : (
             <div>
               <div className="mb-1.5 flex items-baseline justify-between">
                 <span className="text-[13px] font-medium text-muted">What they can see and do</span>
@@ -370,6 +395,7 @@ export default function AccessPage() {
                 })}
               </div>
             </div>
+            )}
 
             {!draft.isNew && (
               <div className="space-y-2">
@@ -394,7 +420,7 @@ export default function AccessPage() {
       {/* ---------- add / edit outlet ---------- */}
       <Sheet
         open={!!outletDraft}
-        onClose={() => setOutletDraft(null)}
+        onClose={() => { setOutletDraft(null); setDelName(null); }}
         title={outletDraft?.isNew ? "New outlet" : outletDraft?.name ?? ""}
         footer={
           <Button size="lg" className="w-full" disabled={!outletOk} onClick={saveOutlet}>
@@ -432,6 +458,33 @@ export default function AccessPage() {
               <span className="text-[15px]">Guests pay before the kitchen starts</span>
               <Toggle checked={outletDraft.payFirst} onChange={(payFirst) => setOutletDraft({ ...outletDraft, payFirst })} label="Guests pay first" />
             </div>
+
+            {owner && !outletDraft.isNew && outlets.length > 1 && (
+              <div className="rounded-group border border-rose/30 bg-rose-soft/40 p-4">
+                {delName === null ? (
+                  <Button variant="danger" className="w-full" onClick={() => { const why = outletActions.removeProblem(outletDraft.id); if (why) toast(why); else setDelName(""); }}>
+                    <Trash2 size={16} /> Delete this outlet
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-[15px] font-semibold text-rose">Delete {outletDraft.name}?</div>
+                    <ul className="list-disc space-y-1 pl-5 text-[13.5px] text-ink/80">
+                      <li>Its tables, stock, own menu and its coupons are deleted.</li>
+                      <li>People who work only here can&apos;t sign in any more (they stay in your list, turned off).</li>
+                      <li>Past bills stay in your reports and data export.</li>
+                      <li>This can&apos;t be undone.</li>
+                    </ul>
+                    <Field label={`Type ${outletDraft.name} to confirm`}>
+                      <input className={inputCls} value={delName} onChange={(e) => setDelName(e.target.value)} placeholder={outletDraft.name} autoCapitalize="none" />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="plain" onClick={() => setDelName(null)}>Keep it</Button>
+                      <Button variant="danger" disabled={delName.trim().toLowerCase() !== outletDraft.name.trim().toLowerCase()} onClick={deleteOutlet}><Trash2 size={16} /> Delete</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Sheet>
