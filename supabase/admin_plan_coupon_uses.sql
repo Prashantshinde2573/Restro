@@ -1,0 +1,4 @@
+-- 19-Nov point 6 (applied as migration admin_plan_coupon_uses): the super admin applies a plan coupon
+-- when adding or renewing a restaurant. public.admin_use_plan_coupon checks it (active, date, uses,
+-- plan), counts the use on the coupon and records it in public.plan_coupon_uses (super admin only).
+-- See the migration for the full SQL.

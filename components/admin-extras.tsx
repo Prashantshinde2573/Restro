@@ -8,8 +8,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Field, Segmented, Sheet, Toggle, inputCls } from "./ui";
 import { useToast } from "./toast";
 import { isValidUpi } from "./upi";
-import { DEFAULT_REMINDERS, deletePlanCoupon, getPlatformSettings, listPlanCoupons, savePlanCoupon, savePlatformSettings, type PlanCoupon, type PlanReminders, type PlatformSettings } from "@/lib/cloud";
-import { plans } from "@/lib/plans";
+import { DEFAULT_REMINDERS, checkPlanCoupon, deletePlanCoupon, getPlatformSettings, listPlanCoupons, savePlanCoupon, savePlatformSettings, type PlanCoupon, type PlanReminders, type PlatformSettings } from "@/lib/cloud";
+import { cyclePrice, plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : "Something went wrong");
@@ -154,7 +154,7 @@ export function PlanCouponsSheet({ open, onClose }: { open: boolean; onClose: ()
   return (
     <>
       <Sheet open={open && !edit} onClose={onClose} title="Plan coupons" wide footer={<Button size="lg" className="w-full" onClick={() => setEdit(blank())}><Plus size={18} /> New plan coupon</Button>}>
-        <p className="mb-4 text-[14px] text-muted">Owners type the code when renewing or changing plan. The discount shows in their total. When you turn on a plan that used a code, tap +1.</p>
+        <p className="mb-4 text-[14px] text-muted">Use a code when you add or renew a restaurant (Add restaurant, or the restaurant's Renewal): it is checked and counted by itself. Owners can also type a code when they ask to change plan; tap +1 when you turn that on by hand.</p>
         {list === null ? (
           <p className="py-8 text-center text-[14px] text-muted">Loading…</p>
         ) : list.length === 0 ? (
@@ -265,5 +265,65 @@ function PlanCouponEdit({ draft, onClose, onSaved, taken }: { draft: Draft | nul
         </div>
       </div>
     </Sheet>
+  );
+}
+
+/* ---------- plan coupon when adding or renewing a restaurant ---------- */
+/** What the plan costs for these months and outlets, before any coupon (null: priced by hand, e.g. Chain). */
+export function planListPrice(planId: string, months: number, outlets = 1): number | null {
+  const p = plans.find((x) => x.id === planId);
+  if (!p?.monthly) return null;
+  const per = months === 6 || months === 12 ? cyclePrice(p, months === 6 ? "half" : "yearly") ?? p.monthly * months : p.monthly * months;
+  return per * Math.max(1, outlets);
+}
+export type CouponPick = { code: string; kind: "percent" | "flat"; value: number } | null;
+export const couponOffFor = (c: CouponPick, list: number) => (!c ? 0 : c.kind === "percent" ? Math.round((list * Math.min(100, c.value)) / 100) : Math.min(list, c.value));
+
+/** Type a plan coupon, check it for this plan, and see what the owner pays. */
+export function PlanCouponField({ plan, list, value, onChange, label = "Plan coupon (optional)" }: { plan: string; list: number | null; value: CouponPick; onChange: (c: CouponPick) => void; label?: string }) {
+  const [code, setCode] = useState(value?.code ?? "");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  // a different plan may not take this coupon: check again
+  useEffect(() => {
+    if (value) { onChange(null); setErr("Plan changed · check the coupon again"); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan]);
+  const check = async () => {
+    const c = code.trim().toUpperCase();
+    if (!c) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const ok = await checkPlanCoupon(c, plan);
+      if (!ok) { onChange(null); setErr("Not valid for this plan (off, expired or used up)"); }
+      else onChange({ code: ok.code, kind: ok.kind, value: Number(ok.value) });
+    } catch {
+      setErr("Couldn't check the code. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const off = list != null ? couponOffFor(value, list) : 0;
+  return (
+    <Field label={label}>
+      {value ? (
+        <div className="flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2.5 text-[14px] text-jade-deep">
+          <span className="font-mono font-bold tracking-wider">{value.code}</span>
+          <span className="flex-1">
+            {value.kind === "percent" ? `${value.value}% off` : `${inr(value.value)} off`}
+            {list != null && <> · {inr(list)} − {inr(off)} = <b>{inr(list - off)}</b></>}
+          </span>
+          <button aria-label="Remove coupon" className="px-1 text-[13px] font-semibold underline" onClick={() => { onChange(null); setCode(""); }}>Remove</button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input className={clsx(inputCls, "flex-1 font-mono uppercase")} placeholder="e.g. LAUNCH20" value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && check()} />
+          <Button variant="tinted" disabled={!code.trim() || busy} onClick={check}>{busy ? "Checking…" : "Check"}</Button>
+        </div>
+      )}
+      {err && <p className="mt-1 text-[13px] font-medium text-rose">{err}</p>}
+      {!value && !err && list != null && <p className="mt-1 text-[12.5px] text-muted">Plan price {inr(list)}. The use is counted on the coupon and kept with this restaurant.</p>}
+    </Field>
   );
 }

@@ -1004,6 +1004,19 @@ export async function checkPlanCoupon(code: string, plan: string): Promise<{ cod
   const r = (data as { code: string; kind: "percent" | "flat"; value: number }[] | null)?.[0];
   return r ? { ...r, value: Number(r.value) } : null;
 }
+/** Super admin: use a plan coupon on a new restaurant or a renewal. Checks it, counts it, keeps it with the restaurant. */
+export async function adminUsePlanCoupon(code: string, rid: string, plan: string, months: number, list: number, event: "new" | "renew"): Promise<{ code: string; off: number; pay: number }> {
+  const { data, error } = await sb().rpc("admin_use_plan_coupon", { p_code: code, p_rid: rid, p_plan: plan, p_months: months, p_list: list, p_event: event });
+  if (error) throw new Error(error.message);
+  const d = data as { code: string; off: number; pay: number };
+  return { code: d.code, off: Number(d.off), pay: Number(d.pay) };
+}
+export interface PlanCouponUse { code: string; plan: string; months: number; list_price: number; off: number; event: "new" | "renew"; at: string }
+export async function adminPlanCouponUses(rid: string): Promise<PlanCouponUse[]> {
+  const { data, error } = await sb().from("plan_coupon_uses").select("code,plan,months,list_price,off,event,at").eq("rid", rid).order("at", { ascending: false }).limit(20);
+  if (error) throw new Error(error.message);
+  return (data as PlanCouponUse[]).map((u) => ({ ...u, list_price: Number(u.list_price), off: Number(u.off) }));
+}
 export async function listPlanCoupons(): Promise<PlanCoupon[]> {
   const { data, error } = await sb().from("plan_coupons").select("*").order("created_at", { ascending: false });
   if (error) throw error;
