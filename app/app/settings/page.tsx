@@ -11,6 +11,7 @@ import { dateIN, planStatus } from "@/lib/plan-status";
 import { ChangePassword } from "@/components/owner-auth";
 import { StampSettings } from "@/components/stamps";
 import { OnlinePayments } from "@/components/online-payments";
+import { WhatsAppApi } from "@/components/whatsapp-api";
 import { useToast } from "@/components/toast";
 import {
   billOf,
@@ -40,7 +41,7 @@ import { inr } from "@/lib/format";
 import type { OutletSettings } from "@/lib/types";
 import type { Member } from "@/lib/access";
 
-type Panel = "restaurant" | "payments" | "ordering" | "stamps" | "security" | "data" | null;
+type Panel = "restaurant" | "payments" | "ordering" | "stamps" | "whatsapp" | "security" | "data" | null;
 
 function Item({ icon, tint, title, value, onClick }: { icon: ReactNode; tint: string; title: string; value?: ReactNode; onClick: () => void }) {
   return (
@@ -64,6 +65,7 @@ export default function SettingsPage() {
   const owner = isOwner(me);
   const canOutlet = useCan("outletSettings");
   const stampsFeature = useFeature("stamps");
+  const waApi = useFeature("waApi");
   const account = useAccount();
   const outlets = useOutlets();
   const outlet = useCurrentOutlet();
@@ -100,6 +102,7 @@ export default function SettingsPage() {
     payments: `Payments · ${outlet.name}`,
     ordering: `Ordering · ${outlet.name}`,
     stamps: `Stamp card · ${outlet.name}`,
+    whatsapp: "WhatsApp API",
     security: "Password and sign-in",
     data: "Export your data",
   };
@@ -161,6 +164,7 @@ export default function SettingsPage() {
 
         {owner && (
           <div className="overflow-hidden rounded-group bg-surface">
+            {cloud.rid && <Item icon={<MessageCircle size={16} />} tint="#25D366" title="WhatsApp API" value={waApi === "ok" ? undefined : "Pro plan"} onClick={() => setPanel("whatsapp")} />}
             <Item icon={<ShieldCheck size={16} />} tint="#D24242" title="Password and sign-in" onClick={() => setPanel("security")} />
             <Item icon={<Database size={16} />} tint="#68716D" title="Export your data" onClick={() => setPanel("data")} />
           </div>
@@ -337,6 +341,7 @@ export default function SettingsPage() {
           </div>
         )}
         {panel === "stamps" && <StampSettings onDone={(msg) => { setPanel(null); toast(msg); }} />}
+        {panel === "whatsapp" && <WhatsAppApi />}
         {panel === "security" && <Security onDone={() => { setPanel(null); toast("Password changed"); }} />}
         {panel === "data" && <Export />}
       </Sheet>

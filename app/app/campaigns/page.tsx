@@ -1,12 +1,15 @@
 "use client";
 
-// Message guests on WhatsApp. Each message opens in WhatsApp with the text
-// typed in, so it goes from the restaurant's own number (no paid API needed).
+// Message guests on WhatsApp. Each message opens in WhatsApp with the text typed in, so it goes
+// from the restaurant's own number (no paid API needed). With WhatsApp API connected (Pro), an
+// approved template can go to every guest who said yes, all at once.
 import clsx from "clsx";
 import { Check, MessageCircle, Send, Ticket } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Avatar, Chips, Field, Group, Page, PageHeader, Segmented } from "@/components/ui";
 import { CouponsPanel, couponState } from "@/components/coupons";
+import { CampaignApi } from "@/components/campaign-api";
+import { waStatus, type WaStatus } from "@/lib/cloud";
 import { couponLabel, couponWorksIn, useAccount, useCoupons, useCurrentOutlet, useFeature, useMe, useOutlets, useGuests } from "@/lib/live";
 import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
 import { timeAgo } from "@/lib/format";
@@ -30,6 +33,14 @@ export default function CampaignsPage() {
   const [tLang, setTLang] = useState<TemplateLang>("en");
   const [tId, setTId] = useState<string | null>(null);
   const [offerId, setOfferId] = useState<string | null>(null); // the coupon added to the message
+  // WhatsApp API (Pro, connected): send to everyone at once from the app
+  const [wa, setWa] = useState<WaStatus | null>(null);
+  const [how, setHow] = useState<"app" | "api">("app");
+  useEffect(() => {
+    let live = true;
+    waStatus().then((s) => { if (live) { setWa(s); if (s) setHow("api"); } }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   const applyTemplate = (id: string, lang = tLang) => {
     const t = TEMPLATES.find((x) => x.id === id);
     if (!t) return;
@@ -71,6 +82,15 @@ export default function CampaignsPage() {
             />
           </Field>
           {seg !== "optin" && <p className="-mt-2 text-[13px] text-saffron">Only message guests who&apos;d expect to hear from you.</p>}
+          {wa && (
+            <Field label="How to send">
+              <Segmented className="w-full" value={how} onChange={setHow} options={[{ value: "api", label: "All at once" }, { value: "app", label: "One by one" }]} />
+            </Field>
+          )}
+          {wa && how === "api" ? (
+            <CampaignApi guests={list} outletId={outlet.id} />
+          ) : (
+          <>
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
               <span className="text-[13px] font-medium text-muted">Templates</span>
@@ -137,8 +157,11 @@ export default function CampaignsPage() {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
 
+        {!(wa && how === "api") && (
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
           {/* wide screens: what guests will get, next to who gets it */}
           <div className="hidden lg:block">
@@ -181,6 +204,7 @@ export default function CampaignsPage() {
           )}
         </Group>
         </div>
+        )}
       </Page>
       )}
     </>

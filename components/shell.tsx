@@ -16,6 +16,7 @@ import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
 import { GatewayBooking } from "./gateway-booking";
+import { WaAuto } from "./wa-auto";
 import { CallAlerts, WaiterCallBar } from "./waiter-calls";
 import { TableJanitor } from "./table-janitor";
 import { NoticeBell, SoundRow } from "./notifications";
@@ -682,6 +683,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <PlanSheet />
             <OrderAlerts />
             <GatewayBooking />
+            <WaAuto />
             <CallAlerts />
             <TableJanitor />
             <WaiterCallBar />

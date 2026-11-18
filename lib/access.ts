@@ -37,7 +37,8 @@ export type Feature =
   | "prepForecast"
   | "insights"
   | "menuEngineering"
-  | "payroll";
+  | "payroll"
+  | "waApi";
 
 const BOTH: BusinessType[] = ["restaurant", "cafe"];
 export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: BusinessType[] }> = {
@@ -63,6 +64,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   insights: { label: "Insights and Leak guard", plan: "pro", types: BOTH },
   menuEngineering: { label: "What's working (menu engineering)", plan: "pro", types: BOTH },
   payroll: { label: "Staff attendance and salary", plan: "growth", types: BOTH },
+  waApi: { label: "WhatsApp API (automatic messages)", plan: "pro", types: BOTH },
 };
 
 /** The ways an outlet serves guests. `mixed` outlets run both. */

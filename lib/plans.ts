@@ -28,7 +28,7 @@ export const plans: Plan[] = [
     yearly: 29990,
     blurb: "For owners who want the numbers to run themselves.",
     outlets: "Up to 3 outlets",
-    features: ["Everything in Growth", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
+    features: ["Everything in Growth", "WhatsApp API: bills and offers sent from your own number", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
   },
   {
     id: "chain",
