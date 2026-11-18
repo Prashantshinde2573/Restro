@@ -11,7 +11,7 @@ import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import { ChangePassword, PasswordInput } from "@/components/owner-auth";
-import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
+import { PlanCouponField, PlanCouponsSheet, PlatformSheet, couponOffFor, planListPrice, type CouponPick } from "@/components/admin-extras";
 import { planStatus } from "@/lib/plan-status";
 import { fitLogo } from "@/lib/fit-logo";
 import { RevenueSheet } from "@/components/admin-revenue";
@@ -32,7 +32,10 @@ import {
   adminPlanEmail,
   verifyMyPassword,
   adminErrors,
+  adminUsePlanCoupon,
+  adminPlanCouponUses,
   type AdminRestaurant,
+  type PlanCouponUse,
 } from "@/lib/cloud";
 import { plans } from "@/lib/plans";
 import { inr, timeAgo } from "@/lib/format";
@@ -387,9 +390,12 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [d, setD] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [coupon, setCoupon] = useState<CouponPick>(null);
+  const toast = useToast();
   useEffect(() => {
-    if (open) { setD(blank); setErr(""); }
+    if (open) { setD(blank); setErr(""); setCoupon(null); }
   }, [open]);
+  const list = d.months > 0 ? planListPrice(d.plan, d.months) : null;
   const set = <K extends keyof typeof blank>(k: K, v: (typeof blank)[K]) => setD((x) => ({ ...x, [k]: v }));
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.ownerEmail.trim());
@@ -419,6 +425,12 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
         tables: d.type === "cafe" ? Math.min(d.tables, 50) : d.tables,
         outlet: { name: d.outletName.trim() || d.city.trim() || "Main", address: d.address.trim(), businessType: d.type, upi: d.upi.trim(), payFirst: d.payFirst },
       });
+      if (coupon && list != null) {
+        // the restaurant is made: count the coupon on it (a problem here doesn't undo the restaurant)
+        await adminUsePlanCoupon(coupon.code, res.rid, d.plan, d.months, list, "new")
+          .then((u) => toast(`Coupon ${u.code} · ${inr(u.off)} off · owner pays ${inr(u.pay)}`))
+          .catch((e) => toast(`Restaurant made, but the coupon wasn't counted: ${(e as Error).message}`));
+      }
       onCreated(res, d.name.trim());
     } catch (e) {
       setErr((e as Error).message);
@@ -496,6 +508,7 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
             </Field>
           </div>
           <p className="text-[13.5px] text-muted">Plan runs until <b className="text-ink">{dateText(ends)}</b>. The owner sees a reminder {RENEW_WARN_DAYS} days before.</p>
+          {list != null && <PlanCouponField plan={d.plan} list={list} value={coupon} onChange={setCoupon} />}
           <Field label="Notes" hint="Only you see these."><input className={inputCls} value={d.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
         </Section>
       </div>
@@ -577,10 +590,30 @@ function RestaurantSheet({
         setBusy(false);
       }
     });
+  // a plan coupon for this renewal (counted when a +months button is used)
+  const [coupon, setCoupon] = useState<CouponPick>(null);
+  const [uses, setUses] = useState<PlanCouponUse[]>([]);
+  const loadUses = useCallback(() => { adminPlanCouponUses(r.id).then(setUses).catch(() => setUses([])); }, [r.id]);
+  useEffect(() => { loadUses(); }, [loadUses]);
   const extend = (months: number) => {
     const from = Math.max(Date.now(), new Date(r.renewsAt).getTime());
     const iso = new Date(from + months * 30 * DAY).toISOString();
-    return run(() => adminUpdate(r.id, { renewsAt: iso }).then(() => adminPlanEmail(r.id, "renewed")), `Renewed till ${dateText(iso)}`);
+    const list = planListPrice(r.plan, months, r.outlets);
+    const c = coupon && list != null ? coupon : null;
+    const msg = `Renewed till ${dateText(iso)}${c ? ` · coupon ${c.code} −${inr(couponOffFor(c, list!))}, owner pays ${inr(list! - couponOffFor(c, list!))}` : ""}`;
+    return run(async () => {
+      await adminUpdate(r.id, { renewsAt: iso });
+      await adminPlanEmail(r.id, "renewed");
+      if (c) {
+        try {
+          await adminUsePlanCoupon(c.code, r.id, r.plan, months, list!, "renew");
+          setCoupon(null);
+          loadUses();
+        } catch (e) {
+          throw new Error(`Renewed till ${dateText(iso)}, but the coupon wasn't counted: ${(e as Error).message}`);
+        }
+      }
+    }, msg);
   };
   // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
   const [graceDate, setGraceDate] = useState("");
@@ -654,6 +687,10 @@ function RestaurantSheet({
             Runs until <b>{dateText(r.renewsAt)}</b>
             <span className="text-muted">({daysLeft(r.renewsAt) >= 0 ? `${daysLeft(r.renewsAt)} days left` : "expired"})</span>
           </div>
+          {planListPrice(r.plan, 1, r.outlets) != null && (
+            <PlanCouponField plan={r.plan} list={planListPrice(r.plan, 1, r.outlets)} value={coupon} onChange={setCoupon} label="Plan coupon for this renewal (optional)" />
+          )}
+          {coupon && <p className="-mt-2 text-[12.5px] text-muted">Price above is for 1 month. Tap how long to renew: the coupon comes off that renewal and is counted once.</p>}
           <div className="flex flex-wrap gap-2">
             {[1, 3, 6, 12].map((m) => (
               <Button key={m} variant="plain" className="!bg-surface" disabled={busy} onClick={() => extend(m)}>+{m === 12 ? "1 year" : `${m} month${m > 1 ? "s" : ""}`}</Button>
@@ -668,6 +705,18 @@ function RestaurantSheet({
               Set date
             </Button>
           </div>
+          {uses.length > 0 && (
+            <div className="rounded-group bg-surface px-4 py-2">
+              <div className="py-1 text-[12.5px] font-semibold uppercase tracking-wide text-muted">Plan coupons used</div>
+              {uses.map((u, i) => (
+                <div key={i} className="flex items-center gap-2 border-t border-line/70 py-2 text-[13.5px] first:border-0">
+                  <span className="font-mono font-bold">{u.code}</span>
+                  <span className="flex-1 text-muted">{u.event === "new" ? "New" : "Renewal"} · {planName(u.plan as PlanId)} · {u.months} mo · {dateText(u.at)}</span>
+                  <span className="tnum">−{inr(u.off)} <span className="text-muted">of {inr(u.list_price)}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section title="Grace period">
