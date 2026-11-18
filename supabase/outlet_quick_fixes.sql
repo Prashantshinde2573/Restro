@@ -1,0 +1,10 @@
+-- Applied live (18 Nov 2026) as migrations subadmin_saves_own_outlet_and_attendance and
+-- member_delete_cleans_pin_and_login.
+--
+-- 1) The app saves with an upsert, and Postgres checks the INSERT rule on an upsert too. The
+--    outlets INSERT rule now lets a sub admin "insert" only a row that already exists and that
+--    they work in (= saving their own outlet). A brand-new outlet stays owner only.
+-- 2) private.can_pay_for: a sub admin may mark their own attendance; other payroll staff still
+--    can't approve their own days.
+-- 3) Deleting a member (not the owner) also deletes their staff_pins row and their staff sign-in
+--    account (only an @staff.restropi.app account of that restaurant and member). History stays.

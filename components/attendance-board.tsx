@@ -74,7 +74,8 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
   useEffect(() => setDay(lastDay), [month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byKey = useMemo(() => new Map(att.map((a) => [a.id, a])), [att]);
-  const canEdit = (m: Member) => isOwner(me) || m.id !== me?.id;
+  // a sub admin marks their own days too (the owner sees each change in Activity); other staff never their own
+  const canEdit = (m: Member) => isOwner(me) || me?.role === "subadmin" || m.id !== me?.id;
   const payOf = (id: string) => pays.find((p) => p.id === id);
   const pending = att.filter((a) => a.status === "pending" && a.date.startsWith(month) && people.some((m) => m.id === a.memberId));
   const person = people.find((m) => m.id === personId) ?? people[0];

@@ -315,7 +315,7 @@ export default function SettingsPage() {
             </div>
             <Link href="/app/tables" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Tables and their QR codes →</Link>
             {(draft.businessType === "cafe" || draft.mixed) && cloud.rid && (
-              <Link href={`/order/counter?r=${cloud.rid}`} className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu →</Link>
+              <a href={`/order/counter?r=${cloud.rid}${outlet.id ? `&o=${encodeURIComponent(outlet.id)}` : ""}`} target="_blank" rel="noopener noreferrer" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu ↗</a>
             )}
           </div>
         )}
