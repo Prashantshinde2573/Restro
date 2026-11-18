@@ -193,7 +193,7 @@ export function useSettings(): OutletSettings {
   return {
     name: a.name, logo: a.logo || "", businessType: o.businessType, mixed: isMixed(o), upi: o.upi, payFirst: o.payFirst,
     address: o.address ?? "", phone: o.phone ?? "", gstin: o.gstin ?? "", fssai: o.fssai ?? "", hours: o.hours ?? "", billFooter: o.billFooter ?? "", acceptCard: o.acceptCard ?? true,
-    orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, gstRate: o.gstRate ?? 0.05,
+    orderFrom: o.orderFrom ?? "", orderTo: o.orderTo ?? "", ordersPaused: !!o.ordersPaused, selfService: !!o.selfService, gstRate: o.gstRate ?? 0.05,
     stamps: stampProgramOf(o, outlets),
   };
 }
@@ -203,7 +203,7 @@ export const settingsActions = {
     const { name: _name, logo: _logo, ...rest } = patch; // name + logo: only the Restropi team changes them
     const id = sessionStore.get().outletId || outletStore.get()[0]?.id;
     if (Object.keys(rest).length) outletActions.update(id, rest);
-    const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", stamps: "stamp card", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
+    const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", selfService: "self-service", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", stamps: "stamp card", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
     const what = [...new Set(Object.keys(rest).map((k) => names[k] ?? k))];
     if (what.length) logActivity("settings", `Changed settings: ${what.join(", ")}${rest.gstRate !== undefined ? ` (GST ${Math.round(rest.gstRate * 100)}%)` : ""}${rest.ordersPaused !== undefined ? (rest.ordersPaused ? " (paused)" : " (back on)") : ""}`, id);
   },

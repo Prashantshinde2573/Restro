@@ -56,6 +56,9 @@ export default function OrdersPage() {
   );
   const count = (f: Filter) => list.filter((o) => match(o, f)).length;
 
+  // self-service counter: a token without a table is collected by the guest ("Picked up")
+  const selfService = !!outlet.selfService;
+  const pickup = (o: Order) => selfService && !o.tableId && !o.tableName;
   const setStatus = (o: Order, status: OrderStatus, msg: string) => {
     orderActions.setStatus(o.id, status);
     if (status === "accepted" && o.tableId && o.partyId) tableActions.update(o.tableId, o.partyId, { pendingApproval: false });
@@ -78,14 +81,14 @@ export default function OrdersPage() {
     if (o.status === "new") return { label: "Accept & send to kitchen", onClick: () => setStatus(o, "accepted", "Accepted · KOT sent to kitchen") };
     if (o.status === "accepted") return { label: "Mark cooking", onClick: () => setStatus(o, "preparing", "Kitchen started"), tone: "dark" };
     if (o.status === "preparing") return { label: "Mark ready", onClick: () => setStatus(o, "ready", "Marked ready"), tone: "dark" };
-    if (o.status === "ready") return { label: "Mark served", onClick: () => setStatus(o, "served", "Marked served"), tone: "dark" };
+    if (o.status === "ready") return pickup(o) ? { label: "Picked up", onClick: () => setStatus(o, "served", `Token ${o.number} picked up`), tone: "dark" } : { label: "Mark served", onClick: () => setStatus(o, "served", "Marked served"), tone: "dark" };
     if (o.status === "served" && canCharge) return { label: `Charge ${inr(billFor(o).reduce((s, x) => s + billOf(x), 0))}`, onClick: () => setPay(billFor(o)) };
     return null;
   };
 
   return (
     <>
-      <PageHeader title="Orders" subtitle={`${count("open")} open · ${inr(paidToday)} collected today`}>
+      <PageHeader title="Orders" subtitle={`${count("open")} open · ${inr(paidToday)} collected today`} actions={selfService ? <a href="/tokens" target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-full bg-surface px-3.5 text-[13.5px] font-semibold text-jade shadow-float">Now serving ↗</a> : undefined}>
         <Chips
           value={filter}
           onChange={setFilter}
@@ -148,7 +151,7 @@ export default function OrdersPage() {
               )}
               {sel.status === "accepted" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "preparing", "Kitchen started")}>Mark cooking</Button>}
               {sel.status === "preparing" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "ready", "Marked ready")}>Mark ready</Button>}
-              {sel.status === "ready" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "served", "Marked served")}>Mark served</Button>}
+              {sel.status === "ready" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "served", pickup(sel) ? `Token ${sel.number} picked up` : "Marked served")}>{pickup(sel) ? "Picked up" : "Mark served"}</Button>}
               {sel.payClaim && sel.status !== "paid" && sel.status !== "cancelled" ? (
                 canConfirm ? (
                   <>

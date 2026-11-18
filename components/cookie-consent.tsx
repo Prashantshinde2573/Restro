@@ -34,7 +34,7 @@ function applyConsent(c: { analytics: boolean; marketing: boolean }) {
 
 // The banner shows on the public website only — not inside the restaurant app, the login
 // screen (owners and staff sign in there every day) or the guest QR menu.
-const isAppPath = (p: string) => /^\/(app|order|admin|print|login)(\/|$)/.test(p);
+const isAppPath = (p: string) => /^\/(app|order|admin|print|login|tokens)(\/|$)/.test(p);
 
 export function CookieConsent() {
   const path = usePathname() ?? "/";

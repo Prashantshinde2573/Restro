@@ -64,6 +64,14 @@ function audio() {
   if (ctx.state === "suspended") void ctx.resume();
   return ctx;
 }
+/** Phones only play sound after a tap: call this on the first tap so a later alert can be heard. */
+export function unlockSound() {
+  try {
+    audio();
+  } catch {
+    /* no sound on this device */
+  }
+}
 function tone(c: AudioContext, freq: number, start: number, dur: number, vol = 0.25, type: OscillatorType = "sine", to?: number) {
   const o = c.createOscillator();
   const g = c.createGain();
