@@ -27,7 +27,9 @@ export const outletActions = {
     const taken = new Set(outletStore.get().map((x) => x.id));
     let id = base;
     for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
-    const outlet = { ...o, id };
+    // after the others, so the first outlet stays first
+    const sort = Math.max(0, ...outletStore.get().map((x) => x.sort ?? 0)) + 1;
+    const outlet = { ...o, id, sort: o.sort ?? sort };
     outletStore.set([...outletStore.get(), outlet]);
     logActivity("settings", `Added outlet ${o.name}`, id);
     // the owner works everywhere
@@ -45,7 +47,7 @@ export const outletActions = {
     return null;
   },
   /**
-   * Delete an outlet (owner). Its own menu, stock and coupons go with it; people who worked only
+   * Delete an outlet (owner). Its menu, categories, stock and coupons go with it; people who worked only
    * here lose access (their record stays, turned off); past bills stay in reports and exports.
    * The tables are removed by the caller (lib/tables).
    */
@@ -66,6 +68,7 @@ export const outletActions = {
         .filter((m) => !(m.outletIds?.length && m.outletIds.every((x) => x === id)))
         .map((m) => (m.outletIds?.includes(id) || m.offIn?.includes(id) ? { ...m, outletIds: m.outletIds?.filter((x) => x !== id), offIn: m.offIn?.filter((x) => x !== id) } : m)),
     );
+    catStore.set(catStore.get().filter((c) => !(c.outletIds?.length && c.outletIds.every((x) => x === id))));
     couponStore.set(
       couponStore
         .get()
@@ -670,55 +673,74 @@ export function stampsForGuestPayment(list: Order[], claim: PayClaim) {
 
 /* ---------------- menu ---------------- */
 const menuStore = createStore<MenuItem[]>([], "menu", { kind: "collection", coll: "menu", guest: "read" });
-/**
- * The dishes of one outlet. Outlets use the shared menu unless they turned on their own menu
- * (Menu → "Own menu"). A shared dish can be sold out in one outlet only (offIn).
- */
-export function menuFor(all: MenuItem[], o: Pick<Outlet, "id" | "ownMenu"> | undefined): MenuItem[] {
+/** The first outlet (the one made with the restaurant): older dishes and categories with no outlet belong to it. */
+export const mainOutletId = (outlets: Pick<Outlet, "id" | "sort">[]) =>
+  [...outlets].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.id.localeCompare(b.id))[0]?.id;
+/** Does a dish or category belong to this outlet? Each outlet has its own menu and categories. */
+const belongs = (x: { outletIds?: string[] }, oid: string, mainId: string | undefined) =>
+  x.outletIds?.length ? x.outletIds.includes(oid) : oid === mainId;
+/** The dishes of one outlet (each outlet has its own menu). */
+export function menuFor(all: MenuItem[], o: Pick<Outlet, "id"> | undefined, mainId?: string): MenuItem[] {
   if (!o?.id) return all;
   return all
-    .filter((m) => (o.ownMenu ? !!m.outletIds?.includes(o.id) : !m.outletIds?.length))
+    .filter((m) => belongs(m, o.id, mainId ?? o.id))
     .map((m) => (m.available && m.offIn?.includes(o.id) ? { ...m, available: false } : m));
 }
 /** Dishes of the outlet on screen (or of the guest's QR outlet). */
 export function useMenu() {
   const all = menuStore.use();
   const o = useCurrentOutlet();
-  return useMemo(() => menuFor(all, o), [all, o.id, o.ownMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mainId = mainOutletId(outletStore.use());
+  return useMemo(() => menuFor(all, o, mainId), [all, o.id, mainId]); // eslint-disable-line react-hooks/exhaustive-deps
 }
-/** A new dish goes on the menu of the outlet on screen: its own menu, or the shared one. */
-function withOutletMenu(m: MenuItem): MenuItem {
-  if (m.outletIds?.length) return m;
-  const o = outletStore.get().find((x) => x.id === currentOutletId());
-  return o?.ownMenu ? { ...m, outletIds: [o.id] } : m;
+/** A new dish or category belongs to the outlet on screen. */
+function inThisOutlet<T extends { outletIds?: string[] }>(x: T): T {
+  if (x.outletIds?.length) return x;
+  const oid = currentOutletId();
+  return oid && outletStore.get().length ? { ...x, outletIds: [oid] } : x;
 }
 /** Every dish of every outlet. */
 export const useAllMenu = () => menuStore.use();
 export const menuActions = {
-  /** Sold out / back: a shared dish only in the outlet on screen; an outlet's own dish for that outlet. */
+  /** Sold out / back, in this dish's outlet. */
   setAvailable(id: string, on: boolean) {
     const m = menuStore.get().find((x) => x.id === id);
-    const oid = currentOutletId();
     if (!m) return;
-    const shared = !m.outletIds?.length && outletStore.get().length > 1 && !!oid;
-    if (shared) {
-      // sold out everywhere from before: keep it sold out in the other outlets
-      const off = new Set(m.available ? (m.offIn ?? []) : outletStore.get().map((o) => o.id));
-      if (on) off.delete(oid!);
-      else off.add(oid!);
-      const next = { ...m, offIn: off.size ? [...off] : undefined, available: on ? true : m.available };
-      menuStore.set(menuStore.get().map((x) => (x.id === id ? next : x)));
-    } else {
-      menuStore.set(menuStore.get().map((x) => (x.id === id ? { ...x, available: on, offIn: undefined } : x)));
-    }
-    logActivity("menu", `${m.name} marked ${on ? "available" : "sold out"}`, oid);
+    menuStore.set(menuStore.get().map((x) => (x.id === id ? { ...x, available: on, offIn: undefined } : x)));
+    logActivity("menu", `${m.name} marked ${on ? "available" : "sold out"}`, currentOutletId());
   },
-  /** Start an outlet's own menu as a copy of the shared one. */
-  copySharedTo(outletId: string) {
-    const shared = menuStore.get().filter((m) => !m.outletIds?.length);
+  /**
+   * Copy one outlet's dishes (and the categories they use) into another outlet. Dishes the other
+   * outlet already has (same name) are skipped. Returns how many dishes were copied.
+   */
+  copyMenu(fromId: string, toId: string) {
+    const outlets = outletStore.get();
+    const mainId = mainOutletId(outlets);
+    const have = new Set(menuFor(menuStore.get(), { id: toId }, mainId).map((m) => m.name.trim().toLowerCase()));
+    const dishes = menuFor(menuStore.get(), { id: fromId }, mainId).filter((m) => !have.has(m.name.trim().toLowerCase()));
+    if (!dishes.length) return 0;
     const stamp = Date.now().toString(36);
-    const copies = shared.map((m, i) => ({ ...m, id: `m${stamp}${i.toString(36)}`, outletIds: [outletId], offIn: undefined, available: m.available && !m.offIn?.includes(outletId) }));
-    if (copies.length) menuStore.set([...menuStore.get(), ...copies]);
+    // categories: reuse the target's category of the same name, else copy it
+    const cats = catStore.get();
+    const toCats = cats.filter((c) => belongs(c, toId, mainId));
+    const catMap = new Map<string, string>();
+    const newCats: Category[] = [];
+    for (const cid of new Set(dishes.map((m) => m.categoryId))) {
+      const c = cats.find((x) => x.id === cid);
+      if (!c) continue;
+      const same = toCats.find((x) => x.name.trim().toLowerCase() === c.name.trim().toLowerCase());
+      if (same) catMap.set(cid, same.id);
+      else {
+        const copy: Category = { ...c, id: `${c.id}-${toId}-${stamp}`.slice(0, 80), outletIds: [toId] };
+        newCats.push(copy);
+        catMap.set(cid, copy.id);
+      }
+    }
+    if (newCats.length) catStore.set([...cats, ...newCats]);
+    const copies = dishes.map((m, i) => ({ ...m, id: `m${stamp}${i.toString(36)}`, outletIds: [toId], offIn: undefined, categoryId: catMap.get(m.categoryId) ?? m.categoryId, soldThisWeek: 0 }));
+    menuStore.set([...menuStore.get(), ...copies]);
+    const name = (id: string) => outlets.find((o) => o.id === id)?.name ?? id;
+    logActivity("menu", `Copied ${copies.length} dishes from ${name(fromId)} to ${name(toId)}`, toId);
     return copies.length;
   },
   update(id: string, patch: Partial<MenuItem>) {
@@ -730,28 +752,48 @@ export const menuActions = {
     if (patch.name && patch.name !== old.name) logActivity("menu", `Renamed ${old.name} to ${patch.name}`);
   },
   add(itemIn: MenuItem) {
-    const item = withOutletMenu(itemIn);
+    const item = inThisOutlet(itemIn);
     menuStore.set([...menuStore.get(), item]);
     logActivity("menu", `Added dish ${item.name} · ${rs(item.price)}`);
   },
   /** Many dishes in one go (menu read from a photo). */
   addMany(itemsIn: MenuItem[]) {
-    const items = itemsIn.map(withOutletMenu);
+    const items = itemsIn.map(inThisOutlet);
     if (items.length) menuStore.set([...menuStore.get(), ...items]);
     if (items.length) logActivity("menu", `Added ${items.length} dishes from a menu photo`);
   },
+  /** Delete a dish. Old bills and reports keep its name (orders store the name). */
+  remove(id: string) {
+    const m = menuStore.get().find((x) => x.id === id);
+    if (!m) return;
+    menuStore.set(menuStore.get().filter((x) => x.id !== id));
+    logActivity("menu", `Deleted dish ${m.name}`, m.outletIds?.[0]);
+  },
 };
+/** Is this dish the free dish of a stamp card? (warn before deleting it) */
+export const isStampReward = (id: string) => outletStore.get().some((o) => o.stamps?.rewardKind === "item" && o.stamps.rewardItemId === id);
 
 /* ---------------- categories (owner-defined → guest filters + side bar) ---------------- */
 const catStore = createStore<Category[]>([], "categories", { kind: "collection", coll: "categories", guest: "read" });
-export const useCategories = () => catStore.use();
+/** Categories of one outlet (each outlet has its own). */
+export const categoriesFor = (all: Category[], o: Pick<Outlet, "id"> | undefined, mainId?: string) =>
+  o?.id ? all.filter((c) => belongs(c, o.id, mainId ?? o.id)) : all;
+/** Categories of the outlet on screen (or of the guest's QR outlet). */
+export function useCategories() {
+  const all = catStore.use();
+  const o = useCurrentOutlet();
+  const mainId = mainOutletId(outletStore.use());
+  return useMemo(() => categoriesFor(all, o, mainId), [all, o.id, mainId]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+/** Every outlet's categories. */
+export const useAllCategories = () => catStore.use();
 export const categoryActions = {
   add(name: string, icon?: string): Category {
     const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cat";
     const taken = new Set(catStore.get().map((c) => c.id));
     let id = base;
     for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
-    const c: Category = { id, name: name.trim(), icon };
+    const c = inThisOutlet<Category>({ id, name: name.trim(), icon });
     catStore.set([...catStore.get(), c]);
     return c;
   },
@@ -770,12 +812,20 @@ export const categoryActions = {
     catStore.set(catStore.get().filter((x) => x.id !== id));
     logActivity("menu", `Deleted category ${c.name}${inIt.length ? (to ? ` · ${inIt.length} dishes moved to ${to.name}` : ` and its ${inIt.length} dishes`) : ""}`);
   },
+  /** Move up or down among this outlet's categories. */
   move(id: string, dir: -1 | 1) {
     const list = [...catStore.get()];
-    const i = list.findIndex((c) => c.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j], list[i]];
+    const c = list.find((x) => x.id === id);
+    if (!c) return;
+    const mainId = mainOutletId(outletStore.get());
+    const oid = c.outletIds?.[0] ?? mainId;
+    // positions (in the whole list) of this outlet's categories
+    const mine = list.map((x, k) => (oid && !belongs(x, oid, mainId) ? -1 : k)).filter((k) => k >= 0);
+    const at = mine.indexOf(list.indexOf(c));
+    const other = mine[at + dir];
+    if (at < 0 || other === undefined) return;
+    const i = mine[at];
+    [list[i], list[other]] = [list[other], list[i]];
     catStore.set(list);
   },
 };

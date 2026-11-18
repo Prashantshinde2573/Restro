@@ -1,12 +1,12 @@
 "use client";
 
-import { hasTables } from "@/lib/access";
+import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { categoryActions, menuActions, outletActions, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
+import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
 import { DragGhost, DragHandle, useDishDrag } from "@/components/dish-drag";
 import { MenuFromPhoto } from "@/components/menu-import";
@@ -47,18 +47,18 @@ export default function MenuPage() {
   const [tab, setTab] = useState<"dishes" | "engineering">("dishes");
   const menuRaw = useMenu(); // the dishes of the outlet on screen
   const orders = useOutletOrders(); // sold here
-  // outlets: one shared menu, or an outlet's own
+  // each outlet has its own menu; its people with menu access change it
   const me = useMe();
   const outlets = useOutlets();
   const outletNow = useCurrentOutlet();
   const allMenu = useAllMenu();
-  const owner = me?.role === "owner";
   const many = outlets.length > 1;
-  const sharedCount = allMenu.filter((m) => !m.outletIds?.length).length;
-  const canSwitchMenu = many && (owner || (me?.role === "subadmin" && me.outletIds.includes(outletNow.id)));
-  // on the shared menu only the owner changes dishes; on an outlet's own menu, its people do
-  const canEditDishes = owner || !!outletNow.ownMenu;
-  const [menuMode, setMenuMode] = useState<"own" | null>(null);
+  const canEditDishes = hasPerm(me, "menu") && inOutlet(me, outletNow.id);
+  // copy dishes from another outlet
+  const [copyOpen, setCopyOpen] = useState(false);
+  const mainId = mainOutletId(outlets);
+  const otherOutlets = outlets.filter((o) => o.id !== outletNow.id).map((o) => ({ ...o, dishes: menuFor(allMenu, o, mainId).length })).filter((o) => o.dishes > 0);
+  const [confirmDel, setConfirmDel] = useState(false);
   // "sold" = plates in the last 7 days, from real orders
   const items = useMemo(() => {
     const since = Date.now() - 7 * 86_400_000;
@@ -84,6 +84,7 @@ export default function MenuPage() {
   const [draft, setDraft] = useState<Draft>(blank());
   const setEdit = (m: MenuItem | "new" | null, catId?: string) => {
     setEditRaw(m);
+    setConfirmDel(false);
     const it = m && m !== "new" ? m : null;
     setDraft(
       it
@@ -142,11 +143,11 @@ export default function MenuPage() {
     <>
       <PageHeader
         title="Menu"
-        subtitle={`${many ? `${outletNow.name} · ${outletNow.ownMenu ? "own menu" : "shared menu"} · ` : ""}${items.length} dishes · ${items.filter((m) => !m.available).length} sold out`}
+        subtitle={`${many ? `${outletNow.name} · ` : ""}${items.length} dish${items.length === 1 ? "" : "es"} · ${items.filter((m) => !m.available).length} sold out`}
         actions={
           <div className="flex gap-2">
-            <Button size="sm" variant="plain" aria-label="Categories" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /><span className="hidden sm:inline">Categories</span></Button>
-            {canEditDishes && <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">From</span> photo</Button>}
+            <Button size="sm" variant="plain" aria-label="Categories" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /> Categories</Button>
+            {canEditDishes && <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">From photo</span><span className="sm:hidden">Photo</span></Button>}
             {canEditDishes && <Button size="sm" onClick={() => setEdit("new")}><Plus size={16} /> Add dish</Button>}
           </div>
         }
@@ -156,37 +157,12 @@ export default function MenuPage() {
       <MenuFromPhoto open={fromPhoto} onClose={() => setFromPhoto(false)} />
 
       <Page>
-        {many && (
-          <div className="mb-5 flex flex-col gap-3 rounded-group bg-surface p-4 sm:flex-row sm:items-center">
-            <div className="min-w-0 flex-1">
-              <div className="text-[15px] font-semibold">Menu at {outletNow.name}</div>
-              <div className="text-[13px] text-muted">
-                {outletNow.ownMenu
-                  ? "Own menu: dishes and prices here are only for this outlet."
-                  : owner
-                    ? "Shared menu: the same dishes in every outlet. Sold out is per outlet."
-                    : "Shared menu set by the owner. You can mark dishes sold out here."}
-              </div>
+        {many && canEditDishes && otherOutlets.length > 0 && (
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-group bg-surface px-4 py-3">
+            <div className="min-w-0 flex-1 text-[13.5px] text-muted">
+              <b className="font-semibold text-ink">Menu of {outletNow.name}.</b> Dishes and prices here are only for this outlet.
             </div>
-            {canSwitchMenu ? (
-              <Segmented
-                value={outletNow.ownMenu ? "own" : "shared"}
-                onChange={(v) => {
-                  if (v === "own") {
-                    if (allMenu.some((m) => m.outletIds?.includes(outletNow.id))) {
-                      outletActions.update(outletNow.id, { ownMenu: true });
-                      toast(`${outletNow.name} uses its own menu again`);
-                    } else setMenuMode("own");
-                  } else {
-                    outletActions.update(outletNow.id, { ownMenu: false });
-                    toast(`${outletNow.name} uses the shared menu · its own dishes are kept for later`);
-                  }
-                }}
-                options={[{ value: "shared", label: "Same for all outlets" }, { value: "own", label: "Own menu" }]}
-              />
-            ) : (
-              <Pill tone={outletNow.ownMenu ? "jade" : "neutral"}>{outletNow.ownMenu ? "Own menu" : "Shared menu"}</Pill>
-            )}
+            <Button size="sm" variant="tinted" onClick={() => setCopyOpen(true)}>Copy from another outlet</Button>
           </div>
         )}
         {tab === "dishes" || !engineeringOn ? (
@@ -212,7 +188,7 @@ export default function MenuPage() {
                   return (
                     <div key={m.id} className={clsx("flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5", drag?.id === m.id && "opacity-40")}>
                       <DragHandle name={m.name} onPointerDown={startDrag(m)} />
-                      <button onClick={() => (canEditDishes ? setEdit(m) : toast("Shared menu: only the owner changes dishes. You can mark it sold out here."))} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                      <button onClick={() => (canEditDishes ? setEdit(m) : toast("Ask the owner or your manager to change this dish. You can mark it sold out here."))} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                         <PhotoSlide item={m} className="h-11 w-11 shrink-0 rounded-[12px]" />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -230,7 +206,7 @@ export default function MenuPage() {
                         checked={m.available}
                         onChange={(v) => {
                           menuActions.setAvailable(m.id, v);
-                          toast(v ? `${m.name} is back on the menu` : `${m.name} marked sold out${many && !m.outletIds?.length ? ` at ${outletNow.name}` : ""}`);
+                          toast(v ? `${m.name} is back on the menu` : `${m.name} marked sold out${many ? ` at ${outletNow.name}` : ""}`);
                         }}
                       />
                     </div>
@@ -287,33 +263,24 @@ export default function MenuPage() {
         )}
       </Page>
 
-      <Sheet open={menuMode === "own"} onClose={() => setMenuMode(null)} title={`Own menu for ${outletNow.name}`}>
-        <p className="text-[14.5px] text-muted">{outletNow.name} gets its own dishes and prices. Other outlets keep the shared menu. You can switch back any time.</p>
+      <Sheet open={copyOpen} onClose={() => setCopyOpen(false)} title={`Copy dishes to ${outletNow.name}`}>
+        <p className="text-[14.5px] text-muted">The dishes are copied with their prices, photos and categories. After that each outlet changes its own; dishes {outletNow.name} already has (same name) are skipped.</p>
         <div className="mt-4 space-y-2.5">
-          <Button
-            size="lg"
-            className="w-full"
-            onClick={() => {
-              const n = menuActions.copySharedTo(outletNow.id);
-              outletActions.update(outletNow.id, { ownMenu: true });
-              setMenuMode(null);
-              toast(`Own menu on · copied ${n} dishes · change them freely`);
-            }}
-          >
-            Start with a copy of the shared menu ({sharedCount} dishes)
-          </Button>
-          <Button
-            size="lg"
-            variant="tinted"
-            className="w-full"
-            onClick={() => {
-              outletActions.update(outletNow.id, { ownMenu: true });
-              setMenuMode(null);
-              toast("Own menu on · add this outlet's dishes");
-            }}
-          >
-            Start empty
-          </Button>
+          {otherOutlets.map((o) => (
+            <Button
+              key={o.id}
+              size="lg"
+              variant="tinted"
+              className="w-full"
+              onClick={() => {
+                const n = menuActions.copyMenu(o.id, outletNow.id);
+                setCopyOpen(false);
+                toast(n ? `Copied ${n} dishes from ${o.name}` : `${outletNow.name} already has all of ${o.name}'s dishes`);
+              }}
+            >
+              From {o.name} ({o.dishes} dishes)
+            </Button>
+          ))}
         </div>
       </Sheet>
 
@@ -442,6 +409,22 @@ export default function MenuPage() {
           <Field label="Cost per plate (₹)" hint="What the ingredients cost you. Used for margins in “What's working”. Optional.">
             <input className={inputCls} inputMode="decimal" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
           </Field>
+          {editing && canEditDishes && (
+            confirmDel ? (
+              <div className="space-y-2 rounded-group bg-rose-soft/50 p-4">
+                <p className="text-[14px]">
+                  Delete <b>{editing.name}</b> from {outletNow.name}? Old bills and reports keep its name.
+                  {isStampReward(editing.id) && " It is the free dish of your stamp card: pick another dish there after this."}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="plain" onClick={() => setConfirmDel(false)}>Keep</Button>
+                  <Button variant="danger" onClick={() => { menuActions.remove(editing.id); setConfirmDel(false); setEdit(null); toast(`${editing.name} deleted`); }}>Delete dish</Button>
+                </div>
+              </div>
+            ) : (
+              <Button variant="danger" className="w-full" onClick={() => setConfirmDel(true)}><Trash2 size={16} /> Delete dish</Button>
+            )
+          )}
         </div>
       </Sheet>
 

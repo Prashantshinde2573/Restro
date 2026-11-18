@@ -32,7 +32,7 @@ import { CouponBox, PayPanel, ThankYou, guestCouponOff } from "@/components/gues
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
-import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
 import { cloudSignOut, ensureGuest, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
@@ -94,6 +94,7 @@ export default function GuestOrder() {
   // QR ordering is in every plan (it is the Restropi USP); the check stays for outlet types and future plans.
   const qrOn = useFeature("qrOrdering") === "ok";
   const menuAll = useMenu();
+  const everyDish = useAllMenu(); // a brand-wide stamp card's free dish can be on another outlet's menu
   const menu = useMemo(() => menuAll.filter((m) => m.available), [menuAll]);
   const cats = useCategories();
   const tables = useAllTables(); // every outlet: the QR link names the table
@@ -677,7 +678,7 @@ export default function GuestOrder() {
   const billItems = unbilled.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
   // a full stamp card: the guest can use the reward on this bill (on by default; the restaurant confirms it with the payment)
   const rewardReady = !!stampProg && myStamps != null && myStamps >= stampProg.needed;
-  const rewardAmt = rewardReady && useReward ? rewardOff(stampProg!, billItems, menuAll) : 0;
+  const rewardAmt = rewardReady && useReward ? rewardOff(stampProg!, billItems, everyDish) : 0;
   const couponAmt = payNow ? 0 : Math.min(Math.max(0, billItems - rewardAmt), guestCouponOff(coupon, billItems));
   // One coupon per bill, the same on the phone and at the counter: a code the staff put on the
   // bill shows here, and a code the guest applies here is put on the bill for the staff.
@@ -1461,7 +1462,7 @@ export default function GuestOrder() {
                   <span className="block text-[15px] font-semibold">{tx(lang, `Use my reward: ${stampProg!.reward}`, `माझं बक्षीस वापरा: ${stampProg!.reward}`)}</span>
                   <span className="block text-[12.5px] text-muted">
                     {useReward
-                      ? tx(lang, `−${inr(rewardOff(stampProg!, billItems, menuAll))} on this bill · your card starts again after this`, `या बिलावर −${inr(rewardOff(stampProg!, billItems, menuAll))} · यानंतर कार्ड पुन्हा सुरू`)
+                      ? tx(lang, `−${inr(rewardOff(stampProg!, billItems, everyDish))} on this bill · your card starts again after this`, `या बिलावर −${inr(rewardOff(stampProg!, billItems, everyDish))} · यानंतर कार्ड पुन्हा सुरू`)
                       : tx(lang, "Tap to use it on this bill", "या बिलावर वापरण्यासाठी टॅप करा")}
                   </span>
                 </span>

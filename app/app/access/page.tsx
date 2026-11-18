@@ -25,7 +25,7 @@ import {
   type Perm,
   isMixed,
 } from "@/lib/access";
-import { memberActions, outletActions, useAccount, useMe, useMembers, useOutlets } from "@/lib/live";
+import { mainOutletId, memberActions, menuActions, menuFor, outletActions, useAccount, useAllMenu, useMe, useMembers, useOutlets } from "@/lib/live";
 import { setStaffPin, useCloud } from "@/lib/cloud";
 import { tableActions, useAllTables } from "@/lib/tables";
 import type { BusinessType, Outlet } from "@/lib/types";
@@ -152,8 +152,17 @@ export default function AccessPage() {
       return;
     }
     setOutletDraft({ id: "", name: "", address: "", businessType: "restaurant", upi: "", payFirst: false, isNew: true });
+    setCopyMenuFrom(menuSources[0]?.id ?? "");
   };
   const outletOk = !!outletDraft && outletDraft.name.trim().length > 1 && isValidUpi(outletDraft.upi);
+  // a new outlet starts with a copy of another outlet's menu (the first outlet by default) or empty
+  const allMenu = useAllMenu();
+  const menuMain = mainOutletId(outlets);
+  const menuSources = outlets
+    .map((o) => ({ id: o.id, name: o.name, dishes: menuFor(allMenu, o, menuMain).length }))
+    .filter((o) => o.dishes > 0)
+    .sort((a, b) => (a.id === menuMain ? -1 : b.id === menuMain ? 1 : 0));
+  const [copyMenuFrom, setCopyMenuFrom] = useState<string>("");
   // delete an outlet: the owner types its name to be sure
   const allTables = useAllTables();
   const [delName, setDelName] = useState<string | null>(null);
@@ -173,7 +182,8 @@ export default function AccessPage() {
     const { isNew, id, ...o } = outletDraft;
     if (isNew) {
       const created = outletActions.add({ ...o, name: o.name.trim(), upi: o.upi.trim() });
-      toast(`${created.name} created · add its sub admin and staff next`);
+      const n = copyMenuFrom ? menuActions.copyMenu(copyMenuFrom, created.id) : 0;
+      toast(`${created.name} created${n ? ` with ${n} dishes` : ""} · add its sub admin and staff next`);
     } else {
       outletActions.update(id, { ...o, name: o.name.trim(), upi: o.upi.trim() });
       toast("Outlet saved");
@@ -383,7 +393,7 @@ export default function AccessPage() {
                   Can do everything the owner does in this outlet: orders, bills and payments, tables, kitchen, stock, staff and their access, attendance and salary
                   (approve days, pay), outlet settings, stamp card, guests, campaigns and coupons, reports, insights and activity.
                 </p>
-                <p className="mt-2 text-muted">Can&apos;t: see or change other outlets, the plan and billing, or the shared menu (they can mark dishes sold out, or turn on their outlet&apos;s own menu).</p>
+                <p className="mt-2 text-muted">Can&apos;t: see or change other outlets, or the plan and billing.</p>
                 {owner && (
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
                     <div>
@@ -489,6 +499,16 @@ export default function AccessPage() {
               <span className="text-[15px]">Guests pay before the kitchen starts</span>
               <Toggle checked={outletDraft.payFirst} onChange={(payFirst) => setOutletDraft({ ...outletDraft, payFirst })} label="Guests pay first" />
             </div>
+            {outletDraft.isNew && menuSources.length > 0 && (
+              <Field label="Menu" hint="Each outlet has its own menu. A copy can be changed freely; you can also copy later from Menu.">
+                <Segmented
+                  className="w-full"
+                  value={copyMenuFrom}
+                  onChange={setCopyMenuFrom}
+                  options={[...menuSources.slice(0, 2).map((o) => ({ value: o.id, label: `Copy ${o.name} (${o.dishes})` })), { value: "", label: "Start empty" }]}
+                />
+              </Field>
+            )}
 
             {owner && !outletDraft.isNew && outlets.length > 1 && (
               <div className="rounded-group border border-rose/30 bg-rose-soft/40 p-4">
@@ -500,7 +520,7 @@ export default function AccessPage() {
                   <div className="space-y-3">
                     <div className="text-[15px] font-semibold text-rose">Delete {outletDraft.name}?</div>
                     <ul className="list-disc space-y-1 pl-5 text-[13.5px] text-ink/80">
-                      <li>Its tables, stock, own menu and its coupons are deleted.</li>
+                      <li>Its tables, stock, menu and its coupons are deleted.</li>
                       <li>People who work only here can&apos;t sign in any more (they stay in your list, turned off).</li>
                       <li>Past bills stay in your reports and data export.</li>
                       <li>This can&apos;t be undone.</li>

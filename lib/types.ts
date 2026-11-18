@@ -10,6 +10,8 @@ export interface Category {
   id: string;
   name: string;
   icon?: string; // emoji shown in the guest side bar
+  /** the outlet this category is in (missing = the first outlet, from before outlets had their own menus) */
+  outletIds?: string[];
 }
 
 export type BusinessType = "restaurant" | "cafe";
@@ -40,7 +42,7 @@ export interface Outlet {
   acceptCard?: boolean; // card machine at the counter
   stamps?: StampProgram; // stamp card (loyalty), set by the owner
   sort?: number;
-  /** This outlet has its own menu (dishes with outletIds = [this outlet]); otherwise it uses the shared menu. */
+  /** Old (before every outlet had its own menu); no longer used. */
   ownMenu?: boolean;
 }
 
@@ -101,9 +103,9 @@ export interface MenuItem {
   photos?: string[]; // uploaded photo URLs (Cloud Storage later)
   photoCount?: number; // sample-data stand-in for photos
   hue: number; // placeholder art colour until photos come from Storage
-  /** A dish of an outlet's own menu (missing = the shared menu every other outlet uses). */
+  /** The outlet this dish is in: each outlet has its own menu (missing = the first outlet, from before). */
   outletIds?: string[];
-  /** Shared dish sold out only in these outlets. */
+  /** Old: a shared dish sold out only in these outlets (no longer written). */
   offIn?: string[];
 }
 
