@@ -47,7 +47,8 @@ export function OrderCard({
   const tone = TONE[o.payClaim && live ? "new" : o.status] ?? TONE.served;
   const stage = STAGES.indexOf(o.status as (typeof STAGES)[number]);
   const items = o.lines.reduce((s, l) => s + l.qty, 0);
-  const shown = o.lines.slice(0, 3);
+  // dishes still to come first (a new add-on shows on the card), then the rest
+  const shown = [...o.lines].sort((a, b) => Number(!!a.done) - Number(!!b.done) || Number(!!b.addOn) - Number(!!a.addOn)).slice(0, 3);
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-[22px] bg-surface shadow-[0_1px_2px_rgb(16_24_20/.05),0_8px_24px_-18px_rgb(16_24_20/.35)] ring-1 ring-line/70 transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgb(16_24_20/.45)]">
       <span className={clsx("absolute inset-y-0 left-0 w-1.5", tone.bar)} aria-hidden />
@@ -90,6 +91,7 @@ export function OrderCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={clsx("rounded-full px-2.5 py-1 text-[12px] font-semibold", tone.chip)}>{o.payClaim && live ? "Paid? Confirm" : STAGE_LABEL[o.status]}</span>
           {payingOnline(o) && live && <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jade" /> Paying online…</span>}
+          {live && o.lines.some((l) => l.addOn && !l.done) && <span className="rounded-full bg-saffron px-2.5 py-1 text-[12px] font-semibold text-white">+ Add-on</span>}
           {o.status === "new" && o.channel === "qr" && !action && !payingOnline(o) && <span className="rounded-full bg-saffron-soft px-2.5 py-1 text-[12px] font-semibold text-saffron">Waiting to be accepted</span>}
           {o.payPreference && o.payPreference !== "online" && live && !o.payClaim && (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-soft px-2.5 py-1 text-[12px] font-semibold text-sky"><Wallet size={12} /> Wants bill · {methodLabel[o.payPreference]}</span>

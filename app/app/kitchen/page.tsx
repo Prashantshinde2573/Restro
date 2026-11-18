@@ -60,16 +60,18 @@ export default function KitchenPage() {
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
     const live = orders.filter((o) => o.status === "accepted" || o.status === "preparing");
+    // a ticket, and again for each add-on round put into it
+    const key = (o: (typeof live)[number]) => `${o.id}:${o.lines.filter((l) => l.addOn).length}`;
     if (!seen.current) {
-      seen.current = new Set(live.map((o) => o.id));
+      seen.current = new Set(live.map(key));
       return;
     }
-    const fresh = live.filter((o) => !seen.current!.has(o.id));
-    fresh.forEach((o) => seen.current!.add(o.id));
+    const fresh = live.filter((o) => !seen.current!.has(key(o)));
+    fresh.forEach((o) => seen.current!.add(key(o)));
     if (!fresh.length) return;
     chime("kitchen");
     if (!voice || !("speechSynthesis" in window)) return;
-    for (const o of fresh) speak(ticketText(o, lang), lang);
+    for (const o of fresh) speak(ticketText({ ...o, lines: o.lines.filter((l) => !l.done) }, lang), lang);
   }, [orders, voice, lang]);
 
   const visible = useMemo(
@@ -173,6 +175,7 @@ export default function KitchenPage() {
                               {l.done && <Check size={14} strokeWidth={3} />}
                             </span>
                             <span className={clsx("flex-1 text-[16px] leading-snug", l.done && "text-muted line-through decoration-2")}>
+                              {l.addOn && !l.done && <span className="mr-1.5 inline-block rounded-full bg-saffron px-2 py-0.5 align-[2px] text-[11px] font-bold uppercase tracking-wide text-white no-underline">Add-on</span>}
                               <b className="tnum">{l.qty}</b> {l.name}
                               {l.note && <span className="mt-0.5 block text-[13px] font-semibold text-saffron no-underline">{l.note}</span>}
                             </span>

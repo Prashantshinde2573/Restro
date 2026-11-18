@@ -7,11 +7,11 @@
 import { useMemo } from "react";
 import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
-import { getCloud, guestUpsert, isConnected } from "./cloud";
+import { getCloud, guestAddOn, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
 import { liveStamps, mayAct, programOf, stampProblem } from "./stamps";
 import { canConfirmPay, featureState, hasPerm, inOutlet, isMixed, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
-import type { Account, ActivityEntry, BillDiscount, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
+import type { Account, ActivityEntry, BillDiscount, Category, Customer, Feedback, MenuItem, Order, OrderLine, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
 export { hydrateStores };
 /* ---------------- account, outlets, members, who is signed in ---------------- */
@@ -333,6 +333,32 @@ export const orderActions = {
     orderStore.set([order, ...orderStore.get()]);
     logOrder(order);
     return order;
+  },
+  /**
+   * A guest's next round into the group's open order (one card, one bill). The server checks the
+   * dishes and prices like a new order. False when it can't (the bill was asked for, the order
+   * closed meanwhile…): then the round goes as a new order.
+   */
+  async addOn(id: string, lines: OrderLine[]): Promise<boolean> {
+    const o = orderStore.get().find((x) => x.id === id);
+    if (!o || !lines.length) return false;
+    if (isConnected()) {
+      if (!o.number) return false; // not on the server yet
+      const saved = await guestAddOn(id, lines);
+      if (!saved) return false;
+      patchOrder(id, (x) => ({ ...x, ...(saved as Partial<Order>), id: x.id, number: x.number }));
+      return true;
+    }
+    if (o.status === "paid" || o.status === "cancelled" || o.payClaim || o.payPreference) return false;
+    const round = 1 + Math.max(1, ...o.lines.map((l) => l.round ?? 1));
+    const out = o.status === "ready" || o.status === "served";
+    const at = new Date().toISOString();
+    patchOrder(id, (x) => ({
+      ...x,
+      status: out ? "accepted" : x.status,
+      lines: [...x.lines.map((l) => (out ? { ...l, done: true } : l)), ...lines.map((l) => ({ ...l, round, addOn: true, addedAt: at }))],
+    }));
+    return true;
   },
   setStatus(id: string, status: OrderStatus) {
     const o = orderStore.get().find((x) => x.id === id);
