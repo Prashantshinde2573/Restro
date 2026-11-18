@@ -19,6 +19,7 @@ import {
   settingsActions,
   useAccount,
   useCan,
+  useAllCategories,
   useCategories,
   useCurrentOutlet,
   useFeature,
@@ -376,7 +377,7 @@ function Export() {
   const outlets = useOutlets();
   const orders = useOrders();
   const menu = useAllMenu(); // every outlet's dishes
-  const categories = useCategories();
+  const categories = useAllCategories();
   const guests = useGuests();
   const feedback = useFeedback();
   const tables = useAllTables();

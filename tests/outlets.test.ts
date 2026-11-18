@@ -1,21 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { couponWorksIn, guestOutletIds, menuFor, stampProgramOf } from "@/lib/live";
+import { categoriesFor, couponWorksIn, guestOutletIds, mainOutletId, menuFor, stampProgramOf } from "@/lib/live";
 import type { Customer, MenuItem, Order, Outlet } from "@/lib/types";
 
 const dish = (id: string, extra: Partial<MenuItem> = {}): MenuItem =>
   ({ id, name: id, categoryId: "c", price: 100, cost: 0, diet: "veg", available: true, soldThisWeek: 0, prepMins: 5, station: "kitchen", hue: 0, ...extra }) as MenuItem;
 
 describe("menu per outlet", () => {
-  const all = [dish("shared"), dish("soldB", { offIn: ["b"] }), dish("ownB", { outletIds: ["b"] })];
-  it("an outlet on the shared menu sees only shared dishes, sold out per outlet", () => {
-    const a = menuFor(all, { id: "a" });
-    expect(a.map((m) => m.id)).toEqual(["shared", "soldB"]);
-    expect(a.find((m) => m.id === "soldB")?.available).toBe(true);
-    const b = menuFor(all, { id: "b" });
-    expect(b.find((m) => m.id === "soldB")?.available).toBe(false);
+  const all = [dish("old"), dish("soldB", { offIn: ["b"] }), dish("ownA", { outletIds: ["a"] }), dish("ownB", { outletIds: ["b"] })];
+  it("each outlet sees only its own dishes; older dishes with no outlet belong to the first outlet", () => {
+    expect(menuFor(all, { id: "a" }, "a").map((m) => m.id)).toEqual(["old", "soldB", "ownA"]);
+    expect(menuFor(all, { id: "b" }, "a").map((m) => m.id)).toEqual(["ownB"]);
   });
-  it("an outlet with its own menu sees only its own dishes", () => {
-    expect(menuFor(all, { id: "b", ownMenu: true }).map((m) => m.id)).toEqual(["ownB"]);
+  it("old per-outlet sold out still shows as sold out", () => {
+    expect(menuFor(all, { id: "b" }, "b").find((m) => m.id === "soldB")?.available).toBe(false);
+  });
+  it("first outlet = lowest sort", () => {
+    expect(mainOutletId([{ id: "z", sort: 1 }, { id: "y", sort: 0 }])).toBe("y");
+  });
+  it("categories per outlet", () => {
+    const cats = [{ id: "c1", name: "A" }, { id: "c2", name: "B", outletIds: ["b"] }];
+    expect(categoriesFor(cats, { id: "a" }, "a").map((c) => c.id)).toEqual(["c1"]);
+    expect(categoriesFor(cats, { id: "b" }, "a").map((c) => c.id)).toEqual(["c2"]);
   });
 });
 

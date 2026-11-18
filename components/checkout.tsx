@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, stampActions, useCan, useCoupons, useCurrentOutlet, useFeature, useGuests, useMe, useMenu, useSettings } from "@/lib/live";
+import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, stampActions, useCan, useAllMenu, useCoupons, useCurrentOutlet, useFeature, useGuests, useMe, useMenu, useSettings } from "@/lib/live";
 import { liveStamps, mayAct, programOf, rewardOff, stampProblem } from "@/lib/stamps";
 import { StampBox } from "./stamps";
 import { billFileName, printReceipt, receiptPdfBlob, receiptText } from "./receipt";
@@ -79,6 +79,7 @@ export function Checkout({
   const [useRewardRaw, setUseReward] = useState<boolean | null>(null); // null = on whenever the card is full
   const [giveStamp, setGiveStamp] = useState<boolean | null>(null); // null = the program's default
   const menu = useMenu();
+  const allMenu = useAllMenu(); // the stamp card's free dish may be on another outlet's menu (a brand-wide card)
   const guestsList = useGuests();
 
   // Start fresh each time the sheet opens — not when the bill behind it changes
@@ -129,7 +130,7 @@ export function Checkout({
   const liveCount = liveStamps(stampGuest, prog).length;
   const canRedeem = stampsOn && liveCount >= prog.needed && mayAct(meEarly, prog.redeemers);
   const useReward = canRedeem && (useRewardRaw ?? true);
-  const rewardAmt = useReward ? rewardOff(prog, subtotal, menu) : 0;
+  const rewardAmt = useReward ? rewardOff(prog, subtotal, allMenu) : 0;
   const stampWhyNot = stampsOn && phoneKey.length === 10 ? stampProblem(prog, stampGuest, subtotal) : null;
   const mayGive = mayAct(meEarly, prog.givers);
   // the bill that uses the reward earns no stamp: the new card starts at 0
@@ -283,7 +284,7 @@ export function Checkout({
               name={stampGuest?.name || guestName}
               have={liveCount}
               program={prog}
-              rewardAmt={rewardOff(prog, subtotal, menu)}
+              rewardAmt={rewardOff(prog, subtotal, allMenu)}
               canRedeem={canRedeem}
               useReward={useReward}
               onUseReward={setUseReward}
