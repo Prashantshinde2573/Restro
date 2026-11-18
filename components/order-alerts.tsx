@@ -16,7 +16,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useReady } from "@/lib/store";
 import { inOutlet } from "@/lib/access";
-import { createdHere, paymentsText, pendingClaims, useCan, useCanConfirm, useAllFeedback, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
+import { createdHere, payingOnline, paymentsText, pendingClaims, useCan, useCanConfirm, useAllFeedback, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
 import { orderWhere, useAllTables } from "@/lib/tables";
 import { pushNotice, type Notice } from "./notifications";
 import { useToast } from "./toast";
@@ -62,7 +62,7 @@ export function OrderAlerts() {
     const here = (id?: string) => !id || !outletNow.id || id === outletNow.id;
     const outletTag = (id?: string) => (outlets.length > 1 && id && !here(id) ? ` · ${outlets.find((x) => x.id === id)?.name ?? ""}` : "");
     const open = orders.filter((o) => o.status !== "paid" && o.status !== "cancelled");
-    const bills = open.filter((o) => o.payPreference && !o.payClaim);
+    const bills = open.filter((o) => o.payPreference && o.payPreference !== "online" && !o.payClaim);
     const claims = pendingClaims(orders);
     const readyNow = open.filter((o) => o.status === "ready");
     if (!seenNew.current || !seenBill.current || !seenClaim.current || !seenReady.current || !seenReview.current) {
@@ -96,7 +96,7 @@ export function OrderAlerts() {
       for (const o of fromElsewhere) {
         const items = o.lines.reduce((s, l) => s + l.qty, 0);
         const needsOk = o.status === "new";
-        const title = needsOk ? (o.payPreference ? "New order · take the payment" : "New QR order · accept it") : o.channel === "qr" ? "New QR order" : `New order by ${o.staff}`;
+        const title = payingOnline(o) ? "New order · guest is paying online" : needsOk ? (o.payPreference ? "New order · take the payment" : "New QR order · accept it") : o.channel === "qr" ? "New QR order" : `New order by ${o.staff}`;
         const body = `${orderWhere(o, tables)} · ${items} item${items === 1 ? "" : "s"}${outletTag(o.outletId)}`;
         pushNotice({ kind: "order", title, body, href: "/app/orders", outletId: o.outletId });
         notify(title, body);

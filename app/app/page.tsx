@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText, CalendarDays, MapPin } from "lucide-react";
 import { hasPerm, hasTables, isOwner } from "@/lib/access";
-import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders, useOutletOrders } from "@/lib/live";
+import { toAccept, useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders, useOutletOrders } from "@/lib/live";
 import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { BarChart, TrendChart } from "@/components/charts";
 import { UserChip } from "@/components/shell";
@@ -93,7 +93,7 @@ function OwnerHome() {
   const shared = tables.filter(isShared).length;
   const kitchenQueue = orders.filter((o) => ["new", "accepted", "preparing"].includes(o.status));
   const oldest = kitchenQueue.reduce((m, o) => Math.max(m, minutesSince(o.createdAt)), 0);
-  const waiting = orders.filter((o) => o.status === "new").length;
+  const waiting = orders.filter(toAccept).length;
   const qrOpen = orders.filter((o) => o.channel !== "pos" && o.status !== "paid" && o.status !== "cancelled");
   const hour = new Date(now).getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";

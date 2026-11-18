@@ -5,7 +5,7 @@
 
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { Banknote, Check, CreditCard, Layers, QrCode, Star, Ticket, X } from "lucide-react";
+import { Banknote, Check, CreditCard, Layers, Lock, QrCode, Star, Ticket, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./ui";
 import { UpiPayCard } from "./upi";
@@ -31,7 +31,17 @@ export function PayPanel({
   onCash,
   onCard,
   onMixed,
+  online,
+  onOnline,
+  onlineBusy = false,
+  onlineAmount,
 }: {
+  /** what the gateway will charge, when it differs (a tip is not taken online) */
+  onlineAmount?: number;
+  /** the outlet takes payments on its own gateway: the guest can pay in the gateway's checkout */
+  online?: { provider: "razorpay" | "cashfree"; mode: "test" | "live" } | null;
+  onOnline?: () => void;
+  onlineBusy?: boolean;
   amount: number;
   upi: string;
   payee: string;
@@ -79,6 +89,19 @@ export function PayPanel({
 
   return (
     <div className="space-y-4">
+      {online && onOnline && (
+        <div className="rounded-group bg-jade-soft p-4">
+          <Button size="lg" className="w-full" disabled={onlineBusy} onClick={onOnline}>
+            <Lock size={17} /> {onlineBusy ? tx(lang, "Opening payment…", "पेमेंट उघडत आहे…") : tx(lang, `Pay ${inr(onlineAmount ?? amount)} online`, `${inr(onlineAmount ?? amount)} ऑनलाइन भरा`)}
+          </Button>
+          <p className="mt-2 text-center text-[12.5px] leading-snug text-jade-deep">
+            {tx(lang, "Any UPI app or card · the bill closes by itself", "कोणतेही UPI ॲप किंवा कार्ड · बिल आपोआप बंद होते")}
+            {onlineAmount != null && onlineAmount < amount && <span className="block">{tx(lang, "Tip is not added online. Give it to the staff if you like.", "ऑनलाइन टिप जोडली जात नाही. हवी असल्यास स्टाफला द्या.")}</span>}
+            <span className="block text-jade-deep/70">{tx(lang, `Secure payment by ${online.provider === "razorpay" ? "Razorpay" : "Cashfree"}`, `${online.provider === "razorpay" ? "Razorpay" : "Cashfree"} द्वारे सुरक्षित पेमेंट`)}{online.mode === "test" ? " · TEST" : ""}</span>
+          </p>
+        </div>
+      )}
+      {online && onOnline && <div className="text-center text-[12.5px] font-semibold uppercase tracking-wider text-faint">{tx(lang, "or pay another way", "किंवा दुसऱ्या प्रकारे भरा")}</div>}
       <div className={clsx("grid gap-2", choices.length === 4 ? "grid-cols-4" : "grid-cols-3")} role="radiogroup" aria-label={tx(lang, "How will you pay?", "कसे भरणार?")}>
         {choices.map(({ v, label, icon: I }) => (
           <button

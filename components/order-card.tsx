@@ -5,7 +5,7 @@ import clsx from "clsx";
 import { Bike, Check, ChefHat, Clock3, CookingPot, HandPlatter, QrCode, ShoppingBag, UtensilsCrossed, Wallet } from "lucide-react";
 import type { Order } from "@/lib/types";
 import { inr, minutesSince, clock } from "@/lib/format";
-import { methodLabel } from "@/lib/live";
+import { methodLabel, payingOnline } from "@/lib/live";
 
 const STAGES = ["new", "accepted", "preparing", "ready", "served"] as const;
 const STAGE_LABEL: Record<string, string> = { new: "New", accepted: "Accepted", preparing: "Cooking", ready: "Ready", served: "Served", paid: "Paid", cancelled: "Cancelled" };
@@ -89,10 +89,15 @@ export function OrderCard({
         {/* stage */}
         <div className="flex flex-wrap items-center gap-1.5">
           <span className={clsx("rounded-full px-2.5 py-1 text-[12px] font-semibold", tone.chip)}>{o.payClaim && live ? "Paid? Confirm" : STAGE_LABEL[o.status]}</span>
-          {o.status === "new" && o.channel === "qr" && !action && <span className="rounded-full bg-saffron-soft px-2.5 py-1 text-[12px] font-semibold text-saffron">Waiting to be accepted</span>}
-          {o.payPreference && live && !o.payClaim && (
+          {payingOnline(o) && live && <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jade" /> Paying online…</span>}
+          {o.status === "new" && o.channel === "qr" && !action && !payingOnline(o) && <span className="rounded-full bg-saffron-soft px-2.5 py-1 text-[12px] font-semibold text-saffron">Waiting to be accepted</span>}
+          {o.payPreference && o.payPreference !== "online" && live && !o.payClaim && (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-soft px-2.5 py-1 text-[12px] font-semibold text-sky"><Wallet size={12} /> Wants bill · {methodLabel[o.payPreference]}</span>
           )}
+          {o.payPreference === "online" && o.status === "new" && !payingOnline(o) && live && (
+            <span className="rounded-full bg-rose-soft px-2.5 py-1 text-[12px] font-semibold text-rose">Online payment not finished</span>
+          )}
+          {o.gateway && live && <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep"><Check size={12} /> Paid online</span>}
           {o.customer && o.channel === "qr" && <span className="truncate text-[12px] text-muted">{o.customer}</span>}
           {live && stage >= 0 && (
             <span className="ml-auto flex items-center gap-1" aria-label={`Stage ${stage + 1} of ${STAGES.length}`}>

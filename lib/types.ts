@@ -238,7 +238,7 @@ export interface Order {
   payment?: "upi" | "cash" | "card" | "split";
   payments?: Payment[]; // how the bill was actually settled (can be mixed)
   paymentLog?: PaymentLogEntry[]; // every later change, for the owner
-  payPreference?: PayMethod; // what the guest chose when asking for the bill
+  payPreference?: PayMethod | "online"; // what the guest chose when asking for the bill ("online": paying on the restaurant's gateway)
   wantsReward?: boolean; // the guest asked to use their full stamp card on this bill
   wantsCoupon?: string; // coupon code the guest applied from their phone (cash/card: staff apply it at checkout)
   guestPhone?: string; // OTP-verified number of the guest who ordered (QR)
@@ -248,6 +248,8 @@ export interface Order {
   confirmedBy?: string; // who confirmed the payment
   priority?: boolean;
   outletId?: string; // which outlet took the order
+  /** paid on the restaurant's own gateway (written by the server only) */
+  gateway?: { intent: string; provider: "razorpay" | "cashfree"; paymentId: string };
 }
 
 /** A raw material the kitchen keeps (paneer, oil, milk…). */

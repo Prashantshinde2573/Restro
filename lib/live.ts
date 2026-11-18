@@ -211,6 +211,16 @@ export const settingsActions = {
 
 /* ---------------- orders ---------------- */
 export const methodLabel: Record<PayMethod, string> = { upi: "UPI", cash: "Cash", card: "Card" };
+/** The way the guest wants to pay at the counter (an unfinished online payment is not one). */
+export const counterPref = (os: Pick<Order, "payPreference">[]): PayMethod | undefined =>
+  os.map((o) => o.payPreference).find((p): p is PayMethod => !!p && p !== "online");
+/** How long a guest has to finish paying on the gateway before staff treat the order as unpaid. */
+export const ONLINE_PAY_WAIT_MS = 15 * 60_000;
+/** A pay-first order whose guest is paying on the restaurant's gateway right now: staff wait, don't accept it. */
+export const payingOnline = (o: Pick<Order, "status" | "payPreference" | "createdAt" | "gateway">, now = Date.now()) =>
+  o.status === "new" && o.payPreference === "online" && !o.gateway && now - new Date(o.createdAt).getTime() < ONLINE_PAY_WAIT_MS;
+/** A "new" order that staff should accept (not one being paid online). */
+export const toAccept = (o: Pick<Order, "status" | "payPreference" | "createdAt" | "gateway">) => o.status === "new" && !payingOnline(o);
 export const paymentsText = (p?: Payment[]) => (p?.length ? p.map((x) => `${methodLabel[x.method]} ₹${x.amount.toLocaleString("en-IN")}`).join(" + ") : "—");
 
 export const billOf = (o: Order) => Math.round(o.lines.reduce((s, l) => s + l.qty * l.price, 0) * (1 + gstRate()));
@@ -297,6 +307,12 @@ export const orderActions = {
     // Paid in full from the guest's phone (café pay-first): closes itself once served
     // (or waits for the owner's OK when the person serving can't confirm payments).
     const pre = (o?.prepaid ?? []).reduce((a, p) => a + p.amount, 0);
+    // Paid on the restaurant's gateway: the server already checked the exact amount (with any coupon or reward)
+    if (o && status === "served" && o.gateway && pre > 0) {
+      patchOrder(id, (x) => ({ ...x, status }));
+      orderActions.pay([id], o.prepaid!, `Online · ${o.gateway.provider === "razorpay" ? "Razorpay" : "Cashfree"}`);
+      return;
+    }
     if (o && status === "served" && pre > 0 && pre >= billOf(o)) {
       patchOrder(id, (x) => ({ ...x, status }));
       orderActions.settle([id], o.prepaid!, o.customer ?? "Guest", { source: "guest" });

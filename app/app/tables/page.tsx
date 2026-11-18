@@ -13,7 +13,7 @@ import dynamic from "next/dynamic";
 const Checkout = dynamic(() => import("@/components/checkout").then((m) => m.Checkout), { ssr: false });
 import { useToast } from "@/components/toast";
 import { gstRate, inr, minutesSince, timeAgo } from "@/lib/format";
-import { getOrders, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";
+import { counterPref, getOrders, payingOnline, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";
 import { closeBill, confirmPayment, rejectPayment } from "@/lib/billing";
 import { capacity, isShared, joinedName, joinedOf, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useLiveTables } from "@/lib/tables";
 import { TableManager } from "@/components/table-manager";
@@ -71,7 +71,7 @@ export default function TablesPage() {
     getOrders().filter((o) => o.tableId === tableId && (o.partyId ?? "A") === partyId && !["paid", "cancelled"].includes(o.status));
   const acceptParty = (tableId: string, _name: string, partyId: string) => {
     tableActions.update(tableId, partyId, { pendingApproval: false, server: myName });
-    partyOrders(tableId, partyId).filter((o) => o.status === "new").forEach((o) => orderActions.setStatus(o.id, "accepted"));
+    partyOrders(tableId, partyId).filter((o) => o.status === "new" && !payingOnline(o)).forEach((o) => orderActions.setStatus(o.id, "accepted"));
   };
   const rejectParty = (tableId: string, _name: string, partyId: string) => {
     partyOrders(tableId, partyId).forEach((o) => orderActions.setStatus(o.id, "cancelled"));
@@ -397,7 +397,7 @@ export default function TablesPage() {
         onClose={() => setPay(null)}
         subtotal={pay?.party.total ?? 0}
         label={pay?.label ?? ""}
-        preferred={pay ? partyOrders(pay.tableId, pay.party.id).find((o) => o.payPreference)?.payPreference : undefined}
+        preferred={pay ? counterPref(partyOrders(pay.tableId, pay.party.id)) : undefined}
         prepaid={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.prepaid ?? []) : undefined}
         lines={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))) : undefined}
         billNo={pay ? partyOrders(pay.tableId, pay.party.id)[0]?.number : undefined}
