@@ -235,7 +235,11 @@ export default function AdminPage() {
                     <span className="block truncate text-[14px]">{r.owner}</span>
                     <span className="block truncate text-[13px] text-muted">{r.ownerEmail}</span>
                   </span>
-                  <span><Pill tone={r.plan === "pro" || r.plan === "chain" ? "sky" : "neutral"}>{planName(r.plan)}</Pill></span>
+                  <span className="flex flex-wrap items-center gap-1">
+                    <Pill tone={r.plan === "pro" || r.plan === "chain" ? "sky" : "neutral"}>{planName(r.plan)}</Pill>
+                    {r.allowGateway && <span title="Online payments allowed" className="rounded-full bg-jade-soft px-1.5 py-0.5 text-[11px] font-semibold text-jade-deep">₹ online</span>}
+                    {r.allowWaApi && <span title="WhatsApp API allowed" className="rounded-full bg-jade-soft px-1.5 py-0.5 text-[11px] font-semibold text-jade-deep">WA API</span>}
+                  </span>
                   <span className="text-right lg:text-left">
                     <Pill tone={s.tone}>{s.text}</Pill>
                     <span className="ml-2 text-[12.5px] text-muted lg:ml-0 lg:block">{dateText(r.renewsAt)}</span>
@@ -708,6 +712,32 @@ function RestaurantSheet({
           >
             Save details
           </Button>
+        </Section>
+
+        <Section title="Extra features">
+          <div className="overflow-hidden rounded-group bg-surface">
+            {(
+              [
+                ["allowGateway", "Online payments (own gateway)", "The owner can connect their own Razorpay / Cashfree; guests see “Pay online”.", r.gatewayOn],
+                ["allowWaApi", "WhatsApp API", "The owner can connect their own WhatsApp number (Pro plan and up): e-bills and offers go out by themselves.", r.waOn],
+              ] as const
+            ).map(([k, label, hint, connected]) => (
+              <div key={k} className="flex items-center justify-between gap-4 border-b border-line/80 px-4 py-3 last:border-0">
+                <span>
+                  <span className="block text-[15px] font-medium">
+                    {label}
+                    {connected && <span className="ml-2 rounded-full bg-jade-soft px-2 py-0.5 text-[11.5px] font-semibold text-jade-deep">Connected</span>}
+                  </span>
+                  <span className="block text-[13px] text-muted">{hint} Off: hidden from the client and refused by the server.</span>
+                </span>
+                <Toggle
+                  checked={r[k]}
+                  label={label}
+                  onChange={(v) => run(() => adminUpdate(r.id, { [k]: v }), `${label} ${v ? "turned on" : "turned off"} for ${r.name}`)}
+                />
+              </div>
+            ))}
+          </div>
         </Section>
 
         <Section title="Access">

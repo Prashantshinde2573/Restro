@@ -164,7 +164,7 @@ export default function SettingsPage() {
 
         {owner && (
           <div className="overflow-hidden rounded-group bg-surface">
-            {cloud.rid && <Item icon={<MessageCircle size={16} />} tint="#25D366" title="WhatsApp API" value={waApi === "ok" ? undefined : "Pro plan"} onClick={() => setPanel("whatsapp")} />}
+            {cloud.rid && account.allowWaApi && <Item icon={<MessageCircle size={16} />} tint="#25D366" title="WhatsApp API" value={waApi === "ok" ? undefined : "Pro plan"} onClick={() => setPanel("whatsapp")} />}
             <Item icon={<ShieldCheck size={16} />} tint="#D24242" title="Password and sign-in" onClick={() => setPanel("security")} />
             <Item icon={<Database size={16} />} tint="#68716D" title="Export your data" onClick={() => setPanel("data")} />
           </div>
@@ -271,7 +271,7 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={draft.acceptCard ?? true} onChange={(v) => setDraft({ ...draft, acceptCard: v })} label="Card machine" />
             </div>
-            {owner && cloud.rid && outlet.id && <OnlinePayments outletId={outlet.id} outletName={outlet.name} />}
+            {owner && cloud.rid && outlet.id && account.allowGateway && <OnlinePayments outletId={outlet.id} outletName={outlet.name} />}
           </div>
         )}
         {panel === "ordering" && (

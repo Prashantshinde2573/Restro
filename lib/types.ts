@@ -59,6 +59,9 @@ export interface Account {
   graceUntil?: string;
   /** Logo on the guest menu, next to the name (public image link). */
   logo?: string;
+  /** turned on by the super admin: this client may connect their own payment gateway / WhatsApp API */
+  allowGateway?: boolean;
+  allowWaApi?: boolean;
 }
 
 // What the guest page needs: the brand name + the current outlet's settings.
