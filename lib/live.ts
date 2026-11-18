@@ -413,7 +413,7 @@ export const orderActions = {
     const first = orderStore.get().find((o) => ids.includes(o.id) && o.guestPhone);
     if (first?.guestPhone) {
       const amount = payments.reduce((a, p) => a + p.amount, 0);
-      guestActions.addBill(first.guestPhone, { orderNo: first.number, amount, method: paymentsText(payments) });
+      guestActions.addBill(first.guestPhone, { orderNo: first.number, amount, method: paymentsText(payments) }, first.outletId);
     }
     // One bill can cover several orders (a table's rounds): give each order its share,
     // so reports add up to exactly what was collected.
@@ -471,175 +471,153 @@ export const orderActions = {
 };
 
 /* ---------------- guests (CRM) ---------------- */
+// Each outlet keeps its own guest book: one record per outlet and phone number (id "phone@outlet"),
+// with that outlet's visits, spend, stamp card and WhatsApp opt-in. Older records with no outlet
+// belong to the first outlet.
 const guestStore = createStore<Customer[]>([], "guests", { kind: "collection", coll: "guests" });
-export const useGuests = () => guestStore.use();
-
-/**
- * Outlets a guest has eaten at: from their bills, stamps and orders. The guest book is one for
- * the brand, but a sub admin sees only the guests of their own outlet.
- */
-export function guestOutletIds(g: Customer, orders: Order[]): Set<string> {
-  const ids = new Set<string>();
-  const key = normPhone(g.phone);
-  const byNo = new Map(orders.map((o) => [o.number, o.outletId]));
-  for (const b of g.bills ?? []) {
-    const o = b.outletId ?? byNo.get(b.orderNo);
-    if (o) ids.add(o);
-  }
-  for (const s of g.stamps ?? []) if (s.outletId) ids.add(s.outletId);
-  for (const r of g.rewards ?? []) if (r.outletId) ids.add(r.outletId);
-  for (const o of orders) if (o.outletId && o.guestPhone && normPhone(o.guestPhone) === key) ids.add(o.outletId);
-  return ids;
-}
-
-/** Which outlets' guests and reviews someone sees: the owner can pick all; everyone else their outlet. */
-export type GuestScope = "outlet" | "all";
-export function useScopedGuests(scope: GuestScope) {
-  const all = guestStore.use();
-  const orders = orderStore.use();
-  const me = useMe();
-  const outlet = useCurrentOutlet();
-  const owner = me?.role === "owner";
-  return useMemo(() => {
-    if (owner && scope === "all") return all;
-    return all.filter((g) => {
-      const ids = guestOutletIds(g, orders);
-      // guests from before outlets were tracked: only the owner sees them
-      return ids.size ? ids.has(outlet.id) : owner;
-    });
-  }, [all, orders, owner, scope, outlet.id]);
-}
-export function useScopedFeedback(scope: GuestScope) {
-  const all = feedbackStore.use();
-  const me = useMe();
-  const outlet = useCurrentOutlet();
-  const owner = me?.role === "owner";
-  return useMemo(() => (owner && scope === "all" ? all : all.filter((f) => (f.outletId ? f.outletId === outlet.id : owner))), [all, owner, scope, outlet.id]);
-}
-
 const normPhone = (p: string) => p.replace(/\D/g, "").slice(-10);
+export const guestKey = (phone: string, outletId: string | undefined) => (outletId ? `${normPhone(phone)}@${outletId}` : normPhone(phone));
+/** Records of one outlet (the outlet on screen when none is given). */
+export function guestsOf(all: Customer[], outletId: string | undefined, mainId: string | undefined): Customer[] {
+  return outletId ? all.filter((c) => (c.outletId ?? mainId) === outletId) : all;
+}
+const outletGuests = (outletId?: string) => guestsOf(guestStore.get(), outletId ?? currentOutletId(), mainOutletId(outletStore.get()));
+/** The guest book of the outlet on screen. */
+export function useGuests() {
+  const all = guestStore.use();
+  const o = useCurrentOutlet();
+  const mainId = mainOutletId(outletStore.use());
+  return useMemo(() => guestsOf(all, o.id, mainId), [all, o.id, mainId]);
+}
+/** Every outlet's guest records (export). */
+export const useAllGuests = () => guestStore.use();
+/** This guest's record in an outlet (the outlet on screen when none is given). */
+export const findGuest = (phone: string, outletId?: string) => {
+  const key = normPhone(phone);
+  return key.length === 10 ? outletGuests(outletId).find((c) => normPhone(c.phone) === key) : undefined;
+};
+const patchGuest = (phone: string, fn: (c: Customer) => Customer, outletId?: string) => {
+  const g = findGuest(phone, outletId);
+  if (g) guestStore.set(guestStore.get().map((c) => (c.id === g.id ? fn(c) : c)));
+};
+/** A bill on a guest's record, once: the same bill number is never counted twice. */
+const withBill = (c: Customer, bill: { orderNo: number; amount: number; method: string }, outletId: string | undefined, name?: string): Customer => {
+  const now = new Date().toISOString();
+  if (bill.orderNo > 0 && (c.bills ?? []).some((b) => b.orderNo === bill.orderNo)) return { ...c, name: c.name || name?.trim() || c.name, lastVisit: now };
+  return {
+    ...c,
+    name: c.name || name?.trim() || c.name,
+    visits: c.visits + 1,
+    lastVisit: now,
+    spend: c.spend + bill.amount,
+    points: c.points + Math.floor(bill.amount / 10),
+    bills: [{ ...bill, at: now, outletId }, ...(c.bills ?? [])],
+  };
+};
+const newGuest = (name: string, phone: string, outletId: string | undefined, extra: Partial<Customer>): Customer => {
+  const key = normPhone(phone);
+  return {
+    id: guestKey(key, outletId),
+    outletId,
+    name: name.trim() || "Guest",
+    phone: `${key.slice(0, 5)} ${key.slice(5)}`,
+    visits: 0,
+    spend: 0,
+    lastVisit: new Date().toISOString(),
+    points: 0,
+    tier: "New",
+    favourite: "—",
+    verified: false,
+    source: "pos",
+    optIn: false,
+    bills: [],
+    ...extra,
+  };
+};
+
+/** Feedback of the outlet on screen (older reviews with no outlet: the first outlet). */
+export function useFeedback() {
+  const all = feedbackStore.use();
+  const o = useCurrentOutlet();
+  const mainId = mainOutletId(outletStore.use());
+  return useMemo(() => (o.id ? all.filter((f) => (f.outletId ?? mainId) === o.id) : all), [all, o.id, mainId]);
+}
+export const useAllFeedback = () => feedbackStore.use();
 
 export const guestActions = {
-  /** Called after OTP: create or update the guest record. */
+  /** A QR guest gave their number (or staff saved it): create or update the guest record of this outlet. */
   upsert(name: string, phone: string, optIn: boolean): Customer {
     const key = normPhone(phone);
+    const oid = currentOutletId() || undefined;
     const c = getCloud();
     if (c.role === "guest" && c.rid) {
       // Guests can't read the guest book; they only add or update their own name.
-      const rec = { id: key, name, phone: `${key.slice(0, 5)} ${key.slice(5)}`, verified: false, source: "qr" as const, optIn, lastVisit: new Date().toISOString() };
+      const rec = { id: key, outletId: oid, name, phone: `${key.slice(0, 5)} ${key.slice(5)}`, verified: false, source: "qr" as const, optIn, lastVisit: new Date().toISOString() };
       guestUpsert(c.rid, key, rec);
-      return { ...rec, visits: 1, spend: 0, points: 0, tier: "New", favourite: "—" };
+      return { ...rec, id: guestKey(key, oid), visits: 1, spend: 0, points: 0, tier: "New", favourite: "—" };
     }
-    const list = guestStore.get();
-    const found = list.find((c) => normPhone(c.phone) === key);
+    const found = findGuest(key, oid);
     if (found) {
       const updated = { ...found, name: name || found.name, verified: true, optIn: optIn || found.optIn, lastVisit: new Date().toISOString() };
-      guestStore.set(list.map((c) => (c.id === found.id ? updated : c)));
+      guestStore.set(guestStore.get().map((x) => (x.id === found.id ? updated : x)));
       return updated;
     }
-    const nc: Customer = {
-      id: key,
-      name,
-      phone: `${key.slice(0, 5)} ${key.slice(5)}`,
-      visits: 1,
-      spend: 0,
-      lastVisit: new Date().toISOString(),
-      points: 0,
-      tier: "New",
-      favourite: "—",
-      verified: true,
-      source: "qr",
-      optIn,
-      bills: [],
-    };
-    guestStore.set([nc, ...list]);
+    const nc = newGuest(name, key, oid, { visits: 1, verified: true, source: "qr", optIn });
+    guestStore.set([nc, ...guestStore.get()]);
     return nc;
   },
-  /** Staff typed the guest's number at billing (walk-in / counter): add them to the guest book with this bill. */
+  /** Staff typed the guest's number at billing (walk-in / counter): this outlet's guest book gets the bill. */
   fromBill(name: string, phone: string, bill: { orderNo: number; amount: number; method: string }) {
     const key = normPhone(phone);
     if (key.length !== 10) return;
-    const list = guestStore.get();
-    const found = list.find((c) => normPhone(c.phone) === key);
-    const now = new Date().toISOString();
-    const entry = { ...bill, at: now, outletId: currentOutletId() };
+    const oid = currentOutletId() || undefined;
+    const found = findGuest(key, oid);
     if (found) {
-      guestStore.set(
-        list.map((c) =>
-          c.id === found.id
-            ? { ...c, name: c.name || name.trim(), visits: c.visits + 1, lastVisit: now, spend: c.spend + bill.amount, points: c.points + Math.floor(bill.amount / 10), bills: [entry, ...(c.bills ?? [])] }
-            : c,
-        ),
-      );
+      guestStore.set(guestStore.get().map((c) => (c.id === found.id ? withBill(c, bill, oid, name) : c)));
       return;
     }
-    guestStore.set([
-      {
-        id: key,
-        name: name.trim() || "Guest",
-        phone: `${key.slice(0, 5)} ${key.slice(5)}`,
-        visits: 1,
-        spend: bill.amount,
-        lastVisit: now,
-        points: Math.floor(bill.amount / 10),
-        tier: "New",
-        favourite: "—",
-        verified: false,
-        source: "pos",
-        optIn: false,
-        bills: [entry],
-      },
-      ...list,
-    ]);
+    guestStore.set([withBill(newGuest(name, key, oid, {}), bill, oid), ...guestStore.get()]);
   },
-  addBill(phone: string, bill: { orderNo: number; amount: number; method: string }) {
-    const key = normPhone(phone);
-    guestStore.set(
-      guestStore.get().map((c) =>
-        normPhone(c.phone) === key
-          ? { ...c, visits: (c.bills?.length ?? 0) > 0 ? c.visits + 1 : c.visits, lastVisit: new Date().toISOString(), spend: c.spend + bill.amount, points: c.points + Math.floor(bill.amount / 10), bills: [{ ...bill, at: new Date().toISOString(), outletId: currentOutletId() }, ...(c.bills ?? [])] }
-          : c,
-      ),
-    );
+  /** A bill paid on an order that carries the guest's number (QR, or a number saved on the order). */
+  addBill(phone: string, bill: { orderNo: number; amount: number; method: string }, outletId?: string) {
+    const oid = outletId ?? (currentOutletId() || undefined);
+    const found = findGuest(phone, oid);
+    if (found) guestStore.set(guestStore.get().map((c) => (c.id === found.id ? withBill(c, bill, oid) : c)));
   },
 };
 
 /* ---------------- stamp card ---------------- */
-// Stamps sit on the guest's record (oldest first). A full card turns into the reward.
-const patchGuest = (phone: string, fn: (c: Customer) => Customer) => {
-  const key = normPhone(phone);
-  guestStore.set(guestStore.get().map((c) => (normPhone(c.phone) === key ? fn(c) : c)));
-};
-export const findGuest = (phone: string) => {
-  const key = normPhone(phone);
-  return key.length === 10 ? guestStore.get().find((c) => normPhone(c.phone) === key) : undefined;
-};
+// Stamps sit on the guest's record of that outlet (oldest first). A full card turns into the reward.
 export const stampActions = {
   /** One stamp for this bill. */
   give(phone: string, info: { orderNo?: number; by?: string; outletId?: string }) {
-    patchGuest(phone, (c) => ({ ...c, stamps: [...(c.stamps ?? []), { at: new Date().toISOString(), ...info }] }));
-    const c = findGuest(phone);
+    patchGuest(phone, (c) => ({ ...c, stamps: [...(c.stamps ?? []), { at: new Date().toISOString(), ...info }] }), info.outletId);
+    const c = findGuest(phone, info.outletId);
     logActivity("guest", `Stamp for ${c?.name || phone}${info.orderNo ? ` on #${info.orderNo}` : ""} (${c?.stamps?.length ?? 1})`, info.outletId);
   },
   /** The card was full: the reward went on this bill; a new card starts. */
   redeem(phone: string, live: number, needed: number, info: { reward: string; amount: number; orderNo?: number; by?: string; outletId?: string }) {
-    patchGuest(phone, (c) => {
-      // drop expired stamps and the ones this reward used up
-      const all = c.stamps ?? [];
-      const keep = all.slice(all.length - live).slice(needed);
-      return { ...c, stamps: keep, rewards: [{ at: new Date().toISOString(), ...info }, ...(c.rewards ?? [])] };
-    });
-    const c = findGuest(phone);
+    patchGuest(
+      phone,
+      (c) => {
+        // drop expired stamps and the ones this reward used up
+        const all = c.stamps ?? [];
+        const keep = all.slice(all.length - live).slice(needed);
+        return { ...c, stamps: keep, rewards: [{ at: new Date().toISOString(), ...info }, ...(c.rewards ?? [])] };
+      },
+      info.outletId,
+    );
+    const c = findGuest(phone, info.outletId);
     logActivity("guest", `Stamp card reward for ${c?.name || phone}: ${info.reward} (₹${info.amount} off${info.orderNo ? `, #${info.orderNo}` : ""})`, info.outletId);
   },
-  /** Fix a card by hand (Guests → a guest). */
+  /** Fix a card by hand (Guests → a guest), in the outlet on screen. */
   adjust(phone: string, delta: number, by?: string) {
     patchGuest(phone, (c) => {
       const all = c.stamps ?? [];
       return { ...c, stamps: delta > 0 ? [...all, ...Array.from({ length: delta }, () => ({ at: new Date().toISOString(), by }))] : all.slice(0, Math.max(0, all.length + delta)) };
     });
     const c = findGuest(phone);
-    logActivity("guest", `${delta > 0 ? "Added" : "Removed"} ${Math.abs(delta)} stamp${Math.abs(delta) > 1 ? "s" : ""} for ${c?.name || phone} by hand`);
+    logActivity("guest", `${delta > 0 ? "Added" : "Removed"} ${Math.abs(delta)} stamp${Math.abs(delta) > 1 ? "s" : ""} for ${c?.name || phone} by hand`, currentOutletId());
   },
 };
 
@@ -657,7 +635,7 @@ export function stampsForGuestPayment(list: Order[], claim: PayClaim) {
   if (featureState("stamps", accountStore.get().plan, outletKinds(outlet)) !== "ok") return;
   const p = programOf(prog);
   const me = currentMember();
-  const guest = findGuest(phone);
+  const guest = findGuest(phone, outlet.id);
   const have = liveStamps(guest, p).length;
   const info = { orderNo: list[0]?.number, by: me?.name, outletId: outlet.id };
   if (claim.reward && have >= p.needed) {
@@ -832,7 +810,6 @@ export const categoryActions = {
 
 /* ---------------- feedback (guest ratings after paying) ---------------- */
 const feedbackStore = createStore<Feedback[]>([], "feedback", { kind: "collection", coll: "feedback" });
-export const useFeedback = () => feedbackStore.use();
 export const feedbackActions = {
   add(fIn: Omit<Feedback, "id" | "at">) {
     const f = { ...fIn, outletId: fIn.outletId ?? currentOutletId() };

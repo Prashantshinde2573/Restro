@@ -319,7 +319,10 @@ export interface Stamp {
 }
 
 export interface Customer {
+  /** "phone@outlet" (older records: the phone) */
   id: string;
+  /** the outlet this guest-book record is for (missing = the first outlet) */
+  outletId?: string;
   name: string;
   phone: string;
   visits: number;

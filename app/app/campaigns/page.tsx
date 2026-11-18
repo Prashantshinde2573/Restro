@@ -7,7 +7,7 @@ import { Check, MessageCircle, Send, Ticket } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Chips, Field, Group, Page, PageHeader, Segmented } from "@/components/ui";
 import { CouponsPanel, couponState } from "@/components/coupons";
-import { couponLabel, couponWorksIn, useAccount, useCoupons, useCurrentOutlet, useFeature, useMe, useOutlets, useScopedGuests, type GuestScope } from "@/lib/live";
+import { couponLabel, couponWorksIn, useAccount, useCoupons, useCurrentOutlet, useFeature, useMe, useOutlets, useGuests } from "@/lib/live";
 import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
 import { timeAgo } from "@/lib/format";
 import { TEMPLATES, fillTemplate, offerBlock, withOffer, type TemplateLang } from "@/lib/wa-templates";
@@ -21,10 +21,8 @@ export default function CampaignsPage() {
   const me = useMe();
   const outlets = useOutlets();
   const outlet = useCurrentOutlet();
-  // owner: guests of every outlet or of the one on screen; a sub admin: only their outlet's guests
-  const [scope, setScope] = useState<GuestScope>("all");
-  const scopeChoice = me?.role === "owner" && outlets.length > 1;
-  const guests = useScopedGuests(scope);
+  // the guests of the outlet on screen (each outlet has its own guest book)
+  const guests = useGuests();
   const [seg, setSeg] = useState<GuestSeg>("optin");
   const [msg, setMsg] = useState(`Hi {name}! Thank you for visiting ${account.name || "us"}. We'd love to see you again this week 🙏`);
   const [sent, setSent] = useState<Set<string>>(new Set());
@@ -60,9 +58,6 @@ export default function CampaignsPage() {
       ) : (
       <Page className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
         <div className="min-w-0 space-y-5">
-          {scopeChoice && (
-            <Segmented value={scope} onChange={(v) => { setScope(v); setSent(new Set()); }} options={[{ value: "all", label: "Guests of all outlets" }, { value: "outlet", label: `Only ${outlet.name || "this outlet"}` }]} />
-          )}
           <Field label="Who gets it">
             <Chips
               value={seg}

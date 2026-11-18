@@ -16,7 +16,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useReady } from "@/lib/store";
 import { inOutlet } from "@/lib/access";
-import { createdHere, paymentsText, pendingClaims, useCan, useCanConfirm, useFeedback, useMe, useOrders, useOutlets } from "@/lib/live";
+import { createdHere, paymentsText, pendingClaims, useCan, useCanConfirm, useAllFeedback, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
 import { orderWhere, useAllTables } from "@/lib/tables";
 import { pushNotice, type Notice } from "./notifications";
 import { useToast } from "./toast";
@@ -37,7 +37,8 @@ export function OrderAlerts() {
   const me = useMe();
   const outlets = useOutlets();
   const tables = useAllTables();
-  const feedback = useFeedback();
+  const feedback = useAllFeedback(); // every outlet's, so switching outlets never pings old reviews
+  const outletNow = useCurrentOutlet();
   const path = usePathname() ?? "";
   const ready = useReady("orders");
   const canSee = useCan("orders");
@@ -55,9 +56,11 @@ export function OrderAlerts() {
 
   useEffect(() => {
     if (!ready || !watching) return;
-    // every outlet this person works in (the owner: all of them)
+    // remember every outlet this person works in, but alert only for the outlet on screen
+    // (another outlet's new orders show as a dot on the outlet button at the top)
     const orders = all.filter((o) => !o.outletId || inOutlet(me, o.outletId));
-    const outletTag = (id?: string) => (outlets.length > 1 && id ? ` · ${outlets.find((x) => x.id === id)?.name ?? ""}` : "");
+    const here = (id?: string) => !id || !outletNow.id || id === outletNow.id;
+    const outletTag = (id?: string) => (outlets.length > 1 && id && !here(id) ? ` · ${outlets.find((x) => x.id === id)?.name ?? ""}` : "");
     const open = orders.filter((o) => o.status !== "paid" && o.status !== "cancelled");
     const bills = open.filter((o) => o.payPreference && !o.payClaim);
     const claims = pendingClaims(orders);
@@ -79,7 +82,7 @@ export function OrderAlerts() {
     };
     const SOUND_OF: Record<Exclude<Notice["kind"], "plan">, SoundEvent> = { order: "order", call: "waiter", kitchen: "kitchen", bill: "bill", claim: "payment", ready: "ready", review: "review" };
     const say = (kind: Exclude<Notice["kind"], "plan">, title: string, body: string, href: string, short = body) => {
-      pushNotice({ kind, title, body, href });
+      pushNotice({ kind, title, body, href, outletId: outletNow.id || undefined });
       notify(title, body);
       toast(short);
       ring(SOUND_OF[kind]);
@@ -88,14 +91,14 @@ export function OrderAlerts() {
     // new orders from other devices / guests
     const newOnes = open.filter((o) => !seenNew.current!.has(o.id));
     orders.forEach((o) => seenNew.current!.add(o.id));
-    const fromElsewhere = newOnes.filter((o) => !createdHere.has(o.id));
+    const fromElsewhere = newOnes.filter((o) => !createdHere.has(o.id) && here(o.outletId));
     if (canSee) {
       for (const o of fromElsewhere) {
         const items = o.lines.reduce((s, l) => s + l.qty, 0);
         const needsOk = o.status === "new";
         const title = needsOk ? (o.payPreference ? "New order · take the payment" : "New QR order · accept it") : o.channel === "qr" ? "New QR order" : `New order by ${o.staff}`;
         const body = `${orderWhere(o, tables)} · ${items} item${items === 1 ? "" : "s"}${outletTag(o.outletId)}`;
-        pushNotice({ kind: "order", title, body, href: "/app/orders" });
+        pushNotice({ kind: "order", title, body, href: "/app/orders", outletId: o.outletId });
         notify(title, body);
         ring("order");
       }
@@ -110,6 +113,7 @@ export function OrderAlerts() {
       // a guest (or staff) asked for the bill
       for (const o of bills.filter((o) => !seenBill.current!.has(o.id))) {
         seenBill.current!.add(o.id);
+        if (!here(o.outletId)) continue;
         if (o.status === "new" && fromElsewhere.includes(o)) continue; // already pinged as a new order
         const body = `${o.tableName ? `Table ${o.tableName}` : "A guest"} asked for the bill · ${o.payPreference!.toUpperCase()}${outletTag(o.outletId)}`;
         say("bill", "Bill requested", body, o.tableName ? "/app/tables" : "/app/orders");
@@ -117,7 +121,7 @@ export function OrderAlerts() {
       // food is ready to serve (not when you're the one on the kitchen screen)
       for (const o of readyNow.filter((o) => !seenReady.current!.has(o.id))) {
         seenReady.current!.add(o.id);
-        if (path.startsWith("/app/kitchen")) continue;
+        if (path.startsWith("/app/kitchen") || !here(o.outletId)) continue;
         say("ready", "Ready to serve", `${orderWhere(o, tables)} · order #${o.number || "—"}${outletTag(o.outletId)}`, "/app/orders");
       }
     }
@@ -127,7 +131,7 @@ export function OrderAlerts() {
     for (const c of claims) {
       if (seenClaim.current!.has(c.claim.id)) continue;
       seenClaim.current!.set(c.claim.id, { by: c.claim.by, ids: c.orders.map((o) => o.id) });
-      if (!canConfirm) continue;
+      if (!canConfirm || !here(c.orders[0].outletId)) continue;
       const guest = c.claim.source === "guest";
       const title = guest ? "Guest paid · please confirm" : "Payment to confirm";
       const body = `${orderWhere(c.orders[0], tables)} · ${paymentsText(c.claim.payments)} · ${guest ? `paid from the phone by ${c.claim.by}` : `marked by ${c.claim.by}`}${outletTag(c.orders[0].outletId)}`;
@@ -144,14 +148,15 @@ export function OrderAlerts() {
     }
 
     // a low rating from a guest
-    // reviews of this person's outlets (from before outlets were tracked: the owner)
-    for (const f of feedback.filter((f) => !seenReview.current!.has(f.id) && (f.outletId ? inOutlet(me, f.outletId) : me?.role === "owner"))) {
+    // reviews of the outlet on screen
+    for (const f of feedback.filter((f) => !seenReview.current!.has(f.id))) {
       seenReview.current!.add(f.id);
+      if (!here(f.outletId) || (f.outletId && !inOutlet(me, f.outletId))) continue;
       if (f.stars <= 3 && (canGuests || me?.role === "owner")) say("review", `${f.stars}★ review · needs a look`, `${f.customer || "A guest"}${f.text ? `: “${f.text.slice(0, 80)}”` : ""}`, "/app/guests", `${f.stars}★ review from ${f.customer || "a guest"}`);
     }
 
     if (ping) chime(ping);
-  }, [all, me, outlets, tables, feedback, path, ready, watching, canSee, canKitchen, canGuests, canConfirm, toast]);
+  }, [all, me, outlets, outletNow.id, tables, feedback, path, ready, watching, canSee, canKitchen, canGuests, canConfirm, toast]);
 
   // offer phone/desktop notifications once
   useEffect(() => {

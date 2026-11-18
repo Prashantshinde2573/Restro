@@ -172,6 +172,13 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   useEffect(() => setOpen(false), [path]);
+  // another outlet has something waiting (a new order, a payment to confirm, a waiter call): a dot, no sound
+  const orders = useOrders();
+  const calls = liveCalls(useCalls());
+  const waitingIn = (oid: string) =>
+    orders.some((o) => o.outletId === oid && (o.status === "new" || (!!o.payClaim && o.status !== "paid"))) ||
+    calls.some((c) => c.outletId === oid && c.status === "open");
+  const elsewhere = outlets.some((o) => o.id !== current.id && waitingIn(o.id));
   const initials = account.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
     <>
@@ -182,13 +189,19 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
           aria-label={`Outlet: ${current.name}`}
           className="flex h-[38px] max-w-[160px] items-center gap-2 rounded-full px-3.5 text-[14.5px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10 disabled:hover:bg-transparent"
         >
-          <Store size={17} strokeWidth={1.9} className="shrink-0" />
+          <span className="relative shrink-0">
+            <Store size={17} strokeWidth={1.9} />
+            {elsewhere && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-saffron ring-2 ring-ink" aria-label="Something waiting in another outlet" />}
+          </span>
           <span className="min-w-0 truncate">{current.name || account.name}</span>
           {(outlets.length > 1 || isOwner(me)) && <ChevronDown size={15} className="shrink-0 text-white/80" />}
         </button>
       ) : (
       <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} className="flex w-full items-center gap-3 rounded-ctl px-2 py-2 text-left hover:bg-surface/60 disabled:hover:bg-transparent">
-        <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink text-[13px] font-bold text-canvas">{initials}</span>
+        <span className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink text-[13px] font-bold text-canvas">
+          {initials}
+          {elsewhere && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-canvas" aria-label="Something waiting in another outlet" />}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-semibold">{account.name}</span>
           <span className="block truncate text-[12px] text-muted">{current.name} · {current.businessType === "cafe" ? "Café" : "Restaurant"}</span>
@@ -211,6 +224,7 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
                 <span className="block text-[15px] font-medium">{o.name}</span>
                 <span className="block text-[12.5px] text-muted">{o.businessType === "cafe" ? "Café" : "Restaurant"}</span>
               </span>
+              {o.id !== current.id && waitingIn(o.id) && <span className="rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">Waiting</span>}
               {o.id === current.id && <Check size={18} className="text-jade" />}
             </button>
           ))}

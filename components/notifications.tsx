@@ -25,6 +25,8 @@ export interface Notice {
   body: string;
   href: string;
   read?: boolean;
+  /** the outlet it is about: the bell shows the outlet on screen (none = every outlet, e.g. the plan) */
+  outletId?: string;
 }
 
 // kept on this device only (each phone has its own bell)
@@ -38,13 +40,14 @@ const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Cloc
 
 /** Bell with the unread count; opens the list. */
 export function NoticeBell({ dark = false }: { dark?: boolean }) {
-  const list = noticeStore.use();
+  const outletNow = useCurrentOutlet();
+  const list = noticeStore.use().filter((n) => !n.outletId || !outletNow.id || n.outletId === outletNow.id);
   const [open, setOpen] = useState(false);
   const path = usePathname();
   useEffect(() => setOpen(false), [path]); // a link in the list was tapped
   const unread = list.filter((n) => !n.read).length;
   const sound = useSound();
-  const markAll = () => noticeStore.set(noticeStore.get().map((n) => (n.read ? n : { ...n, read: true })));
+  const markAll = () => noticeStore.set(noticeStore.get().map((n) => (n.read || (n.outletId && outletNow.id && n.outletId !== outletNow.id) ? n : { ...n, read: true })));
   return (
     <>
       <button
