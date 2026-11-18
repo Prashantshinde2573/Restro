@@ -59,10 +59,11 @@ export function stampProblem(p: StampProgram, c: Pick<Customer, "stamps" | "optI
   return null;
 }
 
-/** Owner, staff who charge bills, or staff who can give discounts. */
+/** Owner or sub admin, staff who charge bills, or staff who can give discounts. */
 export function mayAct(me: Member | null | undefined, who: StampProgram["givers"]): boolean {
   if (!me?.active) return false;
-  if (me.role === "owner") return true;
+  // the owner, and a sub admin (the owner of their outlet), always can
+  if (me.role === "owner" || me.role === "subadmin") return true;
   if (who === "owner") return false;
   return hasPerm(me, who === "discount" ? "discount" : "charge");
 }
@@ -70,5 +71,5 @@ export function mayAct(me: Member | null | undefined, who: StampProgram["givers"
 export const WHO_LABEL: Record<StampProgram["givers"], string> = {
   charge: "Anyone who charges bills",
   discount: "Only staff who can give discounts",
-  owner: "Only the owner",
+  owner: "Only the owner and sub admins",
 };

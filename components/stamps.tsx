@@ -261,18 +261,20 @@ export function StampBox({
           <Gift size={18} className="shrink-0 text-saffron" />
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-semibold">Card full · {p.reward}</div>
-            <div className="text-[12.5px] text-muted">{canRedeem ? (useReward ? `₹${rewardAmt} off this bill · card goes back to ${after}/${p.needed}` : `Switch on to take ₹${rewardAmt} off this bill`) : "Ask the owner to give the reward"}</div>
+            <div className="text-[12.5px] text-muted">{rewardAmt <= 0 ? "The free dish isn't on this outlet's menu · pick it again in Stamp card settings" : canRedeem ? (useReward ? `₹${rewardAmt} off this bill · a new card starts at ${after}/${p.needed}, no stamp on this bill` : `Switch on to take ₹${rewardAmt} off this bill`) : "Ask the owner to give the reward"}</div>
           </div>
-          {canRedeem && <Toggle checked={useReward} onChange={onUseReward} label="Use the reward on this bill" />}
+          {canRedeem && rewardAmt > 0 && <Toggle checked={useReward} onChange={onUseReward} label="Use the reward on this bill" />}
         </div>
       )}
+      {!(full && useReward && canRedeem && rewardAmt > 0) && (
       <div className="flex items-center gap-3 border-t border-line/80 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-medium">Give a stamp for this bill</div>
-          <div className="text-[12.5px] text-muted">{whyNot ?? (!mayGive ? "Only the owner can give stamps" : give ? `Card will show ${Math.max(0, after)}/${p.needed}` : "No stamp on this bill")}</div>
+          <div className="text-[12.5px] text-muted">{whyNot ?? (!mayGive ? "Only the owner or a sub admin can give stamps" : give ? `Card will show ${Math.max(0, after)}/${p.needed}` : "No stamp on this bill")}</div>
         </div>
         <Toggle checked={give} onChange={(v) => !whyNot && mayGive && onGive(v)} label="Give a stamp for this bill" />
       </div>
+      )}
     </div>
   );
 }

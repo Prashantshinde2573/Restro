@@ -76,6 +76,15 @@ export const attendanceActions = {
     attendanceStore.set(list.some((a) => a.id === id) ? list.map((a) => (a.id === id ? row : a)) : [row, ...list]);
     logActivity("team", `Marked attendance of ${nameOf(memberId, names)} for ${date} (${KIND_TEXT[kind]})`);
   },
+  /** The manager marks a day absent (shows A; not paid). */
+  markAbsent(memberId: string, date: string, names: Record<string, string>) {
+    const id = attendanceId(memberId, date);
+    const now = new Date().toISOString();
+    const old = attendanceStore.get().find((x) => x.id === id);
+    const row: Attendance = { id, memberId, date, kind: "full", status: "rejected", requestedAt: old?.requestedAt ?? now, decidedBy: byName(), decidedAt: now, byManager: true, outletId: old?.outletId ?? currentOutletId() };
+    attendanceStore.set(old ? attendanceStore.get().map((x) => (x.id === id ? row : x)) : [...attendanceStore.get(), row]);
+    logActivity("team", `Marked ${nameOf(memberId, names)} absent for ${date}`);
+  },
   remove(id: string, names: Record<string, string>) {
     const a = attendanceStore.get().find((x) => x.id === id);
     attendanceStore.set(attendanceStore.get().filter((x) => x.id !== id));
