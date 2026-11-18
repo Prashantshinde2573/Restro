@@ -296,6 +296,20 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={!!draft.payFirst} onChange={(v) => saveNow({ payFirst: v }, v ? "Guests now pay before the kitchen starts" : "Guests now pay at the end")} label="Guests pay first" />
             </div>
+            {(draft.businessType === "cafe" || draft.mixed) && (
+              <div className="overflow-hidden rounded-group bg-surface">
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div>
+                    <div className="text-[15px]">Self-service counter</div>
+                    <div className="text-[12.5px] text-muted">Guest orders and pays by the counter QR, gets a token on the phone, and hears “ready, collect at the counter”. Staff tap Picked up.</div>
+                  </div>
+                  <Toggle checked={!!draft.selfService} onChange={(v) => saveNow({ selfService: v, ...(v ? { payFirst: true } : {}) }, v ? "Self-service on · open the Now serving screen on a TV or tablet" : "Self-service off")} label="Self-service counter" />
+                </div>
+                {draft.selfService && (
+                  <a href="/tokens" target="_blank" rel="noopener noreferrer" className="block border-t border-line/80 px-4 py-3 text-[14px] font-semibold text-jade">Open the Now serving screen ↗</a>
+                )}
+              </div>
+            )}
             <div className="overflow-hidden rounded-group bg-surface">
               <div className="flex items-center justify-between gap-4 px-4 py-3">
                 <div>

@@ -3,6 +3,7 @@
 import { GUEST_LANGS, tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import { GamesCard, GamesSheet, type GameId } from "@/components/games/games-sheet";
 import { StampCard } from "@/components/stamps";
+import { playSound, unlockSound } from "@/components/sound";
 import { liveStamps, programOf, rewardOff } from "@/lib/stamps";
 import { planStatus } from "@/lib/plan-status";
 import { hasSizes, sizedName } from "@/lib/sizes";
@@ -370,6 +371,34 @@ export default function GuestOrder() {
       toast(tx(lang, "Served · your bill and Pay are here", "टेबलवर आली · बिल आणि पेमेंट इथे आहे"));
     }
   }, [myOrders, ordersReadyEarly]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Counter / token orders: when the kitchen marks one Ready, tell the guest right away:
+  // a banner with the token, a sound and a buzz (phones that allow it), until it's picked up.
+  const readySeen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    // the guest's first tap lets the "ready" sound play later
+    const once = () => unlockSound();
+    window.addEventListener("pointerdown", once, { once: true });
+    return () => window.removeEventListener("pointerdown", once);
+  }, []);
+  const readyNow = useMemo(() => (counter || payNow ? myOrders.filter((o) => o.status === "ready") : []), [myOrders, counter, payNow]);
+  useEffect(() => {
+    if (!ordersReadyEarly) return;
+    const ids = new Set(readyNow.map((o) => o.id));
+    if (readySeen.current === null) {
+      readySeen.current = ids;
+      return;
+    }
+    const fresh = readyNow.filter((o) => !readySeen.current!.has(o.id));
+    readySeen.current = ids;
+    if (!fresh.length) return;
+    try {
+      navigator.vibrate?.([400, 150, 400, 150, 700]);
+    } catch {
+      /* no buzz on this phone */
+    }
+    playSound("bell");
+    window.setTimeout(() => playSound("bell"), 1600);
+  }, [readyNow, ordersReadyEarly]);
   // Restaurant flow: the running bill. Pay-first orders are already settled from the phone.
   const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !o.payClaim && !(payNow && o.payPreference)), [openOrders, payNow]);
   // where this phone's bill stands: nothing to pay / payment sent (restaurant confirms) / paid
@@ -793,6 +822,16 @@ export default function GuestOrder() {
 
   return (
     <div className="pad-tabs mx-auto min-h-dvh max-w-md bg-canvas sm:max-w-2xl">
+      {/* ---------- token ready: collect at the counter ---------- */}
+      {readyNow.length > 0 && (
+        <div role="alert" className="sticky top-0 z-40 flex items-center gap-3 bg-jade px-4 py-3.5 text-white shadow-float">
+          <span className="flex h-12 min-w-12 items-center justify-center rounded-[14px] bg-white px-2 text-[22px] font-extrabold text-jade tnum">{readyNow.map((o) => num(o.number)).join(", ")}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[17px] font-bold leading-tight">{tx(lang, "Your order is ready!", "तयार आहे!")}</span>
+            <span className="block text-[14px] text-white/90">{tx(lang, "Collect it at the counter", "काउंटरवरून घ्या")}</span>
+          </span>
+        </div>
+      )}
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
       {t && !counter && qrOn && isOpen && !thanks && !waiting && ((needCount && !skipAsk) || countOpen) && (
         <GuestCountScreen

@@ -36,6 +36,8 @@ export interface Outlet {
   orderTo?: string;
   /** Owner paused QR orders by hand (busy, closed for the day). */
   ordersPaused?: boolean;
+  /** self-service counter: token on the guest's phone, "ready" alert, Now serving screen, Picked up */
+  selfService?: boolean;
   /** GST on bills: 0.05 (default), 0 when not registered, 0.12 or 0.18. */
   gstRate?: number;
   billFooter?: string; // message at the bottom of the bill
@@ -76,6 +78,8 @@ export interface OutletSettings {
   orderFrom?: string;
   orderTo?: string;
   ordersPaused?: boolean;
+  /** self-service counter: token on the guest's phone, "ready" alert, Now serving screen, Picked up */
+  selfService?: boolean;
   gstRate?: number;
   billFooter?: string; // printed at the bottom of the bill
   acceptCard?: boolean;
