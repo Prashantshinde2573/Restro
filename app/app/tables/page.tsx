@@ -8,7 +8,9 @@ import { Check, Clock, LayoutGrid, Link2, LogOut, Merge, Minus, Plus, Printer, Q
 import { useState } from "react";
 import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
-import { Checkout } from "@/components/checkout";
+import dynamic from "next/dynamic";
+// the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
+const Checkout = dynamic(() => import("@/components/checkout").then((m) => m.Checkout), { ssr: false });
 import { useToast } from "@/components/toast";
 import { gstRate, inr, minutesSince, timeAgo } from "@/lib/format";
 import { getOrders, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";

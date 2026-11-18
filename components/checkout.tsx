@@ -17,12 +17,8 @@ import type { Coupon, Payment, PayMethod } from "@/lib/types";
 
 type Method = "upi" | "cash" | "card" | "mixed" | "split";
 
-export function billTotals(subtotal: number, discount = 0) {
-  const taxable = Math.max(0, subtotal - discount);
-  const gst = Math.round(taxable * gstRate() * 100) / 100;
-  const total = Math.round(taxable + gst);
-  return { subtotal, discount, taxable, cgst: gst / 2, sgst: gst / 2, roundOff: total - (taxable + gst), total };
-}
+export { billTotals } from "@/lib/bill-totals";
+import { billTotals } from "@/lib/bill-totals";
 
 export function Checkout({
   open,
