@@ -8,7 +8,7 @@ import { Bell, BellOff, BellRing, CalendarClock, ChefHat, Check, ChevronDown, Cl
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createStore } from "@/lib/store";
-import { paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useOrders } from "@/lib/live";
+import { toAccept as needsAccept, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useOrders } from "@/lib/live";
 import { confirmPayment, rejectPayment } from "@/lib/billing";
 import { orderWhere, useAllTables } from "@/lib/tables";
 import { inr, timeAgo } from "@/lib/format";
@@ -118,8 +118,8 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
   const canOrders = useCan("orders");
   const toast = useToast();
   const orders = all.filter((o) => !o.outletId || !outlet.id || o.outletId === outlet.id);
-  const toAccept = canOrders ? orders.filter((o) => o.status === "new") : [];
-  const bills = canOrders ? orders.filter((o) => o.payPreference && !o.payClaim && o.status !== "paid" && o.status !== "cancelled") : [];
+  const toAccept = canOrders ? orders.filter(needsAccept) : [];
+  const bills = canOrders ? orders.filter((o) => o.payPreference && o.payPreference !== "online" && !o.payClaim && o.status !== "paid" && o.status !== "cancelled") : [];
   const claims = canConfirm ? pendingClaims(orders) : [];
   const calls = useOutletCalls();
   if (!toAccept.length && !bills.length && !claims.length && !calls.length) return null;

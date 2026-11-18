@@ -35,7 +35,8 @@ import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { cloudSignOut, ensureGuest, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GuestCoupon } from "@/lib/cloud";
+import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
+import { payOnline } from "@/lib/gateway-checkout";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
 const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
@@ -81,7 +82,7 @@ function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) 
 
 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
-type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean };
+type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean; online?: boolean };
 type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
 
 export default function GuestOrder() {
@@ -206,6 +207,9 @@ export default function GuestOrder() {
   const [couponsOn, setCouponsOn] = useState(false);
   const [coupon, setCoupon] = useState<GuestCoupon | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
+  // the outlet takes payments on its own gateway (Razorpay / Cashfree)
+  const [gw, setGw] = useState<GatewayInfo | null>(null);
+  const [onlineBusy, setOnlineBusy] = useState(false);
   const [thanks, setThanks] = useState<Thanks | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
 
@@ -331,6 +335,16 @@ export default function GuestOrder() {
       live = false;
     };
   }, [cloud.status, cloud.rid]);
+  // online payment: the outlet of this table (or the counter) decides
+  const payOutletId = t?.outletId ?? currentOutletId();
+  useEffect(() => {
+    if (cloud.status !== "ready" || !cloud.rid || !payOutletId) return;
+    let live = true;
+    gatewayFor(payOutletId).then((g) => live && setGw(g)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [cloud.status, cloud.rid, payOutletId]);
   const stampCard = stampProg ? (
     <div>
     <StampCard
@@ -478,7 +492,8 @@ export default function GuestOrder() {
     if (waiting.payFirst) {
       // Pay-first: staff accept the order once they have the cash/card payment at the counter.
       if (os.every((o) => o.status !== "new")) {
-        setThanks({ payments, orderNo: os[0].number, orderId: os[0].id, token: true });
+        const online = os[0].gateway ? os.flatMap((o) => o.prepaid ?? []) : [];
+        setThanks({ payments: online.length ? online : payments, orderNo: os[0].number, orderId: os[0].id, token: true });
         setWaiting(null);
         setConfirmed(null);
       }
@@ -703,6 +718,29 @@ export default function GuestOrder() {
     setConfirmed(o.id);
   };
 
+  /** Pay-first, online: the order waits as "new" until the server hears from the gateway, then goes to the kitchen by itself. */
+  const payFirstOnline = async () => {
+    if (!guest || onlineBusy) return;
+    setOnlineBusy(true);
+    const lines = cart;
+    const usedCoupon = cartOff > 0 ? coupon : null;
+    const o = sendOrder(guest, { status: "new", payPreference: "online", ...(usedCoupon ? { wantsCoupon: usedCoupon.code } : {}) });
+    const r = await payOnline([o.id], { name: settings.name, phone: guest.phone, guestName: guest.name });
+    setOnlineBusy(false);
+    if (r.status === "paid" || r.status === "pending") {
+      if (usedCoupon) setCoupon(null);
+      setPayOpen(false);
+      setWaiting({ ids: [o.id], kind: "upi", amount: r.amount || payable, payFirst: true, online: true });
+      setConfirmed(o.id);
+      return;
+    }
+    // not paid: take the order back, so the guest can pay another way
+    orderActions.setStatus(o.id, "cancelled");
+    setCart(lines);
+    if (/off here/i.test(r.message ?? "")) setGw(null); // the owner turned it off meanwhile
+    toast(r.status === "cancelled" ? tx(lang, "Payment not completed. Choose how to pay.", "पेमेंट पूर्ण झालं नाही. कसे भरायचे ते निवडा.") : r.message || tx(lang, "The payment didn't go through. Try again or pay another way.", "पेमेंट झालं नाही. पुन्हा करा किंवा दुसऱ्या प्रकारे भरा."));
+  };
+
   // ---- the group's bill (restaurant flow) ----
   const billItems = unbilled.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
   // a full stamp card: the guest can use the reward on this bill (on by default; the restaurant confirms it with the payment)
@@ -757,6 +795,24 @@ export default function GuestOrder() {
     else orderActions.setPreference(billIds, kind === "card" ? "card" : "cash");
     if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
     setWaiting({ ids: billIds, kind, amount: billTotal, upiPart, payFirst: false });
+  };
+
+  /** Pay the bill online: the server works out the same bill (stamp card, coupon, GST) and closes it once the gateway confirms. */
+  const billOnline = async () => {
+    if (onlineBusy || !billIds.length) return;
+    setOnlineBusy(true);
+    orderActions.askReward(billIds, rewardAmt > 0);
+    orderActions.askCoupon(billIds, couponAmt > 0 ? coupon!.code : undefined);
+    const ids = [...billIds];
+    const r = await payOnline(ids, { name: settings.name, phone: guest?.phone, guestName: guest?.name });
+    setOnlineBusy(false);
+    if (r.status === "paid" || r.status === "pending") {
+      if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
+      setWaiting({ ids, kind: "upi", amount: r.amount || billTotal - tip, payFirst: false, online: true });
+      return;
+    }
+    if (/off here/i.test(r.message ?? "")) setGw(null); // the owner turned it off meanwhile
+    toast(r.status === "cancelled" ? tx(lang, "Payment not completed. You can try again or pay another way.", "पेमेंट पूर्ण झालं नाही. पुन्हा करा किंवा दुसऱ्या प्रकारे भरा.") : r.message || tx(lang, "The payment didn't go through. Try again or pay another way.", "पेमेंट झालं नाही. पुन्हा करा किंवा दुसऱ्या प्रकारे भरा."));
   };
 
   const confirmedOrder = allOrders.find((o) => o.id === confirmed);
@@ -1364,6 +1420,9 @@ export default function GuestOrder() {
             onCash={() => payFirstLater("cash")}
             onCard={() => payFirstLater("card")}
             onMixed={(upiPart) => payFirstLater("mixed", upiPart)}
+            online={gw}
+            onOnline={payFirstOnline}
+            onlineBusy={onlineBusy}
           />
         )}
       </Sheet>
@@ -1393,7 +1452,7 @@ export default function GuestOrder() {
       {confirmedOrder && !thanks && (
         <div className="fixed inset-0 z-40 mx-auto flex max-w-md animate-fade-in flex-col bg-canvas px-5 pb-6 pt-14" role="dialog" aria-label="Order placed">
           <div className="flex flex-1 flex-col items-center text-center">
-            {waiting?.payFirst ? (
+            {waiting?.payFirst && !waiting.online ? (
               <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-saffron-soft text-saffron">{waiting.kind === "card" ? <CreditCard size={36} /> : <Banknote size={36} />}</div>
             ) : (
               <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-jade text-white"><Check size={40} strokeWidth={2.5} /></div>
@@ -1404,7 +1463,13 @@ export default function GuestOrder() {
               {placeLabel}
               {shared && party ? ` · ${groupName}` : ""} · {confirmedOrder.lines.reduce((s, l) => s + l.qty, 0)} {tx(lang, "items", "पदार्थ")}
             </div>
-            {waiting?.payFirst && (
+            {waiting?.payFirst && waiting.online && (
+              <div className="mt-6 flex w-full items-center gap-2 rounded-[22px] bg-jade-soft p-4 text-left text-[15px] text-jade-deep">
+                <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-jade" />
+                <span><b>{tx(lang, `Paid ${inr(waiting.amount)} online.`, `${inr(waiting.amount)} ऑनलाइन भरले.`)}</b> {tx(lang, "Confirming with the bank · your order goes to the kitchen by itself.", "बँकेकडून खात्री होत आहे · ऑर्डर आपोआप किचनला जाईल.")}</span>
+              </div>
+            )}
+            {waiting?.payFirst && !waiting.online && (
               <div className="mt-6 w-full rounded-[22px] bg-saffron-soft p-4 text-left text-[15px]">
                 <b>
                   {waiting.kind === "mixed"
@@ -1540,6 +1605,10 @@ export default function GuestOrder() {
               onCash={() => billLater("cash")}
               onCard={() => billLater("card")}
               onMixed={(upiPart) => billLater("mixed", upiPart)}
+              online={gw}
+              onlineAmount={billTotal - tip}
+              onOnline={billOnline}
+              onlineBusy={onlineBusy}
             />
           </div>
         )}

@@ -16,7 +16,7 @@ import { printReceipt } from "@/components/receipt";
 import { PaymentSplit, paidSum } from "@/components/payment-split";
 import { useToast } from "@/components/toast";
 import { orderWhere, tableActions, useTables } from "@/lib/tables";
-import { billOf, methodLabel, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOutletOrders, useSettings } from "@/lib/live";
+import { billOf, counterPref, methodLabel, payingOnline, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOutletOrders, useSettings } from "@/lib/live";
 import { closeBill, confirmPayment, markUnpaid, partyOpenOrders, rejectPayment } from "@/lib/billing";
 import { PasswordCheck } from "@/components/password-check";
 import { isOwner } from "@/lib/access";
@@ -81,6 +81,7 @@ export default function OrdersPage() {
   const nextStep = (o: Order): { label: string; onClick: () => void; tone?: "primary" | "dark" } | null => {
     if (o.payClaim && o.status !== "paid" && o.status !== "cancelled")
       return canConfirm ? { label: "Money received", onClick: () => { confirmPayment(o.payClaim!.id); toast(`Payment confirmed · #${o.number} closed`); } } : null;
+    if (payingOnline(o)) return null; // the guest is paying online: it accepts itself once paid
     if (o.status === "new") return { label: "Accept & send to kitchen", onClick: () => setStatus(o, "accepted", "Accepted · KOT sent to kitchen") };
     if (o.status === "accepted") return { label: "Mark cooking", onClick: () => setStatus(o, "preparing", "Kitchen started"), tone: "dark" };
     if (o.status === "preparing") return { label: "Mark ready", onClick: () => setStatus(o, "ready", "Marked ready"), tone: "dark" };
@@ -203,7 +204,13 @@ export default function OrdersPage() {
               </div>
             )}
             {sel.payPreference && sel.status !== "paid" && !sel.payClaim && (
-              <div className="rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">Guest asked for the bill and wants to pay by <b>{methodLabel[sel.payPreference]}</b>.</div>
+              <div className="rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
+                {sel.payPreference === "online"
+                  ? payingOnline(sel)
+                    ? "The guest is paying online right now. The order is accepted by itself once the money is in."
+                    : "The guest started an online payment but didn't finish it. Collect the money before you accept, or cancel the order."
+                  : <>Guest asked for the bill and wants to pay by <b>{methodLabel[sel.payPreference]}</b>.</>}
+              </div>
             )}
             <div className="overflow-hidden rounded-group bg-surface">
               {sel.lines.map((l, i) => {
@@ -310,7 +317,7 @@ export default function OrdersPage() {
         onClose={() => setPay(null)}
         subtotal={pay ? pay.reduce((s, o) => s + orderTotal(o.lines), 0) : 0}
         label={pay?.[0] ? orderWhere(pay[0], tables) : ""}
-        preferred={pay?.find((o) => o.payPreference)?.payPreference}
+        preferred={pay ? counterPref(pay) : undefined}
         prepaid={pay?.flatMap((o) => o.prepaid ?? [])}
         lines={pay?.flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })))}
         billNo={pay?.[0]?.number}

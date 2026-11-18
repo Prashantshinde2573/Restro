@@ -1004,3 +1004,57 @@ export interface ReadMenu {
   left: number | null; // photos left today (null = no daily limit set up)
 }
 export const readMenuPhotos = (rid: string, photos: { mime: string; data: string }[]) => callFn<ReadMenu>("menu-from-photo", { rid, photos }, true);
+
+/* ---------------- the restaurant's own payment gateway (Razorpay / Cashfree) ----------------
+ * Keys live only on the server (Supabase Vault). The browser only ever sees the public key id
+ * (Razorpay's checkout needs it) and the amount the server worked out. */
+export type GatewayInfo = { provider: "razorpay" | "cashfree"; keyId: string; mode: "test" | "live" };
+/** Is online payment on for this outlet? (guests and staff) */
+export async function gatewayFor(outletId: string | undefined): Promise<GatewayInfo | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !outletId || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("gateway_for", { r: rid, p_outlet: outletId });
+  if (error || !data) return null;
+  return data as GatewayInfo;
+}
+export type GatewayRow = { outlet_id: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; key_id: string; last4: string | null; active: boolean; verified_at: string | null; has_webhook: boolean };
+/** Owner: the gateways saved for each outlet (never the secrets). */
+export async function gatewayList(): Promise<GatewayRow[]> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return [];
+  const { data } = await sb().from("pay_gateways").select("outlet_id,provider,mode,key_id,last4,active,verified_at,webhook_ref").eq("rid", rid);
+  return ((data ?? []) as (Omit<GatewayRow, "has_webhook"> & { webhook_ref: string | null })[]).map(({ webhook_ref, ...g }) => ({ ...g, has_webhook: !!webhook_ref }));
+}
+/** Owner: connect an outlet to their own gateway. The keys are checked with the gateway before they are saved. */
+export const gatewaySetup = (g: { outletId: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; keyId: string; secret: string; webhook?: string }) =>
+  callFn<{ ok: true; last4: string }>("gateway-setup", { rid: stateStore.get().rid, ...g }, true);
+export const gatewayOff = (outletId: string) => callFn<{ ok: true }>("gateway-setup", { rid: stateStore.get().rid, outletId, action: "off" }, true);
+/** The address the owner pastes into the gateway's webhook settings. */
+export const gatewayWebhookUrl = (provider: "razorpay" | "cashfree", outletId: string) =>
+  `${URL_}/functions/v1/pay-webhook?p=${provider}&r=${encodeURIComponent(stateStore.get().rid ?? "")}&o=${encodeURIComponent(outletId)}`;
+export type PayStart = { intentId: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; keyId: string; orderId: string; sessionId?: string; amount: number };
+/** Guest: open a payment for these orders. The amount comes from the server. */
+export async function payCreate(orderIds: string[]): Promise<PayStart> {
+  await flushWrites(); // the server reads the orders (coupon, stamp card) from the database
+  return callFn<PayStart>("pay-create", { rid: stateStore.get().rid, orderIds }, true);
+}
+export type PayState = { status: "created" | "paid" | "failed"; note?: string };
+/** Has this payment gone through? (asked from the gateway by the server) */
+export const payStatus = (intentId: string, razorpay?: { orderId: string; paymentId: string; signature: string }) =>
+  callFn<PayState>("pay-status", { intentId, ...(razorpay ? { razorpay } : {}) }, true);
+/** Payments that need the owner (paid twice, amount didn't match): refund them from the gateway's dashboard. */
+export async function gatewayProblems(): Promise<{ id: string; outlet_id: string; provider: string; amount_paise: number; payment_id: string | null; note: string; paid_at: string | null; created_at: string }[]> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return [];
+  const { data } = await sb().from("pay_intents").select("id,outlet_id,provider,amount_paise,payment_id,note,paid_at,created_at").eq("rid", rid).not("note", "is", null).order("created_at", { ascending: false }).limit(20);
+  return (data ?? []) as never;
+}
+/** Staff device: take on the guest bookkeeping for one paid online bill (only one device gets it). */
+export async function claimGatewayBooking(intentId: string): Promise<{ bill: Record<string, unknown> } | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("claim_gateway_booking", { r: rid, p_intent: intentId });
+  if (error || data !== true) return null;
+  const { data: row } = await sb().from("pay_intents").select("bill").eq("id", intentId).maybeSingle();
+  return row ? { bill: (row as { bill: Record<string, unknown> }).bill ?? {} } : { bill: {} };
+}

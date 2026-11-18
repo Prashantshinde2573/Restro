@@ -10,6 +10,7 @@ import { openPlanSheet, teamWhatsApp, usePlatform } from "@/components/plan-shee
 import { dateIN, planStatus } from "@/lib/plan-status";
 import { ChangePassword } from "@/components/owner-auth";
 import { StampSettings } from "@/components/stamps";
+import { OnlinePayments } from "@/components/online-payments";
 import { useToast } from "@/components/toast";
 import {
   billOf,
@@ -266,6 +267,7 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={draft.acceptCard ?? true} onChange={(v) => setDraft({ ...draft, acceptCard: v })} label="Card machine" />
             </div>
+            {owner && cloud.rid && outlet.id && <OnlinePayments outletId={outlet.id} outletName={outlet.name} />}
           </div>
         )}
         {panel === "ordering" && (

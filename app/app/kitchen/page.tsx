@@ -7,7 +7,7 @@ import { chime } from "@/components/order-alerts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChannelIcon } from "@/components/channel";
 import { useToast } from "@/components/toast";
-import { orderActions, useCurrentOutlet, useOutletOrders } from "@/lib/live";
+import { orderActions, toAccept, useCurrentOutlet, useOutletOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
 import { orderWhere, useTables } from "@/lib/tables";
 import { useT } from "@/lib/i18n";
@@ -28,7 +28,7 @@ export default function KitchenPage() {
   const all = useOutletOrders();
   // The kitchen only sees orders a captain has accepted (QR/online orders start as "new").
   const orders = useMemo(() => all.filter((o) => ["accepted", "preparing", "ready"].includes(o.status)), [all]);
-  const waiting = all.filter((o) => o.status === "new").length;
+  const waiting = all.filter(toAccept).length;
   const [station, setStation] = useState<Station>("all");
   const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
   const [col, setCol] = useState<"new" | "preparing" | "ready">("preparing");

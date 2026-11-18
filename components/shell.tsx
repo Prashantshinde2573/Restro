@@ -7,7 +7,7 @@ import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaph
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
-import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
+import { liveCalls, toAccept, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { useReady } from "@/lib/store";
 import { ChangePassword } from "./owner-auth";
@@ -15,6 +15,7 @@ import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
+import { GatewayBooking } from "./gateway-booking";
 import { CallAlerts, WaiterCallBar } from "./waiter-calls";
 import { TableJanitor } from "./table-janitor";
 import { NoticeBell, SoundRow } from "./notifications";
@@ -114,7 +115,7 @@ function useNav() {
   // number bubbles: things waiting for someone in this outlet
   const here = (o?: string) => !o || o === outlet.id;
   const orders = useOrders().filter((o) => here(o.outletId));
-  const waiting = orders.filter((o) => o.status === "new").length; // to accept
+  const waiting = orders.filter(toAccept).length; // to accept
   const cooking = orders.filter((o) => o.status === "accepted" || o.status === "preparing").length; // in the kitchen
   const tables = useTables().filter((t) => here(t.outletId));
   const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
@@ -176,7 +177,7 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
   const orders = useOrders();
   const calls = liveCalls(useCalls());
   const waitingIn = (oid: string) =>
-    orders.some((o) => o.outletId === oid && (o.status === "new" || (!!o.payClaim && o.status !== "paid"))) ||
+    orders.some((o) => o.outletId === oid && (toAccept(o) || (!!o.payClaim && o.status !== "paid"))) ||
     calls.some((c) => c.outletId === oid && c.status === "open");
   const elsewhere = outlets.some((o) => o.id !== current.id && waitingIn(o.id));
   const initials = account.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -680,6 +681,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <RouteGate>{children}</RouteGate>
             <PlanSheet />
             <OrderAlerts />
+            <GatewayBooking />
             <CallAlerts />
             <TableJanitor />
             <WaiterCallBar />
