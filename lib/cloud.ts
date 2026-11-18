@@ -1058,3 +1058,43 @@ export async function claimGatewayBooking(intentId: string): Promise<{ bill: Rec
   const { data: row } = await sb().from("pay_intents").select("bill").eq("id", intentId).maybeSingle();
   return row ? { bill: (row as { bill: Record<string, unknown> }).bill ?? {} } : { bill: {} };
 }
+
+/* ---------------- WhatsApp Business API on the restaurant's own number (Pro and up) ----------------
+ * The token and app secret go once to the server (Vault) and never come back. */
+export type WaStatus = { display: string; name: string; bill: boolean; ready: boolean };
+/** Team: is WhatsApp API on, and which messages go out by themselves? */
+export async function waStatus(): Promise<WaStatus | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("wa_status", { r: rid });
+  return error || !data ? null : (data as WaStatus);
+}
+export type WaAccountRow = { phone_number_id: string; waba_id: string; display_phone: string | null; verified_name: string | null; verify_token: string; last4: string | null; active: boolean; settings: { bill?: { template: string; lang: string } | null; ready?: { template: string; lang: string } | null }; verified_at: string | null };
+/** Owner: the saved account (ids, number, settings; never the token). */
+export async function waAccount(): Promise<WaAccountRow | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data } = await sb().from("wa_accounts").select("phone_number_id,waba_id,display_phone,verified_name,verify_token,last4,active,settings,verified_at").eq("rid", rid).maybeSingle();
+  return (data as WaAccountRow) ?? null;
+}
+export type WaTemplate = { name: string; language: string; category: string; body: string; params: number; ok: boolean; why?: string };
+const wa = <T>(body: Record<string, unknown>) => callFn<T>("wa-setup", { rid: stateStore.get().rid, ...body }, true);
+export const waConnect = (x: { phoneId: string; wabaId: string; token: string; appSecret?: string }) => wa<{ ok: true; display: string; name: string; verifyToken: string }>({ action: "connect", ...x });
+export const waOff = () => wa<{ ok: true }>({ action: "off" });
+export const waTemplates = () => wa<{ templates: WaTemplate[] }>({ action: "templates" }).then((r) => r.templates);
+export const waSaveAuto = (settings: { bill: { template: string; lang: string } | null; ready: { template: string; lang: string } | null }) => wa<{ ok: true }>({ action: "settings", settings });
+export const waTest = (to: string, template: string, lang: string) => wa<{ ok: true }>({ action: "test", to, template, lang });
+export const waWebhookUrl = () => `${URL_}/functions/v1/wa-webhook?r=${encodeURIComponent(stateStore.get().rid ?? "")}`;
+/** Bills and "ready" messages: the server reads the order and sends only to its number, once. */
+export const waAuto = (kind: "bill" | "ready", orderIds: string[]) =>
+  callFn<{ ok?: true; skipped?: string; error?: string }>("wa-send", { rid: stateStore.get().rid, kind, ...(kind === "bill" ? { orderIds } : { orderId: orderIds[0] }) }, true);
+export type WaCampaignResult = { sent: number; failed: number; noOptIn: number; stopped: number; recent: number; limit: number; errors: string[] };
+export const waCampaign = (x: { outletId: string; template: string; lang: string; extra: string[]; phones: string[] }) =>
+  callFn<WaCampaignResult>("wa-send", { rid: stateStore.get().rid, kind: "campaign", ...x }, true);
+export type WaMessage = { id: string; kind: string; to_phone: string; template: string | null; status: string; error: string | null; created_at: string };
+export async function waMessages(limit = 50): Promise<WaMessage[]> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return [];
+  const { data } = await sb().from("wa_messages").select("id,kind,to_phone,template,status,error,created_at").eq("rid", rid).order("created_at", { ascending: false }).limit(limit);
+  return (data ?? []) as WaMessage[];
+}
