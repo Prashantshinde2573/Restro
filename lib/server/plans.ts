@@ -68,13 +68,12 @@ export async function sendPlanUpdate(rid: string, event: "renewed" | "grace" | "
   if (!row?.owner_email) return { ok: false, error: "No owner email" };
   const info = { restaurant: row.name, owner: row.owner ?? "", plan: planName(row.plan), renewUrl: `${origin}/app/settings#plan` };
   const st = planStatus({ renewsAt: row.renews_at, graceUntil: row.grace_until, status: row.status });
+  // grace: only once the plan has really ended and the grace period is running. While the plan
+  // still runs, the daily job sends it on the day the grace period starts (never before).
+  if (event === "grace" && !(row.grace_until && st.inGrace)) return { ok: true, later: true };
   const mail =
     event === "grace"
-      ? row.grace_until && st.inGrace
-        ? graceEmail({ ...info, graceUntil: row.grace_until, daysLeft: st.daysLeft, given: true })
-        : row.grace_until
-          ? graceEmail({ ...info, graceUntil: row.grace_until, daysLeft: Math.ceil((new Date(row.grace_until).getTime() - Date.now()) / 86_400_000), given: true })
-          : null
+      ? graceEmail({ ...info, graceUntil: row.grace_until!, daysLeft: st.daysLeft, given: true })
       : planUpdatedEmail({ ...info, until: row.renews_at, changed: event === "plan" });
   if (!mail) return { ok: false, error: "Nothing to send" };
   // grace: a single email per grace period, whoever sends it first

@@ -79,14 +79,14 @@ function OwnerHome() {
 
   const today0 = startOfDay(now);
   const lastWeek0 = today0 - 7 * DAY_MS;
-  const today = totals(between(orders, today0, now + 1));
+  const today = totals(between(orders, today0, today0 + DAY_MS));
   // same weekday last week, up to the same time of day
   const before = totals(between(orders, lastWeek0, lastWeek0 + (now - today0)));
   const dayName = new Date(lastWeek0).toLocaleDateString("en-IN", { weekday: "short" });
   const hourly = byHour(orders, today0, lastWeek0);
   const week = byDay(orders, 7, now);
-  const top = topDishes(between(orders, today0 - 6 * DAY_MS, now + 1));
-  const channels = byChannel(between(orders, today0 - 6 * DAY_MS, now + 1));
+  const top = topDishes(between(orders, today0 - 6 * DAY_MS, today0 + DAY_MS));
+  const channels = byChannel(between(orders, today0 - 6 * DAY_MS, today0 + DAY_MS));
 
   const busy = tables.filter((t) => t.parties.length > 0).length;
   const billing = tables.filter((t) => t.parties.some((p) => p.status === "billing")).length;

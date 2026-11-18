@@ -108,7 +108,9 @@ export const useSession = () => sessionStore.use();
 export const sessionActions = {
   /** Cloud sign-in: who this device is now (members may still be loading). */
   setMember(memberId: string) {
-    sessionStore.set({ ...sessionStore.get(), memberId });
+    const cur = sessionStore.get();
+    // a different person on this device: their outlet, not the last person's
+    sessionStore.set({ ...cur, memberId, outletId: cur.memberId && cur.memberId !== memberId ? "" : cur.outletId });
   },
   setOutlet(outletId: string) {
     sessionStore.set({ ...sessionStore.get(), outletId });
@@ -141,7 +143,7 @@ export function logActivity(kind: ActivityEntry["kind"], text: string, outletId?
     by: myName(),
     kind,
     text,
-    outletId: outletId ?? (sessionStore.get().outletId || outletStore.get()[0]?.id),
+    outletId: outletId ?? currentOutletId(),
     source: c.role === "guest" ? "guest" : "team",
   };
   if (c.role === "guest") {
@@ -155,13 +157,20 @@ const where = (o: Pick<Order, "tableName" | "partyId" | "type" | "customer">) =>
 const rs = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 /** The outlet on screen (falls back to the first one the member may see). */
+/**
+ * The outlet this person works in now: the one they picked, if it is theirs; else their first.
+ * A sub admin or staff member never lands on an outlet that isn't theirs (the server would refuse
+ * every save there). Guests (no member): any outlet (their QR decides).
+ */
+export function pickOutlet<O extends { id: string }>(all: O[], me: Member | null, want?: string): O | undefined {
+  const mine = me ? all.filter((o) => inOutlet(me, o.id)) : all;
+  return mine.find((o) => o.id === want) ?? mine[0] ?? (me && me.role !== "owner" ? undefined : all[0]);
+}
 export function useCurrentOutlet(): Outlet {
   const { outletId } = useSession();
   const outlets = useOutlets();
   const me = useMe();
-  // guests (no member): the outlet their QR belongs to
-  const mine = me ? outlets.filter((o) => inOutlet(me, o.id)) : outlets;
-  const o = mine.find((o) => o.id === outletId) ?? mine[0] ?? outlets[0] ?? blankOutlet;
+  const o = pickOutlet(outlets, me, outletId) ?? outlets[0] ?? blankOutlet;
   setGstRate(o.gstRate); // bills, reports and the guest page use this outlet's GST rate
   return o;
 }
@@ -201,7 +210,8 @@ export const settingsActions = {
   /** Brand name goes on the account; the rest on the current outlet. */
   update(patch: Partial<OutletSettings>) {
     const { name: _name, logo: _logo, ...rest } = patch; // name + logo: only the Restropi team changes them
-    const id = sessionStore.get().outletId || outletStore.get()[0]?.id;
+    const id = currentOutletId();
+    if (!id) return;
     if (Object.keys(rest).length) outletActions.update(id, rest);
     const names: Record<string, string> = { upi: "UPI ID", gstRate: "GST rate", ordersPaused: "QR ordering pause", selfService: "self-service", orderFrom: "QR ordering hours", orderTo: "QR ordering hours", payFirst: "pay first", businessType: "outlet type", mixed: "outlet type", acceptCard: "card payments", stamps: "stamp card", billFooter: "bill footer", address: "address", phone: "phone", gstin: "GSTIN", fssai: "FSSAI", hours: "hours" };
     const what = [...new Set(Object.keys(rest).map((k) => names[k] ?? k))];
@@ -235,7 +245,7 @@ export function useOutletOrders() {
 export const getOrders = () => orderStore.get();
 
 /** The outlet this device is working in (or the first one). */
-export const currentOutletId = (): string | undefined => sessionStore.get().outletId || outletStore.get()[0]?.id;
+export const currentOutletId = (): string | undefined => pickOutlet(outletStore.get(), currentMember(), sessionStore.get().outletId)?.id;
 
 const patchOrder = (id: string, fn: (o: Order) => Order) =>
   orderStore.set(orderStore.get().map((o) => (o.id === id ? fn(o) : o)));

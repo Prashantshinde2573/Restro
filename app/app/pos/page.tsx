@@ -133,6 +133,7 @@ function PosScreen() {
       partyId: type === "dine-in" ? pid ?? undefined : undefined,
       customer: type === "dine-in" ? undefined : label,
       staff: me?.name ?? "Staff",
+      ...(me ? { staffId: me.id } : {}),
       createdAt: new Date().toISOString(),
       status: "accepted",
       lines: lines.map((l) => ({ itemId: l.item.id, name: sizedName(l.item.name, l.size), qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),

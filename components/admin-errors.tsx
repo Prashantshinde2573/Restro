@@ -37,7 +37,7 @@ export function ErrorsSheet({ open, onClose, names }: { open: boolean; onClose: 
   return (
     <Sheet open={open} onClose={onClose} title="App errors" wide>
       <div className="space-y-3">
-        <p className="text-[14px] text-muted">Crashes on a phone, and changes the server refused to save. Each restaurant sends at most 30 an hour.</p>
+        <p className="text-[14px] text-muted">Crashes on a phone, changes the server refused to save, and connections that stopped working (menu reader key, WhatsApp token). Each restaurant sends at most 30 an hour.</p>
         <div className="flex gap-2">
           <Button size="sm" variant="tinted" onClick={load}>Refresh</Button>
           {!!rows?.length && (
@@ -51,7 +51,7 @@ export function ErrorsSheet({ open, onClose, names }: { open: boolean; onClose: 
           {rows?.map((r) => (
             <li key={r.id} className="py-3">
               <div className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-muted">
-                <span className="font-semibold text-ink">{r.kind === "save-refused" ? "Not saved" : r.kind === "crash" ? "Crash" : r.kind}</span>
+                <span className={r.kind === "integration" ? "rounded-full bg-[#FEE4E2] px-2 py-0.5 font-semibold text-[#B42318]" : "font-semibold text-ink"}>{r.kind === "save-refused" ? "Not saved" : r.kind === "crash" ? "Crash" : r.kind === "integration" ? `Connection · ${typeof r.context?.service === "string" ? r.context.service : "service"}` : r.kind}</span>
                 <span>{(r.rid && names[r.rid]) || r.rid || "—"}</span>
                 <span>· {r.role ?? "?"}</span>
                 <span>· {timeAgo(r.at)}</span>

@@ -31,6 +31,7 @@ import {
   adminSyncOwner,
   adminPlanEmail,
   verifyMyPassword,
+  adminErrors,
   type AdminRestaurant,
 } from "@/lib/cloud";
 import { plans } from "@/lib/plans";
@@ -41,6 +42,7 @@ type PlanId = AdminRestaurant["plan"];
 type Filter = "all" | "active" | "due" | "expired" | "suspended";
 
 const DAY = 86_400_000;
+const ERRORS_SEEN = "restropi.admin.errorsSeen";
 const daysLeft = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / DAY);
 const dateText = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const planName = (id: string) => plans.find((p) => p.id === id)?.name ?? id;
@@ -71,6 +73,23 @@ export default function AdminPage() {
   const [couponsOpen, setCouponsOpen] = useState(false);
   const [revenueOpen, setRevenueOpen] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
+  // errors that came in since the super admin last opened the list (a red count on the button)
+  const [newErrors, setNewErrors] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const check = () => {
+      let seen = 0;
+      try { seen = Number(localStorage.getItem(ERRORS_SEEN) ?? 0) || 0; } catch {}
+      adminErrors().then((rows) => live && setNewErrors(rows.filter((r) => new Date(r.at).getTime() > seen).length)).catch(() => {});
+    };
+    check();
+    const id = window.setInterval(check, 60_000);
+    return () => { live = false; window.clearInterval(id); };
+  }, []);
+  const markErrorsSeen = () => {
+    try { localStorage.setItem(ERRORS_SEEN, String(Date.now())); } catch {}
+    setNewErrors(0);
+  };
   const [backupsOpen, setBackupsOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
@@ -159,7 +178,10 @@ export default function AdminPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
-            <Button variant="tinted" onClick={() => setErrorsOpen(true)}><AlertTriangle size={17} /> App errors</Button>
+            <Button variant="tinted" onClick={() => { setErrorsOpen(true); markErrorsSeen(); }}>
+              <AlertTriangle size={17} /> App errors
+              {newErrors > 0 && <span className="ml-1 rounded-full bg-[#D92D20] px-1.5 py-0.5 text-[11.5px] font-bold leading-none text-white tnum">{newErrors > 99 ? "99+" : newErrors}</span>}
+            </Button>
             <Button variant="tinted" onClick={() => setBackupsOpen(true)}><Archive size={17} /> Backups</Button>
             <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & reminders</Button>
             <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
@@ -587,8 +609,11 @@ function RestaurantSheet({
   const giveGrace = (days: number) => {
     const base = Math.max(Date.now(), new Date(r.renewsAt).getTime(), r.graceUntil ? new Date(r.graceUntil).getTime() : 0);
     const iso = new Date(base + days * DAY).toISOString();
-    return run(() => adminUpdate(r.id, { graceUntil: iso }).then(() => adminPlanEmail(r.id, "grace")), `Grace period till ${dateText(iso)}`);
+    return run(() => adminUpdate(r.id, { graceUntil: iso }).then(() => adminPlanEmail(r.id, "grace")), graceMsg(iso));
   };
+  // the owner hears about grace only when it starts (the plan has ended), not while the plan still runs
+  const graceMsg = (iso: string) =>
+    `Grace period till ${dateText(iso)} · ${new Date(r.renewsAt).getTime() > Date.now() ? `the owner gets the email when the plan ends (${dateText(r.renewsAt)})` : "the owner is emailed now"}`;
   const s = renewState(r);
   const infoChanged = info.name !== r.name || info.owner !== r.owner || info.phone !== r.phone || info.city !== r.city || info.notes !== r.notes;
 
@@ -664,7 +689,7 @@ function RestaurantSheet({
           </div>
           <div className="flex gap-2">
             <input type="date" className={clsx(inputCls, "flex-1")} value={graceDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setGraceDate(e.target.value)} aria-label="Grace period until" />
-            <Button disabled={busy || !graceDate} onClick={() => run(() => adminUpdate(r.id, { graceUntil: new Date(`${graceDate}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "grace")), `Grace period till ${dateText(`${graceDate}T23:59:00+05:30`)}`)}>
+            <Button disabled={busy || !graceDate} onClick={() => run(() => adminUpdate(r.id, { graceUntil: new Date(`${graceDate}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "grace")), graceMsg(`${graceDate}T23:59:00+05:30`))}>
               Set grace
             </Button>
           </div>
