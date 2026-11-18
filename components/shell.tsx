@@ -422,24 +422,26 @@ function TabBar() {
   const moreCount = moreItems.reduce((n, i) => n + (i.state === "ok" ? badgeOf(i.href) ?? 0 : 0), 0);
   // a link in "More" was tapped: close it once the new page is showing
   useEffect(() => setMore(false), [path]);
+  // the kitchen screen is dark: the tab bar goes dark with it (no bright strip under the tickets)
+  const dark = path.startsWith("/app/kitchen");
   return (
     <>
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-canvas/85 backdrop-blur-xl lg:hidden">
+      <nav className={clsx("pb-safe fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl lg:hidden", dark ? "border-white/10 bg-[#0a0a0a]/90" : "border-line/70 bg-canvas/85")}>
         <div className="mx-auto flex max-w-lg">
           {myTabs.map((it) => {
             const active = isActive(path, it.href);
             const Icon = it.icon;
             return (
               <Link key={it.href} href={it.href} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : "text-faint"} />
+                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : dark ? "text-white/55" : "text-faint"} />
                 {!!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-[calc(50%-20px)] top-1" />}
-                <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : "text-faint")}>{t(it.key)}</span>
+                <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : dark ? "text-white/55" : "text-faint")}>{t(it.key)}</span>
               </Link>
             );
           })}
           <button onClick={() => setMore(true)} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : "text-faint"} />
-            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : "text-faint")}>{t("more")}</span>
+            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : dark ? "text-white/55" : "text-faint"} />
+            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : dark ? "text-white/55" : "text-faint")}>{t("more")}</span>
             {renew !== null ? (
               <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>
             ) : moreCount > 0 ? (

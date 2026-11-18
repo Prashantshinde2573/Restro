@@ -80,7 +80,7 @@ export default function GuestsPage() {
                   { value: "optin", label: "OK with offers", count: all.filter((c) => guestMatch(c, "optin")).length },
                 ]}
               />
-              {stampsOn && (
+              {stampsOn && (rewardOnly || all.some((c) => stampsOf(c) >= prog.needed)) && (
                 <button onClick={() => setRewardOnly((v) => !v)} aria-pressed={rewardOnly} className={clsx("-mt-1 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold", rewardOnly ? "border-saffron/40 bg-saffron-soft text-saffron" : "border-line bg-surface text-ink")}>
                   <Gift size={14} /> Reward ready · {all.filter((c) => stampsOf(c) >= prog.needed).length}
                 </button>

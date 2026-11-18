@@ -13,7 +13,7 @@ const dict = {
   menu: { en: "Menu", mr: "मेनू", hi: "मेन्यू" },
   inventory: { en: "Stock", mr: "स्टॉक", hi: "स्टॉक" },
   customers: { en: "Guests", mr: "ग्राहक", hi: "ग्राहक" },
-  staff: { en: "Team", mr: "टीम", hi: "टीम" },
+  staff: { en: "Staff sales", mr: "स्टाफ विक्री", hi: "स्टाफ बिक्री" },
   access: { en: "Members & access", mr: "सदस्य आणि परवानग्या", hi: "सदस्य और एक्सेस" },
   payroll: { en: "Attendance & pay", mr: "हजेरी आणि पगार", hi: "हाज़िरी और वेतन" },
   attendance: { en: "My attendance", mr: "माझी हजेरी", hi: "मेरी हाज़िरी" },

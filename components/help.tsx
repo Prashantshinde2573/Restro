@@ -261,7 +261,7 @@ export function HelpChat({ full = false }: { full?: boolean }) {
         </span>
         <div className="flex rounded-full bg-white/10 p-0.5" role="radiogroup" aria-label="Language">
           {HELP_LANGS.map((l) => (
-            <button key={l} role="radio" aria-checked={lang === l} onClick={() => setLang(l)} className={clsx("rounded-full px-2.5 py-1 text-[12.5px] font-semibold", lang === l ? "bg-white text-ink" : "text-white/75")}>
+            <button key={l} role="radio" aria-checked={lang === l} onClick={() => setLang(l)} className={clsx("min-h-[34px] rounded-full px-3 py-1.5 text-[13px] font-semibold", lang === l ? "bg-white text-ink" : "text-white/75")}>
               {LANG_LABEL[l]}
             </button>
           ))}
@@ -291,14 +291,14 @@ export function HelpChat({ full = false }: { full?: boolean }) {
         {!area && !related.length && here.length > 0 && <div className="mb-1.5 px-1 text-[12px] font-semibold text-muted">{m.ui.forThisScreen}</div>}
         {area && <div className="mb-1.5 px-1 text-[12px] font-semibold text-muted">{m.areas[area]}</div>}
         {related.length > 0 && !area && <div className="mb-1.5 px-1 text-[12px] font-semibold text-muted">{m.ui.related}</div>}
-        <div className={clsx("flex flex-wrap gap-1.5 overflow-y-auto pb-2.5", full ? "max-h-[132px] sm:max-h-[180px]" : "max-h-[150px]")}>
+        <div className={clsx("flex flex-wrap gap-1.5 overflow-y-auto pb-4", chips.length > 4 && "[mask-image:linear-gradient(to_bottom,#000_78%,transparent)]", full ? "max-h-[132px] sm:max-h-[180px]" : "max-h-[150px]")}>
           {chips.map((c) => (
             <button
               key={c.key}
               onClick={c.run}
               disabled={typing}
               className={clsx(
-                "rounded-full px-3 py-1.5 text-left text-[13px] font-medium ring-1 transition disabled:opacity-50",
+                "min-h-[36px] rounded-full px-3 py-1.5 text-left text-[13px] font-medium ring-1 transition disabled:opacity-50",
                 c.tone === "nav" ? "bg-surface text-ink ring-line hover:ring-ink/30" : c.tone === "guide" ? "bg-jade-soft text-jade-deep ring-jade/20 hover:ring-jade/40" : "bg-sunken text-ink/85 ring-transparent hover:bg-jade-soft hover:text-jade-deep",
               )}
             >

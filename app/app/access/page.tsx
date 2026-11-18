@@ -238,10 +238,9 @@ export default function AccessPage() {
                   </button>
                 );
               })}
-              <button onClick={openNewOutlet} className="flex min-h-[124px] flex-col items-center justify-center gap-1.5 rounded-group border-2 border-dashed border-line text-muted hover:border-jade hover:text-jade">
-                <Building2 size={20} />
-                <span className="text-[14px] font-semibold">Add outlet</span>
-                {outlets.length >= outletLimit && <span className="text-[12px]">Upgrade to add more</span>}
+              <button onClick={openNewOutlet} className="flex min-h-[64px] items-center justify-center gap-2 rounded-group border-2 border-dashed border-line px-4 text-muted hover:border-jade hover:text-jade">
+                <Building2 size={18} />
+                <span className="text-[14px] font-semibold">{outlets.length >= outletLimit ? `Add outlet · upgrade from ${PLAN_NAME[account.plan]}` : "Add outlet"}</span>
               </button>
             </div>
           </section>

@@ -87,7 +87,7 @@ export default function TablesPage() {
         subtitle={tables.length ? `${outlet.name ? `${outlet.name} · ` : ""}${busy} busy · ${tables.filter((t) => tableState(t) === "free").length} free${shared ? ` · ${shared} shared` : ""}` : outlet.name}
         actions={
           <div className="flex gap-2">
-            {tables.length > 0 && <Link href="/print/tables"><Button variant="plain" size="sm"><Printer size={16} /> QR codes</Button></Link>}
+            {tables.length > 0 && (me?.role === "owner" || me?.role === "subadmin") && <Link href="/print/tables"><Button variant="plain" size="sm"><Printer size={16} /> QR codes</Button></Link>}
             {canManage && <Button variant="tinted" size="sm" onClick={() => setManage(true)}><Settings2 size={16} /> Manage tables</Button>}
           </div>
         }
