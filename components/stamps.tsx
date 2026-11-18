@@ -103,7 +103,10 @@ export function StampSettings({ onDone }: { onDone: (msg: string) => void }) {
 
       {many && (
         <div className="rounded-group bg-surface p-4">
-          <Toggle checked={everywhere} onChange={setEverywhere} label="Same stamp card in all outlets" />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[15px]">Same stamp card in all outlets</span>
+            <Toggle checked={everywhere} onChange={setEverywhere} label="Same stamp card in all outlets" />
+          </div>
           <p className="mt-1.5 text-[12.5px] text-muted">
             {everywhere ? "Guests collect stamps at any outlet and use the reward at any outlet. New outlets get this card too." : `Only ${outlet.name} uses this card. Other outlets keep their own.`}
           </p>

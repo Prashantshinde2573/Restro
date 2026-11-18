@@ -8,7 +8,7 @@ import { Donut, TrendChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
 import { paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu } from "@/lib/live";
 import { useOrdersForRange } from "@/lib/report-orders";
-import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
+import { DAY_MS, between, byCategory, byDay, byMethod, discountReport, inOutlet, live, paid, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import type { Order } from "@/lib/types";
 import { asDate, cellText, xlsxBlob, type XCell } from "@/lib/xlsx";
@@ -89,6 +89,7 @@ export default function ReportsPage() {
   const top = topDishes(paid(orders), 10);
   const categories = byCategory(paid(orders), menu, catName);
   const net = Math.max(0, t.sales - t.gst);
+  const disc = discountReport(orders);
   const stamp = new Date().toISOString().slice(0, 10);
   const label = period === "today" ? "today" : period === "custom" ? `${isoDay(from)}-to-${isoDay(end)}` : `last-${days}-days`;
   const rangeText = days === 1 ? niceDay(from) : `${niceDay(from)} – ${niceDay(end)}`;
@@ -117,12 +118,13 @@ export default function ReportsPage() {
         `bills-${label}-${stamp}`,
         [
           ...head("Bills"),
-          ["Bill no.", "Date", "Day", "Time", "Type", "Table", "Status", "Items", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total (Rs)", "Paid by", "Staff"],
+          ["Bill no.", "Date", "Day", "Time", "Type", "Table", "Status", "Items", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total (Rs)", "Discount (Rs)", "Discount for", "Paid by", "Staff"],
           ...live(orders).map((o: Order) => {
             const t0 = new Date(o.createdAt).getTime();
             const x = taxSplit(o);
             return [o.number, asDate(t0), dayName(t0), new Date(t0).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.type, o.tableName ?? "", o.status,
-              o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), x.taxable, x.cgst, x.sgst, x.total, paymentsText(o.payments).replace(/₹/g, "Rs "), o.staff];
+              o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), x.taxable, x.cgst, x.sgst, x.total,
+              (o.discounts ?? []).reduce((a, d) => a + d.amount, 0) || "", (o.discounts ?? []).map((d) => d.label).join("; "), paymentsText(o.payments).replace(/₹/g, "Rs "), o.staff];
           }),
         ],
       ],
@@ -151,6 +153,30 @@ export default function ReportsPage() {
           ["Date", "Day", "Paid bills", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
           ...dayRows.map((d) => [asDate(d.d0), dayName(d.d0), d.bills, d.taxable, d.cgst, d.sgst, d.total]),
           ["Total", "", sum("bills"), sum("taxable"), sum("cgst"), sum("sgst"), sum("total")],
+        ],
+      ],
+    },
+    {
+      name: "Discounts & coupons",
+      file: () => [
+        `discounts-${label}-${stamp}`,
+        [
+          ...head("Discounts & coupons"),
+          ["", "Amount (Rs)"],
+          ["Bills with a discount", disc.bills],
+          ["Coupons", disc.coupon],
+          ["Stamp card rewards", disc.reward],
+          ["Other discounts (by staff)", disc.staff],
+          ["Total discounts", disc.total],
+          [],
+          ["Coupon code", "Times used", "Discount given (Rs)"],
+          ...disc.coupons.map((c) => [c.code, c.uses, c.amount]),
+          [],
+          ["Bill no.", "Date", "Time", "Table", "Discount", "Amount (Rs)", "Guest mobile", "Staff"],
+          ...disc.rows.map(({ order: o, d }) => {
+            const t0 = new Date(o.createdAt).getTime();
+            return [o.number, asDate(t0), new Date(t0).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.tableName ?? "", d.label, d.amount, o.guestPhone ?? "", o.staff];
+          }),
         ],
       ],
     },
@@ -185,6 +211,7 @@ export default function ReportsPage() {
     `🧾 Paid bills: ${t.paidOrders}`,
     `📈 Average bill: ${t.avgBill ? inr(t.avgBill) : "—"}`,
     `🏛️ GST collected: ${inr(t.gst)}`,
+    ...(disc.total ? [`🏷️ Discounts given: ${inr(disc.total)}${disc.coupon ? ` (coupons ${inr(disc.coupon)})` : ""}`] : []),
     "",
     "*How guests paid*",
     `UPI ${inr(methods.upi)} · Cash ${inr(methods.cash)} · Card ${inr(methods.card)}`,
@@ -269,14 +296,15 @@ export default function ReportsPage() {
       <Page className="space-y-6">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
           {[
-            ["Sales", inr(t.sales)],
-            ["Paid bills", String(t.paidOrders)],
-            ["Average bill", t.avgBill ? inr(t.avgBill) : "—"],
-            ["GST collected", inr(t.gst)],
-          ].map(([l, v]) => (
+            ["Sales", inr(t.sales), "Money received on paid bills, with GST, after discounts"],
+            ["Paid bills", String(t.paidOrders), "Orders paid in this period"],
+            ["Average bill", t.avgBill ? inr(t.avgBill) : "—", "Sales ÷ paid bills"],
+            ["Discounts given", inr(disc.total), disc.bills ? `On ${disc.bills} bill${disc.bills === 1 ? "" : "s"} · coupons ${inr(disc.coupon)}` : "Coupons, stamp cards and staff discounts"],
+          ].map(([l, v, h]) => (
             <div key={l} className="bg-surface p-4">
               <div className="text-[13px] text-muted">{l}</div>
               <div className="mt-1 text-[24px] font-semibold tracking-tight tnum">{v}</div>
+              <div className="mt-0.5 text-[12px] leading-snug text-faint">{h}</div>
             </div>
           ))}
         </div>
@@ -319,7 +347,7 @@ export default function ReportsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <Group title="Top dishes" flush className="lg:col-span-1">
+          <Group title="Top dishes · menu price" flush className="lg:col-span-1">
             {top.length ? (
               top.map((d, i) => (
                 <div key={d.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0 lg:px-5">
@@ -334,7 +362,7 @@ export default function ReportsPage() {
             )}
           </Group>
 
-          <Group title="Sales by category" flush>
+          <Group title="By category · menu price" flush>
             {categories.length ? (
               categories.map((c) => (
                 <div key={c.label} className="flex justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] last:border-0 lg:px-5">
@@ -360,6 +388,32 @@ export default function ReportsPage() {
             </div>
           </Group>
         </div>
+
+        <Group title="Discounts & coupons" flush>
+          {disc.total ? (
+            <>
+              {[
+                ["Coupons", disc.coupon],
+                ["Stamp card rewards", disc.reward],
+                ["Other discounts (by staff)", disc.staff],
+              ].map(([l, v]) => (
+                <div key={l as string} className="flex justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] lg:px-5">
+                  <span className="text-muted">{l}</span>
+                  <span className="font-medium tnum">{inr(v as number)}</span>
+                </div>
+              ))}
+              {disc.coupons.map((c) => (
+                <div key={c.code} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 text-[14px] last:border-0 lg:px-5">
+                  <span className="rounded-md bg-sunken px-2 py-0.5 font-mono text-[13px] font-semibold">{c.code}</span>
+                  <span className="flex-1 text-muted">used {c.uses} time{c.uses === 1 ? "" : "s"}</span>
+                  <span className="font-medium tnum">{inr(c.amount)}</span>
+                </div>
+              ))}
+            </>
+          ) : (
+            <p className="px-4 py-6 text-center text-[14px] text-muted">No discounts in this period. Coupons, stamp card rewards and staff discounts show here once bills are paid with them.</p>
+          )}
+        </Group>
 
         <Group
           title="Download"

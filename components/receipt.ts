@@ -12,6 +12,8 @@ export interface ReceiptData {
   lines: { name: string; qty: number; price: number }[];
   totals: { subtotal: number; discount: number; cgst: number; sgst: number; roundOff: number; total: number };
   payments: Payment[];
+  /** each discount with its reason ("Coupon WELCOME26", "Stamp card · Free coffee"); else one "Discount" line */
+  discounts?: { label: string; amount: number }[];
   by?: string; // who billed it
   customer?: string;
   when?: Date;
@@ -21,6 +23,9 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const methodName = (m: string) => (m === "upi" ? "UPI" : m === "cash" ? "Cash" : m === "card" ? "Card" : m);
 const title = () => (gstRate() > 0 ? "TAX INVOICE" : "BILL");
+/** The discount lines of a bill: each with its reason when known. */
+const offLines = (r: ReceiptData) =>
+  r.discounts?.filter((d) => d.amount > 0).length ? r.discounts.filter((d) => d.amount > 0) : r.totals.discount ? [{ label: "Discount", amount: r.totals.discount }] : [];
 const whenText = (d: Date) => `${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}, ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
 
 /** File name for this bill when printed, saved as PDF or shared: "Chai_Point_Cafe_101". */
@@ -80,7 +85,8 @@ export function printReceipt(r: ReceiptData) {
     <hr>
     <table class=tot>
       <tr><td>Items: ${items}</td><td class=r>Subtotal</td><td class=r>${money(r.totals.subtotal)}</td></tr>
-      ${r.totals.discount ? `<tr><td></td><td class=r>Discount</td><td class=r>-${money(r.totals.discount)}</td></tr><tr><td></td><td class=r>Taxable value</td><td class=r>${money(r.totals.subtotal - r.totals.discount)}</td></tr>` : ""}
+      ${offLines(r).map((d) => `<tr><td></td><td class=r>${esc(d.label)}</td><td class=r>-${money(d.amount)}</td></tr>`).join("")}
+      ${r.totals.discount ? `<tr><td></td><td class=r>Taxable value</td><td class=r>${money(r.totals.subtotal - r.totals.discount)}</td></tr>` : ""}
       ${gstRate() > 0 ? `<tr><td></td><td class=r>CGST @ ${halfGstLabel()}</td><td class=r>${money(r.totals.cgst)}</td></tr><tr><td></td><td class=r>SGST @ ${halfGstLabel()}</td><td class=r>${money(r.totals.sgst)}</td></tr>` : ""}
       ${Math.abs(r.totals.roundOff) >= 0.01 ? `<tr><td></td><td class=r>Round off</td><td class=r>${money(r.totals.roundOff)}</td></tr>` : ""}
       <tr class=grand><td colspan=2>TOTAL</td><td class=r>₹${money(r.totals.total)}</td></tr>
@@ -119,7 +125,7 @@ export function receiptText(r: ReceiptData) {
     ...r.lines.map((l) => `${l.qty} × ${l.name}  —  ${inr(l.qty * l.price)}`),
     line,
     `Subtotal: ${inr(r.totals.subtotal, { decimals: true })}`,
-    r.totals.discount ? `Discount: −${inr(r.totals.discount, { decimals: true })}` : "",
+    ...offLines(r).map((d) => `🎁 ${d.label}: −${inr(d.amount, { decimals: true })}`),
     gstRate() > 0 ? `CGST ${halfGstLabel()}: ${inr(r.totals.cgst, { decimals: true })}` : "",
     gstRate() > 0 ? `SGST ${halfGstLabel()}: ${inr(r.totals.sgst, { decimals: true })}` : "",
     `*Total: ${inr(r.totals.total)}*`,
@@ -150,6 +156,7 @@ export function receiptPdfBlob(r: ReceiptData) {
     lines: r.lines,
     subtotal: r.totals.subtotal,
     discount: r.totals.discount,
+    discounts: offLines(r),
     gstHalfLabel: halfGstLabel(),
     cgst: r.totals.cgst,
     sgst: r.totals.sgst,

@@ -259,7 +259,8 @@ function PlanCouponEdit({ draft, onClose, onSaved, taken }: { draft: Draft | nul
         <Field label="Note (optional)">
           <input className={inputCls} value={d.note ?? ""} onChange={(e) => set({ note: e.target.value || null })} placeholder="Diwali offer" />
         </Field>
-        <div className="rounded-ctl bg-surface px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
+          <span className="text-[15px]">Coupon is on</span>
           <Toggle checked={d.active} onChange={(active) => set({ active })} label="Coupon is on" />
         </div>
       </div>

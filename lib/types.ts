@@ -185,6 +185,14 @@ export interface Payment {
   amount: number;
 }
 
+/** One discount on a bill, with its reason, so the guest, the owner, the bill and reports all say why. */
+export interface BillDiscount {
+  kind: "coupon" | "reward" | "staff";
+  label: string; // "Coupon WELCOME26", "Stamp card · Free coffee", "Discount 10%"
+  amount: number; // rupees off the items, before GST
+  code?: string; // the coupon code
+}
+
 /** "It's paid" from someone who can't close bills alone: waits for the owner (or a trusted manager). */
 export interface PayClaim {
   id: string; // same id on every order of the bill
@@ -196,6 +204,8 @@ export interface PayClaim {
   coupon?: string;
   /** the guest used their full stamp card on this bill (its amount is in `discount`) */
   reward?: { name: string; amount: number };
+  /** each discount with its reason (newer claims) */
+  discounts?: BillDiscount[];
 }
 
 /** One line in the activity log: who did what, when. */
@@ -253,6 +263,8 @@ export interface Order {
   confirmedBy?: string; // who confirmed the payment
   priority?: boolean;
   outletId?: string; // which outlet took the order
+  /** the bill's discounts, with their reasons (on the first order of the bill) */
+  discounts?: BillDiscount[];
   /** paid on the restaurant's own gateway (written by the server only) */
   gateway?: { intent: string; provider: "razorpay" | "cashfree"; paymentId: string };
 }
@@ -273,6 +285,14 @@ export interface Coupon {
   note?: string;
   createdAt: string;
   outletIds?: string[]; // only these outlets (empty or missing: every outlet)
+  /** "invited": only the guests it was sent from Campaigns (forPhones). Missing: anyone with the code */
+  audience?: "anyone" | "invited";
+  /** the invited guests (10-digit numbers) */
+  forPhones?: string[];
+  /** guests who already used it (10-digit numbers) */
+  usedBy?: string[];
+  /** each guest once (default: yes) */
+  oncePerGuest?: boolean;
 }
 
 export interface StockItem {

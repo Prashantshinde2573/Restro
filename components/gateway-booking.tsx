@@ -32,7 +32,7 @@ function book(list: Order[], bill: Record<string, unknown>) {
   stampsForGuestPayment(list, claim);
   if (code) {
     const c = getCoupons().find((x) => x.code === normCode(code));
-    if (c) couponActions.used(c.id);
+    if (c) couponActions.used(c.id, first.guestPhone);
   }
   logActivity("payment", `Paid online · #${first.number} · ₹${amount.toLocaleString("en-IN")} · ${first.gateway!.provider === "razorpay" ? "Razorpay" : "Cashfree"} ${first.gateway!.paymentId}`, first.outletId);
 }

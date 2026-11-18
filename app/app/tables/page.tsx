@@ -251,6 +251,11 @@ export default function TablesPage() {
                         <span className="text-[16px] font-semibold">{label} · {p.guests} {p.guests > 1 ? "guests" : "guest"}</span>
                         <Pill tone={p.status === "billing" ? "saffron" : p.status === "ordered" ? "jade" : "sky"}>{p.status === "billing" ? "Wants bill" : p.status === "ordered" ? "Eating" : "Seated"}</Pill>
                         {p.pendingApproval && <Pill tone="saffron">Ordered from QR · accept?</Pill>}
+                        {(() => {
+                          const code = partyOrders(sel.id, p.id).find((o) => o.wantsCoupon)?.wantsCoupon;
+                          return code ? <Pill tone="jade">Guest coupon {code}</Pill> : null;
+                        })()}
+                        {partyOrders(sel.id, p.id).some((o) => o.wantsReward) && <Pill tone="jade">Stamp reward</Pill>}
                       </div>
                       <div className="mt-0.5 text-[13px] text-muted">
                         {minutesSince(p.since)} min · {p.server ?? "No captain yet"} · {p.source === "qr" ? "opened from QR" : "seated by captain"}
@@ -410,7 +415,7 @@ export default function TablesPage() {
         onPaid={(payments, extra) => {
           if (!pay) return;
           const ids = partyOrders(pay.tableId, pay.party.id).map((o) => o.id);
-          return closeBill({ ids, payments, by: myName, tableId: pay.tableId, partyId: pay.party.id, discount: extra?.discount, coupon: extra?.coupon });
+          return closeBill({ ids, payments, by: myName, tableId: pay.tableId, partyId: pay.party.id, discount: extra?.discount, coupon: extra?.coupon, discounts: extra?.discounts });
         }}
       />
     </>

@@ -312,7 +312,7 @@ const couponText = (c: GuestCoupon, lang: Lang) =>
     : tx(lang, `${inr(c.value)} off`, `${inr(c.value)} सूट`);
 
 /** "Have a coupon code?" on the guest's bill: type the code from the restaurant's WhatsApp message. */
-export function CouponBox({ lang, subtotal, applied, onChange }: { lang: Lang; subtotal: number; applied: GuestCoupon | null; onChange: (c: GuestCoupon | null) => void }) {
+export function CouponBox({ lang, subtotal, applied, onChange, phone }: { lang: Lang; subtotal: number; applied: GuestCoupon | null; onChange: (c: GuestCoupon | null) => void; phone?: string }) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
@@ -349,7 +349,7 @@ export function CouponBox({ lang, subtotal, applied, onChange }: { lang: Lang; s
     if (c.length < 3) return setErr(tx(lang, "Enter the code", "कोड टाका"));
     setBusy(true);
     setErr("");
-    const r = await guestCoupon(c, currentOutletId()).catch(() => ({ problem: "Couldn't check the code. Try again." }) as { coupon?: GuestCoupon; problem?: string });
+    const r = await guestCoupon(c, currentOutletId(), phone).catch(() => ({ problem: "Couldn't check the code. Try again." }) as { coupon?: GuestCoupon; problem?: string });
     setBusy(false);
     if (!r.coupon) return setErr(r.problem ?? "No coupon with this code");
     if (r.coupon.minBill && subtotal < r.coupon.minBill) return setErr(tx(lang, `Works on bills of ${inr(r.coupon.minBill)} or more`, `${inr(r.coupon.minBill)} किंवा जास्तच्या बिलावरच चालतो`));

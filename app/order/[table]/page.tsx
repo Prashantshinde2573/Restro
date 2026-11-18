@@ -761,7 +761,7 @@ export default function GuestOrder() {
     }
     if (coupon?.code === billCode) return;
     let live = true;
-    guestCoupon(billCode, t?.outletId ?? currentOutletId()).then((r) => { if (live && r.coupon) setCoupon(r.coupon); }).catch(() => {});
+    guestCoupon(billCode, t?.outletId ?? currentOutletId(), guest?.phone).then((r) => { if (live && r.coupon) setCoupon(r.coupon); }).catch(() => {});
     return () => { live = false; };
   }, [billCode]); // eslint-disable-line react-hooks/exhaustive-deps
   const changeCoupon = (c: GuestCoupon | null) => {
@@ -1147,7 +1147,7 @@ export default function GuestOrder() {
               </div>
             </div>
           )}
-          {!payNow && unbilled.length > 0 && !waiting && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} />}
+          {!payNow && unbilled.length > 0 && !waiting && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} phone={guest?.phone} />}
           {openOrders.some((o) => o.status !== "served") && <GamesCard onGame={setGame} lang={lang} />}
           {stampCard}
           {pastOrders.length > 0 && (
@@ -1392,7 +1392,7 @@ export default function GuestOrder() {
 
           <input value={note} onChange={(e) => setNote(e.target.value)} className="h-12 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40" placeholder={tx(lang, "Note for the kitchen (no onion, less sugar…)", "किचनसाठी सूचना (कमी तिखट, कांदा नको…)")} />
 
-          {payNow && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={itemTotal} applied={coupon} onChange={setCoupon} />}
+          {payNow && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={itemTotal} applied={coupon} onChange={setCoupon} phone={guest?.phone} />}
           <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(itemTotal, { decimals: true })}</dd></div>
             {cartOff > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Coupon", "कूपन")} {coupon!.code}</dt><dd className="tnum">−{inr(cartOff, { decimals: true })}</dd></div>}
@@ -1573,7 +1573,7 @@ export default function GuestOrder() {
                 <span className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2", useReward ? "border-jade bg-jade text-white" : "border-line")}>{useReward && <Check size={14} strokeWidth={3} />}</span>
               </button>
             )}
-            {(couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} />}
+            {(couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} phone={guest?.phone} />}
             <div>
               <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Tip for the staff (optional)", "स्टाफसाठी टिप (ऐच्छिक)")}</div>
               <div className="grid grid-cols-4 gap-2">

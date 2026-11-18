@@ -10,7 +10,7 @@ import { Avatar, Chips, Field, Group, Page, PageHeader, Segmented } from "@/comp
 import { CouponsPanel, couponState } from "@/components/coupons";
 import { CampaignApi } from "@/components/campaign-api";
 import { waStatus, type WaStatus } from "@/lib/cloud";
-import { couponLabel, couponWorksIn, useAccount, useCoupons, useCurrentOutlet, useFeature, useMe, useOutlets, useGuests } from "@/lib/live";
+import { couponActions, couponIsPrivate, couponLabel, couponWorksIn, useAccount, useCoupons, useCurrentOutlet, useFeature, useMe, useOutlets, useGuests } from "@/lib/live";
 import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
 import { timeAgo } from "@/lib/format";
 import { TEMPLATES, fillTemplate, offerBlock, withOffer, type TemplateLang } from "@/lib/wa-templates";
@@ -88,7 +88,15 @@ export default function CampaignsPage() {
             </Field>
           )}
           {wa && how === "api" ? (
-            <CampaignApi guests={list} outletId={outlet.id} />
+            <CampaignApi
+              guests={list}
+              outletId={outlet.id}
+              onSent={(phones, text) => {
+                // a private coupon whose code is in the message: these guests may use it
+                const words = text.toUpperCase();
+                for (const c of live.filter(couponIsPrivate)) if (words.includes(c.code)) couponActions.invite(c.id, phones);
+              }}
+            />
           ) : (
           <>
           <div>
@@ -189,7 +197,12 @@ export default function CampaignsPage() {
                   href={waLink(g.phone, msg.replaceAll("{name}", first(g.name)))}
                   target="_blank"
                   rel="noreferrer"
-                  onClick={() => setSent((s) => new Set(s).add(g.id))}
+                  onClick={() => {
+                    setSent((s) => new Set(s).add(g.id));
+                    // a coupon "only for guests I send it to": this guest may use it now
+                    const c = live.find((x) => x.id === offerId);
+                    if (c && couponIsPrivate(c) && msg.includes(c.code)) couponActions.invite(c.id, [g.phone]);
+                  }}
                   className={clsx("flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold", done ? "bg-sunken text-muted" : "bg-[#25D366] text-white")}
                 >
                   {done ? <><Check size={15} /> Sent</> : <><Send size={14} /> Send</>}

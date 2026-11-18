@@ -11,7 +11,7 @@ import { getCloud, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
 import { liveStamps, mayAct, programOf, stampProblem } from "./stamps";
 import { canConfirmPay, featureState, hasPerm, inOutlet, isMixed, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
-import type { Account, ActivityEntry, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
+import type { Account, ActivityEntry, BillDiscount, Category, Customer, Feedback, MenuItem, Order, OrderStatus, Outlet, OutletSettings, PayClaim, Payment, PayMethod, StockItem, StockLog, Coupon } from "./types";
 
 export { hydrateStores };
 /* ---------------- account, outlets, members, who is signed in ---------------- */
@@ -296,6 +296,28 @@ export function pendingClaims(orders: Order[]) {
 /** Can the person on this device confirm payments? */
 export const useCanConfirm = () => canConfirmPay(useMe());
 
+/** Older claims kept only the total discount: turn them into labelled discounts. */
+export function discountsFrom(x: { discount?: number; coupon?: string; reward?: { name: string; amount: number } }): BillDiscount[] {
+  const out: BillDiscount[] = [];
+  const total = Math.max(0, Number(x.discount) || 0);
+  const reward = x.reward ? Math.min(total || x.reward.amount, Math.max(0, x.reward.amount)) : 0;
+  if (reward > 0) out.push({ kind: "reward", label: `Stamp card · ${x.reward!.name}`, amount: reward });
+  const rest = Math.max(0, total - reward);
+  if (rest > 0) out.push(x.coupon ? { kind: "coupon", label: `Coupon ${x.coupon}`, amount: rest, code: x.coupon } : { kind: "staff", label: "Discount", amount: rest });
+  return out;
+}
+/** The orders paid together with this one (one bill: a table's rounds); just this order when unpaid. */
+export function billOrdersOf(o: Order, all: Order[]): Order[] {
+  if (o.status !== "paid") return [o];
+  const when = (x: Order) => [...(x.paymentLog ?? [])].reverse().find((e) => /^Paid/.test(e.text))?.at;
+  const at = when(o);
+  if (!at) return [o];
+  return all.filter((x) => x.status === "paid" && x.tableName === o.tableName && (x.partyId ?? "A") === (o.partyId ?? "A") && when(x) === at);
+}
+/** A bill's discounts (on any of its orders). */
+export const billDiscounts = (list: Pick<Order, "discounts">[]) => list.flatMap((o) => o.discounts ?? []);
+export const discountTotal = (list: Pick<Order, "discounts">[]) => billDiscounts(list).reduce((s, d) => s + d.amount, 0);
+
 export const orderActions = {
   add(o: Omit<Order, "id" | "number">): Order {
     if (isConnected()) {
@@ -323,9 +345,17 @@ export const orderActions = {
       orderActions.pay([id], o.prepaid!, `Online · ${o.gateway.provider === "razorpay" ? "Razorpay" : "Cashfree"}`);
       return;
     }
-    if (o && status === "served" && pre > 0 && pre >= billOf(o)) {
+    // the guest's coupon (applied on their phone before paying) comes off the bill they prepaid
+    const sub = o ? o.lines.reduce((s, l) => s + l.qty * l.price, 0) : 0;
+    const cp = o?.wantsCoupon ? couponStore.get().find((c) => c.code === normCode(o.wantsCoupon!)) : undefined;
+    const cOff = cp ? couponOff(cp, sub) : 0;
+    const due = Math.round(Math.max(0, sub - cOff) * (1 + gstRate()));
+    if (o && status === "served" && pre > 0 && pre >= due - 1) {
       patchOrder(id, (x) => ({ ...x, status }));
-      orderActions.settle([id], o.prepaid!, o.customer ?? "Guest", { source: "guest" });
+      orderActions.settle([id], o.prepaid!, o.customer ?? "Guest", {
+        source: "guest",
+        ...(cOff > 0 ? { discounts: [{ kind: "coupon" as const, label: `Coupon ${cp!.code}`, amount: cOff, code: cp!.code }], coupon: cp!.code, discount: cOff } : {}),
+      });
       return;
     }
     patchOrder(id, (x) => ({ ...x, status }));
@@ -360,11 +390,12 @@ export const orderActions = {
    * closes it straight away; anyone else's "paid" waits for their OK.
    * Returns "paid" or "waiting".
    */
-  settle(ids: string[], payments: Payment[], by: string, opts: { source?: PayClaim["source"]; discount?: number; coupon?: string; reward?: PayClaim["reward"] } = {}): "paid" | "waiting" {
+  settle(ids: string[], payments: Payment[], by: string, opts: { source?: PayClaim["source"]; discount?: number; coupon?: string; reward?: PayClaim["reward"]; discounts?: BillDiscount[] } = {}): "paid" | "waiting" {
     const c = getCloud();
     const trusted = c.role !== "guest" && opts.source !== "guest" && canConfirmPay(currentMember());
+    const discounts = opts.discounts ?? discountsFrom(opts);
     if (trusted) {
-      orderActions.pay(ids, payments, by);
+      orderActions.pay(ids, payments, by, undefined, discounts);
       return "paid";
     }
     const claim: PayClaim = {
@@ -376,6 +407,7 @@ export const orderActions = {
       ...(opts.discount ? { discount: opts.discount } : {}),
       ...(opts.coupon ? { coupon: opts.coupon } : {}),
       ...(opts.reward ? { reward: opts.reward } : {}),
+      ...(discounts.length ? { discounts } : {}),
     };
     const at = claim.at;
     const list = orderStore.get().filter((o) => ids.includes(o.id));
@@ -395,7 +427,7 @@ export const orderActions = {
     const claim = list[0]?.payClaim;
     if (!claim) return [];
     const who = myName();
-    orderActions.pay(list.map((o) => o.id), claim.payments, claim.by, who);
+    orderActions.pay(list.map((o) => o.id), claim.payments, claim.by, who, claim.discounts ?? discountsFrom(claim));
     logActivity("payment", `Confirmed ${where(list[0])} · ${paymentsText(claim.payments)} (marked by ${claim.by})`, list[0].outletId);
     return list;
   },
@@ -425,7 +457,7 @@ export const orderActions = {
     orderStore.set(
       orderStore.get().map((o) =>
         ids.includes(o.id) && o.status === "paid"
-          ? { ...o, status: "served", payments: undefined, payment: undefined, payClaim: undefined, confirmedBy: undefined, paymentLog: [...(o.paymentLog ?? []), { at, by: who, text: `Marked unpaid (was ${paymentsText(o.payments)})` }] }
+          ? { ...o, status: "served", payments: undefined, payment: undefined, payClaim: undefined, confirmedBy: undefined, discounts: undefined, paymentLog: [...(o.paymentLog ?? []), { at, by: who, text: `Marked unpaid (was ${paymentsText(o.payments)})` }] }
           : o,
       ),
     );
@@ -433,7 +465,7 @@ export const orderActions = {
     return list;
   },
   /** Settle one or more orders (a party's bill) with one or more payments. */
-  pay(ids: string[], payments: Payment[], by: string, confirmedBy?: string) {
+  pay(ids: string[], payments: Payment[], by: string, confirmedBy?: string, discounts: BillDiscount[] = []) {
     const at = new Date().toISOString();
     // Save the bill on the guest's record (one entry per bill, not per order).
     const first = orderStore.get().find((o) => ids.includes(o.id) && o.guestPhone);
@@ -444,17 +476,22 @@ export const orderActions = {
     // One bill can cover several orders (a table's rounds): give each order its share,
     // so reports add up to exactly what was collected.
     const share = splitPayments(orderStore.get().filter((o) => ids.includes(o.id)), payments);
+    // the bill's discounts sit on its first order (so totals in reports count them once)
+    const firstId = orderStore.get().find((o) => ids.includes(o.id))?.id;
+    const off = discounts.filter((d) => d.amount > 0);
+    const offText = off.length ? ` · ${off.map((d) => `${d.label} −${rs(d.amount)}`).join(", ")}` : "";
     orderStore.set(
       orderStore.get().map((o) =>
         ids.includes(o.id)
           ? {
               ...o,
+              discounts: o.id === firstId && off.length ? off : undefined,
               status: "paid",
               payments: share.get(o.id) ?? payments,
               payment: payments.length > 1 ? "split" : payments[0]?.method,
               payClaim: undefined,
               confirmedBy: confirmedBy ?? by,
-              paymentLog: [...(o.paymentLog ?? []), { at, by: confirmedBy ?? by, text: `Paid · ${paymentsText(payments)}${ids.length > 1 ? ` (bill for ${ids.length} orders)` : ""}${confirmedBy ? ` · marked by ${by}, confirmed` : ""}` }],
+              paymentLog: [...(o.paymentLog ?? []), { at, by: confirmedBy ?? by, text: `Paid · ${paymentsText(payments)}${ids.length > 1 ? ` (bill for ${ids.length} orders)` : ""}${offText}${confirmedBy ? ` · marked by ${by}, confirmed` : ""}` }],
             }
           : o,
       ),
@@ -899,19 +936,38 @@ export const couponActions = {
     couponStore.set(couponStore.get().filter((x) => x.id !== id));
     if (x) logActivity("coupon", `Deleted coupon ${x.code}`);
   },
-  /** Count one use (called when a bill with this coupon is paid). */
-  used(id: string) {
-    couponStore.set(couponStore.get().map((x) => (x.id === id ? { ...x, uses: (x.uses ?? 0) + 1 } : x)));
+  /** Count one use (called when a bill with this coupon is paid), and remember who used it. */
+  used(id: string, phone?: string) {
+    const p = (phone ?? "").replace(/\D/g, "").slice(-10);
+    couponStore.set(
+      couponStore.get().map((x) =>
+        x.id === id ? { ...x, uses: (x.uses ?? 0) + 1, ...(p.length === 10 && !x.usedBy?.includes(p) ? { usedBy: [...(x.usedBy ?? []), p].slice(-5000) } : {}) } : x,
+      ),
+    );
+  },
+  /** Campaigns: a private coupon may be used by these guests too. */
+  invite(id: string, phones: string[]) {
+    const ps = phones.map((p) => p.replace(/\D/g, "").slice(-10)).filter((p) => p.length === 10);
+    if (!ps.length) return;
+    couponStore.set(couponStore.get().map((x) => (x.id === id ? { ...x, forPhones: [...new Set([...(x.forPhones ?? []), ...ps])].slice(-5000) } : x)));
   },
 };
 /** Why a coupon can't be used on this bill, or null when it can. */
-export function couponProblem(c: Coupon | undefined, subtotal: number): string | null {
+/** Is this a coupon only for the guests it was sent to? */
+export const couponIsPrivate = (c: Pick<Coupon, "forPhones" | "audience">) => c.audience === "invited" || !!c.forPhones?.length;
+/** Does using this coupon need the guest's number (to check who may use it, once each)? */
+export const couponNeedsPhone = (c: Pick<Coupon, "forPhones" | "oncePerGuest" | "audience">) => couponIsPrivate(c) || c.oncePerGuest !== false;
+export function couponProblem(c: Coupon | undefined, subtotal: number, phone?: string): string | null {
   if (!c) return "No coupon with this code";
+  const p = (phone ?? "").replace(/\D/g, "").slice(-10);
   if (!c.active) return "This coupon is turned off";
   if (c.validTo && c.validTo < new Date().toISOString().slice(0, 10)) return "This coupon has expired";
   if (c.maxUses && c.uses >= c.maxUses) return "This coupon has been used up";
   if (!couponWorksIn(c, currentOutletId())) return "This coupon is for another outlet";
   if (c.minBill && subtotal < c.minBill) return `Works on bills of ₹${c.minBill} or more`;
+  if (couponIsPrivate(c) && p.length === 10 && !c.forPhones?.includes(p)) return "This coupon is only for the guests it was sent to";
+  if (c.oncePerGuest !== false && p.length === 10 && c.usedBy?.includes(p)) return "This guest has already used this coupon";
+  if (couponNeedsPhone(c) && p.length !== 10) return "Add the guest's mobile number to use this coupon (each guest once)";
   return null;
 }
 export function couponOff(c: Coupon, subtotal: number) {

@@ -7,7 +7,7 @@ import { Copy, Plus, Share2, Ticket, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button, Empty, Field, Segmented, Sheet, Toggle, inputCls } from "./ui";
 import { useToast } from "./toast";
-import { couponActions, couponLabel, couponWorksIn, normCode, useAccount, useCoupons, useCurrentOutlet, useMe, useOutlets } from "@/lib/live";
+import { couponActions, couponLabel, couponWorksIn, normCode, useAccount, useCoupons, useCurrentOutlet, useMe, useOutlets, couponIsPrivate } from "@/lib/live";
 import { inOutlet } from "@/lib/access";
 import type { Coupon } from "@/lib/types";
 
@@ -95,6 +95,10 @@ export function CouponsPanel() {
                   <div className="mt-0.5 text-[13px] text-muted">
                     Used {c.uses ?? 0}{c.maxUses ? ` of ${c.maxUses}` : ""} time{(c.uses ?? 0) === 1 ? "" : "s"}
                     {c.validTo ? ` · till ${new Date(c.validTo).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                  </div>
+                  <div className="mt-1 text-[12.5px] font-medium text-muted">
+                    {couponIsPrivate(c) ? `🔒 Only invited guests (${c.forPhones?.length ?? 0})` : "Anyone with the code"}
+                    {c.oncePerGuest !== false ? " · once each" : ""}
                   </div>
                   {c.note && <div className="mt-1 truncate text-[13px] text-faint">{c.note}</div>}
                   {where(c) && <div className="mt-1 truncate text-[12.5px] font-medium text-jade">📍 {where(c)}</div>}
@@ -188,10 +192,21 @@ function CouponSheet({ draft, onClose, taken }: { draft: Draft | null; onClose: 
             )}
           </Field>
         )}
+        <Field label="Who can use it" hint={d.audience === "invited" ? `Only guests you send it to from Campaigns${d.forPhones?.length ? ` (${d.forPhones.length} so far)` : ""}. Others see “only for the guests it was sent to”.` : "Anyone who has the code."}>
+          <Segmented className="w-full" value={d.audience === "invited" ? "invited" : "anyone"} onChange={(v) => set({ audience: v === "invited" ? "invited" : undefined })} options={[{ value: "anyone", label: "Anyone with the code" }, { value: "invited", label: "Only guests I send it to" }]} />
+        </Field>
+        <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
+          <span className="min-w-0">
+            <span className="block text-[15px]">Each guest only once</span>
+            <span className="block text-[12.5px] text-muted">Checked by the guest&apos;s mobile number</span>
+          </span>
+          <Toggle checked={d.oncePerGuest !== false} onChange={(v) => set({ oncePerGuest: v ? undefined : false })} label="Each guest only once" />
+        </div>
         <Field label="Note (optional)">
           <input className={inputCls} value={d.note ?? ""} onChange={(e) => set({ note: e.target.value || undefined })} placeholder="Diwali offer for regulars" />
         </Field>
-        <div className="rounded-ctl bg-surface px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
+          <span className="text-[15px]">Coupon is on</span>
           <Toggle checked={d.active} onChange={(active) => set({ active })} label="Coupon is on" />
         </div>
       </div>

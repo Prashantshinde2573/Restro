@@ -2,7 +2,7 @@
 
 // One order as a card: where it is, what's in it, its stage, and the one next step.
 import clsx from "clsx";
-import { Bike, Check, ChefHat, Clock3, CookingPot, HandPlatter, QrCode, ShoppingBag, UtensilsCrossed, Wallet } from "lucide-react";
+import { Bike, Check, ChefHat, Clock3, CookingPot, Gift, HandPlatter, QrCode, ShoppingBag, Ticket, UtensilsCrossed, Wallet } from "lucide-react";
 import type { Order } from "@/lib/types";
 import { inr, minutesSince, clock } from "@/lib/format";
 import { methodLabel, payingOnline } from "@/lib/live";
@@ -98,6 +98,17 @@ export function OrderCard({
             <span className="rounded-full bg-rose-soft px-2.5 py-1 text-[12px] font-semibold text-rose">Online payment not finished</span>
           )}
           {o.gateway && live && <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep"><Check size={12} /> Paid online</span>}
+          {o.wantsCoupon && o.status !== "paid" && o.status !== "cancelled" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep"><Ticket size={12} /> Guest coupon {o.wantsCoupon}</span>
+          )}
+          {o.wantsReward && o.status !== "paid" && o.status !== "cancelled" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep"><Gift size={12} /> Stamp reward</span>
+          )}
+          {o.status === "paid" && (o.discounts?.length ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12px] font-semibold text-jade-deep" title={o.discounts!.map((d) => `${d.label} −₹${d.amount}`).join(", ")}>
+              <Ticket size={12} /> {o.discounts!.length === 1 ? o.discounts![0].label : `${o.discounts!.length} discounts`} · −₹{o.discounts!.reduce((s, d) => s + d.amount, 0)}
+            </span>
+          )}
           {o.customer && o.channel === "qr" && <span className="truncate text-[12px] text-muted">{o.customer}</span>}
           {live && stage >= 0 && (
             <span className="ml-auto flex items-center gap-1" aria-label={`Stage ${stage + 1} of ${STAGES.length}`}>

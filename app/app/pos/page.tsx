@@ -440,6 +440,7 @@ function PosScreen() {
             partyId: dineIn ? pid! : undefined,
             discount: extra?.discount,
             coupon: extra?.coupon,
+            discounts: extra?.discounts,
           });
           setSentIds([]);
           setLines([]);

@@ -131,3 +131,37 @@ export function byChannel(orders: Order[]) {
 }
 
 export const DAY_MS = DAY;
+
+/** Discounts given on paid bills: by kind, and each coupon with how often it was used. */
+export interface DiscountReport {
+  total: number;
+  bills: number;
+  coupon: number;
+  reward: number;
+  staff: number;
+  coupons: { code: string; uses: number; amount: number }[];
+  rows: { order: Order; d: NonNullable<Order["discounts"]>[number] }[];
+}
+export function discountReport(orders: Order[]): DiscountReport {
+  const r: DiscountReport = { total: 0, bills: 0, coupon: 0, reward: 0, staff: 0, coupons: [], rows: [] };
+  const codes = new Map<string, { code: string; uses: number; amount: number }>();
+  for (const o of paid(live(orders))) {
+    const ds = (o.discounts ?? []).filter((d) => d.amount > 0);
+    if (!ds.length) continue;
+    r.bills++;
+    for (const d of ds) {
+      r.total += d.amount;
+      r[d.kind] += d.amount;
+      r.rows.push({ order: o, d });
+      if (d.kind === "coupon") {
+        const code = d.code ?? d.label.replace(/^Coupon\s+/, "");
+        const c = codes.get(code) ?? { code, uses: 0, amount: 0 };
+        c.uses++;
+        c.amount += d.amount;
+        codes.set(code, c);
+      }
+    }
+  }
+  r.coupons = [...codes.values()].sort((a, b) => b.amount - a.amount);
+  return r;
+}

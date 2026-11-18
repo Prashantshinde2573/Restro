@@ -149,7 +149,7 @@ export function ReportBuilder({
     const discounts = paidList
       .map((o) => ({ o, bill: billOf(o), paid: paidAmount(o) }))
       .filter((x) => x.bill - x.paid >= 1)
-      .map((x) => ({ ...x, off: x.bill - x.paid }));
+      .map((x) => ({ ...x, off: x.bill - x.paid, why: (x.o.discounts ?? []).map((d) => d.label).join(", ") || "Discount" }));
     const cancelled = list.filter((o) => o.status === "cancelled");
     const open = live(list).filter((o) => o.status !== "paid");
     return { paidList, sales, gst, taxable, cgst, sgst, dayRows, methods, items, categories, staffRows, types, discounts, cancelled, open, avg: paidList.length ? Math.round(sales / paidList.length) : 0 };
@@ -216,7 +216,7 @@ export function ReportBuilder({
       parts.push(
         sec(
           "Discounts given",
-          table(["Bill", "Date", "Staff", "Bill amount", "Paid", "Discount"], data.discounts.map((x) => [`#${x.o.number}`, dateText(new Date(x.o.createdAt).getTime()), esc(x.o.staff), money(x.bill), money(x.paid), `<b>${money(x.off)}</b>`]), data.discounts.length ? ["<b>Total</b>", "", "", "", "", `<b>${money(data.discounts.reduce((s, x) => s + x.off, 0))}</b>`] : undefined, 3),
+          table(["Bill", "Date", "Staff", "For", "Bill amount", "Paid", "Discount"], data.discounts.map((x) => [`#${x.o.number}`, dateText(new Date(x.o.createdAt).getTime()), esc(x.o.staff), esc(x.why), money(x.bill), money(x.paid), `<b>${money(x.off)}</b>`]), data.discounts.length ? ["<b>Total</b>", "", "", "", "", "", `<b>${money(data.discounts.reduce((s, x) => s + x.off, 0))}</b>`] : undefined, 4),
         ),
       );
     if (has("cancelled"))
@@ -302,7 +302,7 @@ export function ReportBuilder({
     if (has("categories")) add("Sales by category", ["Category", "Qty", "Sales before GST (Rs)"], data.categories.map((c) => [c.name, c.qty, c.sales]));
     if (has("staff")) add("Staff-wise sales", ["Person", "Bills", "Sales (Rs)"], data.staffRows.map((s) => [s.name, s.bills, s.sales]));
     if (has("types")) add("Where orders came from", ["Type", "Bills", "Sales (Rs)"], data.types.map((t) => [t.name, t.bills, t.sales]));
-    if (has("discounts")) add("Discounts given", ["Bill", "Date", "Staff", "Bill amount (Rs)", "Paid (Rs)", "Discount (Rs)"], data.discounts.map((x) => [x.o.number, asDate(new Date(x.o.createdAt).getTime()), x.o.staff, x.bill, x.paid, x.off]));
+    if (has("discounts")) add("Discounts given", ["Bill", "Date", "Staff", "For", "Bill amount (Rs)", "Paid (Rs)", "Discount (Rs)"], data.discounts.map((x) => [x.o.number, asDate(new Date(x.o.createdAt).getTime()), x.o.staff, x.why, x.bill, x.paid, x.off]));
     if (has("cancelled")) add("Cancelled orders", ["Order", "Date", "Where", "Items", "Value (Rs)"], data.cancelled.map((o) => [o.number, asDate(new Date(o.createdAt).getTime()), o.tableName ?? typeLabel(o), o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), billOf(o)]));
     if (has("bills")) add("All bills", ["Bill", "Date", "Time", "Where", "Staff", "Paid by", "Total (Rs)"], data.paidList.map((o) => { const t = new Date(o.createdAt); return [o.number, asDate(t.getTime()), t.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.tableName ?? typeLabel(o), o.staff, paymentsText(o.payments).replace(/₹/g, "Rs "), paidAmount(o)]; }));
     const blob = xlsxBlob([{ name: "Sales report", rows }]);

@@ -13,7 +13,7 @@ import { billFileName, printReceipt, receiptPdfBlob, receiptText } from "./recei
 import { useToast } from "./toast";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import { PaymentSplit, paidSum } from "./payment-split";
-import type { Coupon, Payment, PayMethod } from "@/lib/types";
+import type { BillDiscount, Coupon, Payment, PayMethod } from "@/lib/types";
 
 type Method = "upi" | "cash" | "card" | "mixed" | "split";
 
@@ -39,7 +39,7 @@ export function Checkout({
   subtotal: number;
   label: string;
   /** Return "waiting" when the bill needs the owner's OK before it closes. */
-  onPaid?: (payments: Payment[], extra?: { coupon?: string; discount?: number }) => "paid" | "waiting" | void;
+  onPaid?: (payments: Payment[], extra?: { coupon?: string; discount?: number; discounts?: BillDiscount[] }) => "paid" | "waiting" | void;
   preferred?: PayMethod; // what the guest asked for from their phone
   prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
   lines?: { name: string; qty: number; price: number }[]; // what's on the bill (for the receipt)
@@ -97,10 +97,10 @@ export function Checkout({
       setUseReward(null);
       setGiveStamp(null);
       const asked = couponCode && couponFeature ? coupons.find((x) => x.code === normCode(couponCode)) : undefined;
-      const ok = asked && !couponProblem(asked, subtotal);
+      const ok = asked && !couponProblem(asked, subtotal, guest?.phone);
       setCoupon(ok ? asked! : null);
       setCode(ok ? asked!.code : "");
-      setCodeErr(asked && !ok ? `Guest's coupon ${asked.code}: ${couponProblem(asked, subtotal)}` : "");
+      setCodeErr(asked && !ok ? `Guest's coupon ${asked.code}: ${couponProblem(asked, subtotal, guest?.phone)}` : "");
       const pre = paidSum(prepaid ?? []);
       if (pre > 0) {
         // Guest paid part by UPI from their phone: open on "UPI + Cash" with that part filled in.
@@ -134,6 +134,16 @@ export function Checkout({
   const willStamp = stampsOn && phoneKey.length === 10 && !stampWhyNot && mayGive && !(rewardAmt > 0) && (giveStamp ?? prog.auto);
   const baseOff = coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100);
   const t = billTotals(subtotal, Math.min(subtotal, baseOff + rewardAmt));
+  // each discount with its reason: on the bill, the e-bill, the order and in reports
+  const offOthers = Math.max(0, t.discount - rewardAmt);
+  const discounts: BillDiscount[] = [
+    ...(rewardAmt > 0 ? [{ kind: "reward" as const, label: `Stamp card · ${prog.reward}`, amount: rewardAmt }] : []),
+    ...(offOthers > 0
+      ? [coupon
+          ? { kind: "coupon" as const, label: `Coupon ${coupon.code}`, amount: offOthers, code: coupon.code }
+          : { kind: "staff" as const, label: custom.on ? (custom.kind === "pct" ? `Discount ${Math.min(100, Number(custom.value) || 0)}%` : "Discount") : `Discount ${discountPct}%`, amount: offOthers }]
+      : []),
+  ];
   const perGuest = Math.ceil(t.total / guests);
   const settings = useSettings();
   const splitOn = useFeature("splitByGuest") === "ok";
@@ -166,8 +176,21 @@ export function Checkout({
     billNo,
     lines: lines?.length ? lines : [{ name: "Food & drinks", qty: 1, price: subtotal }],
     totals: t,
+    discounts,
     payments: paidWith,
   });
+  // the number or the bill changed after the coupon went on: check it again (once-each, invited guests, min bill)
+  useEffect(() => {
+    if (!coupon) return;
+    const why = couponProblem(coupon, subtotal, phone);
+    if (!why) return;
+    setCoupon(null);
+    onCoupon?.(undefined);
+    setCode(coupon.code);
+    setCodeErr(why);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, subtotal]);
+
   const finish = () => {
     setDone(true);
     const payments: Payment[] =
@@ -177,7 +200,7 @@ export function Checkout({
           ? [{ method: "upi", amount: t.total }]
           : [{ method, amount: t.total }];
     setPaidWith(payments);
-    if (coupon) couponActions.used(coupon.id);
+    if (coupon) couponActions.used(coupon.id, phone);
     // a number typed at billing puts this guest (and the bill) in the guest book
     if (phone.replace(/\D/g, "").length >= 10)
       guestActions.fromBill(guestName, phone, { orderNo: billNo ?? 0, amount: t.total, method: payments.map((p) => p.method.toUpperCase()).join(" + ") });
@@ -191,7 +214,7 @@ export function Checkout({
     );
     if (rewardAmt > 0) stampActions.redeem(phone, liveCount, prog.needed, { reward: prog.reward, amount: rewardAmt, orderNo: billNo, by: me?.name, outletId: outlet.id });
     if (willStamp) stampActions.give(phone, { orderNo: billNo, by: me?.name, outletId: outlet.id });
-    const r = onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
+    const r = onPaid?.(payments, { coupon: coupon?.code, discount: t.discount, discounts });
     setWaiting(r === "waiting");
   };
 
@@ -339,7 +362,7 @@ export function Checkout({
             </div>
             <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
               <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
-              {t.discount - rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount - rewardAmt, { decimals: true })}</dd></div>}
+              {t.discount - rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{discounts.find((d) => d.kind !== "reward")?.label ?? "Discount"}{coupon && couponCode && normCode(couponCode) === coupon.code ? " · from the guest" : ""}</dt><dd className="tnum">−{inr(t.discount - rewardAmt, { decimals: true })}</dd></div>}
               {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>Stamp card · {prog.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt>CGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>SGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
@@ -397,7 +420,7 @@ export function Checkout({
                   onSubmit={(e) => {
                     e.preventDefault();
                     const c = coupons.find((x) => x.code === normCode(code));
-                    const why = couponProblem(c, subtotal);
+                    const why = couponProblem(c, subtotal, phone);
                     if (why) return setCodeErr(why);
                     setCodeErr("");
                     setDiscountPct(0);
