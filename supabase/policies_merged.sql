@@ -1,0 +1,5 @@
+-- Applied live (18 Nov 2026) as migration merge_permissive_policies_and_close_public_staff.
+-- Where a table had two permissive policies for the same action (one for the team, one for QR
+-- guests), they are now one policy "<action> (team or guest)" with both rules joined by OR — the
+-- same access, checked once per row (Supabase advisor "multiple permissive policies").
+-- public.public_staff (the old pick-your-face staff list) can no longer be called by anyone.

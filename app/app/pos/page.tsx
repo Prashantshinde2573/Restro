@@ -8,9 +8,12 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Chips, DietMark, Segmented, Sheet } from "@/components/ui";
 import { PhotoSlide } from "@/components/menu-bits";
-import { Checkout, billTotals } from "@/components/checkout";
+import { billTotals } from "@/lib/bill-totals";
+import dynamic from "next/dynamic";
+// the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
+const Checkout = dynamic(() => import("@/components/checkout").then((m) => m.Checkout), { ssr: false });
 import { GuestCount } from "@/components/guest-count";
-import { VoiceOrder } from "@/components/voice";
+const VoiceOrder = dynamic(() => import("@/components/voice").then((m) => m.VoiceOrder), { ssr: false });
 import { ItemSheet } from "@/components/item-sheet";
 import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";

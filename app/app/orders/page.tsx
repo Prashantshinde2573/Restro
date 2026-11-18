@@ -8,7 +8,10 @@ import { Button, Chips, Page, PageHeader, Pill, Sheet, DietMark } from "@/compon
 import { StatusPill, channelLabel } from "@/components/channel";
 import { OrderCard } from "@/components/order-card";
 import { startOfDay } from "@/lib/stats";
-import { Checkout, billTotals } from "@/components/checkout";
+import { billTotals } from "@/lib/bill-totals";
+import dynamic from "next/dynamic";
+// the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
+const Checkout = dynamic(() => import("@/components/checkout").then((m) => m.Checkout), { ssr: false });
 import { printReceipt } from "@/components/receipt";
 import { PaymentSplit, paidSum } from "@/components/payment-split";
 import { useToast } from "@/components/toast";
