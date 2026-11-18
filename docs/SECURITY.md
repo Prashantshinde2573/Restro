@@ -67,3 +67,9 @@ Item 4 is switched on and item 2 is decided (items 1 and 3 are done).
 - The webhook (`wa-webhook`) accepts only messages signed with the restaurant's Meta app secret (`X-Hub-Signature-256`). STOP turns offers off in every outlet; START turns them on again.
 - `wa_accounts`, `wa_messages` and `wa_optouts` are written only by the server. The team reads the message log only with the Campaigns permission, for their own outlets.
 - Without WhatsApp API, nothing changes: the WhatsApp buttons open WhatsApp with the message typed in, as before.
+
+## Super admin switches (per restaurant)
+
+- "Online payments (own gateway)" and "WhatsApp API" are **off by default**. Only the super admin turns them on (Admin → a restaurant → Extra features, with the super admin password).
+- Off means hidden in the client's app **and** refused by the database: keys can't be saved (trigger), guests don't get "Pay online", no WhatsApp message is sent. Payments already started still finish; STOP replies are still recorded.
+- Owners can't change these switches: signed-in users have no update right on `restaurants`.

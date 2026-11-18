@@ -1,9 +1,9 @@
 # Restro
-
+  
 Restaurant and café management SaaS — billing, kitchen, tables, stock, team,
 guests and reports, with an AI layer (Pulse briefing, prep forecast, Leak
 guard, voice ordering).
-
+ 
 **Status:** UI and workflow prototype with sample data. Firebase comes next —
 see [`WORKFLOW.md`](./WORKFLOW.md).
 

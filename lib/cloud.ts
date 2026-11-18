@@ -440,8 +440,8 @@ function disconnect() {
 type Row = { id: string; data: Record<string, unknown>; number?: number };
 const fromRow = (key: string, r: Row) => (key === "orders" ? { ...r.data, id: r.id, number: r.number ?? r.data.number ?? 0 } : { ...r.data, id: r.id });
 
-type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string; logo?: string | null; grace_until?: string | null };
-const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status, logo: r.logo ?? "", graceUntil: r.grace_until ?? undefined });
+type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string; logo?: string | null; grace_until?: string | null; allow_gateway?: boolean; allow_wa_api?: boolean };
+const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status, logo: r.logo ?? "", graceUntil: r.grace_until ?? undefined, allowGateway: !!r.allow_gateway, allowWaApi: !!r.allow_wa_api });
 
 export function connect(rid: string, role: Role, uid: string) {
   if (connected && connected.rid === rid && connected.role === role && connected.uid === uid) return;
@@ -480,7 +480,7 @@ export function connect(rid: string, role: Role, uid: string) {
       const loadAccount = (tries: number) =>
         void client
           .from("restaurants")
-          .select("name, owner, plan, renews_at, status, logo, grace_until")
+          .select("name, owner, plan, renews_at, status, logo, grace_until, allow_gateway, allow_wa_api")
           .eq("id", rid)
           .maybeSingle()
           .then(({ data, error }) => {
@@ -858,6 +858,12 @@ export interface AdminRestaurant {
   menuItems: number;
   orders30: number;
   lastOrderAt: string | null;
+  /** super admin switches: may this client connect their own payment gateway / WhatsApp API? */
+  allowGateway: boolean;
+  allowWaApi: boolean;
+  /** connected and on right now */
+  gatewayOn: boolean;
+  waOn: boolean;
 }
 export async function adminList(): Promise<AdminRestaurant[]> {
   const { data, error } = await sb().rpc("admin_restaurants");
@@ -872,7 +878,7 @@ export async function adminSales(from: Date, to: Date): Promise<{ rid: string; b
 }
 export async function adminUpdate(
   rid: string,
-  patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">> & { graceUntil?: string | null },
+  patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes" | "allowGateway" | "allowWaApi">> & { graceUntil?: string | null },
 ) {
   const { error } = await sb().rpc("admin_update_restaurant", { r: rid, patch });
   if (error) throw new Error(error.message);
