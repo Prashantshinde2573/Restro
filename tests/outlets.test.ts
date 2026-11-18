@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { categoriesFor, couponWorksIn, guestOutletIds, mainOutletId, menuFor, stampProgramOf } from "@/lib/live";
-import type { Customer, MenuItem, Order, Outlet } from "@/lib/types";
+import { categoriesFor, couponWorksIn, guestKey, guestsOf, mainOutletId, menuFor, stampProgramOf } from "@/lib/live";
+import type { Customer, MenuItem, Outlet } from "@/lib/types";
 
 const dish = (id: string, extra: Partial<MenuItem> = {}): MenuItem =>
   ({ id, name: id, categoryId: "c", price: 100, cost: 0, diet: "veg", available: true, soldThisWeek: 0, prepMins: 5, station: "kitchen", hue: 0, ...extra }) as MenuItem;
@@ -25,11 +25,14 @@ describe("menu per outlet", () => {
 });
 
 describe("guests per outlet", () => {
-  const g = { id: "9876543210", phone: "98765 43210", name: "N", bills: [{ orderNo: 7, at: "", amount: 1, method: "upi" }] } as unknown as Customer;
-  it("finds the outlets from bills (through the order number) and from orders", () => {
-    const orders = [{ number: 7, outletId: "a" }, { number: 9, outletId: "b", guestPhone: "+91 98765 43210" }] as unknown as Order[];
-    expect([...guestOutletIds(g, orders)].sort()).toEqual(["a", "b"]);
-    expect(guestOutletIds(g, []).size).toBe(0);
+  const g = (id: string, outletId?: string) => ({ id, outletId, phone: "98765 43210", name: "N" }) as unknown as Customer;
+  it("each outlet sees only its own records; older records belong to the first outlet", () => {
+    const all = [g("9876543210"), g("9876543210@b", "b")];
+    expect(guestsOf(all, "a", "a").map((c) => c.id)).toEqual(["9876543210"]);
+    expect(guestsOf(all, "b", "a").map((c) => c.id)).toEqual(["9876543210@b"]);
+  });
+  it("record id is phone@outlet", () => {
+    expect(guestKey("+91 98765 43210", "b")).toBe("9876543210@b");
   });
 });
 

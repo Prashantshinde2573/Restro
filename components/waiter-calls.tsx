@@ -31,6 +31,7 @@ export function CallAlerts() {
   const calls = useCalls();
   const me = useMe();
   const outlets = useOutlets();
+  const outletNow = useCurrentOutlet();
   const ready = useReady("calls");
   const toast = useToast();
   const seen = useRef<Map<string, string> | null>(null); // id → "status:to"
@@ -50,6 +51,8 @@ export function CallAlerts() {
       const now = key(c);
       if (was === now) continue;
       seen.current.set(c.id, now);
+      // only the outlet on screen (another outlet shows a dot on the outlet button)
+      if (c.outletId && outletNow.id && c.outletId !== outletNow.id) continue;
       const where = callWhere(c);
       if (c.status === "open" && !was) {
         // a new call: every waiter here, and whoever hands out calls
@@ -79,7 +82,7 @@ export function CallAlerts() {
     }
     for (const c of mine) if (!seen.current.has(c.id)) seen.current.set(c.id, key(c));
     if (ring) chime("waiter");
-  }, [calls, me, outlets, ready, toast]);
+  }, [calls, me, outlets, ready, toast, outletNow.id]);
   return null;
 }
 

@@ -23,8 +23,8 @@ import {
   useCategories,
   useCurrentOutlet,
   useFeature,
-  useFeedback,
-  useGuests,
+  useAllFeedback,
+  useAllGuests,
   useMe,
   useAllMenu,
   useOrders,
@@ -378,8 +378,8 @@ function Export() {
   const orders = useOrders();
   const menu = useAllMenu(); // every outlet's dishes
   const categories = useAllCategories();
-  const guests = useGuests();
-  const feedback = useFeedback();
+  const guests = useAllGuests();
+  const feedback = useAllFeedback();
   const tables = useAllTables();
   const stamp = new Date().toISOString().slice(0, 10);
   const slug = (account.name || "restropi").toLowerCase().replace(/[^a-z0-9]+/g, "-");
