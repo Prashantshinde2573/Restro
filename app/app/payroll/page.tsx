@@ -125,9 +125,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "sa
 function MonthSwitch({ month, onChange, max }: { month: string; onChange: (m: string) => void; max: string }) {
   return (
     <div className="inline-flex items-center gap-1 rounded-ctl bg-sunken p-[3px]">
-      <button className="rounded-[9px] p-1.5 hover:bg-surface" onClick={() => onChange(shiftMonth(month, -1))} aria-label="Previous month"><ChevronLeft size={16} /></button>
+      <button className="flex h-10 w-10 items-center justify-center rounded-[10px] hover:bg-surface" onClick={() => onChange(shiftMonth(month, -1))} aria-label="Previous month"><ChevronLeft size={16} /></button>
       <span className="min-w-[124px] text-center text-[13px] font-semibold">{monthLabel(month)}</span>
-      <button className="rounded-[9px] p-1.5 hover:bg-surface disabled:opacity-30" disabled={month >= max} onClick={() => onChange(shiftMonth(month, 1))} aria-label="Next month"><ChevronRight size={16} /></button>
+      <button className="flex h-10 w-10 items-center justify-center rounded-[10px] hover:bg-surface disabled:opacity-30" disabled={month >= max} onClick={() => onChange(shiftMonth(month, 1))} aria-label="Next month"><ChevronRight size={16} /></button>
     </div>
   );
 }

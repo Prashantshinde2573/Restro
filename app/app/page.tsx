@@ -1,15 +1,16 @@
 "use client";
 
+import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText, CalendarDays, MapPin } from "lucide-react";
 import { hasPerm, hasTables, isOwner } from "@/lib/access";
-import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders } from "@/lib/live";
+import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders, useOutletOrders } from "@/lib/live";
 import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { BarChart, TrendChart } from "@/components/charts";
 import { UserChip } from "@/components/shell";
 import { DAY_MS, between, byChannel, byDay, byHour, change, inOutlet, startOfDay, topDishes, totals } from "@/lib/stats";
-import { isShared, useLiveTables } from "@/lib/tables";
+import { isShared, useLiveTables, useTables } from "@/lib/tables";
 import { inr, minutesSince } from "@/lib/format";
 import { NeedsYou } from "@/components/notifications";
 
@@ -17,11 +18,19 @@ import { NeedsYou } from "@/components/notifications";
 function StaffHome() {
   const me = useMe();
   const outlet = useCurrentOutlet();
+  // live counts on the tiles, so the start screen says what needs doing
+  const live = useOutletOrders().filter((o) => o.status !== "paid" && o.status !== "cancelled");
+  const ready = live.filter((o) => o.status === "ready").length;
+  const cooking = live.filter((o) => o.status === "accepted" || o.status === "preparing").length;
+  const tablesHere = useTables();
+  const billAsks = tablesHere.reduce((n, t) => n + t.parties.filter((p) => p.status === "billing" || p.paymentPending).length, 0);
+  const busy = tablesHere.filter((t) => t.parties.length).length;
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const links = [
     { href: "/app/pos", label: "New order", perm: "pos" as const, icon: SquarePlus },
-    { href: "/app/orders", label: "Orders", perm: "orders" as const, icon: ReceiptText },
-    { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true },
-    { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat },
+    { href: "/app/orders", label: "Orders", perm: "orders" as const, icon: ReceiptText, note: live.length ? `${plural(live.length, "open")}${ready ? ` · ${ready} ready to serve` : ""}` : "", hot: ready > 0 },
+    { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true, note: busy ? `${busy} busy${billAsks ? ` · ${plural(billAsks, "bill")} asked` : ""}` : "", hot: billAsks > 0 },
+    { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat, note: cooking ? `${cooking} cooking` : "" },
     { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
     { href: "/app/activity", label: "Activity", perm: "activity" as const, icon: History },
   ].filter((l) => hasPerm(me, l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
@@ -34,7 +43,10 @@ function StaffHome() {
           {links.map((l) => (
             <Link key={l.href} href={l.href} className="flex flex-col gap-3 rounded-group bg-surface p-5 hover:shadow-float">
               <l.icon size={24} className="text-jade" />
-              <span className="text-[16px] font-semibold">{l.label}</span>
+              <span>
+                <span className="block text-[16px] font-semibold">{l.label}</span>
+                {"note" in l && l.note ? <span className={clsx("mt-0.5 block text-[13px] font-medium", "hot" in l && l.hot ? "text-saffron" : "text-muted")}>{l.note}</span> : null}
+              </span>
             </Link>
           ))}
         </div>
@@ -107,7 +119,8 @@ function OwnerHome() {
   const pending = steps.filter((s) => !s.done && !skipped.includes(s.id));
   const vs = (a: number, b: number) => {
     const c = change(a, b);
-    return c === null ? { note: `vs ${dayName} last week: —`, up: true } : { note: `${c >= 0 ? "+" : ""}${c}% vs last ${dayName}`, up: c >= 0 };
+    // nothing to compare with (no sales last week): say nothing rather than "—"
+    return c === null ? { note: "", up: true } : { note: `${c >= 0 ? "+" : ""}${c}% vs last ${dayName}`, up: c >= 0 };
   };
   const pulse =
     today.orders === 0
@@ -197,13 +210,15 @@ function OwnerHome() {
           {[
             { label: "Sales today", value: inr(today.sales), ...vs(today.sales, before.sales) },
             { label: "Orders", value: String(today.orders), ...vs(today.orders, before.orders) },
-            { label: "Average bill", value: today.avgBill ? inr(today.avgBill) : "—", ...vs(today.avgBill, before.avgBill) },
+            today.avgBill
+              ? { label: "Average bill", value: inr(today.avgBill), ...vs(today.avgBill, before.avgBill) }
+              : { label: "Paid bills", value: String(today.paidOrders ?? 0), note: "first bill shows the average", up: true },
             { label: "Not paid yet", value: inr(today.open), note: "open bills today", up: true },
           ].map((s) => (
             <div key={s.label} className="bg-surface p-4 lg:p-5">
               <div className="text-[13px] text-muted">{s.label}</div>
               <div className="mt-1 text-[26px] font-semibold tracking-tight tnum lg:text-[30px]">{s.value}</div>
-              <div className={s.up ? "text-[12.5px] font-medium text-muted" : "text-[12.5px] font-medium text-rose"}>{s.note}</div>
+              {s.note && <div className={s.up ? "text-[12.5px] font-medium text-muted" : "text-[12.5px] font-medium text-rose"}>{s.note}</div>}
             </div>
           ))}
         </div>

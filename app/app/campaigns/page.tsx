@@ -92,7 +92,7 @@ export default function CampaignsPage() {
                       if (tId) applyTemplate(tId, v);
                       else if (c && msg.includes("━━")) setMsg((m) => withOffer(m, offerBlock(c, v, account.name)));
                     }}
-                    className={clsx("rounded-full px-2.5 py-1 text-[12.5px] font-semibold", tLang === v ? "bg-surface text-ink shadow-sm" : "text-muted")}
+                    className={clsx("min-h-[34px] rounded-full px-3 py-1.5 text-[13px] font-semibold", tLang === v ? "bg-surface text-ink shadow-sm" : "text-muted")}
                   >
                     {label}
                   </button>
@@ -129,7 +129,7 @@ export default function CampaignsPage() {
               ))}
             </div>
           )}
-          <div>
+          <div className="lg:hidden">
             <div className="mb-1.5 text-[13px] font-medium text-muted">Preview</div>
             <div className="rounded-[22px] bg-[#E7DED3] p-3">
               <div className="ml-auto max-w-[95%] whitespace-pre-wrap rounded-[14px] rounded-tr-[4px] bg-white p-3 text-[13.5px] leading-snug text-[#111] shadow-sm">
@@ -139,6 +139,16 @@ export default function CampaignsPage() {
           </div>
         </div>
 
+        <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          {/* wide screens: what guests will get, next to who gets it */}
+          <div className="hidden lg:block">
+                <div className="mb-1.5 text-[13px] font-medium text-muted">Preview</div>
+                <div className="rounded-[22px] bg-[#E7DED3] p-3">
+                  <div className="ml-auto max-w-[95%] whitespace-pre-wrap rounded-[14px] rounded-tr-[4px] bg-white p-3 text-[13.5px] leading-snug text-[#111] shadow-sm">
+                    {waBold(msg.replaceAll("{name}", first(list[0]?.name ?? "Neha")))}
+                  </div>
+                </div>
+          </div>
         <Group title={`${list.length} guest${list.length === 1 ? "" : "s"} · ${sent.size} sent`} flush>
           {list.length === 0 && (
             <p className="px-4 py-8 text-center text-[14px] text-muted">{guests.length ? "No guests in this group." : "Guests appear here once they order with their phone number."}</p>
@@ -170,6 +180,7 @@ export default function CampaignsPage() {
             </p>
           )}
         </Group>
+        </div>
       </Page>
       )}
     </>

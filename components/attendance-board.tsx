@@ -135,7 +135,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
 
       {view === "month" && (
         <div className="overflow-hidden rounded-group bg-surface">
-          <div ref={regRef} className="overflow-x-auto">
+          <div ref={regRef} className="overflow-x-auto [scrollbar-width:thin]">
             <table className="w-max border-separate border-spacing-0 text-[12.5px]">
               <thead>
                 <tr>
@@ -178,7 +178,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
                               disabled={d > today || !canEdit(m)}
                               onClick={() => open(m, d)}
                               aria-label={`${m.name} ${longDay(d)}: ${k}`}
-                              className={clsx("relative flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-[12.5px] font-bold transition active:scale-95", CELL[k].cls, d === today && k === "none" && "ring-1 ring-inset ring-ink/30")}
+                              className={clsx("relative flex h-[36px] w-[34px] items-center justify-center rounded-[9px] text-[13px] font-bold transition active:scale-95", CELL[k].cls, d === today && k === "none" && "ring-1 ring-inset ring-ink/30")}
                             >
                               {CELL[k].label}
                               {rec?.otHours && rec.status !== "rejected" ? <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-saffron ring-2 ring-surface" /> : null}
@@ -195,7 +195,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
               </tbody>
             </table>
           </div>
-          <p className="border-t border-line/70 px-4 py-2.5 text-[12.5px] text-muted">Tap a box to mark that day · tap a date to mark everyone · tap a name for their calendar. Orange dot = overtime.</p>
+          <p className="border-t border-line/70 px-4 py-2.5 text-[12.5px] text-muted"><span className="lg:hidden">Swipe sideways for the whole month · </span>Tap a box to mark that day · tap a date to mark everyone · tap a name for their calendar. Orange dot = overtime.</p>
         </div>
       )}
 

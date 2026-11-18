@@ -192,13 +192,14 @@ export function Chips<T extends string>({
   options: { value: T; label: string; count?: number }[];
 }) {
   return (
-    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+    // phones: one row that scrolls, fading at the edge so it's clear there is more; wide screens: wrap
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pr-8 [mask-image:linear-gradient(to_right,#000_86%,transparent)] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:[mask-image:none]">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           className={clsx(
-            "shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition",
+            "min-h-[38px] shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition",
             value === o.value ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
           )}
         >
