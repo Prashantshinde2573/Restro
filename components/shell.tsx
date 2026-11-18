@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
 import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
@@ -314,6 +314,17 @@ function Sidebar() {
   }, [hrefs, router]);
   const [opening, setOpening] = useState<string | null>(null);
   useEffect(() => setOpening(null), [path]);
+  const navRef = useRef<HTMLElement>(null);
+  const [more, setMore] = useState(false);
+  const checkMore = () => {
+    const el = navRef.current;
+    setMore(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > 8);
+  };
+  useEffect(() => {
+    checkMore();
+    window.addEventListener("resize", checkMore);
+    return () => window.removeEventListener("resize", checkMore);
+  }, [hrefs]); // eslint-disable-line react-hooks/exhaustive-deps
   const renew = useRenewDays();
   // the browser tab shows how many orders and waiter calls are waiting: "(2) Restropi"
   const urgent = navGroups.flatMap((g) => g.items).filter((i) => i.state === "ok" && (i.href === "/app/orders" || i.href === "/app/tables")).reduce((n, i) => n + (i.badge ?? 0), 0);
@@ -323,14 +334,15 @@ function Sidebar() {
   }, [urgent, path]);
   return (
     <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col px-3 py-5 lg:flex">
-      <div className="flex items-center justify-between px-2 pb-5">
+      <div className="flex items-center justify-between px-2 pb-4">
         <Link href="/app">
           <Wordmark className="h-[30px]" />
         </Link>
         <div className="flex items-center gap-1.5"><HelpButton /><NoticeBell /></div>
       </div>
       <OutletSwitcher />
-      <nav className="no-scrollbar mt-3 flex-1 space-y-3.5 overflow-y-auto">
+      <div className="relative mt-3 flex min-h-0 flex-1 flex-col">
+      <nav ref={navRef} onScroll={checkMore} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto [scrollbar-width:thin]">
         {navGroups.map((g) => (
           <div key={g.key}>
             <div className="px-3 pb-1 text-[12px] font-medium text-faint">{t(g.key)}</div>
@@ -343,7 +355,7 @@ function Sidebar() {
                   href={it.href}
                   onClick={() => { if (!active) setOpening(it.href); }}
                   className={clsx(
-                    "flex items-center gap-3 rounded-[10px] px-3 py-[7px] text-[14.5px] font-medium transition-colors",
+                    "flex items-center gap-3 rounded-[10px] px-3 py-[6px] text-[14.5px] font-medium transition-colors",
                     active ? "bg-surface text-ink shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
                     it.state === "locked" && "opacity-60",
                   )}
@@ -357,6 +369,17 @@ function Sidebar() {
           </div>
         ))}
       </nav>
+      {/* more items below on a short laptop screen: a fade and a hint, never a half-cut row */}
+      {more && (
+        <button
+          type="button"
+          onClick={() => navRef.current?.scrollBy({ top: 200, behavior: "smooth" })}
+          className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-10 items-end justify-center bg-gradient-to-t from-sunken via-sunken/90 to-transparent pb-1 text-[12px] font-semibold text-muted"
+        >
+          More ↓
+        </button>
+      )}
+      </div>
       <div className="mt-3 space-y-1 border-t border-line pt-3">
         <Link
           href="/app/help"

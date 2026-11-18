@@ -6,7 +6,7 @@
 //   Day    one day, everyone on it: Full / Half / Absent buttons and overtime.
 //   Person one person's month as a calendar.
 //
-// A day with no entry is Absent (A). A paid weekly holiday shows H. Requests the staff
+// A past day nobody marked shows – (not marked); A only when marked absent. A paid weekly holiday shows H. Requests the staff
 // sent from their phone show in amber until someone approves them (tap the box).
 import clsx from "clsx";
 import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -29,7 +29,7 @@ import {
 } from "@/lib/payroll";
 
 type View = "month" | "day" | "person";
-type Cell = "full" | "half" | "leave" | "pending" | "absent" | "holiday" | "rejected" | "none";
+type Cell = "full" | "half" | "leave" | "pending" | "absent" | "holiday" | "rejected" | "unmarked" | "none";
 
 const dayNum = (d: string) => Number(d.slice(8, 10));
 const weekday = (d: string) => new Date(d + "T00:00:00Z").getUTCDay();
@@ -46,7 +46,8 @@ function cellOf(a: Attendance | undefined, date: string, today: string, pay?: St
   if (a?.status === "pending") return "pending";
   if (pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && weekday(date) === pay.weeklyOff) return "holiday";
   if (a?.status === "rejected") return "rejected";
-  return date === today ? "none" : "absent";
+  // a past day nobody marked is "not marked" (–), not absent: only a day marked absent shows A
+  return date === today ? "none" : "unmarked";
 }
 
 const CELL: Record<Cell, { label: string; cls: string }> = {
@@ -57,6 +58,7 @@ const CELL: Record<Cell, { label: string; cls: string }> = {
   absent: { label: "A", cls: "bg-rose-soft text-rose" },
   rejected: { label: "A", cls: "bg-rose-soft text-rose" },
   holiday: { label: "H", cls: "bg-sky-soft text-sky" },
+  unmarked: { label: "–", cls: "bg-sunken text-faint" },
   none: { label: "", cls: "bg-sunken/60 text-faint" },
 };
 
@@ -222,7 +224,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
 }
 
 function Legend() {
-  const items: [Cell, string][] = [["full", "Present"], ["half", "Half day"], ["leave", "Leave"], ["absent", "Absent"], ["holiday", "Holiday"], ["pending", "Waiting"]];
+  const items: [Cell, string][] = [["full", "Present"], ["half", "Half"], ["leave", "Leave"], ["absent", "Absent"], ["holiday", "Holiday"], ["pending", "Waiting"], ["unmarked", "Not marked"]];
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted">
       {items.map(([k, l]) => (
@@ -254,7 +256,7 @@ function DayView({
     const rec = byKey.get(attendanceId(m.id, day));
     if (kind === "absent") {
       if (rec?.status === "pending") attendanceActions.decide(rec.id, "rejected", names);
-      else if (rec) attendanceActions.remove(rec.id, names);
+      else attendanceActions.markAbsent(m.id, day, names);
       return;
     }
     attendanceActions.mark(m.id, day, kind, kind === "leave" ? 0 : rec?.otHours ?? 0, names, rec?.note);
@@ -425,7 +427,7 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
     if (!Number.isFinite(h) || h < 0 || h > 16) return toast("Overtime: 0 to 16 hours");
     if (kind === "absent") {
       if (rec?.status === "pending") attendanceActions.decide(rec.id, "rejected", names);
-      else if (rec) attendanceActions.remove(rec.id, names);
+      else attendanceActions.markAbsent(m.id, date, names);
     } else {
       attendanceActions.mark(m.id, date, kind, kind === "leave" ? 0 : h, names, note);
     }

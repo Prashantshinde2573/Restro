@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, Clock3, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
+import { Banknote, CheckCircle2, Clock3, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X, Stamp as StampIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
@@ -90,6 +90,7 @@ export function Checkout({
     wasOpen.current = open;
     if (opening) {
       setDone(false);
+      setStampNote(null);
       setWaiting(false);
       setPaidGuests([]);
       setCash(null);
@@ -156,6 +157,8 @@ export function Checkout({
   }, [method, mixed.length]);
 
   const [paidWith, setPaidWith] = useState<Payment[]>([]);
+  // what happened to the stamp card on this bill (shown on the Paid screen and in the e-bill)
+  const [stampNote, setStampNote] = useState<string | null>(null);
   const outlet = useCurrentOutlet();
   const me = useMe();
   const receipt = () => ({
@@ -183,6 +186,13 @@ export function Checkout({
     if (phone.replace(/\D/g, "").length >= 10)
       guestActions.fromBill(guestName, phone, { orderNo: billNo ?? 0, amount: t.total, method: payments.map((p) => p.method.toUpperCase()).join(" + ") });
     // stamp card: the reward first (a new card starts), then this bill's stamp
+    setStampNote(
+      rewardAmt > 0
+        ? `${prog.reward} used · new stamp card ${Math.max(0, liveCount - prog.needed)}/${prog.needed}`
+        : willStamp
+          ? `Stamp added · ${liveCount + 1}/${prog.needed} for ${prog.reward}`
+          : null,
+    );
     if (rewardAmt > 0) stampActions.redeem(phone, liveCount, prog.needed, { reward: prog.reward, amount: rewardAmt, orderNo: billNo, by: me?.name, outletId: outlet.id });
     if (willStamp) stampActions.give(phone, { orderNo: billNo, by: me?.name, outletId: outlet.id });
     const r = onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
@@ -206,7 +216,7 @@ export function Checkout({
           </Button>
         ) : (
           <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? t.total) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
-            {method === "upi" ? "Payment received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
+            {method === "upi" ? "UPI received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
           </Button>
         )
       }
@@ -222,6 +232,11 @@ export function Checkout({
               ? `${label} is marked paid. The owner confirms it once the money is in; until then the bill stays open.`
               : `${label} is paid and closed.`}
           </p>
+          {stampNote && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-jade-soft px-3.5 py-1.5 text-[14px] font-semibold text-jade-deep">
+              <StampIcon size={15} /> {stampNote}
+            </div>
+          )}
           <div className="mt-8 w-full max-w-sm space-y-3 text-left">
             <Field label="Send e-bill on WhatsApp" hint="No paper needed. Opens WhatsApp with the bill typed in.">
               <div className="flex gap-2">
@@ -232,7 +247,7 @@ export function Checkout({
                   onClick={() => {
                     const d = phone.replace(/\D/g, "").slice(-10);
                     if (d.length !== 10) return toast("Add a 10-digit number first");
-                    window.open(`https://wa.me/91${d}?text=${encodeURIComponent(receiptText(receipt()))}`, "_blank");
+                    window.open(`https://wa.me/91${d}?text=${encodeURIComponent(receiptText(receipt()) + (stampNote ? `\n\n🎟️ ${stampNote}` : ""))}`, "_blank");
                   }}
                 >
                   <MessageCircle size={17} /> Send
@@ -277,6 +292,32 @@ export function Checkout({
           <div className="grid grid-cols-[1fr_1.15fr] gap-2">
             <input className={clsx(inputCls, "!h-11 !text-[15px]")} placeholder="Customer name" value={guestName} onChange={(e) => setGuestName(e.target.value)} aria-label="Customer name (optional)" autoComplete="off" />
             <input className={clsx(inputCls, "!h-11 !text-[15px]")} inputMode="tel" placeholder="Mobile (optional)" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d +]/g, ""))} aria-label="Customer mobile number (optional)" autoComplete="off" />
+          </div>
+          {/* how the guest pays: first, so it's never missed below the fold */}
+          {prepaidSum > 0 && (
+            <div className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
+              Guest already paid <b>UPI {inr(prepaidSum)}</b> from their phone. Collect <b>{inr(Math.max(0, t.total - prepaidSum))}</b> in cash.
+            </div>
+          )}
+          {preferred && !prepaidSum && (
+            <div className="flex items-center gap-2 rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
+              Guest chose <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> from their phone. You can still change it.
+            </div>
+          )}
+          <div className={clsx("grid gap-2", methods.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
+            {methods.map((m) => (
+              <button
+                key={m.v}
+                onClick={() => setMethod(m.v)}
+                className={clsx(
+                  "flex flex-col items-center gap-1.5 rounded-[16px] px-1 py-3 text-[12.5px] font-semibold transition",
+                  method === m.v ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
+                )}
+              >
+                <m.icon size={20} />
+                <span className="text-center leading-tight">{m.label}</span>
+              </button>
+            ))}
           </div>
           {stampsOn && (
             <StampBox
@@ -383,32 +424,6 @@ export function Checkout({
             {codeErr && <p className="mt-1.5 text-[12.5px] text-rose">{codeErr}</p>}
           </div>
 
-          {/* method */}
-          {prepaidSum > 0 && (
-            <div className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
-              Guest already paid <b>UPI {inr(prepaidSum)}</b> from their phone. Collect <b>{inr(Math.max(0, t.total - prepaidSum))}</b> in cash.
-            </div>
-          )}
-          {preferred && !prepaidSum && (
-            <div className="flex items-center gap-2 rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
-              Guest chose <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> from their phone. You can still change it.
-            </div>
-          )}
-          <div className={clsx("grid gap-2", methods.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
-            {methods.map((m) => (
-              <button
-                key={m.v}
-                onClick={() => setMethod(m.v)}
-                className={clsx(
-                  "flex flex-col items-center gap-1.5 rounded-[16px] px-1 py-3 text-[12.5px] font-semibold transition",
-                  method === m.v ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
-                )}
-              >
-                <m.icon size={20} />
-                <span className="text-center leading-tight">{m.label}</span>
-              </button>
-            ))}
-          </div>
 
           {method === "upi" && (
             <div className="flex flex-col items-center rounded-group bg-surface p-5 text-center">
