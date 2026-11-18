@@ -25,12 +25,14 @@ import {
   useStaffPay,
 } from "@/lib/payroll";
 
+// the last week (a day worked or a missed request), and the next 30 days (leave asked ahead)
 const lastWeek = (today: string) => {
   const out: string[] = [];
   const t = new Date(today + "T00:00:00Z").getTime();
-  for (let i = 0; i <= 7; i++) out.push(new Date(t - i * 86_400_000).toISOString().slice(0, 10));
-  return out;
+  for (let i = -30; i <= 7; i++) out.push(new Date(t - i * 86_400_000).toISOString().slice(0, 10));
+  return out.sort().reverse();
 };
+const KIND_LABEL = { full: "Full day", half: "Half day", leave: "Leave" } as const;
 
 export default function MyAttendancePage() {
   const me = useMe();
@@ -44,7 +46,7 @@ export default function MyAttendancePage() {
 
   const [date, setDate] = useState(today);
   const current = all.find((a) => a.id === attendanceId(me?.id ?? "", date));
-  const [kind, setKind] = useState<"full" | "half">("full");
+  const [kind, setKind] = useState<"full" | "half" | "leave">("full");
   const [ot, setOt] = useState("");
   const [note, setNote] = useState("");
   const [editing, setEditing] = useState(false);
@@ -53,7 +55,7 @@ export default function MyAttendancePage() {
     setDate(d);
     setEditing(false);
     const a = all.find((x) => x.id === attendanceId(me?.id ?? "", d));
-    setKind(a?.kind ?? "full");
+    setKind(a?.kind ?? (d > today ? "leave" : "full"));
     setOt(a?.otHours ? String(a.otHours) : "");
     setNote(a?.note ?? "");
   };
@@ -61,7 +63,8 @@ export default function MyAttendancePage() {
   const send = () => {
     const hours = Number(ot || 0);
     if (!Number.isFinite(hours) || hours < 0 || hours > 16) return toast("Overtime: 0 to 16 hours");
-    attendanceActions.request({ date, kind, otHours: hours, note });
+    if (date > today && kind !== "leave") return toast("Days ahead can only be asked as leave");
+    attendanceActions.request({ date, kind, otHours: kind === "leave" ? 0 : hours, note });
     setEditing(false);
     toast(current ? "Request changed" : "Sent for approval");
   };
@@ -90,7 +93,7 @@ export default function MyAttendancePage() {
               <select className={inputCls} value={date} onChange={(e) => pick(e.target.value)}>
                 {lastWeek(today).map((d) => (
                   <option key={d} value={d}>
-                    {d === today ? `Today · ${dayLabel(d)}` : dayLabel(d)}
+                    {d === today ? `Today · ${dayLabel(d)}` : d > today ? `${dayLabel(d)} · leave` : dayLabel(d)}
                   </option>
                 ))}
               </select>
@@ -100,7 +103,7 @@ export default function MyAttendancePage() {
               <div className="flex flex-wrap items-center gap-3 rounded-ctl bg-sunken/60 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-[15px] font-semibold">
-                    {current.kind === "half" ? "Half day" : "Full day"}
+                    {KIND_LABEL[current.kind]}
                     <StatusPill a={current} />
                   </div>
                   <div className="text-[13px] text-muted">
@@ -117,15 +120,23 @@ export default function MyAttendancePage() {
               </div>
             ) : (
               <>
-                <Segmented value={kind} onChange={setKind} options={[{ value: "full", label: "Full day" }, { value: "half", label: "Half day" }]} className="w-full" />
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Overtime (hours)" hint="Leave empty if none">
-                    <input className={inputCls} inputMode="decimal" type="number" min={0} max={16} step={0.5} value={ot} onChange={(e) => setOt(e.target.value)} placeholder="0" />
-                  </Field>
+                <Segmented
+                  value={kind}
+                  onChange={setKind}
+                  options={date > today ? [{ value: "leave", label: "Leave" }] : [{ value: "full", label: "Full day" }, { value: "half", label: "Half day" }, { value: "leave", label: "Leave" }]}
+                  className="w-full"
+                />
+                <div className={clsx("grid gap-3", kind === "leave" ? "grid-cols-1" : "grid-cols-2")}>
+                  {kind !== "leave" && (
+                    <Field label="Overtime (hours)" hint="Empty if none">
+                      <input className={inputCls} inputMode="decimal" type="number" min={0} max={16} step={0.5} value={ot} onChange={(e) => setOt(e.target.value)} placeholder="0" />
+                    </Field>
+                  )}
                   <Field label="Note (optional)">
-                    <input className={inputCls} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. came late" />
+                    <input className={inputCls} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder={kind === "leave" ? "e.g. family function" : "e.g. came late"} />
                   </Field>
                 </div>
+                {kind === "leave" && pay && <p className="text-[12.5px] text-muted">{pay.paidLeaves ? `${pay.paidLeaves} paid leave a month${slip.leaveDays ? ` · ${slip.leaveDays} taken this month` : ""}. More is unpaid.` : "Leave is unpaid for you."}</p>}
                 <Button className="w-full" onClick={send}><CalendarCheck size={17} /> {current ? "Save change" : "Send for approval"}</Button>
               </>
             )}
@@ -136,7 +147,7 @@ export default function MyAttendancePage() {
           <Group title="This month so far">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div><div className="text-[22px] font-semibold tnum">{+slip.workedDays.toFixed(1)}</div><div className="text-[12.5px] text-muted">days approved</div></div>
-              <div><div className="text-[22px] font-semibold tnum">{+slip.otHours.toFixed(1)} h</div><div className="text-[12.5px] text-muted">overtime</div></div>
+              <div><div className="text-[22px] font-semibold tnum">{slip.leaveDays ? slip.leaveDays : `${+slip.otHours.toFixed(1)} h`}</div><div className="text-[12.5px] text-muted">{slip.leaveDays ? "leave" : "overtime"}</div></div>
               <div><div className="text-[22px] font-semibold tnum">{inr(slip.net)}</div><div className="text-[12.5px] text-muted">salary till today</div></div>
             </div>
             {slip.pending > 0 && <p className="mt-3 text-center text-[13px] text-muted">{slip.pending} day{slip.pending === 1 ? "" : "s"} still waiting for approval.</p>}
@@ -153,7 +164,7 @@ export default function MyAttendancePage() {
               <button key={a.id} onClick={() => pick(a.date)} className={clsx("flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 hover:bg-sunken/40 lg:px-5", a.date === date && "bg-sunken/40")}>
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-medium">{dayLabel(a.date)}</div>
-                  <div className="text-[13px] text-muted">{a.kind === "half" ? "Half day" : "Full day"}{a.otHours ? ` · OT ${a.otHours} h` : ""}{a.note ? ` · ${a.note}` : ""}</div>
+                  <div className="text-[13px] text-muted">{KIND_LABEL[a.kind]}{a.otHours ? ` · OT ${a.otHours} h` : ""}{a.note ? ` · ${a.note}` : ""}</div>
                 </div>
                 <StatusPill a={a} />
               </button>

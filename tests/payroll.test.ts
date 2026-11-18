@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { daysInMonth, daysText, explainSalary, payslip, payslipText, shiftMonth, type Attendance, type PayEntry, type StaffPay } from "@/lib/payroll-math";
 
-const day = (date: string, kind: "full" | "half" = "full", status: Attendance["status"] = "approved", otHours?: number): Attendance => ({
+const day = (date: string, kind: Attendance["kind"] = "full", status: Attendance["status"] = "approved", otHours?: number): Attendance => ({
   id: `m1_${date}`, memberId: "m1", date, kind, status, requestedAt: date, ...(otHours ? { otHours } : {}),
 });
 const entry = (type: PayEntry["type"], amount: number, month = "2026-11"): PayEntry => ({ id: `${type}${amount}`, memberId: "m1", month, type, amount, date: `${month}-10` });
@@ -127,5 +127,32 @@ describe("payroll math", () => {
     // joined next month / left last month: nothing
     expect(payslip(NOV, { ...pay, joinedOn: "2026-12-01" }, [], [], AFTER).employed).toBe(false);
     expect(payslip(NOV, { ...pay, joinedOn: undefined, leftOn: "2026-10-31" }, [], [], AFTER).paidOffs).toBe(0);
+  });
+});
+
+describe("paid leave", () => {
+  it("monthly: leave up to the paid leaves a month is paid, more is not", () => {
+    const pay: StaffPay = { id: "m1", type: "monthly", amount: 30000, paidLeaves: 2 };
+    const days = [
+      ...Array.from({ length: 25 }, (_, i) => day(`2026-11-${String(i + 1).padStart(2, "0")}`)),
+      day("2026-11-26", "leave"), day("2026-11-27", "leave"), day("2026-11-28", "leave"),
+    ];
+    const p = payslip(NOV, pay, days, [], AFTER);
+    expect(p.leaveDays).toBe(3);
+    expect(p.paidLeave).toBe(2);
+    expect(p.unpaidLeave).toBe(1);
+    expect(p.paidDays).toBe(27);
+    expect(p.base).toBe(27000);
+    expect(explainSalary(p, pay).some((s) => /without pay/.test(s.label))).toBe(true);
+  });
+  it("daily: paid leave days are paid at the day rate; no paid leave set = unpaid", () => {
+    const days = [day("2026-11-02"), day("2026-11-03", "leave")];
+    expect(payslip(NOV, { id: "m1", type: "daily", amount: 500, paidLeaves: 1 }, days, [], AFTER).base).toBe(1000);
+    expect(payslip(NOV, { id: "m1", type: "daily", amount: 500 }, days, [], AFTER).base).toBe(500);
+  });
+  it("a pending leave is not counted", () => {
+    const p = payslip(NOV, { id: "m1", type: "daily", amount: 500, paidLeaves: 2 }, [day("2026-11-03", "leave", "pending")], [], AFTER);
+    expect(p.leaveDays).toBe(0);
+    expect(p.pending).toBe(1);
   });
 });

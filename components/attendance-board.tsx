@@ -29,7 +29,7 @@ import {
 } from "@/lib/payroll";
 
 type View = "month" | "day" | "person";
-type Cell = "full" | "half" | "pending" | "absent" | "holiday" | "rejected" | "none";
+type Cell = "full" | "half" | "leave" | "pending" | "absent" | "holiday" | "rejected" | "none";
 
 const dayNum = (d: string) => Number(d.slice(8, 10));
 const weekday = (d: string) => new Date(d + "T00:00:00Z").getUTCDay();
@@ -42,7 +42,7 @@ function cellOf(a: Attendance | undefined, date: string, today: string, pay?: St
   if (date > today) return "none";
   if (pay?.joinedOn && date < pay.joinedOn) return "none";
   if (pay?.leftOn && date > pay.leftOn) return "none";
-  if (a?.status === "approved") return a.kind === "half" ? "half" : "full";
+  if (a?.status === "approved") return a.kind;
   if (a?.status === "pending") return "pending";
   if (pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && weekday(date) === pay.weeklyOff) return "holiday";
   if (a?.status === "rejected") return "rejected";
@@ -52,6 +52,7 @@ function cellOf(a: Attendance | undefined, date: string, today: string, pay?: St
 const CELL: Record<Cell, { label: string; cls: string }> = {
   full: { label: "P", cls: "bg-jade text-white" },
   half: { label: "½", cls: "bg-jade-soft text-jade-deep ring-1 ring-inset ring-jade/40" },
+  leave: { label: "L", cls: "bg-[#efedff] text-[#5b4bc4]" },
   pending: { label: "?", cls: "bg-saffron-soft text-saffron ring-1 ring-inset ring-saffron/50" },
   absent: { label: "A", cls: "bg-rose-soft text-rose" },
   rejected: { label: "A", cls: "bg-rose-soft text-rose" },
@@ -88,16 +89,17 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
   }, [view, month, lastDay]);
 
   const counts = (m: Member) => {
-    let p = 0, h = 0, a = 0, ot = 0;
+    let p = 0, h = 0, a = 0, l = 0, ot = 0;
     for (const d of days) {
       const rec = byKey.get(attendanceId(m.id, d));
       const c = cellOf(rec, d, today, payOf(m.id));
       if (c === "full") p++;
       if (c === "half") h++;
       if (c === "absent" || c === "rejected") a++;
+      if (c === "leave") l++;
       if (rec?.status === "approved" && rec.otHours) ot += rec.otHours;
     }
-    return { p, h, a, ot };
+    return { p, h, a, l, ot };
   };
   const open = (m: Member, date: string) => {
     if (date > today) return;
@@ -110,7 +112,8 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
         <div className="flex flex-wrap items-center gap-3 rounded-group bg-saffron-soft px-4 py-3">
           <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-saffron px-2 text-[13px] font-bold text-white">{pending.length}</span>
           <span className="min-w-0 flex-1 text-[14px] font-medium text-ink">
-            {pending.length === 1 ? "request" : "requests"} from staff waiting · amber <b>?</b> boxes below. Tap one to approve.
+            {pending.length === 1 ? "day waits" : "days wait"} for your OK
+            <span className="block text-[12.5px] font-normal text-muted">Tap a <b>?</b> box to check one</span>
           </span>
           <Button
             size="sm"
@@ -219,7 +222,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
 }
 
 function Legend() {
-  const items: [Cell, string][] = [["full", "Present"], ["half", "Half day"], ["absent", "Absent"], ["holiday", "Holiday"], ["pending", "Waiting"]];
+  const items: [Cell, string][] = [["full", "Present"], ["half", "Half day"], ["leave", "Leave"], ["absent", "Absent"], ["holiday", "Holiday"], ["pending", "Waiting"]];
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted">
       {items.map(([k, l]) => (
@@ -247,21 +250,21 @@ function DayView({
   }, [day]);
   const idx = days.indexOf(day);
   const marked = people.filter((m) => byKey.get(attendanceId(m.id, day))?.status === "approved").length;
-  const set = (m: Member, kind: "full" | "half" | "absent") => {
+  const set = (m: Member, kind: "full" | "half" | "leave" | "absent") => {
     const rec = byKey.get(attendanceId(m.id, day));
     if (kind === "absent") {
       if (rec?.status === "pending") attendanceActions.decide(rec.id, "rejected", names);
       else if (rec) attendanceActions.remove(rec.id, names);
       return;
     }
-    attendanceActions.mark(m.id, day, kind, rec?.otHours ?? 0, names, rec?.note);
+    attendanceActions.mark(m.id, day, kind, kind === "leave" ? 0 : rec?.otHours ?? 0, names, rec?.note);
   };
   const allPresent = () => {
     people.filter(canEdit).forEach((m) => {
       const rec = byKey.get(attendanceId(m.id, day));
       const k = cellOf(rec, day, today, payOf(m.id));
       if (k === "none" && day !== today) return; // not working here that day
-      if (!rec || rec.status !== "approved") attendanceActions.mark(m.id, day, rec?.kind ?? "full", rec?.otHours ?? 0, names, rec?.note);
+      if (!rec || rec.status !== "approved") attendanceActions.mark(m.id, day, rec?.kind === "half" ? "half" : "full", rec?.otHours ?? 0, names, rec?.note);
     });
     toast("Everyone marked present");
   };
@@ -307,7 +310,7 @@ function DayView({
                   <span className="block truncate text-[15px] font-medium">{m.name}</span>
                   <span className="block truncate text-[12.5px] text-muted">
                     {rec?.status === "pending"
-                      ? `Asked ${rec.kind === "half" ? "half day" : "full day"}${rec.otHours ? ` + OT ${rec.otHours} h` : ""}${rec.note ? ` · “${rec.note}”` : ""}`
+                      ? `Asked ${rec.kind === "leave" ? "leave" : rec.kind === "half" ? "half day" : "full day"}${rec.otHours ? ` + OT ${rec.otHours} h` : ""}${rec.note ? ` · “${rec.note}”` : ""}`
                       : k === "holiday" ? "Weekly holiday (paid)"
                       : k === "none" && day !== today ? "Not working here this day"
                       : rec?.otHours && rec.status === "approved" ? `Overtime ${rec.otHours} h` : (m.title || "Staff")}
@@ -320,7 +323,7 @@ function DayView({
                 <div className="flex w-full items-center gap-2 sm:w-auto">
                   {rec?.status === "pending" && <span className="rounded-full bg-saffron-soft px-2 py-1 text-[11.5px] font-semibold text-saffron">Waiting</span>}
                   <div role="radiogroup" aria-label={`${m.name} attendance`} className="flex flex-1 rounded-[12px] bg-sunken p-[3px] sm:flex-none">
-                    {([["full", "Full"], ["half", "Half"], ["absent", "Absent"]] as const).map(([v, l]) => (
+                    {([["full", "Full"], ["half", "Half"], ["leave", "Leave"], ["absent", "Absent"]] as const).map(([v, l]) => (
                       <button
                         key={v}
                         role="radio"
@@ -328,7 +331,7 @@ function DayView({
                         onClick={() => set(m, v)}
                         className={clsx(
                           "flex-1 rounded-[9px] px-3 py-2 text-[13.5px] font-semibold transition sm:flex-none sm:py-1.5",
-                          value === v ? (v === "absent" ? "bg-rose text-white" : v === "half" ? "bg-jade-soft text-jade-deep shadow-sm" : "bg-jade text-white") : "text-muted",
+                          value === v ? (v === "absent" ? "bg-rose text-white" : v === "half" ? "bg-jade-soft text-jade-deep shadow-sm" : v === "leave" ? "bg-[#5b4bc4] text-white" : "bg-jade text-white") : "text-muted",
                         )}
                       >
                         {l}
@@ -353,7 +356,7 @@ function PersonView({
   people, m, setPerson, month, days, today, byKey, pay, count, onOpen, canEdit,
 }: {
   people: Member[]; m: Member; setPerson: (id: string) => void; month: string; days: string[]; today: string;
-  byKey: Map<string, Attendance>; pay?: StaffPay; count: { p: number; h: number; a: number; ot: number };
+  byKey: Map<string, Attendance>; pay?: StaffPay; count: { p: number; h: number; a: number; l: number; ot: number };
   onOpen: (m: Member, d: string) => void; canEdit: boolean;
 }) {
   const lead = weekday(days[0]);
@@ -374,7 +377,7 @@ function PersonView({
         <div className="grid grid-cols-4 gap-2 text-center">
           <Mini n={count.p} l="Present" cls="text-jade" />
           <Mini n={count.h} l="Half days" cls="text-jade-deep" />
-          <Mini n={count.a} l="Absent" cls="text-rose" />
+          {count.l ? <Mini n={count.l} l="Leave" cls="text-[#5b4bc4]" /> : <Mini n={count.a} l="Absent" cls="text-rose" />}
           <Mini n={+count.ot.toFixed(1)} l="OT hours" cls="text-saffron" />
         </div>
         <div className="mt-4 grid grid-cols-7 gap-1.5 text-center">
@@ -413,7 +416,7 @@ const Mini = ({ n, l, cls }: { n: number; l: string; cls: string }) => (
 /** Change one person's one day: Full / Half / Absent, overtime, note. Approves a waiting request. */
 function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: string; rec?: Attendance; pay?: StaffPay; names: Record<string, string>; onClose: () => void }) {
   const toast = useToast();
-  const [kind, setKind] = useState<"full" | "half" | "absent">(rec && rec.status !== "rejected" ? rec.kind : rec?.status === "rejected" ? "absent" : "full");
+  const [kind, setKind] = useState<"full" | "half" | "leave" | "absent">(rec && rec.status !== "rejected" ? rec.kind : rec?.status === "rejected" ? "absent" : "full");
   const [ot, setOt] = useState(rec?.otHours ? String(rec.otHours) : "");
   const [note, setNote] = useState(rec?.note ?? "");
   const holiday = pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && weekday(date) === pay.weeklyOff;
@@ -424,9 +427,9 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
       if (rec?.status === "pending") attendanceActions.decide(rec.id, "rejected", names);
       else if (rec) attendanceActions.remove(rec.id, names);
     } else {
-      attendanceActions.mark(m.id, date, kind, h, names, note);
+      attendanceActions.mark(m.id, date, kind, kind === "leave" ? 0 : h, names, note);
     }
-    toast(`${m.name.split(" ")[0]} · ${kind === "absent" ? "absent" : kind === "half" ? "half day" : "present"}`);
+    toast(`${m.name.split(" ")[0]} · ${kind === "absent" ? "absent" : kind === "half" ? "half day" : kind === "leave" ? "on leave" : "present"}`);
     onClose();
   };
   return (
@@ -435,24 +438,24 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
         <div className="text-[15px] text-muted">{longDay(date)}{holiday ? " · weekly holiday (paid even if absent)" : ""}</div>
         {rec?.status === "pending" && (
           <div className="rounded-group bg-saffron-soft px-4 py-3 text-[14px]">
-            <b>{m.name.split(" ")[0]} asked:</b> {rec.kind === "half" ? "half day" : "full day"}{rec.otHours ? ` + overtime ${rec.otHours} h` : ""}{rec.note ? ` · “${rec.note}”` : ""}
+            <b>{m.name.split(" ")[0]} asked:</b> {rec.kind === "leave" ? "leave" : rec.kind === "half" ? "half day" : "full day"}{rec.otHours ? ` + overtime ${rec.otHours} h` : ""}{rec.note ? ` · “${rec.note}”` : ""}
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Attendance">
-          {([["full", "Present", "P"], ["half", "Half day", "½"], ["absent", "Absent", "A"]] as const).map(([v, l, s]) => (
+        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Attendance">
+          {([["full", "Present", "P"], ["half", "Half day", "½"], ["leave", "Leave", "L"], ["absent", "Absent", "A"]] as const).map(([v, l, s]) => (
             <button
               key={v}
               role="radio"
               aria-checked={kind === v}
               onClick={() => setKind(v)}
-              className={clsx("flex flex-col items-center gap-1 rounded-[16px] py-3.5 text-[14px] font-semibold ring-1", kind === v ? (v === "absent" ? "bg-rose text-white ring-rose" : "bg-jade text-white ring-jade") : "bg-surface ring-line")}
+              className={clsx("flex flex-col items-center gap-1 rounded-[16px] py-3.5 text-[14px] font-semibold ring-1", kind === v ? (v === "absent" ? "bg-rose text-white ring-rose" : v === "leave" ? "bg-[#5b4bc4] text-white ring-[#5b4bc4]" : "bg-jade text-white ring-jade") : "bg-surface ring-line")}
             >
               <span className="text-[20px] leading-none">{s}</span>
               {l}
             </button>
           ))}
         </div>
-        {kind !== "absent" && (
+        {kind !== "absent" && kind !== "leave" && (
           <div className="grid grid-cols-[120px_1fr] gap-3">
             <label>
               <span className="mb-1 block text-[13px] font-medium text-muted">Overtime (hours)</span>

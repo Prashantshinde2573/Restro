@@ -153,6 +153,7 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
   const [otRate, setOtRate] = useState(pay?.otRate ? String(pay.otRate) : "");
   const [off, setOff] = useState(pay?.weeklyOff !== undefined && pay.weeklyOff !== null ? String(pay.weeklyOff) : "");
   const [joinedOn, setJoinedOn] = useState(pay?.joinedOn ?? "");
+  const [paidLeaves, setPaidLeaves] = useState(pay?.paidLeaves ? String(pay.paidLeaves) : "");
   const [leftOn, setLeftOn] = useState(pay?.leftOn ?? "");
   const [editPay, setEditPay] = useState(!pay);
   const savePay = () => {
@@ -161,7 +162,7 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
     const r = Number(otRate || 0);
     if (!Number.isFinite(r) || r < 0) return toast("Overtime rate looks wrong");
     if (joinedOn && leftOn && leftOn < joinedOn) return toast("Last working day is before the joining date");
-    payActions.setPay({ id: m.id, type, amount: a, ...(r ? { otRate: r } : {}), ...(off !== "" && type === "monthly" ? { weeklyOff: Number(off) } : {}), ...(joinedOn ? { joinedOn } : {}), ...(leftOn ? { leftOn } : {}) }, names);
+    payActions.setPay({ id: m.id, type, amount: a, ...(r ? { otRate: r } : {}), ...(off !== "" && type === "monthly" ? { weeklyOff: Number(off) } : {}), ...(joinedOn ? { joinedOn } : {}), ...(leftOn ? { leftOn } : {}), ...(Number(paidLeaves) > 0 ? { paidLeaves: Math.min(31, Math.floor(Number(paidLeaves))) } : {}) }, names);
     setEditPay(false);
     toast("Salary saved");
   };
@@ -251,6 +252,7 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
                 {pay.type === "monthly" ? (pay.weeklyOff !== undefined && pay.weeklyOff !== null ? `Holiday every ${WEEKDAYS[pay.weeklyOff]} (paid)` : "No weekly holiday") : "Paid only for days worked"}
               </div>
               <div className="mt-0.5 text-[13px] text-muted">
+                {pay.paidLeaves ? `${pay.paidLeaves} paid leave a month · ` : "No paid leave · "}
                 {pay.joinedOn ? `Joined ${fullDate(pay.joinedOn)}` : "Joining date not set"}
                 {pay.leftOn ? ` · Left ${fullDate(pay.leftOn)}` : ""}
               </div>
@@ -274,6 +276,9 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
                   </select>
                 </Field>
               )}
+              <Field label="Paid leave per month" hint={Number(paidLeaves) > 0 ? `Up to ${Math.floor(Number(paidLeaves))} leave day${Number(paidLeaves) >= 2 ? "s" : ""} a month are paid; more leave is unpaid.` : "Empty = every leave day is unpaid."}>
+                <input className={inputCls} inputMode="numeric" type="number" min={0} max={31} value={paidLeaves} onChange={(e) => setPaidLeaves(e.target.value)} placeholder="e.g. 2" />
+              </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Joining date" hint="Holidays before it aren't paid">
                   <input type="date" className={inputCls} value={joinedOn} max={leftOn || undefined} onChange={(e) => setJoinedOn(e.target.value)} />
@@ -302,7 +307,7 @@ function PersonSheet({ m, month, onClose, names }: { m: Member; month: string; o
                 <div key={a.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0">
                   <div className="min-w-0 flex-1">
                     <div className="text-[14.5px] font-medium">{dayLabel(a.date)}</div>
-                    <div className="truncate text-[12.5px] text-muted">{a.kind === "half" ? "Half day" : "Full day"}{a.otHours ? ` · OT ${a.otHours} h` : ""}{a.note ? ` · ${a.note}` : ""}{a.byManager ? " · marked by manager" : ""}</div>
+                    <div className="truncate text-[12.5px] text-muted">{a.kind === "leave" ? "Leave" : a.kind === "half" ? "Half day" : "Full day"}{a.otHours ? ` · OT ${a.otHours} h` : ""}{a.note ? ` · ${a.note}` : ""}{a.byManager ? " · marked by manager" : ""}</div>
                   </div>
                   <StatusPill a={a} />
                   {canEdit && a.status === "pending" && <Button size="sm" onClick={() => attendanceActions.decide(a.id, "approved", names)} aria-label="Approve"><Check size={14} /></Button>}

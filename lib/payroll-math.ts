@@ -17,6 +17,8 @@ export interface StaffPay {
   joinedOn?: string;
   /** YYYY-MM-DD: last day at work (left the job). Holidays after it are not paid. */
   leftOn?: string;
+  /** leave days a month that are paid (more leave than this is unpaid); empty = no paid leave */
+  paidLeaves?: number;
   updatedAt?: string;
 }
 
@@ -27,7 +29,8 @@ export interface Attendance {
   memberId: string;
   /** YYYY-MM-DD, India date */
   date: string;
-  kind: "full" | "half";
+  /** a day at work (full or half), or a day on leave (paid up to the person's paid leaves a month) */
+  kind: "full" | "half" | "leave";
   /** extra hours worked that day */
   otHours?: number;
   note?: string;
@@ -94,6 +97,10 @@ export interface Payslip {
   halfDays: number;
   /** full + half/2 */
   workedDays: number;
+  /** approved leave days; the first `paidLeave` of them are paid, the rest not */
+  leaveDays: number;
+  paidLeave: number;
+  unpaidLeave: number;
   /** weekly offs that count as paid (monthly pay only, days not otherwise worked) */
   paidOffs: number;
   /** days the pay is worked out on */
@@ -124,6 +131,7 @@ export interface Payslip {
  *  monthly: amount × paid days ÷ days in the month, where paid days = days worked
  *           (a half day counts ½) + their weekly offs that month, at most the whole month.
  *  daily:   amount × days worked.
+ *  leave:   up to the person's paid leaves a month count as days worked; more leave is unpaid.
  *  overtime: approved overtime hours × overtime rate.
  * Only approved days count; pending ones are shown separately.
  */
@@ -133,6 +141,9 @@ export function payslip(month: string, pay: StaffPay | undefined, days: Attendan
   const fullDays = ok.filter((d) => d.kind === "full").length;
   const halfDays = ok.filter((d) => d.kind === "half").length;
   const workedDays = fullDays + halfDays / 2;
+  const leaveDays = ok.filter((d) => d.kind === "leave").length;
+  const paidLeave = Math.min(leaveDays, Math.max(0, Math.floor(Number(pay?.paidLeaves) || 0)));
+  const unpaidLeave = leaveDays - paidLeave;
   const otHours = ok.reduce((s, d) => s + Math.max(0, Number(d.otHours) || 0), 0);
   const D = daysInMonth(month);
 
@@ -157,15 +168,15 @@ export function payslip(month: string, pay: StaffPay | undefined, days: Attendan
     }
   }
   const amount = Math.max(0, Number(pay?.amount) || 0);
-  const paidDays = pay?.type === "monthly" ? Math.min(D, workedDays + paidOffs) : workedDays;
-  const base = !pay ? 0 : pay.type === "monthly" ? round((amount * paidDays) / D) : round(amount * workedDays);
+  const paidDays = pay?.type === "monthly" ? Math.min(D, workedDays + paidOffs + paidLeave) : workedDays + paidLeave;
+  const base = !pay ? 0 : pay.type === "monthly" ? round((amount * paidDays) / D) : round(amount * paidDays);
   const ot = round(otHours * Math.max(0, Number(pay?.otRate) || 0));
 
   const sum = (t: PayEntryType) => entries.filter((e) => e.month === month && e.type === t).reduce((s, e) => s + Math.max(0, Number(e.amount) || 0), 0);
   const bonus = sum("bonus"), fine = sum("fine"), advance = sum("advance"), paid = sum("paid");
   const net = Math.max(0, base + ot + bonus - fine - advance);
   return {
-    month, daysInMonth: D, fullDays, halfDays, workedDays, paidOffs, paidDays, otHours,
+    month, daysInMonth: D, fullDays, halfDays, workedDays, leaveDays, paidLeave, unpaidLeave, paidOffs, paidDays, otHours,
     base, ot, bonus, fine, advance, net, paid, due: net - paid,
     pending: mine.filter((d) => d.status === "pending").length,
     inProgress: month === monthOf(today),
@@ -202,12 +213,16 @@ export function explainSalary(p: Payslip, pay: StaffPay | undefined): { label: s
     const off = pay.weeklyOff !== undefined && pay.weeklyOff !== null && pay.weeklyOff >= 0 ? pay.weeklyOff : null;
     const parts = [plural(p.workedDays, "day worked", "days worked")];
     if (p.paidOffs) parts.push(`${p.paidOffs} ${p.paidOffs === 1 ? WEEKDAYS[off ?? 0] : PLURAL_DAY[off ?? 0]} (holiday)`);
+    if (p.paidLeave) parts.push(plural(p.paidLeave, "paid leave", "paid leave"));
     steps.push({ label: `Days to pay: ${parts.join(" + ")}`, value: plural(p.paidDays, "day", "days") });
+    if (p.unpaidLeave) steps.push({ label: `${plural(p.unpaidLeave, "leave day", "leave days")} without pay (more than ${pay.paidLeaves ?? 0} paid a month)`, value: "" });
     steps.push({ label: `Salary: ${rupees2(perDay)} × ${plural(p.paidDays, "day", "days")}`, value: rupees(p.base) });
   } else {
     steps.push({ label: "Pay per day", value: rupees(pay.amount) });
     steps.push({ label: "Days worked", value: plural(p.workedDays, "day", "days") });
-    steps.push({ label: `Salary: ${rupees(pay.amount)} × ${plural(p.workedDays, "day", "days")}`, value: rupees(p.base) });
+    if (p.paidLeave) steps.push({ label: "Paid leave", value: plural(p.paidLeave, "day", "days") });
+    if (p.unpaidLeave) steps.push({ label: `${plural(p.unpaidLeave, "leave day", "leave days")} without pay`, value: "" });
+    steps.push({ label: `Salary: ${rupees(pay.amount)} × ${plural(p.paidDays, "day", "days")}`, value: rupees(p.base) });
   }
   if (p.ot) steps.push({ label: `Overtime: ${+p.otHours.toFixed(1)} h × ${rupees(pay.otRate ?? 0)}`, value: `+ ${rupees(p.ot)}` });
   if (p.bonus) steps.push({ label: "Bonus", value: `+ ${rupees(p.bonus)}` });
