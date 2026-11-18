@@ -826,10 +826,11 @@ export async function guestCouponsOn(outletId?: string): Promise<boolean> {
 }
 export type GuestCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number };
 /** Guest QR page: check one coupon code. Returns the coupon, or why it can't be used. */
-export async function guestCoupon(code: string, outletId?: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {
+export async function guestCoupon(code: string, outletId?: string, phone?: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {
   const rid = stateStore.get().rid;
   if (!rid || !cloudConfigured) return { problem: "Coupons are not available here" };
-  const { data, error } = await sb().rpc("guest_coupon", { r: rid, p_code: code, ...(outletId ? { p_outlet: outletId } : {}) });
+  // the guest's number decides private coupons and "each guest once"
+  const { data, error } = await sb().rpc("guest_coupon_check", { r: rid, p_code: code, ...(outletId ? { p_outlet: outletId } : {}), ...(phone ? { p_phone: phone } : {}) });
   if (error || !data) return { problem: "Couldn't check the code. Try again." };
   const d = data as GuestCoupon & { problem?: string };
   if (d.problem) return { problem: d.problem };

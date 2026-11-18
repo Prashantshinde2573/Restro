@@ -48,6 +48,8 @@ export interface InvoiceData {
   lines: { name: string; qty: number; price: number }[];
   subtotal: number;
   discount: number;
+  /** each discount with its reason; when given, these lines replace the single "Discount" line */
+  discounts?: { label: string; amount: number }[];
   gstHalfLabel: string; // "2.5%"
   cgst: number;
   sgst: number;
@@ -124,7 +126,8 @@ export function invoicePdf(d: InvoiceData): Blob {
     y += size + 5;
   };
   row("Subtotal", m2(d.subtotal));
-  if (d.discount) row("Discount", `- ${m2(d.discount)}`, { color: jade });
+  if (d.discounts?.length) for (const x of d.discounts) row(x.label.slice(0, 34), `- ${m2(x.amount)}`, { color: jade });
+  else if (d.discount) row("Discount", `- ${m2(d.discount)}`, { color: jade });
   if (d.discount) row("Taxable value", m2(d.subtotal - d.discount));
   row(`CGST @ ${d.gstHalfLabel}`, m2(d.cgst));
   row(`SGST @ ${d.gstHalfLabel}`, m2(d.sgst));

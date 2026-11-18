@@ -5,9 +5,9 @@
 // The owner, or a member the owner ticked "Confirm payments" for, closes a bill
 // straight away. Anyone else's "paid" waits for their OK: the table stays busy and
 // the bill shows under "Payments to confirm" until someone confirms it.
-import { billOf, couponActions, getCoupons, getOrders, normCode, orderActions, stampsForGuestPayment } from "./live";
+import { billOf, couponActions, discountsFrom, getCoupons, getOrders, normCode, orderActions, stampsForGuestPayment } from "./live";
 import { getTable, tableActions } from "./tables";
-import type { Order, Payment } from "./types";
+import type { BillDiscount, Order, Payment } from "./types";
 import { gstRate } from "./format";
 
 /** Unpaid orders of one party at a table. */
@@ -22,8 +22,9 @@ export function closeBill(opts: {
   partyId?: string;
   discount?: number;
   coupon?: string;
+  discounts?: BillDiscount[];
 }): "paid" | "waiting" {
-  const r = opts.ids.length ? orderActions.settle(opts.ids, opts.payments, opts.by, { discount: opts.discount, coupon: opts.coupon }) : "paid";
+  const r = opts.ids.length ? orderActions.settle(opts.ids, opts.payments, opts.by, { discount: opts.discount, coupon: opts.coupon, discounts: opts.discounts }) : "paid";
   if (opts.tableId && opts.partyId) {
     if (r === "paid") tableActions.close(opts.tableId, opts.partyId, "bill paid");
     else tableActions.update(opts.tableId, opts.partyId, { status: "billing", paymentPending: true });
@@ -47,7 +48,7 @@ export function confirmPayment(claimId: string) {
   // a coupon the guest used from their phone counts once the money is confirmed (staff checkout counts its own)
   if (claim?.coupon && claim.source === "guest" && list.length) {
     const c = getCoupons().find((x) => x.code === normCode(claim.coupon!));
-    if (c) couponActions.used(c.id);
+    if (c) couponActions.used(c.id, list.find((o) => o.guestPhone)?.guestPhone);
   }
   freeIfSettled(list[0]);
   return list;
@@ -100,5 +101,6 @@ export function claimSummary(claimId: string) {
   const taxable = Math.max(0, subtotal - discount);
   const due = Math.round(taxable + Math.round(taxable * gstRate() * 100) / 100);
   const short = Math.round(due - paid);
-  return { bill, paid, discount, reward: claim.reward?.name, coupon: claim.coupon, short: short > 1 ? short : 0, guest: claim.source === "guest" };
+  const labels = (claim.discounts ?? discountsFrom(claim)).map((d) => `${d.label} −₹${d.amount}`);
+  return { bill, paid, discount, labels, reward: claim.reward?.name, coupon: claim.coupon, short: short > 1 ? short : 0, guest: claim.source === "guest" };
 }

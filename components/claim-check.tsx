@@ -14,7 +14,7 @@ export function ClaimCheck({ claimId }: { claimId: string }) {
       {s.discount > 0 && (
         <>
           {" "}· discount <b className="tnum">{inr(s.discount)}</b>
-          {s.reward ? ` (${s.reward})` : s.coupon ? ` (coupon ${s.coupon})` : s.guest ? " (from the guest's phone)" : ""}
+          {s.labels.length ? ` (${s.labels.join(", ")}${s.guest ? ", from the guest's phone" : ""})` : s.guest ? " (from the guest's phone)" : ""}
         </>
       )}
       {s.short > 0 && (

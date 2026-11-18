@@ -11,7 +11,7 @@ import type { Customer } from "@/lib/types";
 
 const key = (t: { name: string; language: string }) => `${t.name}|${t.language}`;
 
-export function CampaignApi({ guests, outletId }: { guests: Customer[]; outletId: string }) {
+export function CampaignApi({ guests, outletId, onSent }: { guests: Customer[]; outletId: string; onSent?: (phones: string[], text: string) => void }) {
   const [templates, setTemplates] = useState<WaTemplate[] | null>(null);
   const [err, setErr] = useState("");
   const [pick, setPick] = useState("");
@@ -37,7 +37,9 @@ export function CampaignApi({ guests, outletId }: { guests: Customer[]; outletId
     setBusy(true);
     setErr("");
     try {
-      setRes(await waCampaign({ outletId, template: t.name, lang: t.language, extra, phones: many.map((g) => g.phone) }));
+      const r = await waCampaign({ outletId, template: t.name, lang: t.language, extra, phones: many.map((g) => g.phone) });
+      setRes(r);
+      if (r.sent > 0) onSent?.(many.map((g) => g.phone), `${t.body} ${extra.join(" ")}`);
     } catch (e) {
       setErr((e as Error).message);
     } finally {

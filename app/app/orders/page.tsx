@@ -16,7 +16,7 @@ import { printReceipt } from "@/components/receipt";
 import { PaymentSplit, paidSum } from "@/components/payment-split";
 import { useToast } from "@/components/toast";
 import { orderWhere, tableActions, useTables } from "@/lib/tables";
-import { billOf, counterPref, methodLabel, payingOnline, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOutletOrders, useSettings } from "@/lib/live";
+import { billDiscounts, billOf, billOrdersOf, counterPref, methodLabel, payingOnline, orderActions, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useMe, useMenu, useOutletOrders, useSettings } from "@/lib/live";
 import { closeBill, confirmPayment, markUnpaid, partyOpenOrders, rejectPayment } from "@/lib/billing";
 import { PasswordCheck } from "@/components/password-check";
 import { isOwner } from "@/lib/access";
@@ -227,10 +227,32 @@ export default function OrdersPage() {
                   </div>
                 );
               })}
-              <div className="flex justify-between bg-sunken/50 px-4 py-3 text-[15px] font-semibold">
-                <span>Bill incl. GST</span>
-                <span className="tnum">{inr(billOf(sel))}</span>
-              </div>
+              {(() => {
+                const bill = billOrdersOf(sel, list);
+                const offs = billDiscounts(bill);
+                const paid = sel.status === "paid" ? bill.reduce((s, o) => s + paidSum(o.payments ?? []), 0) : 0;
+                return (
+                  <>
+                    {bill.length > 1 && <div className="border-t border-line/70 px-4 py-2 text-[12.5px] text-muted">One bill with {bill.filter((o) => o.id !== sel.id).map((o) => `#${o.number}`).join(", ")}</div>}
+                    {offs.map((d, i) => (
+                      <div key={i} className="flex justify-between border-t border-line/70 px-4 py-2 text-[14px] text-jade">
+                        <span>{d.label}</span>
+                        <span className="tnum">−{inr(d.amount)}</span>
+                      </div>
+                    ))}
+                    {sel.status !== "paid" && sel.wantsCoupon && (
+                      <div className="border-t border-line/70 px-4 py-2 text-[13.5px] text-jade">Guest applied coupon <b>{sel.wantsCoupon}</b> on their phone · it comes off when you charge</div>
+                    )}
+                    {sel.status !== "paid" && sel.wantsReward && (
+                      <div className="border-t border-line/70 px-4 py-2 text-[13.5px] text-jade">Guest wants to use their stamp card reward · it comes off when you charge</div>
+                    )}
+                    <div className="flex justify-between bg-sunken/50 px-4 py-3 text-[15px] font-semibold">
+                      <span>{sel.status === "paid" ? (bill.length > 1 ? "Bill paid (all orders)" : "Bill paid") : "Bill incl. GST"}</span>
+                      <span className="tnum">{inr(sel.status === "paid" ? paid : billOf(sel))}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {(sel.status === "paid" || (sel.paymentLog?.length ?? 0) > 0) && (
@@ -254,11 +276,17 @@ export default function OrdersPage() {
               <Button
                 variant="plain"
                 onClick={() => {
-                  const sub = orderTotal(sel.lines);
+                  // the whole bill (a table's rounds paid together), with its discounts
+                  const bill = billOrdersOf(sel, list);
+                  const lines = bill.flatMap((o) => o.lines);
+                  const offs = billDiscounts(bill);
+                  const sub = orderTotal(lines);
                   const ok = printReceipt({
                     settings, outletName: outlet.name, label: orderWhere(sel, tables), billNo: sel.number,
-                    lines: sel.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })),
-                    totals: billTotals(sub), payments: sel.payments ?? [],
+                    lines: lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })),
+                    totals: billTotals(sub, Math.min(sub, offs.reduce((s, d) => s + d.amount, 0))),
+                    discounts: offs,
+                    payments: bill.flatMap((o) => o.payments ?? []),
                   });
                   if (!ok) toast("Allow pop-ups for this site to print");
                 }}
@@ -330,7 +358,7 @@ export default function OrdersPage() {
         onPaid={(payments, extra) => {
           if (!pay?.length) return;
           const o = pay[0];
-          return closeBill({ ids: pay.map((x) => x.id), payments, by: myName, tableId: o.tableId, partyId: o.tableId ? o.partyId ?? "A" : undefined, discount: extra?.discount, coupon: extra?.coupon });
+          return closeBill({ ids: pay.map((x) => x.id), payments, by: myName, tableId: o.tableId, partyId: o.tableId ? o.partyId ?? "A" : undefined, discount: extra?.discount, coupon: extra?.coupon, discounts: extra?.discounts });
         }}
       />
 
