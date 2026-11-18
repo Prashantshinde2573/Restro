@@ -35,7 +35,7 @@ import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
+import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, reloadLists, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
 import { payOnline } from "@/lib/gateway-checkout";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
@@ -616,6 +616,39 @@ export default function GuestOrder() {
   }, [cart, menu]);
 
   // ---- placing an order ----
+  const cartLines = () =>
+    cart.map((l) => ({
+      itemId: l.item.id,
+      name: sizedName(l.item.name, l.size),
+      qty: l.qty,
+      price: l.unitPrice,
+      station: l.item.station,
+      note: [...l.options, ...(note ? [note] : [])].join(" · ") || undefined,
+    }));
+  // At a table (pay at the end): the next round goes into the group's open order as an add-on,
+  // so the kitchen and the bill see one order. Anything else, or if that can't be done: a new order.
+  const [adding, setAdding] = useState(false);
+  const addOrSend = async (g: GuestProfile): Promise<boolean> => {
+    const into = !payNow && !counter && t && party
+      ? [...openOrders].filter((o) => o.channel === "qr" && !o.payClaim && !o.payPreference && !o.gateway && !(o.prepaid ?? []).length).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+      : undefined;
+    if (into) {
+      setAdding(true);
+      const ok = await orderActions.addOn(into.id, cartLines()).catch(() => false);
+      setAdding(false);
+      if (ok) {
+        const cur = tables.find((x) => x.id === t!.id)?.parties.find((x) => x.id === party!.id);
+        tableActions.update(t!.id, party!.id, { status: "ordered", total: (cur?.total ?? 0) + itemTotal });
+        guestActions.upsert(g.name, g.phone, g.optIn);
+        setCart([]);
+        setNote("");
+        setCartOpen(false);
+        return true;
+      }
+    }
+    sendOrder(g);
+    return false;
+  };
   const sendOrder = (g: GuestProfile, extra: Partial<Order> = {}): Order => {
     let p = party;
     if (t && !p) {
@@ -635,14 +668,7 @@ export default function GuestOrder() {
       staff: "QR",
       createdAt: new Date().toISOString(),
       status: p?.pendingApproval ? "new" : "accepted",
-      lines: cart.map((l) => ({
-        itemId: l.item.id,
-        name: sizedName(l.item.name, l.size),
-        qty: l.qty,
-        price: l.unitPrice,
-        station: l.item.station,
-        note: [...l.options, ...(note ? [note] : [])].join(" · ") || undefined,
-      })),
+      lines: cartLines(),
       ...extra,
     });
     if (t && p) {
@@ -672,11 +698,11 @@ export default function GuestOrder() {
       ? tx(lang, "Ordering from the phone is paused right now. Please order with our staff.", "आत्ता फोनवरून ऑर्डर बंद आहे. कृपया स्टाफकडे ऑर्डर द्या.")
       : tx(lang, `You can browse the menu — ordering opens at ${hours.opensAt}.`, `मेनू पाहू शकता — ऑर्डर ${hours.opensAt} पासून.`);
   // After a table order: straight to My orders — live status, the bill so far and the games are all there.
-  const showMyOrders = () => {
+  const showMyOrders = (added?: boolean) => {
     setCartOpen(false);
     setView("orders");
     window.scrollTo({ top: 0 });
-    toast(tx(lang, "Order placed", "ऑर्डर पाठवली"));
+    toast(added ? tx(lang, "Added to your order", "तुमच्या ऑर्डरमध्ये जोडलं") : tx(lang, "Order placed", "ऑर्डर पाठवली"));
   };
   const placeOrder = () => {
     if (!isOpen) return toast(closedText);
@@ -692,8 +718,8 @@ export default function GuestOrder() {
       afterOtp.current = "order";
       return setOtpOpen(true);
     }
-    sendOrder(guest);
-    showMyOrders();
+    if (adding) return;
+    void addOrSend(guest).then(showMyOrders);
   };
 
   // ---- pay-first outcomes (café) ----
@@ -952,7 +978,7 @@ export default function GuestOrder() {
               {t.parties.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => { tableActions.update(t.id, p.id, { phoneClaimed: true }); remember(p.id); toast(tx(lang, "Joined · you're on the same bill", "जोडलं · एकच बिल")); }}
+                  onClick={() => { tableActions.update(t.id, p.id, { phoneClaimed: true }); remember(p.id); toast(tx(lang, "Joined · you're on the same bill", "जोडलं · एकच बिल")); void reloadLists(["orders"]).catch(() => {}); }}
                   className="flex items-center gap-3 rounded-[14px] bg-jade px-4 py-3 text-left text-white active:scale-[.99]"
                 >
                   <Users size={18} className="shrink-0" />
@@ -1113,6 +1139,7 @@ export default function GuestOrder() {
                   <li key={i} className="flex justify-between gap-3">
                     <span className="min-w-0">
                       {l.qty}× {l.name}
+                      {l.addOn && <span className="ml-1.5 rounded-full bg-saffron-soft px-1.5 py-0.5 text-[11px] font-semibold text-saffron">{tx(lang, "added", "नंतर जोडलं")}</span>}
                       {l.note && <span className="block text-[12.5px] text-muted">{l.note}</span>}
                     </span>
                     <span className="shrink-0 text-muted tnum">{inr(l.qty * l.price)}</span>
@@ -1339,7 +1366,7 @@ export default function GuestOrder() {
         onClose={() => setCartOpen(false)}
         title={tx(lang, "Your order", "तुमची ऑर्डर")}
         footer={
-          <Button size="lg" className="w-full" disabled={!count || !isOpen} onClick={placeOrder}>
+          <Button size="lg" className="w-full" disabled={!count || !isOpen || adding} onClick={placeOrder}>
             {payNow
               ? tx(lang, `Continue to pay · ${inr(payable)}`, `पैसे भरा · ${inr(payable)}`)
               : `${tx(lang, myOrders.length ? "Send to kitchen" : "Place order", "ऑर्डर पाठवा")} · ${inr(payable)}`}
@@ -1442,8 +1469,7 @@ export default function GuestOrder() {
             setCartOpen(false);
             setPayOpen(true);
           } else {
-            sendOrder(g);
-            showMyOrders();
+            void addOrSend(g).then(showMyOrders);
           }
         }}
       />

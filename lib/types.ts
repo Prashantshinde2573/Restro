@@ -233,6 +233,10 @@ export interface OrderLine {
   note?: string;
   station: MenuItem["station"];
   done?: boolean;
+  /** added to an order already sent (a guest's next round): which round, and when */
+  round?: number;
+  addOn?: boolean;
+  addedAt?: string;
 }
 
 export interface Order {

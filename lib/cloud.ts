@@ -465,6 +465,7 @@ export function connect(rid: string, role: Role, uid: string) {
   const ch = client.channel(`restropi:${rid}:${uid}`);
   // Reloaders per list: used to catch up after the phone slept, lost signal, or the live link dropped.
   const reloads = new Map<string, () => void>();
+  reloadNow = (keys) => { for (const k of keys) reloads.get(k)?.(); };
   for (const b of remoteBindings) {
     const g = b.spec.guest ?? "none";
     if (role === "guest" && g === "none") {
@@ -532,7 +533,8 @@ export function connect(rid: string, role: Role, uid: string) {
     });
     const query = () => {
       let q = client.from(table).select(b.key === "orders" ? "id, data, number" : "id, data").eq("rid", rid);
-      if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
+      // a guest's orders: the server shows their own and their group's (after "we're together")
+      if (role === "guest" && g === "own" && b.key !== "orders") q = q.eq("guest_uid", uid);
       if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
       if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
       if (b.key === "calls") q = q.order("updated_at", { ascending: false }).limit(100);
@@ -626,6 +628,12 @@ const track = <T,>(p: PromiseLike<T>) => {
   return pr;
 };
 /** Wait for writes still on their way (e.g. save a person before setting their PIN). */
+let reloadNow: (keys: string[]) => void = () => {};
+/** Fetch these lists again now (after joining a group: its orders). Waits for this phone's writes first. */
+export async function reloadLists(keys: string[]) {
+  await flushWrites();
+  reloadNow(keys);
+}
 export const flushWrites = async () => {
   await Promise.allSettled([...pending]);
   await flushAll();
@@ -823,6 +831,14 @@ export async function guestCouponsOn(outletId?: string): Promise<boolean> {
   if (!rid || !cloudConfigured) return false;
   const { data, error } = await sb().rpc("guest_coupons_on", { r: rid, ...(outletId ? { p_outlet: outletId } : {}) });
   return !error && data === true;
+}
+/** Guest QR page: the next round goes into the group's open order. Returns the order as saved, or null. */
+export async function guestAddOn(orderId: string, lines: unknown[]): Promise<Record<string, unknown> | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("guest_add_on", { r: rid, p_order: orderId, p_lines: lines });
+  if (error || !data) return null;
+  return data as Record<string, unknown>;
 }
 export type GuestCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number };
 /** Guest QR page: check one coupon code. Returns the coupon, or why it can't be used. */

@@ -51,6 +51,7 @@ export function OrderAlerts() {
   const seenClaim = useRef<Map<string, { by: string; ids: string[] }> | null>(null);
   const seenReady = useRef<Set<string> | null>(null);
   const seenReview = useRef<Set<string> | null>(null);
+  const seenAddOns = useRef<Map<string, number> | null>(null);
   const [ask, setAsk] = useState(false);
   const watching = canSee || canKitchen;
 
@@ -65,7 +66,9 @@ export function OrderAlerts() {
     const bills = open.filter((o) => o.payPreference && o.payPreference !== "online" && !o.payClaim);
     const claims = pendingClaims(orders);
     const readyNow = open.filter((o) => o.status === "ready");
-    if (!seenNew.current || !seenBill.current || !seenClaim.current || !seenReady.current || !seenReview.current) {
+    const addOns = (o: { lines: { addOn?: boolean }[] }) => o.lines.filter((l) => l.addOn).length;
+    if (!seenNew.current || !seenBill.current || !seenClaim.current || !seenReady.current || !seenReview.current || !seenAddOns.current) {
+      seenAddOns.current = new Map(open.map((o) => [o.id, addOns(o)]));
       // first load: remember what's already there, ping only for what comes after
       seenNew.current = new Set(orders.map((o) => o.id));
       seenBill.current = new Set(bills.map((o) => o.id));
@@ -108,6 +111,20 @@ export function OrderAlerts() {
       const toCook = fromElsewhere.filter((o) => o.status === "accepted" || o.status === "preparing");
       for (const o of toCook) say("kitchen", "New order for the kitchen", `${orderWhere(o, tables)} · ${o.lines.map((l) => `${l.qty} ${l.name}`).join(", ")}`, "/app/kitchen", `New order · ${orderWhere(o, tables)}`);
     }
+
+    // a guest's next round went into their open order (add-on)
+    for (const o of open) {
+      const n = addOns(o);
+      const was = seenAddOns.current!.get(o.id);
+      seenAddOns.current!.set(o.id, n);
+      if (was === undefined || n <= was || !here(o.outletId)) continue;
+      const fresh = o.lines.filter((l) => l.addOn && !l.done).slice(-(n - was));
+      const what = fresh.map((l) => `${l.qty} ${l.name}`).join(", ");
+      if (canSee) say("order", `Add-on · ${orderWhere(o, tables)}`, `${what} · order #${o.number || "—"}${outletTag(o.outletId)}`, "/app/orders", `Add-on · ${orderWhere(o, tables)}`);
+      else if (canKitchen && !path.startsWith("/app/kitchen")) say("kitchen", "Add-on for the kitchen", `${orderWhere(o, tables)} · ${what}`, "/app/kitchen", `Add-on · ${orderWhere(o, tables)}`);
+    }
+    // back in the kitchen after an add-on: "ready" alerts again when it's ready again
+    for (const id of [...seenReady.current!]) if (!readyNow.some((o) => o.id === id)) seenReady.current!.delete(id);
 
     if (canSee) {
       // a guest (or staff) asked for the bill

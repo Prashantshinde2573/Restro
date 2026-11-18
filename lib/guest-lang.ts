@@ -39,6 +39,8 @@ const HI: Record<string, string> = {
   "Joined · you're on the same bill": "जुड़ गए · एक ही बिल",
   "Yes, join Group {}": "हाँ, ग्रुप {} में जोड़ें",
   "Yes, we're together": "हाँ, हम साथ हैं",
+  "Added to your order": "आपके ऑर्डर में जोड़ा",
+  added: "बाद में जोड़ा",
   guests: "लोग",
   guest: "व्यक्ति",
   "No, we're a separate group": "नहीं, हम अलग हैं",

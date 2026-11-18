@@ -73,3 +73,14 @@ Item 4 is switched on and item 2 is decided (items 1 and 3 are done).
 - "Online payments (own gateway)" and "WhatsApp API" are **off by default**. Only the super admin turns them on (Admin → a restaurant → Extra features, with the super admin password).
 - Off means hidden in the client's app **and** refused by the database: keys can't be saved (trigger), guests don't get "Pay online", no WhatsApp message is sent. Payments already started still finish; STOP replies are still recorded.
 - Owners can't change these switches: signed-in users have no update right on `restaurants`.
+
+## Shared table bill and add-ons (19 Nov 2026)
+
+- `orders.party_uids`: the guest phones of the group at a table. Only the server writes it
+  (`private.keep_party_uids` trigger); a phone's own writes to it are ignored.
+- A phone joins a group with "Yes, we're together" (`guest_set_parties`, `phoneClaimed`). From then on
+  it reads and updates that group's orders (since the group sat down), and may pay the group's bill
+  online (`svc_bill_for`). A phone that did not join sees nothing of the group.
+- `guest_add_on(r, order, lines)`: a guest of the order (or its group) adds dishes to an open order.
+  Same dish and price checks as a new order; at most 60 dishes and 20 rounds; refused once the bill
+  is asked for, paid or online payment started. Earlier dishes and payments can't be changed.
