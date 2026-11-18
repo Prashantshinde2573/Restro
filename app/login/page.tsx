@@ -11,8 +11,9 @@ import { RiseText } from "@/components/site/motion";
 import { Mesh } from "@/components/site/hero";
 import { Button, Field, Segmented, inputCls } from "@/components/ui";
 import { ChangePassword, OwnerAuth } from "@/components/owner-auth";
-import { cloudSignOut, publicInfo, signInStaff, useCloud } from "@/lib/cloud";
+import { cloudSignOut, publicInfo, signInStaff, useCloud, type StaffChoice } from "@/lib/cloud";
 import { sessionActions } from "@/lib/live";
+import { CookingLoader } from "@/components/loader";
 
 const RID_KEY = "restropi.rid"; // the restaurant this device last signed in to (shows its name)
 const PHONE_KEY = "restropi.staffPhone"; // last staff mobile used here, so they only type the PIN
@@ -26,6 +27,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [place, setPlace] = useState("");
+  // the same number and PIN work in more than one restaurant: which one?
+  const [choices, setChoices] = useState<StaffChoice[] | null>(null);
 
   // opens on Owner; the staff sign-in link (…/login?r=…) or a phone used by staff before opens on Staff
   useEffect(() => {
@@ -54,7 +57,7 @@ export default function LoginPage() {
   // staff: mobile number + PIN, on any phone or tablet
   const digits = phone.replace(/\D/g, "").slice(-10);
   const canStaff = digits.length === 10 && /^\d{4}$/.test(pin) && !busy;
-  const staffSignIn = (e?: React.FormEvent) => {
+  const staffSignIn = (e?: React.FormEvent, rid?: string) => {
     e?.preventDefault();
     if (!canStaff) {
       setError(digits.length !== 10 ? "Enter your 10-digit mobile number" : "Enter your 4-digit PIN");
@@ -62,19 +65,27 @@ export default function LoginPage() {
     }
     setBusy(true);
     setError("");
-    signInStaff(digits, pin)
-      .then(({ rid, memberId }) => {
+    signInStaff(digits, pin, rid)
+      .then((res) => {
+        if ("choose" in res) {
+          setChoices(res.choose);
+          setBusy(false);
+          return;
+        }
+        const { rid, memberId } = res;
+        setChoices(null);
         try {
           localStorage.setItem(PHONE_KEY, digits);
           localStorage.setItem(RID_KEY, rid);
         } catch {}
         sessionActions.setMember(memberId);
+        // stay busy: the app opens as soon as the restaurant has loaded
       })
       .catch((err: Error) => {
         setError(err.message);
         setPin("");
-      })
-      .finally(() => setBusy(false));
+        setBusy(false);
+      });
   };
   const [linkExpired, setLinkExpired] = useState(false);
   useEffect(() => {
@@ -83,9 +94,17 @@ export default function LoginPage() {
     if (q.get("link") === "expired" || h.get("error_code") === "otp_expired") setLinkExpired(true);
   }, []);
   const mustSet = cloud.status === "ready" && cloud.role !== "guest" && cloud.role !== "staff" && cloud.mustChangePassword;
+  // signed in: show a loader until the app opens (it loads the restaurant first)
+  const entering = (cloud.status === "ready" && cloud.role !== "guest" && !cloud.mustChangePassword) || (busy && mode === "staff");
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas lg:flex-row">
+      {entering && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-canvas/95 backdrop-blur-sm" role="status" aria-live="polite">
+          <CookingLoader size={64} label="Signing in" />
+          <p className="text-[15px] font-semibold text-ink/80">{cloud.status === "ready" ? "Opening your restaurant…" : "Signing in…"}</p>
+        </div>
+      )}
       <div className="relative isolate m-3 hidden flex-1 flex-col justify-between overflow-hidden rounded-[36px] bg-canvas p-12 lg:flex">
         <Mesh solid />
         <Link href="/" className="relative w-fit" aria-label="Restropi home"><Wordmark className="h-8" /></Link>
@@ -164,7 +183,7 @@ export default function LoginPage() {
                   autoComplete="tel-national"
                   maxLength={14}
                   value={phone}
-                  onChange={(e) => { setPhone(e.target.value.replace(/[^\d ]/g, "")); setError(""); }}
+                  onChange={(e) => { setPhone(e.target.value.replace(/[^\d ]/g, "")); setError(""); setChoices(null); }}
                   placeholder="98xxx xxxxx"
                 />
               </Field>
@@ -177,13 +196,32 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   maxLength={4}
                   value={pin}
-                  onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }}
+                  onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); setChoices(null); }}
                   placeholder="••••"
                 />
               </Field>
-              <Button type="submit" className="w-full" disabled={busy}>
-                <LogIn size={17} /> {busy ? "Signing in…" : "Sign in"}
-              </Button>
+              {choices ? (
+                <div className="space-y-2 rounded-group bg-surface p-3">
+                  <div className="px-1 text-[14px] font-semibold">This number works in {choices.length} restaurants. Which one?</div>
+                  {choices.map((c) => (
+                    <button
+                      key={c.rid}
+                      type="button"
+                      disabled={busy || c.paused}
+                      onClick={() => staffSignIn(undefined, c.rid)}
+                      className="flex w-full items-center justify-between rounded-[14px] bg-sunken px-4 py-3 text-left text-[15px] font-semibold active:scale-[.99] disabled:opacity-50"
+                    >
+                      {c.name}
+                      <span className="text-[12.5px] font-normal text-muted">{c.paused ? "paused" : "Sign in →"}</span>
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setChoices(null)} className="w-full pt-1 text-center text-[13px] font-medium text-muted">Cancel</button>
+                </div>
+              ) : (
+                <Button type="submit" className="w-full" disabled={busy}>
+                  <LogIn size={17} /> {busy ? "Signing in…" : "Sign in"}
+                </Button>
+              )}
               <p className="text-center text-[13px] text-faint">Use the mobile number your manager added for you and your 4-digit PIN.</p>
             </form>
           )}

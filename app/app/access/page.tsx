@@ -151,7 +151,7 @@ export default function AccessPage() {
       toast(`${PLAN_NAME[account.plan]} allows ${outletLimit} outlet${outletLimit > 1 ? "s" : ""}. Upgrade to add more.`);
       return;
     }
-    setOutletDraft({ id: "", name: "", address: "", businessType: "restaurant", upi: "", payFirst: false, isNew: true });
+    setOutletDraft({ id: "", name: "", address: "", businessType: "restaurant", mixed: true, upi: "", payFirst: false, isNew: true });
     setCopyMenuFrom(menuSources[0]?.id ?? "");
   };
   const outletOk = !!outletDraft && outletDraft.name.trim().length > 1 && isValidUpi(outletDraft.upi);

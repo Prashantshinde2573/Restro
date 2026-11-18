@@ -32,13 +32,22 @@ const MAX_B64 = 6_000_000; // ~4.5 MB per photo after base64
 // function has to answer within Supabase's 150 s limit. Google retires model
 // names often; when one is gone, the model Google suggests in its reply is tried next.
 type Model = { name: string; thinking?: Record<string, unknown> };
+// Lite models first: they read a menu just as well, answer faster and are busy less often.
 const MODELS: Model[] = [
   ...(Deno.env.get("GEMINI_MODEL") ? [{ name: Deno.env.get("GEMINI_MODEL")! }] : []),
-  { name: "gemini-3.8-flash", thinking: { thinkingLevel: "low" } },
   { name: "gemini-3.5-flash-lite", thinking: { thinkingLevel: "low" } },
-  { name: "gemini-flash-latest", thinking: { thinkingLevel: "low" } },
   { name: "gemini-flash-lite-latest", thinking: { thinkingLevel: "low" } },
+  { name: "gemini-3.8-flash", thinking: { thinkingLevel: "low" } },
+  { name: "gemini-flash-latest", thinking: { thinkingLevel: "low" } },
 ];
+const TRY_MS = 40_000; // one model may not hold the whole time (one waited 71 s just to say "busy")
+
+/** A problem the super admin should hear about (the key, or Google refusing everything). */
+class ReaderError extends Error {
+  constructor(message: string, readonly report?: string) {
+    super(message);
+  }
+}
 const DEADLINE_MS = 140_000; // stop trying before Supabase's 150 s limit
 const KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 
@@ -89,22 +98,30 @@ async function gemini(photos: Photo[]) {
   const started = Date.now();
   const parts = [{ text: PROMPT }, ...photos.map((p) => ({ inline_data: { mime_type: p.mime, data: p.data } }))];
   let last = "";
+  let busy = 0;
   const queue = [...MODELS];
   const tried = new Set<string>();
+  const retried = new Set<string>(); // models allowed one more try after "busy"
+  const attempts = new Map<string, number>();
   while (queue.length) {
     const m = queue.shift()!;
-    if (tried.has(m.name)) continue;
+    const n = attempts.get(m.name) ?? 0;
+    if (n >= (retried.has(m.name) ? 2 : 1)) continue;
+    attempts.set(m.name, n + 1);
     tried.add(m.name);
     for (const thinking of m.thinking ? [m.thinking, undefined] : [undefined]) {
       const left = DEADLINE_MS - (Date.now() - started);
-      if (left < 15_000) throw new Error("Reading took too long. Try fewer photos at a time (1–2 pages).");
+      if (left < 15_000) {
+        if (busy) throw new ReaderError("Google's menu reader is very busy right now. Please try again in a few minutes.", "Gemini: every model busy (503/429)");
+        throw new Error("Reading took too long. Try fewer photos at a time (1–2 pages).");
+      }
       const t0 = Date.now();
       let r: Response;
       try {
         r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m.name}:generateContent`, {
           method: "POST",
           headers: { "content-type": "application/json", "x-goog-api-key": KEY },
-          signal: AbortSignal.timeout(Math.min(left - 5_000, 75_000)),
+          signal: AbortSignal.timeout(Math.min(left - 5_000, TRY_MS)),
           body: JSON.stringify({
             contents: [{ role: "user", parts }],
             generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0, maxOutputTokens: 16_000, ...(thinking ? { thinkingConfig: thinking } : {}) },
@@ -128,10 +145,17 @@ async function gemini(photos: Photo[]) {
       if (r.status === 400 && thinking && /think/i.test(j?.error?.message ?? "")) continue; // same model, without the setting
       if (!r.ok) {
         const msg = j?.error?.message ?? `Gemini error ${r.status}`;
-        if (r.status === 429) throw new Error("The menu reader is busy (Gemini limit reached). Try again in a minute.");
-        if ((r.status === 400 || r.status === 403) && /API key|permission|PERMISSION/i.test(msg)) throw new Error("The Gemini key isn't working. Check GEMINI_API_KEY in Supabase.");
-        if (r.status >= 500) {
+        if ((r.status === 400 || r.status === 401 || r.status === 403) && /API key|permission|PERMISSION|API_KEY|billing/i.test(msg))
+          throw new ReaderError("Menu reading is not working right now. The Restropi team has been told.", `Gemini key not working (${r.status}): ${msg.slice(0, 160)}`);
+        if (r.status === 429 || r.status >= 500) {
+          // busy or over its limit: once more on the same model after a short wait, then the next model
+          busy++;
           last = `${m.name}: ${msg}`;
+          if (!retried.has(m.name) && DEADLINE_MS - (Date.now() - started) > 50_000) {
+            retried.add(m.name);
+            await new Promise((res) => setTimeout(res, 1500));
+            queue.push(m);
+          }
           break; // next model
         }
         throw new Error(msg);
@@ -146,6 +170,7 @@ async function gemini(photos: Photo[]) {
     }
   }
   console.log("no model answered:", last);
+  if (busy) throw new ReaderError("Google's menu reader is very busy right now. Please try again in a few minutes.", `Gemini: no model answered (${last.slice(0, 160)})`);
   throw new Error("The menu reader isn't answering right now. Try again in a minute, with one clear photo.");
 }
 
@@ -197,6 +222,12 @@ Deno.serve(async (req) => {
     } catch (e) {
       // give the photos back: nothing was read
       if (limited) await db.rpc("menu_scan_take", { p_rid: rid, p_day: day, p_n: -photos.length, p_max: DAILY_PHOTOS });
+      // tell the super admin (App errors), at most once an hour for the same problem
+      if (e instanceof ReaderError && e.report) {
+        const since = new Date(Date.now() - 3600_000).toISOString();
+        const { count } = await db.from("app_errors").select("id", { count: "exact", head: true }).eq("kind", "integration").eq("message", e.report).gte("at", since);
+        if (!count) await db.from("app_errors").insert({ rid, uid: who.user.id, role: "service", kind: "integration", message: e.report, context: { service: "menu reader (Gemini)", what: e.message } });
+      }
       throw e;
     }
     const { model, data } = read;

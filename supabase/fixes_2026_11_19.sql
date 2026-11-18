@@ -1,0 +1,6 @@
+-- 19 Nov 2026 fixes, applied live as migrations:
+--   order_guard_sizes_and_clock         guest order price check knows dish sizes; private.check_guest_lines();
+--                                       an order's createdAt can't be in the future (a phone clock running fast)
+--   new_outlet_serves_tables(_only_new) a new outlet serves at tables and the counter (mixed) by default
+--   wa_token_problem_to_app_errors      a WhatsApp token that stopped working shows in the super admin's App errors
+-- The function bodies are in the database; see the migration list in Supabase for the exact SQL.

@@ -238,6 +238,8 @@ export interface Order {
   status: OrderStatus;
   createdAt: string; // ISO
   staff: string;
+  /** the member who took the order (their name can change; this doesn't) */
+  staffId?: string;
   payment?: "upi" | "cash" | "card" | "split";
   payments?: Payment[]; // how the bill was actually settled (can be mixed)
   paymentLog?: PaymentLogEntry[]; // every later change, for the owner

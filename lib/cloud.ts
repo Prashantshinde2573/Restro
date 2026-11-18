@@ -311,8 +311,11 @@ async function callFn<T>(name: string, body: unknown, withUser = false): Promise
 }
 
 /** Staff sign in with their mobile number + 4-digit PIN, on any phone or tablet. */
-export async function signInStaff(phone: string, pin: string) {
-  const t = await callFn<{ access_token: string; refresh_token: string; rid: string; memberId: string }>("staff-login", { phone, pin });
+export type StaffChoice = { rid: string; name: string; paused?: boolean };
+/** Staff sign in. When the same number and PIN work in more than one restaurant, it returns the choices instead. */
+export async function signInStaff(phone: string, pin: string, rid?: string): Promise<{ rid: string; memberId: string } | { choose: StaffChoice[] }> {
+  const t = await callFn<{ access_token: string; refresh_token: string; rid: string; memberId: string; choose?: StaffChoice[] }>("staff-login", { phone, pin, ...(rid ? { rid } : {}) });
+  if (t.choose?.length) return { choose: t.choose };
   const { error } = await sb().auth.setSession({ access_token: t.access_token, refresh_token: t.refresh_token });
   if (error) throw new Error(error.message);
   return { rid: t.rid, memberId: t.memberId };
@@ -869,12 +872,6 @@ export async function adminList(): Promise<AdminRestaurant[]> {
   const { data, error } = await sb().rpc("admin_restaurants");
   if (error) throw new Error(error.message);
   return (data as AdminRestaurant[]) ?? [];
-}
-/** Super admin: paid sales per restaurant between two times. */
-export async function adminSales(from: Date, to: Date): Promise<{ rid: string; bills: number; sales: number }[]> {
-  const { data, error } = await sb().rpc("admin_sales", { p_from: from.toISOString(), p_to: to.toISOString() });
-  if (error) throw new Error(error.message);
-  return ((data as { rid: string; bills: number; sales: number | string }[]) ?? []).map((r) => ({ rid: r.rid, bills: Number(r.bills), sales: Number(r.sales) }));
 }
 export async function adminUpdate(
   rid: string,

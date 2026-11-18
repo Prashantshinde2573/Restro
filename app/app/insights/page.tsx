@@ -17,7 +17,7 @@ export default function InsightsPage() {
   const stock = useStock().filter((s) => !s.outletId || s.outletId === outlet.id);
   const now = Date.now();
   const week0 = startOfDay(now) - 6 * DAY_MS;
-  const week = between(orders, week0, now + 1);
+  const week = between(orders, week0, startOfDay(now) + DAY_MS);
   const lastWeek = between(orders, week0 - 7 * DAY_MS, week0);
 
   /* ---------- money leaks, last 7 days ---------- */
@@ -74,7 +74,7 @@ export default function InsightsPage() {
   const hours = new Array(24).fill(0);
   live(week).forEach((o) => hours[new Date(o.createdAt).getHours()]++);
   const peak = hours.indexOf(Math.max(...hours));
-  const sold14 = new Set(topDishes(between(orders, now - 14 * DAY_MS, now + 1), 10_000).map((d) => d.id));
+  const sold14 = new Set(topDishes(between(orders, now - 14 * DAY_MS, startOfDay(now) + DAY_MS), 10_000).map((d) => d.id));
   const slow = orders.length ? menu.filter((m) => m.available !== false && !sold14.has(m.id)) : [];
 
   return (
@@ -147,7 +147,7 @@ export default function InsightsPage() {
 
         {orders.length > 0 && (
           <p className="text-center text-[12.5px] text-faint">
-            Last order {timeAgo(orders[0].createdAt)} · <Banknote size={12} className="inline" /> {inr(totals(between(orders, startOfDay(now), now + 1)).sales)} today
+            Last order {timeAgo(orders[0].createdAt)} · <Banknote size={12} className="inline" /> {inr(totals(between(orders, startOfDay(now), startOfDay(now) + DAY_MS)).sales)} today
             {salesChange !== null && salesChange < 0 && <> · <TrendingDown size={12} className="inline text-rose" /> sales down this week</>}
           </p>
         )}

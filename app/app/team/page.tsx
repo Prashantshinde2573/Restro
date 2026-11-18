@@ -14,11 +14,11 @@ export default function TeamPage() {
   const members = useMembers().filter((m) => m.role === "owner" || m.outletIds.includes(outlet.id));
   const now = Date.now();
   const from = period === "today" ? startOfDay(now) : startOfDay(now) - 6 * DAY_MS;
-  const orders = between(inOutlet(useOrders(), outlet.id), from, now + 1).filter((o) => o.status !== "cancelled");
+  const orders = between(inOutlet(useOrders(), outlet.id), from, startOfDay(now) + DAY_MS).filter((o) => o.status !== "cancelled");
 
   const rows = members
     .map((m) => {
-      const mine = orders.filter((o) => o.staff === m.name);
+      const mine = orders.filter((o) => (o.staffId ? o.staffId === m.id : o.staff === m.name));
       return { m, count: mine.length, sales: paid(mine).reduce((s, o) => s + paidAmount(o), 0) };
     })
     .sort((a, b) => Number(b.m.active) - Number(a.m.active) || b.sales - a.sales || a.m.name.localeCompare(b.m.name));

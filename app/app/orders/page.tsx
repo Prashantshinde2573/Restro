@@ -92,7 +92,7 @@ export default function OrdersPage() {
 
   return (
     <>
-      <PageHeader title="Orders" subtitle={`${count("open")} open · ${inr(paidToday)} collected today`} actions={selfService ? <a href="/tokens" target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center rounded-full bg-surface px-3.5 text-[13.5px] font-semibold text-jade shadow-float">Now serving ↗</a> : undefined}>
+      <PageHeader title="Orders" subtitle={`${count("open")} open · ${inr(paidToday)} collected today`} >
         <Chips
           value={filter}
           onChange={setFilter}

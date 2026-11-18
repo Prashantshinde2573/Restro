@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, MessageCircle, QrCode, Receipt, ShieldCheck, Stamp as StampIcon, Store, Users } from "lucide-react";
+import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, MessageCircle, QrCode, Receipt, ShieldCheck, Stamp as StampIcon, Store } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -135,17 +135,6 @@ export default function SettingsPage() {
               <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>Change plan</Button>
             </div>
           </section>
-        )}
-
-        {(owner || me?.role === "subadmin") && (
-          <div className="overflow-hidden rounded-group bg-surface">
-            <Link href="/app/access" className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40">
-              <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#2C6EC8] text-white"><Users size={16} /></span>
-              <span className="flex-1 text-[15px]">{owner ? "Outlets, members & access" : "Staff & access"}</span>
-              <span className="text-[14px] text-muted">{owner ? `${outlets.length} outlet${outlets.length === 1 ? "" : "s"}` : outlet.name}</span>
-              <ChevronRight size={17} className="text-faint" />
-            </Link>
-          </div>
         )}
 
         {(owner || canOutlet) && (
@@ -309,11 +298,8 @@ export default function SettingsPage() {
                     <div className="text-[15px]">Self-service counter</div>
                     <div className="text-[12.5px] text-muted">Guest orders and pays by the counter QR, gets a token on the phone, and hears “ready, collect at the counter”. Staff tap Picked up.</div>
                   </div>
-                  <Toggle checked={!!draft.selfService} onChange={(v) => saveNow({ selfService: v, ...(v ? { payFirst: true } : {}) }, v ? "Self-service on · open the Now serving screen on a TV or tablet" : "Self-service off")} label="Self-service counter" />
+                  <Toggle checked={!!draft.selfService} onChange={(v) => saveNow({ selfService: v, ...(v ? { payFirst: true } : {}) }, v ? "Self-service on" : "Self-service off")} label="Self-service counter" />
                 </div>
-                {draft.selfService && (
-                  <a href="/tokens" target="_blank" rel="noopener noreferrer" className="block border-t border-line/80 px-4 py-3 text-[14px] font-semibold text-jade">Open the Now serving screen ↗</a>
-                )}
               </div>
             )}
             <div className="overflow-hidden rounded-group bg-surface">

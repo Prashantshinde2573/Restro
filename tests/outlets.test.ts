@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoriesFor, couponWorksIn, guestKey, guestsOf, mainOutletId, menuFor, stampProgramOf } from "@/lib/live";
+import { categoriesFor, couponWorksIn, pickOutlet, guestKey, guestsOf, mainOutletId, menuFor, stampProgramOf } from "@/lib/live";
 import type { Customer, MenuItem, Outlet } from "@/lib/types";
 
 const dish = (id: string, extra: Partial<MenuItem> = {}): MenuItem =>
@@ -60,5 +60,24 @@ describe("attendance and salary: who is on it", () => {
     expect(onPayroll({ ...base, role: "subadmin" })).toBe(false);
     expect(onPayroll({ ...base, role: "subadmin", payrollOn: true })).toBe(true);
     expect(onPayroll(null)).toBe(false);
+  });
+});
+
+describe("which outlet a person works in", () => {
+  const outlets = [{ id: "main" }, { id: "kolhapur" }];
+  const sub = { id: "m1", name: "Uddhav", role: "subadmin", outletIds: ["kolhapur"], perms: [], active: true } as unknown as Parameters<typeof pickOutlet>[1];
+  const owner = { id: "owner", name: "O", role: "owner", outletIds: [], perms: [], active: true } as unknown as Parameters<typeof pickOutlet>[1];
+  it("a sub admin never lands on another outlet, even if this device last showed it", () => {
+    expect(pickOutlet(outlets, sub, "main")?.id).toBe("kolhapur");
+    expect(pickOutlet(outlets, sub, "")?.id).toBe("kolhapur");
+    expect(pickOutlet(outlets, sub, "kolhapur")?.id).toBe("kolhapur");
+  });
+  it("the owner can switch to any outlet", () => {
+    expect(pickOutlet(outlets, owner, "kolhapur")?.id).toBe("kolhapur");
+    expect(pickOutlet(outlets, owner, "")?.id).toBe("main");
+  });
+  it("someone with no outlet left gets none (nothing is saved to a wrong one)", () => {
+    const none = { ...(sub as object), outletIds: [] } as unknown as Parameters<typeof pickOutlet>[1];
+    expect(pickOutlet(outlets, none, "main")).toBeUndefined();
   });
 });

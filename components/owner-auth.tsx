@@ -29,9 +29,10 @@ export function OwnerAuth() {
     setBusy(true);
     try {
       await signInOwner(email, password);
+      // stay busy until the app opens (the login page shows a loader while the restaurant loads)
+      window.setTimeout(() => setBusy(false), 20_000);
     } catch (e) {
       setError((e as Error).message);
-    } finally {
       setBusy(false);
     }
   };
@@ -130,7 +131,7 @@ export function OwnerAuth() {
         <PasswordInput autoComplete="current-password" value={password} onChange={setPassword} />
       </Field>
       <Button size="lg" type="submit" className="w-full" disabled={!canGo || busy}>
-        {busy ? "Signing in…" : "Sign in"}
+        {busy ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden /> Signing in…</> : "Sign in"}
       </Button>
       <div className="flex justify-between text-[13.5px] font-medium">
         <button type="button" onClick={reset} className="text-jade">Forgot password?</button>

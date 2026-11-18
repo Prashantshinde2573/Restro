@@ -27,6 +27,8 @@ Deno.serve(async (req) => {
       const { data, error } = await db.rpc("staff_by_phone", { p_digits: digits });
       if (error) return json({ error: "Could not sign in. Try again." }, 500);
       people = ((data ?? []) as { rid: string; member_id: string }[]).map((r) => ({ rid: r.rid, memberId: r.member_id }));
+      // the same number works in more than one restaurant: the one they picked
+      if (typeof body?.rid === "string" && body.rid) people = people.filter((p) => p.rid === body.rid);
       if (!people.length) return json({ error: "Wrong mobile number or PIN" }, 401);
     } else {
       if (typeof body?.rid !== "string" || typeof body?.memberId !== "string") return json({ error: "Wrong PIN" }, 400);
@@ -36,7 +38,7 @@ Deno.serve(async (req) => {
     // take a try slot for each, then check the PIN
     let missing = 0;
     let locked = 0;
-    let hit: (Who & { userId: string }) | null = null;
+    const hits: (Who & { userId: string })[] = [];
     for (const p of people) {
       const { data: slot, error: tryErr } = await db.rpc("staff_pin_try", { p_rid: p.rid, p_member: p.memberId });
       if (tryErr) return json({ error: "Could not sign in. Try again." }, 500);
@@ -44,8 +46,28 @@ Deno.serve(async (req) => {
       if (slot === "locked") { locked++; continue; }
       const { data: row } = await db.from("staff_pins").select("*").eq("rid", p.rid).eq("member_id", p.memberId).maybeSingle();
       if (!row) { missing++; continue; }
-      if (!hit && (await checkPin(pin, row.pin_hash))) hit = { ...p, userId: row.user_id };
+      if (await checkPin(pin, row.pin_hash)) hits.push({ ...p, userId: row.user_id });
     }
+    if (hits.length > 1) {
+      // only restaurants where this person can still sign in
+      const { data: ms } = await db.from("members").select("rid,id,data").in("rid", hits.map((h) => h.rid));
+      const ok = (h: Who) => {
+        const d = ms?.find((x) => x.rid === h.rid && x.id === h.memberId)?.data as MemberData | undefined;
+        return !!d && d.active !== false && d.role !== "owner";
+      };
+      const usable = hits.filter(ok);
+      if (usable.length === 1) hits.splice(0, hits.length, usable[0]);
+    }
+    if (hits.length > 1) {
+      // same number and PIN in two or more restaurants: ask which one (never guess)
+      for (const h of hits) await db.from("staff_pins").update({ fails: 0, locked_until: null }).eq("rid", h.rid).eq("member_id", h.memberId);
+      const { data: rs } = await db.from("restaurants").select("id,name,status").in("id", hits.map((h) => h.rid));
+      const choose = hits
+        .map((h) => ({ rid: h.rid, name: rs?.find((x) => x.id === h.rid)?.name ?? "Restaurant", paused: rs?.find((x) => x.id === h.rid)?.status === "suspended" }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return json({ choose });
+    }
+    const hit = hits[0] ?? null;
     if (!hit) {
       if (locked && locked + missing === people.length) return json({ error: "Too many tries. Wait 15 minutes." }, 429);
       if (missing === people.length) return json({ error: "No PIN set yet. Ask your manager to set one." }, 404);
