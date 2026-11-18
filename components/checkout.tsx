@@ -1,13 +1,15 @@
 "use client";
 
 import clsx from "clsx";
-import { Banknote, CheckCircle2, Clock3, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X } from "lucide-react";
+import { Banknote, CheckCircle2, Clock3, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X, Stamp as StampIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, Sheet, inputCls, Pill } from "./ui";
 import { ScanQr } from "./qr";
 import { upiUri } from "./upi";
-import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, useCan, useCoupons, useCurrentOutlet, useFeature, useMe, useSettings } from "@/lib/live";
-import { printReceipt, receiptPdfBlob, receiptText } from "./receipt";
+import { couponActions, couponLabel, couponOff, couponProblem, guestActions, normCode, stampActions, useCan, useAllMenu, useCoupons, useCurrentOutlet, useFeature, useGuests, useMe, useMenu, useSettings } from "@/lib/live";
+import { liveStamps, mayAct, programOf, rewardOff, stampProblem } from "@/lib/stamps";
+import { StampBox } from "./stamps";
+import { billFileName, printReceipt, receiptPdfBlob, receiptText } from "./receipt";
 import { useToast } from "./toast";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import { PaymentSplit, paidSum } from "./payment-split";
@@ -15,12 +17,8 @@ import type { Coupon, Payment, PayMethod } from "@/lib/types";
 
 type Method = "upi" | "cash" | "card" | "mixed" | "split";
 
-export function billTotals(subtotal: number, discount = 0) {
-  const taxable = Math.max(0, subtotal - discount);
-  const gst = Math.round(taxable * gstRate() * 100) / 100;
-  const total = Math.round(taxable + gst);
-  return { subtotal, discount, taxable, cgst: gst / 2, sgst: gst / 2, roundOff: total - (taxable + gst), total };
-}
+export { billTotals } from "@/lib/bill-totals";
+import { billTotals } from "@/lib/bill-totals";
 
 export function Checkout({
   open,
@@ -32,6 +30,9 @@ export function Checkout({
   prepaid,
   lines,
   billNo,
+  guest,
+  couponCode,
+  onCoupon,
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,10 +44,17 @@ export function Checkout({
   prepaid?: Payment[]; // already paid by the guest from their phone (e.g. UPI half)
   lines?: { name: string; qty: number; price: number }[]; // what's on the bill (for the receipt)
   billNo?: number;
+  /** the guest on this bill, when known (QR orders): fills in the name and number */
+  guest?: { name?: string; phone?: string };
+  /** coupon code the guest applied on their phone: put on the bill when it still works */
+  couponCode?: string;
+  /** a coupon was put on or taken off this bill here: the guest's phone shows the same bill */
+  onCoupon?: (code?: string) => void;
 }) {
   const toast = useToast();
   const [method, setMethod] = useState<Method>("upi");
   const [discountPct, setDiscountPct] = useState(0);
+  // cash handed over; null = the exact amount (the default, follows the total)
   const [cash, setCash] = useState<number | null>(null);
   const [guests, setGuests] = useState(3);
   const [paidGuests, setPaidGuests] = useState<number[]>([]);
@@ -61,7 +69,14 @@ export function Checkout({
   const [codeErr, setCodeErr] = useState("");
   const coupons = useCoupons();
   const canDiscount = useCan("discount");
-  const couponsOn = useFeature("coupons") === "ok" && canDiscount;
+  const couponFeature = useFeature("coupons") === "ok";
+  const couponsOn = couponFeature && canDiscount;
+  // stamp card
+  const [useRewardRaw, setUseReward] = useState<boolean | null>(null); // null = on whenever the card is full
+  const [giveStamp, setGiveStamp] = useState<boolean | null>(null); // null = the program's default
+  const menu = useMenu();
+  const allMenu = useAllMenu(); // the stamp card's free dish may be on another outlet's menu (a brand-wide card)
+  const guestsList = useGuests();
 
   // Start fresh each time the sheet opens — not when the bill behind it changes
   // (paying changes it, and that used to throw the "Paid" screen back to "Charge").
@@ -71,16 +86,21 @@ export function Checkout({
     wasOpen.current = open;
     if (opening) {
       setDone(false);
+      setStampNote(null);
       setWaiting(false);
       setPaidGuests([]);
       setCash(null);
       setDiscountPct(0);
       setCustom({ on: false, kind: "pct", value: "" });
-      setPhone("");
-      setGuestName("");
-      setCoupon(null);
-      setCode("");
-      setCodeErr("");
+      setPhone(guest?.phone ?? "");
+      setGuestName(guest?.name ?? "");
+      setUseReward(null);
+      setGiveStamp(null);
+      const asked = couponCode && couponFeature ? coupons.find((x) => x.code === normCode(couponCode)) : undefined;
+      const ok = asked && !couponProblem(asked, subtotal);
+      setCoupon(ok ? asked! : null);
+      setCode(ok ? asked!.code : "");
+      setCodeErr(asked && !ok ? `Guest's coupon ${asked.code}: ${couponProblem(asked, subtotal)}` : "");
       const pre = paidSum(prepaid ?? []);
       if (pre > 0) {
         // Guest paid part by UPI from their phone: open on "UPI + Cash" with that part filled in.
@@ -98,7 +118,22 @@ export function Checkout({
     const v = Math.max(0, Number(custom.value) || 0);
     return Math.min(subtotal, Math.round(custom.kind === "pct" ? (subtotal * Math.min(v, 100)) / 100 : v));
   })();
-  const t = billTotals(subtotal, coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100));
+  const settingsEarly = useSettings();
+  const meEarly = useMe();
+  const stampsOn = useFeature("stamps") === "ok" && !!settingsEarly.stamps?.on;
+  const prog = programOf(settingsEarly.stamps);
+  const phoneKey = phone.replace(/\D/g, "").slice(-10);
+  const stampGuest = stampsOn && phoneKey.length === 10 ? guestsList.find((c) => c.phone.replace(/\D/g, "").slice(-10) === phoneKey) : undefined;
+  const liveCount = liveStamps(stampGuest, prog).length;
+  const canRedeem = stampsOn && liveCount >= prog.needed && mayAct(meEarly, prog.redeemers);
+  const useReward = canRedeem && (useRewardRaw ?? true);
+  const rewardAmt = useReward ? rewardOff(prog, subtotal, allMenu) : 0;
+  const stampWhyNot = stampsOn && phoneKey.length === 10 ? stampProblem(prog, stampGuest, subtotal) : null;
+  const mayGive = mayAct(meEarly, prog.givers);
+  // the bill that uses the reward earns no stamp: the new card starts at 0
+  const willStamp = stampsOn && phoneKey.length === 10 && !stampWhyNot && mayGive && !(rewardAmt > 0) && (giveStamp ?? prog.auto);
+  const baseOff = coupon ? couponOff(coupon, subtotal) : custom.on ? customOff : Math.round((subtotal * discountPct) / 100);
+  const t = billTotals(subtotal, Math.min(subtotal, baseOff + rewardAmt));
   const perGuest = Math.ceil(t.total / guests);
   const settings = useSettings();
   const splitOn = useFeature("splitByGuest") === "ok";
@@ -118,6 +153,8 @@ export function Checkout({
   }, [method, mixed.length]);
 
   const [paidWith, setPaidWith] = useState<Payment[]>([]);
+  // what happened to the stamp card on this bill (shown on the Paid screen and in the e-bill)
+  const [stampNote, setStampNote] = useState<string | null>(null);
   const outlet = useCurrentOutlet();
   const me = useMe();
   const receipt = () => ({
@@ -144,6 +181,16 @@ export function Checkout({
     // a number typed at billing puts this guest (and the bill) in the guest book
     if (phone.replace(/\D/g, "").length >= 10)
       guestActions.fromBill(guestName, phone, { orderNo: billNo ?? 0, amount: t.total, method: payments.map((p) => p.method.toUpperCase()).join(" + ") });
+    // stamp card: the reward first (a new card starts), then this bill's stamp
+    setStampNote(
+      rewardAmt > 0
+        ? `${prog.reward} used · new stamp card ${Math.max(0, liveCount - prog.needed)}/${prog.needed}`
+        : willStamp
+          ? `Stamp added · ${liveCount + 1}/${prog.needed} for ${prog.reward}`
+          : null,
+    );
+    if (rewardAmt > 0) stampActions.redeem(phone, liveCount, prog.needed, { reward: prog.reward, amount: rewardAmt, orderNo: billNo, by: me?.name, outletId: outlet.id });
+    if (willStamp) stampActions.give(phone, { orderNo: billNo, by: me?.name, outletId: outlet.id });
     const r = onPaid?.(payments, { coupon: coupon?.code, discount: t.discount });
     setWaiting(r === "waiting");
   };
@@ -164,8 +211,8 @@ export function Checkout({
             {paidGuests.length < guests ? `${guests - paidGuests.length} share${guests - paidGuests.length > 1 ? "s" : ""} left to collect` : `Close bill · ${inr(t.total)}`}
           </Button>
         ) : (
-          <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? 0) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
-            {method === "upi" ? "Payment received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
+          <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? t.total) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
+            {method === "upi" ? "UPI received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
           </Button>
         )
       }
@@ -181,6 +228,11 @@ export function Checkout({
               ? `${label} is marked paid. The owner confirms it once the money is in; until then the bill stays open.`
               : `${label} is paid and closed.`}
           </p>
+          {stampNote && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-jade-soft px-3.5 py-1.5 text-[14px] font-semibold text-jade-deep">
+              <StampIcon size={15} /> {stampNote}
+            </div>
+          )}
           <div className="mt-8 w-full max-w-sm space-y-3 text-left">
             <Field label="Send e-bill on WhatsApp" hint="No paper needed. Opens WhatsApp with the bill typed in.">
               <div className="flex gap-2">
@@ -191,7 +243,7 @@ export function Checkout({
                   onClick={() => {
                     const d = phone.replace(/\D/g, "").slice(-10);
                     if (d.length !== 10) return toast("Add a 10-digit number first");
-                    window.open(`https://wa.me/91${d}?text=${encodeURIComponent(receiptText(receipt()))}`, "_blank");
+                    window.open(`https://wa.me/91${d}?text=${encodeURIComponent(receiptText(receipt()) + (stampNote ? `\n\n🎟️ ${stampNote}` : ""))}`, "_blank");
                   }}
                 >
                   <MessageCircle size={17} /> Send
@@ -203,7 +255,7 @@ export function Checkout({
               className="w-full"
               onClick={async () => {
                 const r = receipt();
-                const name = `bill-${billNo ?? "receipt"}.pdf`;
+                const name = `${billFileName(r)}.pdf`;
                 const file = new File([receiptPdfBlob(r)], name, { type: "application/pdf" });
                 // phones: share sheet → pick WhatsApp and the guest; computers: download it
                 if (navigator.canShare?.({ files: [file] })) {
@@ -237,6 +289,48 @@ export function Checkout({
             <input className={clsx(inputCls, "!h-11 !text-[15px]")} placeholder="Customer name" value={guestName} onChange={(e) => setGuestName(e.target.value)} aria-label="Customer name (optional)" autoComplete="off" />
             <input className={clsx(inputCls, "!h-11 !text-[15px]")} inputMode="tel" placeholder="Mobile (optional)" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d +]/g, ""))} aria-label="Customer mobile number (optional)" autoComplete="off" />
           </div>
+          {/* how the guest pays: first, so it's never missed below the fold */}
+          {prepaidSum > 0 && (
+            <div className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
+              Guest already paid <b>UPI {inr(prepaidSum)}</b> from their phone. Collect <b>{inr(Math.max(0, t.total - prepaidSum))}</b> in cash.
+            </div>
+          )}
+          {preferred && !prepaidSum && (
+            <div className="flex items-center gap-2 rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
+              Guest chose <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> from their phone. You can still change it.
+            </div>
+          )}
+          <div className={clsx("grid gap-2", methods.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
+            {methods.map((m) => (
+              <button
+                key={m.v}
+                onClick={() => setMethod(m.v)}
+                className={clsx(
+                  "flex flex-col items-center gap-1.5 rounded-[16px] px-1 py-3 text-[12.5px] font-semibold transition",
+                  method === m.v ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
+                )}
+              >
+                <m.icon size={20} />
+                <span className="text-center leading-tight">{m.label}</span>
+              </button>
+            ))}
+          </div>
+          {stampsOn && (
+            <StampBox
+              phoneOk={phoneKey.length === 10}
+              name={stampGuest?.name || guestName}
+              have={liveCount}
+              program={prog}
+              rewardAmt={rewardOff(prog, subtotal, allMenu)}
+              canRedeem={canRedeem}
+              useReward={useReward}
+              onUseReward={setUseReward}
+              mayGive={mayGive}
+              whyNot={rewardAmt > 0 ? "No stamp on the reward bill · the card starts again at 0" : stampWhyNot}
+              give={willStamp}
+              onGive={(v) => setGiveStamp(v)}
+            />
+          )}
           {/* totals */}
           <div className="rounded-group bg-surface p-4">
             <div className="flex items-baseline justify-between">
@@ -245,7 +339,8 @@ export function Checkout({
             </div>
             <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
               <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
-              {t.discount > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount, { decimals: true })}</dd></div>}
+              {t.discount - rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{coupon ? `Coupon ${coupon.code}` : "Discount"}</dt><dd className="tnum">−{inr(t.discount - rewardAmt, { decimals: true })}</dd></div>}
+              {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>Stamp card · {prog.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt>CGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>SGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
@@ -254,7 +349,7 @@ export function Checkout({
               {[0, 5, 10].map((p) => (
                 <button
                   key={p}
-                  onClick={() => { setDiscountPct(p); setCoupon(null); setCustom((c) => ({ ...c, on: false })); }}
+                  onClick={() => { setDiscountPct(p); if (coupon) onCoupon?.(undefined); setCoupon(null); setCustom((c) => ({ ...c, on: false })); }}
                   className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", !coupon && !custom.on && discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
                 >
                   <Percent size={13} />
@@ -262,7 +357,7 @@ export function Checkout({
                 </button>
               ))}
               <button
-                onClick={() => { setCoupon(null); setCustom((c) => ({ ...c, on: true })); }}
+                onClick={() => { if (coupon) onCoupon?.(undefined); setCoupon(null); setCustom((c) => ({ ...c, on: true })); }}
                 className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", custom.on && !coupon ? "bg-ink text-canvas" : "bg-sunken text-muted")}
               >
                 Custom
@@ -294,7 +389,7 @@ export function Checkout({
                 <div className="mt-3 flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
                   <Ticket size={16} />
                   <span className="flex-1"><b>{coupon.code}</b> · {couponLabel(coupon)}</span>
-                  <button aria-label="Remove coupon" onClick={() => setCoupon(null)} className="p-1"><X size={15} /></button>
+                  <button aria-label="Remove coupon" onClick={() => { setCoupon(null); onCoupon?.(undefined); }} className="p-1"><X size={15} /></button>
                 </div>
               ) : (
                 <form
@@ -308,6 +403,7 @@ export function Checkout({
                     setDiscountPct(0);
                     setCustom((x) => ({ ...x, on: false }));
                     setCoupon(c!);
+                    onCoupon?.(c!.code);
                   }}
                 >
                   <input
@@ -324,32 +420,6 @@ export function Checkout({
             {codeErr && <p className="mt-1.5 text-[12.5px] text-rose">{codeErr}</p>}
           </div>
 
-          {/* method */}
-          {prepaidSum > 0 && (
-            <div className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
-              Guest already paid <b>UPI {inr(prepaidSum)}</b> from their phone. Collect <b>{inr(Math.max(0, t.total - prepaidSum))}</b> in cash.
-            </div>
-          )}
-          {preferred && !prepaidSum && (
-            <div className="flex items-center gap-2 rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
-              Guest chose <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> from their phone. You can still change it.
-            </div>
-          )}
-          <div className={clsx("grid gap-2", methods.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
-            {methods.map((m) => (
-              <button
-                key={m.v}
-                onClick={() => setMethod(m.v)}
-                className={clsx(
-                  "flex flex-col items-center gap-1.5 rounded-[16px] px-1 py-3 text-[12.5px] font-semibold transition",
-                  method === m.v ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
-                )}
-              >
-                <m.icon size={20} />
-                <span className="text-center leading-tight">{m.label}</span>
-              </button>
-            ))}
-          </div>
 
           {method === "upi" && (
             <div className="flex flex-col items-center rounded-group bg-surface p-5 text-center">
@@ -374,14 +444,14 @@ export function Checkout({
                   .map((v) => (
                     <button
                       key={v}
-                      onClick={() => setCash(v)}
-                      className={clsx("rounded-ctl py-3 text-[16px] font-semibold tnum", cash === v ? "bg-jade text-white" : "bg-sunken")}
+                      onClick={() => setCash(v === t.total ? null : v)}
+                      className={clsx("rounded-ctl py-3 text-[16px] font-semibold tnum", (cash ?? t.total) === v ? "bg-jade text-white" : "bg-sunken")}
                     >
                       {v === t.total ? "Exact" : inr(v)}
                     </button>
                   ))}
               </div>
-              {cash !== null && cash >= t.total && (
+              {cash !== null && cash > t.total && (
                 <div className="mt-4 flex items-baseline justify-between rounded-ctl bg-jade-soft px-4 py-3">
                   <span className="text-[15px] font-medium text-jade-deep">Give back</span>
                   <span className="text-[24px] font-semibold text-jade-deep tnum">{inr(cash - t.total)}</span>

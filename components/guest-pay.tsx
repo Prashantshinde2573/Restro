@@ -3,17 +3,18 @@
 // How the guest pays from their phone: UPI (exact-amount QR), cash, cash + UPI,
 // or card. And the thank-you screen they see once the bill is settled.
 
+import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { Banknote, Check, CreditCard, Layers, QrCode, Star } from "lucide-react";
+import { Banknote, Check, CreditCard, Layers, Lock, QrCode, Star, Ticket, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./ui";
 import { UpiPayCard } from "./upi";
 import { useToast } from "./toast";
 import { inr } from "@/lib/format";
 import type { Payment } from "@/lib/types";
+import { guestCoupon, type GuestCoupon } from "@/lib/cloud";
+import { currentOutletId } from "@/lib/live";
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 export type GuestPayChoice = "upi" | "cash" | "mixed" | "card";
 
@@ -30,7 +31,17 @@ export function PayPanel({
   onCash,
   onCard,
   onMixed,
+  online,
+  onOnline,
+  onlineBusy = false,
+  onlineAmount,
 }: {
+  /** what the gateway will charge, when it differs (a tip is not taken online) */
+  onlineAmount?: number;
+  /** the outlet takes payments on its own gateway: the guest can pay in the gateway's checkout */
+  online?: { provider: "razorpay" | "cashfree"; mode: "test" | "live" } | null;
+  onOnline?: () => void;
+  onlineBusy?: boolean;
   amount: number;
   upi: string;
   payee: string;
@@ -78,6 +89,19 @@ export function PayPanel({
 
   return (
     <div className="space-y-4">
+      {online && onOnline && (
+        <div className="rounded-group bg-jade-soft p-4">
+          <Button size="lg" className="w-full" disabled={onlineBusy} onClick={onOnline}>
+            <Lock size={17} /> {onlineBusy ? tx(lang, "Opening payment…", "पेमेंट उघडत आहे…") : tx(lang, `Pay ${inr(onlineAmount ?? amount)} online`, `${inr(onlineAmount ?? amount)} ऑनलाइन भरा`)}
+          </Button>
+          <p className="mt-2 text-center text-[12.5px] leading-snug text-jade-deep">
+            {tx(lang, "Any UPI app or card · the bill closes by itself", "कोणतेही UPI ॲप किंवा कार्ड · बिल आपोआप बंद होते")}
+            {onlineAmount != null && onlineAmount < amount && <span className="block">{tx(lang, "Tip is not added online. Give it to the staff if you like.", "ऑनलाइन टिप जोडली जात नाही. हवी असल्यास स्टाफला द्या.")}</span>}
+            <span className="block text-jade-deep/70">{tx(lang, `Secure payment by ${online.provider === "razorpay" ? "Razorpay" : "Cashfree"}`, `${online.provider === "razorpay" ? "Razorpay" : "Cashfree"} द्वारे सुरक्षित पेमेंट`)}{online.mode === "test" ? " · TEST" : ""}</span>
+          </p>
+        </div>
+      )}
+      {online && onOnline && <div className="text-center text-[12.5px] font-semibold uppercase tracking-wider text-faint">{tx(lang, "or pay another way", "किंवा दुसऱ्या प्रकारे भरा")}</div>}
       <div className={clsx("grid gap-2", choices.length === 4 ? "grid-cols-4" : "grid-cols-3")} role="radiogroup" aria-label={tx(lang, "How will you pay?", "कसे भरणार?")}>
         {choices.map(({ v, label, icon: I }) => (
           <button
@@ -176,10 +200,16 @@ export function ThankYou({
   token,
   lang,
   pending = false,
+  closed = false,
   onRate,
   onClose,
   children,
+  stamp,
 }: {
+  /** the guest's stamp card, shown under the rating */
+  stamp?: ReactNode;
+  /** the visit is over (own page): no "Done", ask to scan the QR to order again */
+  closed?: boolean;
   /** the guest says they paid; the owner hasn't confirmed it yet */
   pending?: boolean;
   name?: string;
@@ -189,7 +219,7 @@ export function ThankYou({
   token?: number;
   lang: Lang;
   onRate: (stars: number, text: string) => void;
-  onClose: () => void;
+  onClose?: () => void;
   children?: ReactNode;
 }) {
   const [stars, setStars] = useState(0);
@@ -244,7 +274,7 @@ export function ThankYou({
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={stars >= 4 ? tx(lang, "What did you like? (optional)", "काय आवडलं? (ऐच्छिक)") : tx(lang, "What went wrong? It goes straight to the owner.", "काय चुकलं? थेट मालकाला जाईल.")}
-                  className="w-full rounded-ctl bg-surface p-3 text-[15px] outline-none ring-1 ring-line focus:ring-2 focus:ring-jade"
+                  className="w-full rounded-ctl bg-surface p-3 text-[15px] outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
                 />
                 <Button size="lg" variant="tinted" className="mt-2 w-full" onClick={() => { onRate(stars, text); setSent(true); }}>
                   {tx(lang, "Send rating", "रेटिंग पाठवा")}
@@ -254,7 +284,95 @@ export function ThankYou({
           </>
         )}
       </div>
-      <Button size="lg" className="mt-6 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
+      {stamp}
+      {closed ? (
+        <div className="mt-6 flex w-full items-center gap-3 rounded-[18px] bg-surface p-4 text-left">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><QrCode size={20} /></span>
+          <span className="text-[14px] leading-snug text-muted">
+            <b className="block text-[15px] text-ink">{tx(lang, "Your visit is complete", "तुमची भेट पूर्ण झाली")}</b>
+            {tx(lang, "Want to order again? Scan the QR on your table.", "पुन्हा ऑर्डर करायची आहे? टेबलवरचा QR पुन्हा स्कॅन करा.")}
+          </span>
+        </div>
+      ) : (
+        <Button size="lg" className="mt-6 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
+      )}
     </div>
+  );
+}
+
+/** Discount of a coupon on this many rupees of food (0 when the bill is too small). */
+export function guestCouponOff(c: GuestCoupon | null, subtotal: number) {
+  if (!c || (c.minBill && subtotal < c.minBill)) return 0;
+  const raw = c.kind === "percent" ? (subtotal * c.value) / 100 : c.value;
+  return Math.max(0, Math.min(subtotal, Math.round(c.kind === "percent" && c.maxOff ? Math.min(raw, c.maxOff) : raw)));
+}
+const couponText = (c: GuestCoupon, lang: Lang) =>
+  c.kind === "percent"
+    ? tx(lang, `${c.value}% off${c.maxOff ? ` (up to ${inr(c.maxOff)})` : ""}`, `${c.value}% सूट${c.maxOff ? ` (${inr(c.maxOff)} पर्यंत)` : ""}`)
+    : tx(lang, `${inr(c.value)} off`, `${inr(c.value)} सूट`);
+
+/** "Have a coupon code?" on the guest's bill: type the code from the restaurant's WhatsApp message. */
+export function CouponBox({ lang, subtotal, applied, onChange }: { lang: Lang; subtotal: number; applied: GuestCoupon | null; onChange: (c: GuestCoupon | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (applied) {
+    const off = guestCouponOff(applied, subtotal);
+    return (
+      <div className="flex items-center gap-3 rounded-group bg-jade-soft p-3.5 text-jade-deep">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white"><Ticket size={17} /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold">{applied.code} · {couponText(applied, lang)}</div>
+          <div className="text-[12.5px] text-jade-deep/80">
+            {off > 0
+              ? tx(lang, `You save ${inr(off)} on this bill`, `या बिलावर ${inr(off)} वाचले`)
+              : tx(lang, `Works on bills of ${inr(applied.minBill ?? 0)} or more`, `${inr(applied.minBill ?? 0)} किंवा जास्तच्या बिलावर`)}
+          </div>
+        </div>
+        <button type="button" aria-label={tx(lang, "Remove coupon", "कूपन काढा")} onClick={() => onChange(null)} className="p-1.5"><X size={16} /></button>
+      </div>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-3 rounded-group border-[1.5px] border-dashed border-line bg-surface p-3.5 text-left">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade"><Ticket size={17} /></span>
+        <span className="flex-1 text-[15px] font-semibold">{tx(lang, "Have a coupon code?", "कूपन कोड आहे?")}</span>
+        <span className="text-[13.5px] font-semibold text-jade">{tx(lang, "Apply", "वापरा")}</span>
+      </button>
+    );
+  }
+  const apply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const c = code.trim();
+    if (c.length < 3) return setErr(tx(lang, "Enter the code", "कोड टाका"));
+    setBusy(true);
+    setErr("");
+    const r = await guestCoupon(c, currentOutletId()).catch(() => ({ problem: "Couldn't check the code. Try again." }) as { coupon?: GuestCoupon; problem?: string });
+    setBusy(false);
+    if (!r.coupon) return setErr(r.problem ?? "No coupon with this code");
+    if (r.coupon.minBill && subtotal < r.coupon.minBill) return setErr(tx(lang, `Works on bills of ${inr(r.coupon.minBill)} or more`, `${inr(r.coupon.minBill)} किंवा जास्तच्या बिलावरच चालतो`));
+    onChange(r.coupon);
+    setOpen(false);
+    setCode("");
+  };
+  return (
+    <form onSubmit={apply} className="rounded-group bg-surface p-3.5">
+      <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Coupon code", "कूपन कोड")}</div>
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          value={code}
+          onChange={(e) => { setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)); setErr(""); }}
+          placeholder={tx(lang, "e.g. WELCOME10", "उदा. WELCOME10")}
+          aria-label={tx(lang, "Coupon code", "कूपन कोड")}
+          autoCapitalize="characters"
+          className="h-11 min-w-0 flex-1 rounded-ctl bg-canvas px-3.5 text-[15px] font-semibold uppercase tracking-wide outline-none ring-1 ring-line focus:ring-jade/40"
+        />
+        <Button type="submit" disabled={busy}>{busy ? "…" : tx(lang, "Apply", "वापरा")}</Button>
+      </div>
+      {err && <p className="mt-2 text-[13px] font-medium text-rose">{err}</p>}
+    </form>
   );
 }

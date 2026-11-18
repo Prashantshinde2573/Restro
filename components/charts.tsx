@@ -26,7 +26,8 @@ function ticks(max: number, count = 4) {
   if (max <= 0) return [0, 1];
   const raw = max / count;
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
+  // whole steps only (orders and rupees): a chart of 0–1 shows 0 and 1, not 0, 0, 1, 1, 1
+  const step = Math.max(1, Math.ceil([1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw));
   const top = Math.ceil(max / step) * step;
   return Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
 }

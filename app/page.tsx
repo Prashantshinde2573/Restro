@@ -1,20 +1,25 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { PricingTable } from "@/components/pricing";
-import { MobileCta, SiteFooter, SiteNav, WhatsAppTab } from "@/components/site/chrome";
+import { MobileCta, SiteFooter, SiteNav } from "@/components/site/chrome";
 import { Hero, MadeFor } from "@/components/site/hero";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
+import { JsonLd } from "@/components/site/json-ld";
 import { SectionHead } from "@/components/site/head";
-import { Features, Only, Statement, Story, WhyRestropi } from "@/components/site/sections";
+import { Features, Only, Story, WhyRestropi } from "@/components/site/sections";
+import { ScanStory } from "@/components/site/scan-story";
 
 export default function Landing() {
   return (
     <SiteMotion>
       <div className="min-h-dvh overflow-x-clip bg-canvas">
+        <JsonLd page="home" />
         <SiteNav onVideo />
         <main>
           <Hero />
           <MadeFor />
-          <Statement />
+          <ScanStory />
           <WhyRestropi />
           <Features />
           <Story />
@@ -26,6 +31,18 @@ export default function Landing() {
               <div className="mt-6 lg:mt-8">
                 <PricingTable />
               </div>
+              <div data-reveal className="mt-8 flex flex-col items-center gap-2 text-center lg:mt-10">
+                <Link
+                  href="/pricing"
+                  className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink ring-1 ring-black/[.06] transition hover:bg-jade-soft"
+                >
+                  Compare all plans in detail
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-white transition group-hover:translate-x-0.5">
+                    <ArrowRight size={17} />
+                  </span>
+                </Link>
+                <span className="text-[13px] text-ink/65">Every feature, side by side</span>
+              </div>
             </div>
           </section>
 
@@ -33,7 +50,6 @@ export default function Landing() {
         <SiteFooter />
         <MobileCta />
         <HelpChat />
-        <WhatsAppTab />
       </div>
     </SiteMotion>
   );

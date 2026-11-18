@@ -9,7 +9,7 @@ export const plans: Plan[] = [
     yearly: 6990,
     blurb: "For a café or a single small outlet.",
     outlets: "1 outlet · 3 staff logins",
-    features: ["Billing with UPI QR and GST", "Menu and tables", "Kitchen orders (KOT) on phone or tablet", "WhatsApp e-bills", "Daily sales report"],
+    features: ["QR ordering and payment from the table", "Billing with UPI QR and GST", "Menu and tables", "Kitchen orders (KOT) on phone or tablet", "WhatsApp e-bills", "Daily sales report"],
   },
   {
     id: "growth",
@@ -18,7 +18,7 @@ export const plans: Plan[] = [
     yearly: 19990,
     blurb: "For a busy restaurant that wants fewer leaks.",
     outlets: "1 outlet · unlimited staff",
-    features: ["Everything in Starter", "QR ordering and payment from the table", "Split the bill equally by guest", "Stock and dish costing", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests"],
+    features: ["Everything in Starter", "Split the bill equally by guest", "Stock and dish costing", "Staff attendance and salary slips", "Restropi Pulse daily briefing", "Guest book and feedback", "WhatsApp campaigns", "Discount coupons for guests", "Stamp card for regulars"],
     highlight: true,
   },
   {
@@ -28,7 +28,7 @@ export const plans: Plan[] = [
     yearly: 29990,
     blurb: "For owners who want the numbers to run themselves.",
     outlets: "Up to 3 outlets",
-    features: ["Everything in Growth", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
+    features: ["Everything in Growth", "WhatsApp API: bills and offers sent from your own number", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
   },
   {
     id: "chain",
@@ -53,3 +53,7 @@ export function cyclePrice(p: Pick<Plan, "monthly" | "yearly">, c: Cycle): numbe
   if (!p.monthly) return null;
   return c === "monthly" ? p.monthly : c === "half" ? p.monthly * 5 : p.yearly ?? p.monthly * 10;
 }
+
+/** GST on Restropi plan payments. 0 until Restropi is GST-registered; set to 0.18 then
+ *  (the plan sheet, website prices and help text all follow this). */
+export const PLAN_GST_RATE = 0;

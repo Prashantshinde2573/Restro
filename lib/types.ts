@@ -10,6 +10,8 @@ export interface Category {
   id: string;
   name: string;
   icon?: string; // emoji shown in the guest side bar
+  /** the outlet this category is in (missing = the first outlet, from before outlets had their own menus) */
+  outletIds?: string[];
 }
 
 export type BusinessType = "restaurant" | "cafe";
@@ -34,11 +36,16 @@ export interface Outlet {
   orderTo?: string;
   /** Owner paused QR orders by hand (busy, closed for the day). */
   ordersPaused?: boolean;
+  /** self-service counter: token on the guest's phone, "ready" alert, Now serving screen, Picked up */
+  selfService?: boolean;
   /** GST on bills: 0.05 (default), 0 when not registered, 0.12 or 0.18. */
   gstRate?: number;
   billFooter?: string; // message at the bottom of the bill
   acceptCard?: boolean; // card machine at the counter
+  stamps?: StampProgram; // stamp card (loyalty), set by the owner
   sort?: number;
+  /** Old (before every outlet had its own menu); no longer used. */
+  ownMenu?: boolean;
 }
 
 // The client's account: brand name, plan and when the plan has to be renewed.
@@ -48,11 +55,17 @@ export interface Account {
   plan: "starter" | "growth" | "pro" | "chain";
   renewsAt: string; // ISO
   status?: "active" | "suspended"; // set by the super admin
+  /** after the plan ended, the super admin may let the store run until this date (grace period) */
+  graceUntil?: string;
+  /** Logo on the guest menu, next to the name (public image link). */
+  logo?: string;
 }
 
 // What the guest page needs: the brand name + the current outlet's settings.
 export interface OutletSettings {
   name: string;
+  logo?: string; // the brand's logo (shown on the guest menu)
+  stamps?: StampProgram; // stamp card (loyalty)
   businessType: BusinessType;
   mixed?: boolean; // tables and counter both
   upi: string; // UPI ID every payment QR is generated for
@@ -65,6 +78,8 @@ export interface OutletSettings {
   orderFrom?: string;
   orderTo?: string;
   ordersPaused?: boolean;
+  /** self-service counter: token on the guest's phone, "ready" alert, Now serving screen, Picked up */
+  selfService?: boolean;
   gstRate?: number;
   billFooter?: string; // printed at the bottom of the bill
   acceptCard?: boolean;
@@ -87,9 +102,21 @@ export interface MenuItem {
   sweet?: boolean; // shows under the guest "Sweet" filter
   desc?: string;
   options?: OptionGroup[]; // customisations: spice level, add-ons…
+  /** sizes with their own price (Pizza M ₹250 / L ₹350). With sizes, `price` is the smallest. */
+  sizes?: Size[];
   photos?: string[]; // uploaded photo URLs (Cloud Storage later)
   photoCount?: number; // sample-data stand-in for photos
   hue: number; // placeholder art colour until photos come from Storage
+  /** The outlet this dish is in: each outlet has its own menu (missing = the first outlet, from before). */
+  outletIds?: string[];
+  /** Old: a shared dish sold out only in these outlets (no longer written). */
+  offIn?: string[];
+}
+
+export interface Size {
+  id: string;
+  name: string; // "M", "Large", "Half"
+  price: number; // the full price for this size, before GST
 }
 
 export interface OptionChoice {
@@ -139,6 +166,9 @@ export interface Table {
   // from the people who sat here before, so an old phone isn't put back into
   // a finished group's bill.
   visitId: string;
+  // Staff pushed this table up against another one for a big group: its seats count for that
+  // table (the "main" one, which holds the guests and the bill) until the group leaves.
+  joinedTo?: string;
 }
 
 export type OrderType = "dine-in" | "takeaway" | "delivery";
@@ -161,6 +191,8 @@ export interface PayClaim {
   source: "staff" | "guest";
   discount?: number;
   coupon?: string;
+  /** the guest used their full stamp card on this bill (its amount is in `discount`) */
+  reward?: { name: string; amount: number };
 }
 
 /** One line in the activity log: who did what, when. */
@@ -206,7 +238,9 @@ export interface Order {
   payment?: "upi" | "cash" | "card" | "split";
   payments?: Payment[]; // how the bill was actually settled (can be mixed)
   paymentLog?: PaymentLogEntry[]; // every later change, for the owner
-  payPreference?: PayMethod; // what the guest chose when asking for the bill
+  payPreference?: PayMethod | "online"; // what the guest chose when asking for the bill ("online": paying on the restaurant's gateway)
+  wantsReward?: boolean; // the guest asked to use their full stamp card on this bill
+  wantsCoupon?: string; // coupon code the guest applied from their phone (cash/card: staff apply it at checkout)
   guestPhone?: string; // OTP-verified number of the guest who ordered (QR)
   guestUid?: string; // Supabase user id of the guest's phone (cloud mode)
   prepaid?: Payment[]; // part the guest already paid from their phone (e.g. UPI half of "Cash + UPI")
@@ -214,18 +248,8 @@ export interface Order {
   confirmedBy?: string; // who confirmed the payment
   priority?: boolean;
   outletId?: string; // which outlet took the order
-}
-
-export interface Ingredient {
-  id: string;
-  name: string;
-  unit: string;
-  stock: number;
-  par: number;
-  costPerUnit: number;
-  supplier: string;
-  forecastTomorrow: number;
-  expiresInDays?: number;
+  /** paid on the restaurant's own gateway (written by the server only) */
+  gateway?: { intent: string; provider: "razorpay" | "cashfree"; paymentId: string };
 }
 
 /** A raw material the kitchen keeps (paneer, oil, milk…). */
@@ -243,6 +267,7 @@ export interface Coupon {
   active: boolean;
   note?: string;
   createdAt: string;
+  outletIds?: string[]; // only these outlets (empty or missing: every outlet)
 }
 
 export interface StockItem {
@@ -264,8 +289,46 @@ export interface StockLog {
   note?: string;
 }
 
+/** Stamp card: a stamp per bill, a reward when the card is full. Set per outlet by the owner. */
+export interface StampProgram {
+  on: boolean;
+  /** stamps to fill a card; the reward is given on the next bill */
+  needed: number;
+  /** what the guest gets, in words: "Free coffee" */
+  reward: string;
+  /** how the reward comes off the bill */
+  rewardKind: "item" | "flat" | "pct";
+  rewardItemId?: string; // rewardKind "item": this dish is free (up to its price)
+  rewardValue?: number; // rewardKind "flat": ₹ off · "pct": % off
+  rewardCap?: number; // rewardKind "pct": at most this many ₹
+  /** a bill earns a stamp only if its items come to at least this (before GST) */
+  minBill: number;
+  /** at most this many stamps per guest per day */
+  perDay: number;
+  /** stamps older than this many days stop counting (0 = never) */
+  expiryDays: number;
+  /** who can collect: everyone with a number, or only guests who said yes to offers */
+  who: "everyone" | "optin";
+  /** add the stamp by itself when a bill is charged with the guest's number (or the cashier ticks it) */
+  auto: boolean;
+  /** who can give stamps and who can give the reward */
+  givers: "charge" | "discount" | "owner";
+  redeemers: "charge" | "discount" | "owner";
+  /** extra rules guests see */
+  terms?: string;
+}
+export interface Stamp {
+  at: string; // ISO
+  orderNo?: number;
+  by?: string; // who gave it
+  outletId?: string;
+}
+
 export interface Customer {
+  /** "phone@outlet" (older records: the phone) */
   id: string;
+  /** the outlet this guest-book record is for (missing = the first outlet) */
+  outletId?: string;
   name: string;
   phone: string;
   visits: number;
@@ -279,19 +342,10 @@ export interface Customer {
   verified?: boolean; // phone confirmed by OTP
   source?: "qr" | "pos" | "whatsapp";
   optIn?: boolean; // agreed to offers on WhatsApp
-  bills?: { orderNo: number; at: string; amount: number; method: string }[];
-}
-
-export interface StaffMember {
-  id: string;
-  name: string;
-  role: "Owner" | "Manager" | "Captain" | "Cashier" | "Chef" | "Helper";
-  onShift: boolean;
-  clockedIn?: string;
-  hoursThisWeek: number;
-  salesToday: number;
-  rating: number;
-  hue: number;
+  bills?: { orderNo: number; at: string; amount: number; method: string; outletId?: string }[];
+  /** stamp card: stamps on the current card (oldest first) and rewards given */
+  stamps?: Stamp[];
+  rewards?: { at: string; reward: string; amount: number; orderNo?: number; by?: string; outletId?: string }[];
 }
 
 export interface Feedback {
@@ -302,43 +356,7 @@ export interface Feedback {
   at: string;
   routed: "google" | "private";
   replied?: boolean;
-}
-
-export type AlertSeverity = "high" | "medium" | "low";
-
-export interface LeakAlert {
-  id: string;
-  title: string;
-  detail: string;
-  severity: AlertSeverity;
-  at: string;
-  who?: string;
-  amount?: number;
-  kind: "void" | "discount" | "cash" | "stock" | "refund";
-}
-
-export interface Campaign {
-  id: string;
-  name: string;
-  channel: "WhatsApp" | "SMS" | "Email";
-  audience: string;
-  status: "draft" | "scheduled" | "sent";
-  sent?: number;
-  visits?: number;
-  revenue?: number;
-  when: string;
-}
-
-export interface Tenant {
-  id: string;
-  name: string;
-  city: string;
-  plan: "Starter" | "Growth" | "Pro" | "Chain";
-  outlets: number;
-  status: "active" | "trial" | "past-due" | "cancelled";
-  mrr: number;
-  since: string;
-  ordersToday: number;
+  outletId?: string; // the outlet the guest ate at
 }
 
 export interface Plan {

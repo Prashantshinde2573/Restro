@@ -27,9 +27,8 @@ export default function TeamPage() {
   return (
     <>
       <PageHeader
-        title="Team"
-        subtitle={`${outlet.name} · ${members.filter((m) => m.active).length} people`}
-        actions={<Link href="/app/access"><Button size="sm" variant="tinted"><Plus size={16} /> Add person</Button></Link>}
+        title="Staff sales"
+        subtitle={`${outlet.name} · who took how many orders`}
       >
         <Segmented value={period} onChange={setPeriod} options={[{ value: "today", label: "Today" }, { value: "7d", label: "7 days" }]} />
       </PageHeader>
@@ -43,9 +42,10 @@ export default function TeamPage() {
           </div>
         ) : (
           <Group title={period === "today" ? "Orders taken today" : "Orders taken · 7 days"} flush>
-            {rows.map(({ m, count, sales }) => (
+            {rows.filter((r) => r.count > 0).length === 0 && <p className="px-4 py-4 text-[14px] text-muted lg:px-5">No orders taken {period === "today" ? "today" : "in 7 days"} yet.</p>}
+            {rows.filter((r) => r.count > 0).map(({ m, count, sales }) => (
               <Link key={m.id} href="/app/access" className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40 lg:px-5">
-                <Avatar name={m.name} hue={m.hue} size={40} />
+                <Avatar name={m.name} hue={m.hue} photo={m.photo} size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-[15px] font-medium">
                     {m.name}
@@ -70,6 +70,11 @@ export default function TeamPage() {
               </div>
             )}
           </Group>
+        )}
+        {rows.some((r) => r.count === 0) && members.length > 1 && (
+          <p className="px-1 text-[13px] text-muted">
+            No orders: {rows.filter((r) => r.count === 0).map((r) => r.m.name.split(" ")[0]).join(", ")}. People and access are in <Link href="/app/access" className="font-semibold text-jade">Members &amp; access</Link>.
+          </p>
         )}
       </Page>
     </>

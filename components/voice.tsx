@@ -3,15 +3,16 @@
 // Voice ordering: the browser listens (Chrome / Edge / Android; Safari partly),
 // and what was said is matched to this restaurant's own menu.
 // Say it like: "two butter chicken, four butter naan, one dal makhani".
+import { sizedName, sizesOf } from "@/lib/sizes";
 import clsx from "clsx";
 import { Mic, MicOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Sheet, DietMark } from "./ui";
 import { useMenu } from "@/lib/live";
-import type { MenuItem } from "@/lib/types";
+import type { MenuItem, Size } from "@/lib/types";
 import { inr } from "@/lib/format";
 
-type Line = { item: MenuItem; qty: number };
+type Line = { item: MenuItem; qty: number; size?: Size };
 
 const NUM: Record<string, number> = {
   a: 1, an: 1, one: 1, ek: 1, two: 2, to: 2, too: 2, do: 2, don: 2, three: 3, teen: 3, tin: 3, four: 4, for: 4, char: 4, chaar: 4,
@@ -29,7 +30,19 @@ export function parseOrder(text: string, menu: MenuItem[]): Line[] {
     .filter((x) => x.w.length)
     .sort((a, b) => b.w.length - a.w.length); // longer names first: "butter naan" before "naan"
   const used = new Array(words.length).fill(false);
-  const found: { at: number; item: MenuItem; qty: number }[] = [];
+  const found: { at: number; item: MenuItem; qty: number; size?: Size }[] = [];
+  // "large pizza", "pizza medium", "half biryani": a size said next to a dish that has sizes
+  const sizeNear = (m: MenuItem, at: number, len: number) => {
+    const sizes = sizesOf(m);
+    if (!sizes.length) return undefined;
+    const near = [words[at - 1], words[at - 2], words[at + len]].filter(Boolean);
+    const is = (word: string, name: string) => {
+      const n = norm(name);
+      if (word === n) return true;
+      return n.length === 1 && ["small", "medium", "large", "regular"].includes(word) && word[0] === n;
+    };
+    return sizes.find((z) => near.some((w) => is(w, z.name))) ?? sizes[0];
+  };
   const same = (a: string, b: string) => a === b || (a.length > 3 && b.length > 3 && (a.startsWith(b) || b.startsWith(a))); // naan / nan, chaas / chas
   for (const { m, w } of items) {
     for (let i = 0; i + w.length <= words.length; i++) {
@@ -37,18 +50,19 @@ export function parseOrder(text: string, menu: MenuItem[]): Line[] {
         for (let k = 0; k < w.length; k++) used[i + k] = true;
         const before = words[i - 1];
         const qty = before ? (/^\d+$/.test(before) ? Number(before) : NUM[before] ?? 1) : 1;
-        found.push({ at: i, item: m, qty: Math.min(Math.max(qty, 1), 50) });
+        found.push({ at: i, item: m, qty: Math.min(Math.max(qty, 1), 50), size: sizeNear(m, i, w.length) });
         i += w.length - 1;
       }
     }
   }
   const merged = new Map<string, Line & { at: number }>();
   found.sort((a, b) => a.at - b.at).forEach((f) => {
-    const cur = merged.get(f.item.id);
+    const k = `${f.item.id}|${f.size?.id ?? ""}`;
+    const cur = merged.get(k);
     if (cur) cur.qty += f.qty;
-    else merged.set(f.item.id, { item: f.item, qty: f.qty, at: f.at });
+    else merged.set(k, { item: f.item, qty: f.qty, size: f.size, at: f.at });
   });
-  return [...merged.values()].map(({ item, qty }) => ({ item, qty }));
+  return [...merged.values()].map(({ item, qty, size }) => ({ item, qty, size }));
 }
 
 type Rec = {
@@ -74,7 +88,7 @@ export function VoiceOrder({
 }: {
   open: boolean;
   onClose: () => void;
-  onAdd: (lines: { item: MenuItem; qty: number; note?: string }[]) => void;
+  onAdd: (lines: { item: MenuItem; qty: number; note?: string; size?: Size }[]) => void;
 }) {
   const menu = useMenu();
   const [text, setText] = useState("");
@@ -152,8 +166,8 @@ export function VoiceOrder({
               {lines.map((l) => (
                 <div key={l.item.id} className="flex items-center gap-3 border-b border-line/70 px-4 py-3 last:border-0">
                   <DietMark diet={l.item.diet} />
-                  <span className="flex-1 text-[15px]"><b className="tnum">{l.qty}×</b> {l.item.name}</span>
-                  <span className="text-[14px] text-muted tnum">{inr(l.qty * l.item.price)}</span>
+                  <span className="flex-1 text-[15px]"><b className="tnum">{l.qty}×</b> {sizedName(l.item.name, l.size?.name)}</span>
+                  <span className="text-[14px] text-muted tnum">{inr(l.qty * (l.size?.price ?? l.item.price))}</span>
                 </div>
               ))}
             </div>

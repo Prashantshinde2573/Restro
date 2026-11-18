@@ -3,6 +3,7 @@
 // Owner's report builder: pick what goes in, filter it, then get a designed PDF
 // (the browser's print box saves it) or one Excel file with the same sections.
 import clsx from "clsx";
+import { asDate, xlsxBlob, type XCell } from "@/lib/xlsx";
 import { Check, FileSpreadsheet, FileText } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Sheet, inputCls } from "./ui";
@@ -291,28 +292,24 @@ export function ReportBuilder({
   // ---------- Excel: the same sections stacked in one file ----------
   const excel = () => {
     const has = (id: SectionId) => sel.includes(id);
-    const rows: unknown[][] = [[`Sales report - ${business}${outletName ? ` (${outletName})` : ""}`], ["From", dateText(from), "To", dateText(end)], ...(filterText ? [["Filtered", filterText]] : []), []];
-    const add = (title: string, head: string[], body: unknown[][]) => rows.push([title], head, ...body, []);
+    const rows: XCell[][] = [[`Sales report - ${business}${outletName ? ` (${outletName})` : ""}`], ["From", asDate(from), "To", asDate(end)], ...(filterText ? [["Filtered", filterText]] : []), []];
+    const add = (title: string, head: string[], body: XCell[][]) => rows.push([title], head, ...body, []);
     if (has("summary")) add("Summary", ["", "Value"], [["Sales with GST (Rs)", data.sales], ["Paid bills", data.paidList.length], ["Average bill (Rs)", data.avg], ["GST collected (Rs)", data.gst]]);
-    if (has("days")) add("Sales by day", ["Date", "Day", "Bills", "Taxable (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total (Rs)"], [...data.dayRows.map((d) => [dateText(d.d0), dayName(d.d0), d.bills, d.taxable, d.cgst, d.sgst, d.total]), ["Total", "", data.paidList.length, data.taxable, data.cgst, data.sgst, data.sales]]);
+    if (has("days")) add("Sales by day", ["Date", "Day", "Bills", "Taxable (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total (Rs)"], [...data.dayRows.map((d) => [asDate(d.d0), dayName(d.d0), d.bills, d.taxable, d.cgst, d.sgst, d.total]), ["Total", "", data.paidList.length, data.taxable, data.cgst, data.sgst, data.sales]]);
     if (has("methods")) add("How guests paid", ["Method", "Amount (Rs)"], (["upi", "cash", "card"] as const).map((m) => [methodLabel[m], data.methods[m]]));
     if (has("gst")) add("GST summary", ["", "Amount (Rs)"], [["Taxable value", data.taxable], [`CGST ${halfGstLabel()}`, data.cgst], [`SGST ${halfGstLabel()}`, data.sgst], ["Total GST", data.gst], ["Total with GST", data.sales]]);
     if (has("items")) add("Item-wise sales", ["Dish", "Category", "Qty", "Sales before GST (Rs)"], data.items.map((d) => [d.name, d.cat, d.qty, d.sales]));
     if (has("categories")) add("Sales by category", ["Category", "Qty", "Sales before GST (Rs)"], data.categories.map((c) => [c.name, c.qty, c.sales]));
     if (has("staff")) add("Staff-wise sales", ["Person", "Bills", "Sales (Rs)"], data.staffRows.map((s) => [s.name, s.bills, s.sales]));
     if (has("types")) add("Where orders came from", ["Type", "Bills", "Sales (Rs)"], data.types.map((t) => [t.name, t.bills, t.sales]));
-    if (has("discounts")) add("Discounts given", ["Bill", "Date", "Staff", "Bill amount (Rs)", "Paid (Rs)", "Discount (Rs)"], data.discounts.map((x) => [x.o.number, dateText(new Date(x.o.createdAt).getTime()), x.o.staff, x.bill, x.paid, x.off]));
-    if (has("cancelled")) add("Cancelled orders", ["Order", "Date", "Where", "Items", "Value (Rs)"], data.cancelled.map((o) => [o.number, dateText(new Date(o.createdAt).getTime()), o.tableName ?? typeLabel(o), o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), billOf(o)]));
-    if (has("bills")) add("All bills", ["Bill", "Date", "Time", "Where", "Staff", "Paid by", "Total (Rs)"], data.paidList.map((o) => { const t = new Date(o.createdAt); return [o.number, dateText(t.getTime()), t.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.tableName ?? typeLabel(o), o.staff, paymentsText(o.payments).replace(/₹/g, "Rs "), paidAmount(o)]; }));
-    const cell = (v: unknown) => {
-      const s = String(v ?? "");
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const blob = new Blob(["﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    if (has("discounts")) add("Discounts given", ["Bill", "Date", "Staff", "Bill amount (Rs)", "Paid (Rs)", "Discount (Rs)"], data.discounts.map((x) => [x.o.number, asDate(new Date(x.o.createdAt).getTime()), x.o.staff, x.bill, x.paid, x.off]));
+    if (has("cancelled")) add("Cancelled orders", ["Order", "Date", "Where", "Items", "Value (Rs)"], data.cancelled.map((o) => [o.number, asDate(new Date(o.createdAt).getTime()), o.tableName ?? typeLabel(o), o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), billOf(o)]));
+    if (has("bills")) add("All bills", ["Bill", "Date", "Time", "Where", "Staff", "Paid by", "Total (Rs)"], data.paidList.map((o) => { const t = new Date(o.createdAt); return [o.number, asDate(t.getTime()), t.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.tableName ?? typeLabel(o), o.staff, paymentsText(o.payments).replace(/₹/g, "Rs "), paidAmount(o)]; }));
+    const blob = xlsxBlob([{ name: "Sales report", rows }]);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `report-${dateText(from)}-to-${dateText(end)}.csv`;
+    a.download = `report-${dateText(from)}-to-${dateText(end)}.xlsx`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };

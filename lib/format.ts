@@ -5,13 +5,6 @@ export const inr = (n: number, opts: { decimals?: boolean } = {}) =>
     maximumFractionDigits: opts.decimals ? 2 : 0,
   });
 
-export const compactInr = (n: number) => {
-  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(1)}Cr`;
-  if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}k`;
-  return `₹${n}`;
-};
-
 export const minutesSince = (iso: string) =>
   Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
 
@@ -50,5 +43,3 @@ export function setGstRate(r: number | undefined) {
 export const halfGstLabel = () => `${+((currentGst * 100) / 2).toFixed(2)}%`;
 /** "5%" */
 export const gstLabel = () => `${+(currentGst * 100).toFixed(2)}%`;
-/** @deprecated use gstRate() */
-export const GST_RATE = 0.05;

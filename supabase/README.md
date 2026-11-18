@@ -1,4 +1,4 @@
-# Supabase backend (project: Restropi-in, ref rzzhslbotgumhfvkfgvo)
+# Supabase backend (project: Restropi-Updated, Mumbai ap-south-1, ref gguwfynlyihsigpcztdp)
 
 Already applied to the live project — nothing to run here. Kept for the record.
 
@@ -39,4 +39,4 @@ There is no public sign-up.
 - Order numbers come from a database trigger, so two phones never get the same number.
 
 Download the exact SQL any time with the Supabase CLI:
-`supabase link --project-ref rzzhslbotgumhfvkfgvo && supabase db pull`
+`supabase link --project-ref gguwfynlyihsigpcztdp && supabase db pull`

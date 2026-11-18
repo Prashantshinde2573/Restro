@@ -2,17 +2,42 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/instrument-sans";
 import "./globals.css";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
+import { CookieConsent } from "@/components/cookie-consent";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 // Analytics: set these in .env.local / your host's environment to switch them on.
-const GA_ID = process.env.NEXT_PUBLIC_GA_ID; // Google Analytics 4, e.g. G-XXXXXXX
-const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID; // Google Tag Manager, e.g. GTM-XXXXXX
+// Google Analytics 4 Measurement ID (public, it shows in every page). NEXT_PUBLIC_GA_ID on Vercel overrides it.
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-DCQPV9HT7T";
+// Google Tag Manager container (public). NEXT_PUBLIC_GTM_ID on Vercel overrides it.
+const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || "GTM-PVZ25CCF";
 const GSC = process.env.NEXT_PUBLIC_GSC_VERIFICATION; // Search Console "HTML tag" code
 
 export const metadata: Metadata = {
-  title: { default: "Restropi", template: "%s · Restropi" },
-  description: "Run your restaurant or café from one calm screen — billing, kitchen, stock, team and guests.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: "%s · Restropi" },
+  description: SITE_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "business",
   manifest: "/manifest.webmanifest",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    locale: "en_IN",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: SITE_TITLE }],
+  },
+  twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION, images: ["/opengraph-image"] },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
+  formatDetection: { telephone: false, email: false, address: false },
   appleWebApp: { capable: true, title: "Restropi", statusBarStyle: "default" },
   ...(GSC ? { verification: { google: GSC } } : {}),
 };
@@ -28,6 +53,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Google Consent Mode v2: nothing is stored until the visitor agrees (components/cookie-consent.tsx).
+            Runs before Tag Manager / Analytics load, and re-applies a saved choice. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});try{var c=JSON.parse(localStorage.getItem('restropi.consent')||'null');if(c){var g=function(v){return v?'granted':'denied'};gtag('consent','update',{analytics_storage:g(c.analytics),ad_storage:g(c.marketing),ad_user_data:g(c.marketing),ad_personalization:g(c.marketing)})}}catch(e){}",
+          }}
+        />
         {/* Public pages animate in. Hide those elements before the first paint only if motion is
             allowed; if the page scripts never start, show everything after 3 s.
             First visit to the home or pricing page in a tab: show the loader for one turn (1.5 s). */}
@@ -48,10 +81,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {GA_ID && (
           <>
             <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
-            <Script id="ga4" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GA_ID}');`}</Script>
+            <Script id="ga4" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments);};gtag('js',new Date());gtag('config','${GA_ID}');`}</Script>
           </>
         )}
         <Providers>{children}</Providers>
+        {/* Vercel Web Analytics: page views on the Vercel dashboard (no cookies) */}
+        <Analytics />
+        <CookieConsent />
       </body>
     </html>
   );

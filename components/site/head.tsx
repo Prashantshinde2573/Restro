@@ -5,8 +5,6 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import { RiseText } from "./motion";
 
-export const SECTION_PY = "py-14 lg:py-28"; // 56px on phones
-
 export function Eyebrow({ children, dark = false, className }: { children: ReactNode; dark?: boolean; className?: string }) {
   return (
     <div
@@ -33,6 +31,7 @@ export function SectionHead({
   dark = false,
   align = "center",
   className,
+  as = "h2",
 }: {
   eyebrow: string;
   title: string;
@@ -40,12 +39,14 @@ export function SectionHead({
   dark?: boolean;
   align?: "center" | "left";
   className?: string;
+  /** "h1" for the main heading of a page that has no hero */
+  as?: "h1" | "h2";
 }) {
   return (
     <div className={clsx(align === "center" ? "mx-auto max-w-3xl text-center" : "max-w-3xl", className)}>
       <Eyebrow dark={dark}>{eyebrow}</Eyebrow>
       <RiseText
-        as="h2"
+        as={as}
         onScroll
         text={title}
         className={clsx(
@@ -54,7 +55,7 @@ export function SectionHead({
           dark && "text-white [&_.text-jade]:text-saffron",
         )}
       />
-      {sub && <p data-reveal className={clsx("mt-4 text-[16px] leading-relaxed lg:text-[17px]", align === "center" && "mx-auto max-w-xl", dark ? "text-white/65" : "text-ink/60")}>{sub}</p>}
+      {sub && <p data-reveal className={clsx("mt-4 text-[16px] leading-relaxed lg:text-[17px]", align === "center" && "mx-auto max-w-xl", dark ? "text-white/65" : "text-ink/70")}>{sub}</p>}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { fromPrice, hasSizes, needsChoice, sizedName, sizesOf } from "@/lib/sizes";
 import { hasCounter, hasTables } from "@/lib/access";
 import clsx from "clsx";
 import { ChevronDown, Mic, Minus, Plus, Search, Send, Trash2, X, Check } from "lucide-react";
@@ -7,19 +8,22 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Chips, DietMark, Segmented, Sheet } from "@/components/ui";
 import { PhotoSlide } from "@/components/menu-bits";
-import { Checkout, billTotals } from "@/components/checkout";
+import { billTotals } from "@/lib/bill-totals";
+import dynamic from "next/dynamic";
+// the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
+const Checkout = dynamic(() => import("@/components/checkout").then((m) => m.Checkout), { ssr: false });
 import { GuestCount } from "@/components/guest-count";
-import { VoiceOrder } from "@/components/voice";
+const VoiceOrder = dynamic(() => import("@/components/voice").then((m) => m.VoiceOrder), { ssr: false });
 import { ItemSheet } from "@/components/item-sheet";
 import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";
 import { useT } from "@/lib/i18n";
-import { getTable, isShared, seatsFree, tableActions, tableState, useTables } from "@/lib/tables";
+import { capacity, getTable, isShared, joinedName, seatsFree, tableActions, tableState, useLiveTables } from "@/lib/tables";
 import { closeBill, partyOpenOrders } from "@/lib/billing";
 import { inr, gstLabel } from "@/lib/format";
 import type { MenuItem, OrderType } from "@/lib/types";
 
-type Line = { item: MenuItem; qty: number; note?: string; unitPrice?: number };
+type Line = { item: MenuItem; qty: number; note?: string; unitPrice?: number; size?: string };
 const NOTES = ["Less spicy", "Extra spicy", "No onion", "Jain", "Pack separately"];
 
 export default function PosPage() {
@@ -37,7 +41,7 @@ function PosScreen() {
   const me = useMe();
   const menu = useMenu();
   const cats = useCategories();
-  const tables = useTables();
+  const tables = useLiveTables();
 
   const [cat, setCat] = useState<string>("all");
   const [q, setQ] = useState("");
@@ -72,13 +76,13 @@ function PosScreen() {
     [menu, cat, q],
   );
 
-  const add = (item: MenuItem, qty = 1, note?: string, unitPrice?: number) => {
+  const add = (item: MenuItem, qty = 1, note?: string, unitPrice?: number, size?: string) => {
     if (!item.available) return;
     setSent(false);
     setLines((ls) => {
-      const i = ls.findIndex((l) => l.item.id === item.id && l.note === note && l.unitPrice === unitPrice);
+      const i = ls.findIndex((l) => l.item.id === item.id && l.note === note && l.unitPrice === unitPrice && l.size === size);
       if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, qty: l.qty + qty } : l));
-      return [...ls, { item, qty, note, unitPrice }];
+      return [...ls, { item, qty, note, unitPrice, size }];
     });
   };
   const priceOf = (l: Line) => l.unitPrice ?? l.item.price;
@@ -131,7 +135,7 @@ function PosScreen() {
       staff: me?.name ?? "Staff",
       createdAt: new Date().toISOString(),
       status: "accepted",
-      lines: lines.map((l) => ({ itemId: l.item.id, name: l.item.name, qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
+      lines: lines.map((l) => ({ itemId: l.item.id, name: sizedName(l.item.name, l.size), qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
     });
     const kot = type === "dine-in" ? (tb && getTable(tb.id)!.parties.length > 1 ? `${table} · ${pid}` : table) : label;
     toast(`KOT sent · ${count} items for ${kot}`);
@@ -179,7 +183,7 @@ function PosScreen() {
           />
         )}
         {type === "dine-in" && !cafe ? null : (
-          <input value={cust} onChange={(e) => setCust(e.target.value)} className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder={type === "delivery" ? "Guest name, phone or address" : "Guest name (optional, shows on the order)"} />
+          <input value={cust} onChange={(e) => setCust(e.target.value)} className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40" placeholder={type === "delivery" ? "Guest name, phone or address" : "Guest name (optional, shows on the order)"} />
         )}
       </div>
 
@@ -191,10 +195,10 @@ function PosScreen() {
           </div>
         ) : (
           lines.map((l, i) => (
-            <div key={`${l.item.id}-${l.note ?? ""}`} className="group flex items-start gap-3 rounded-ctl px-2 py-2.5 hover:bg-sunken/40">
+            <div key={`${l.item.id}-${l.size ?? ""}-${l.note ?? ""}`} className="group flex items-start gap-3 rounded-ctl px-2 py-2.5 hover:bg-sunken/40">
               <div className="mt-1"><DietMark diet={l.item.diet} /></div>
               <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-medium leading-tight">{l.item.name}</div>
+                <div className="text-[15px] font-medium leading-tight">{sizedName(l.item.name, l.size)}</div>
                 <button onClick={() => setNoteFor(`${i}`)} className={clsx("mt-0.5 text-[12.5px]", l.note ? "font-medium text-saffron" : "text-faint hover:text-jade")}>
                   {l.note ?? "Add note"}
                 </button>
@@ -244,7 +248,7 @@ function PosScreen() {
     <div className="flex min-h-dvh lg:h-[calc(100dvh-24px)] lg:min-h-0">
       {/* Menu side */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-[52px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:static lg:bg-transparent lg:px-8 lg:pt-8">
+        <div className="sticky top-[60px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:static lg:bg-transparent lg:px-8 lg:pt-8">
           <div className="flex items-center justify-between gap-3">
             <h1 className="large-title">{t("pos")}</h1>
             {voiceOn && (
@@ -260,7 +264,7 @@ function PosScreen() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder={t("search")}
-                className="h-11 w-full rounded-ctl bg-surface pl-10 pr-9 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade"
+                className="h-11 w-full rounded-ctl bg-surface pl-10 pr-9 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40"
               />
               {q && (
                 <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-faint">
@@ -288,7 +292,7 @@ function PosScreen() {
               return (
                 <button
                   key={m.id}
-                  onClick={() => (m.options?.some((g) => g.required) ? setCustomize(m) : add(m))}
+                  onClick={() => (needsChoice(m) ? setCustomize(m) : add(m))}
                   disabled={!m.available}
                   className={clsx(
                     "group relative flex flex-col overflow-hidden rounded-[18px] bg-surface text-left transition active:scale-[.97]",
@@ -310,9 +314,11 @@ function PosScreen() {
                       <span className="text-[14.5px] font-semibold leading-tight">{m.name}</span>
                     </div>
                     <div className="mt-auto flex items-center justify-between pt-2">
-                      <span className="text-[14px] font-medium text-muted tnum">{inr(m.price)}</span>
+                      <span className="text-[14px] font-medium text-muted tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
                       {!m.available ? (
                         <span className="text-[11.5px] font-semibold text-rose">Sold out</span>
+                      ) : hasSizes(m) ? (
+                        <span className="text-[11.5px] font-medium text-jade">{sizesOf(m).map((z) => z.name).join(" / ")}</span>
                       ) : m.options?.some((g) => g.required) ? (
                         <span className="text-[11.5px] font-medium text-jade">Choices</span>
                       ) : m.tags?.[0] ? (
@@ -347,7 +353,7 @@ function PosScreen() {
       {/* Table picker: a shared table lists each party separately */}
       <Sheet open={pickTable} onClose={() => setPickTable(false)} title="Choose table" wide>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {tables.map((tb) => {
+          {tables.filter((tb) => !tb.joinedTo).map((tb) => {
             const st = tableState(tb);
             const pick = (pid: string | null) => {
               setTable(tb.name);
@@ -359,8 +365,8 @@ function PosScreen() {
             return (
               <div key={tb.id} className={clsx("rounded-[16px] p-3", table === tb.name ? "bg-jade-soft ring-2 ring-jade" : "bg-surface")}>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[18px] font-semibold">{tb.name}</span>
-                  <span className="text-[11.5px] text-muted">{st === "free" ? `${tb.seats} seats` : st === "reserved" ? "reserved" : `${seatsFree(tb)} of ${tb.seats} free`}</span>
+                  <span className="text-[18px] font-semibold">{joinedName(tb, tables)}</span>
+                  <span className="text-[11.5px] text-muted">{st === "free" ? `${capacity(tb, tables)} seats` : st === "reserved" ? "reserved" : `${seatsFree(tb, tables)} of ${capacity(tb, tables)} free`}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {tb.parties.map((p) => (
@@ -401,8 +407,8 @@ function PosScreen() {
         </div>
       </Sheet>
 
-      <ItemSheet item={customize} onClose={() => setCustomize(null)} onAdd={(l) => add(l.item, l.qty, l.options.join(" · ") || undefined, l.unitPrice)} />
-      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => ls.forEach((l) => add(l.item, l.qty, l.note))} />
+      <ItemSheet item={customize} onClose={() => setCustomize(null)} onAdd={(l) => add(l.item, l.qty, l.options.join(" · ") || undefined, l.unitPrice, l.size)} />
+      <VoiceOrder open={voice} onClose={() => setVoice(false)} onAdd={(ls) => ls.forEach((l) => add(l.item, l.qty, l.note, l.size?.price, l.size?.name))} />
       <Checkout
         open={pay}
         onClose={() => setPay(false)}
@@ -412,7 +418,7 @@ function PosScreen() {
           ...getOrders()
             .filter((o) => (type === "dine-in" ? !!tb && o.tableId === tb.id && (o.partyId ?? "A") === (pty?.id ?? party ?? "A") : sentIds.includes(o.id)) && o.status !== "paid" && o.status !== "cancelled")
             .flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))),
-          ...(sent ? [] : lines.map((l) => ({ name: l.item.name, qty: l.qty, price: priceOf(l) }))),
+          ...(sent ? [] : lines.map((l) => ({ name: sizedName(l.item.name, l.size), qty: l.qty, price: priceOf(l) }))),
         ]}
         onPaid={(payments, extra) => {
           // Anything still in the cart becomes an order first, so the sale is saved.

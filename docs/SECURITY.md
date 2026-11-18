@@ -47,3 +47,23 @@ Changing a client's plan, renewal date, details or status, or resetting the owne
 
 ## Not production-ready until
 Item 4 is switched on and item 2 is decided (items 1 and 3 are done).
+
+## Online payments (the restaurant's own Razorpay / Cashfree)
+
+- Each outlet connects its **own** gateway account. Money goes straight to the restaurant; Restropi never holds it.
+- Only the owner can connect or turn it off (edge function `gateway-setup`). The keys are checked with the gateway first, then stored encrypted in **Supabase Vault**. The secret is never sent back to any browser, not even the owner's; the screen shows only the last 4 characters.
+- The browser only ever gets the public key id and the amount. **The amount is worked out on the server** (`svc_bill_for`: lines → stamp card reward → coupon → GST → round), from the orders in the database; a guest can only pay their own orders.
+- A bill is marked paid only when the server asks the gateway itself (`pay-status`, `pay-webhook`) and the paid amount matches exactly. Webhooks are checked with the gateway's signature (Razorpay: webhook secret; Cashfree: signed timestamp + body, 5-minute window). Each payment id is recorded once, so a replayed webhook does nothing.
+- The "paid online" mark on an order (`data.gateway`) can be written only by the server: a trigger keeps it as it was for every signed-in user (guests and staff).
+- A payment that arrives for a bill already settled another way, or with the wrong amount, is not applied: it is listed for the owner under Settings → Payments to refund.
+- All service functions (`svc_*`) can be run only by the server (service role), never from the app.
+
+## WhatsApp API (the restaurant's own number, Pro plan and up)
+
+- Only the owner connects it (edge function `wa-setup`). The ids and token are checked with Meta first; the access token and app secret are stored in **Supabase Vault** and never sent back to any browser.
+- The Pro plan (and a running plan) is checked **on the server** for every call, not only in the app.
+- Bills and "your order is ready": the app sends only order ids. The server reads the order and sends only to the number on that order, once per bill or token (unique log row), with the owner's chosen approved template.
+- Offers: only guests of that outlet who said yes to offers, never after they wrote STOP, at most one offer a day per guest, at most 1,000 offers a day per restaurant, 300 per send. Sending stops at once if WhatsApp starts limiting the number.
+- The webhook (`wa-webhook`) accepts only messages signed with the restaurant's Meta app secret (`X-Hub-Signature-256`). STOP turns offers off in every outlet; START turns them on again.
+- `wa_accounts`, `wa_messages` and `wa_optouts` are written only by the server. The team reads the message log only with the Campaigns permission, for their own outlets.
+- Without WhatsApp API, nothing changes: the WhatsApp buttons open WhatsApp with the message typed in, as before.

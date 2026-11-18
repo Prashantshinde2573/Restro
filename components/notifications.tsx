@@ -4,25 +4,29 @@
 // payments to confirm), and "Needs you now" on the home screen.
 import clsx from "clsx";
 import Link from "next/link";
-import { Bell, Check, Clock3, ReceiptText, Smartphone, X } from "lucide-react";
+import { Bell, BellOff, BellRing, CalendarClock, ChefHat, Check, ChevronDown, Clock3, Play, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createStore } from "@/lib/store";
-import { paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useOrders } from "@/lib/live";
+import { toAccept as needsAccept, paymentsText, pendingClaims, useCan, useCanConfirm, useCurrentOutlet, useOrders } from "@/lib/live";
 import { confirmPayment, rejectPayment } from "@/lib/billing";
 import { orderWhere, useAllTables } from "@/lib/tables";
 import { inr, timeAgo } from "@/lib/format";
 import { Button, Sheet } from "./ui";
 import { useToast } from "./toast";
+import { WaiterCallCards, useOutletCalls } from "./waiter-calls";
+import { playSound, setSound, setSoundFor, SOUND_EVENTS, SOUNDS, useSound, useSoundPicks, type SoundId } from "./sound";
 
 export interface Notice {
   id: string;
   at: string;
-  kind: "order" | "bill" | "claim";
+  kind: "order" | "call" | "bill" | "claim" | "ready" | "kitchen" | "review" | "plan";
   title: string;
   body: string;
   href: string;
   read?: boolean;
+  /** the outlet it is about: the bell shows the outlet on screen (none = every outlet, e.g. the plan) */
+  outletId?: string;
 }
 
 // kept on this device only (each phone has its own bell)
@@ -32,16 +36,18 @@ export function pushNotice(n: Omit<Notice, "id" | "at">) {
   noticeStore.set([item, ...noticeStore.get()].slice(0, 60));
 }
 
-const icon = { order: ReceiptText, bill: Smartphone, claim: Clock3 };
+const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star, plan: CalendarClock };
 
 /** Bell with the unread count; opens the list. */
 export function NoticeBell({ dark = false }: { dark?: boolean }) {
-  const list = noticeStore.use();
+  const outletNow = useCurrentOutlet();
+  const list = noticeStore.use().filter((n) => !n.outletId || !outletNow.id || n.outletId === outletNow.id);
   const [open, setOpen] = useState(false);
   const path = usePathname();
   useEffect(() => setOpen(false), [path]); // a link in the list was tapped
   const unread = list.filter((n) => !n.read).length;
-  const markAll = () => noticeStore.set(noticeStore.get().map((n) => (n.read ? n : { ...n, read: true })));
+  const sound = useSound();
+  const markAll = () => noticeStore.set(noticeStore.get().map((n) => (n.read || (n.outletId && outletNow.id && n.outletId !== outletNow.id) ? n : { ...n, read: true })));
   return (
     <>
       <button
@@ -49,7 +55,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
         aria-label={unread ? `${unread} new notifications` : "Notifications"}
         className={clsx("relative flex h-[34px] w-[34px] items-center justify-center rounded-full", dark ? "text-white hover:bg-white/10" : "bg-surface text-ink shadow-float hover:bg-sunken")}
       >
-        <Bell size={18} />
+        {sound ? <Bell size={18} /> : <BellOff size={18} />}
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold text-white tnum">{unread > 9 ? "9+" : unread}</span>
         )}
@@ -62,6 +68,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
         }}
         title="Notifications"
       >
+        <SoundRow />
         <NeedsYou compact />
         {list.length === 0 ? (
           <p className="py-10 text-center text-[14px] text-muted">Nothing yet. New orders, bill requests and payments to confirm show up here.</p>
@@ -76,7 +83,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
                   onClick={markAll}
                   className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40"
                 >
-                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "claim" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
+                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "plan" ? "bg-rose-soft text-rose" : n.kind === "claim" || n.kind === "review" || n.kind === "call" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
                     <I size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -102,7 +109,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
   );
 }
 
-/** "Needs you now": QR orders to accept, bills asked for, payments to confirm. Nothing → nothing shown. */
+/** "Needs you now": waiter calls, QR orders to accept, bills asked for, payments to confirm. Nothing → nothing shown. */
 export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: () => void }) {
   const all = useOrders();
   const outlet = useCurrentOutlet();
@@ -111,14 +118,16 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
   const canOrders = useCan("orders");
   const toast = useToast();
   const orders = all.filter((o) => !o.outletId || !outlet.id || o.outletId === outlet.id);
-  const toAccept = canOrders ? orders.filter((o) => o.status === "new") : [];
-  const bills = canOrders ? orders.filter((o) => o.payPreference && !o.payClaim && o.status !== "paid" && o.status !== "cancelled") : [];
+  const toAccept = canOrders ? orders.filter(needsAccept) : [];
+  const bills = canOrders ? orders.filter((o) => o.payPreference && o.payPreference !== "online" && !o.payClaim && o.status !== "paid" && o.status !== "cancelled") : [];
   const claims = canConfirm ? pendingClaims(orders) : [];
-  if (!toAccept.length && !bills.length && !claims.length) return null;
+  const calls = useOutletCalls();
+  if (!toAccept.length && !bills.length && !claims.length && !calls.length) return null;
   return (
     <section className={clsx("rounded-[24px] bg-saffron-soft/70", compact ? "p-3" : "p-4 lg:p-5")}>
       <h2 className={clsx("font-semibold tracking-tight", compact ? "px-1 text-[15px]" : "text-[18px]")}>Needs you now</h2>
       <div className="mt-2 space-y-2">
+        <WaiterCallCards calls={calls} />
         {claims.map((c) => {
           const total = c.claim.payments.reduce((s, p) => s + p.amount, 0);
           return (
@@ -155,5 +164,73 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
         )}
       </div>
     </section>
+  );
+}
+
+/** Sound on / off for this device (in the bell and in your profile menu). */
+export function SoundRow() {
+  const on = useSound();
+  const picks = useSoundPicks();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-3 overflow-hidden rounded-group bg-surface">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", on ? "bg-jade-soft text-jade" : "bg-sunken text-muted")}>
+          {on ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14.5px] font-semibold">Sound</span>
+          <span className="block text-[12.5px] text-muted">{on ? "A different sound for each kind of alert" : "Muted on this device · alerts still show here"}</span>
+        </span>
+        <button
+          role="switch"
+          aria-checked={on}
+          aria-label="Sound for alerts"
+          onClick={() => setSound(!on)}
+          className={clsx("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors", on ? "bg-jade" : "bg-line")}
+        >
+          <span className={clsx("absolute h-5 w-5 rounded-full bg-white shadow transition-transform", on ? "translate-x-6" : "translate-x-1")} />
+        </button>
+      </div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between border-t border-line/80 px-4 py-2.5 text-[13.5px] font-semibold text-jade"
+      >
+        Choose sounds
+        <ChevronDown size={16} className={clsx("transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className={clsx("border-t border-line/80", !on && "opacity-60")}>
+          {SOUND_EVENTS.map((ev) => (
+            <div key={ev.id} className="flex items-center gap-2 border-b border-line/60 px-4 py-2.5 last:border-0">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-medium">{ev.label}</span>
+                <span className="block text-[12px] leading-snug text-muted">{ev.hint}</span>
+              </span>
+              <select
+                aria-label={`Sound for ${ev.label}`}
+                value={picks[ev.id]}
+                onChange={(e) => setSoundFor(ev.id, e.target.value as SoundId)}
+                className="h-9 max-w-[140px] rounded-[10px] bg-sunken px-2 text-[13px] font-medium outline-none"
+              >
+                {SOUNDS.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => playSound(picks[ev.id])}
+                disabled={picks[ev.id] === "none"}
+                aria-label={`Play ${ev.label} sound`}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink disabled:opacity-40"
+              >
+                <Play size={14} />
+              </button>
+            </div>
+          ))}
+          {!on && <p className="px-4 pb-3 pt-1 text-[12px] text-muted">Sound is off, so these won't play until you turn it on.</p>}
+        </div>
+      )}
+    </div>
   );
 }

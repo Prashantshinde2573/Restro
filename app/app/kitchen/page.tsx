@@ -7,9 +7,11 @@ import { chime } from "@/components/order-alerts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChannelIcon } from "@/components/channel";
 import { useToast } from "@/components/toast";
-import { orderActions, useCurrentOutlet, useOrders } from "@/lib/live";
+import { orderActions, toAccept, useCurrentOutlet, useOutletOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
 import { orderWhere, useTables } from "@/lib/tables";
+import { useT } from "@/lib/i18n";
+import { speak, ticketText, voiceOnText } from "@/lib/speak";
 import type { MenuItem, Order } from "@/lib/types";
 
 type Station = "all" | MenuItem["station"];
@@ -23,10 +25,10 @@ const stations: { v: Station; label: string }[] = [
 
 export default function KitchenPage() {
   const toast = useToast();
-  const all = useOrders();
+  const all = useOutletOrders();
   // The kitchen only sees orders a captain has accepted (QR/online orders start as "new").
   const orders = useMemo(() => all.filter((o) => ["accepted", "preparing", "ready"].includes(o.status)), [all]);
-  const waiting = all.filter((o) => o.status === "new").length;
+  const waiting = all.filter(toAccept).length;
   const [station, setStation] = useState<Station>("all");
   const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
   const [col, setCol] = useState<"new" | "preparing" | "ready">("preparing");
@@ -39,6 +41,7 @@ export default function KitchenPage() {
   }, []);
 
   // new ticket: chime, and (when on) read it aloud — "Table T5. 2 Paneer Tikka, 1 Butter Naan"
+  const { lang } = useT(); // tickets are read in the app's language (English / हिंदी / मराठी)
   const [voice, setVoiceRaw] = useState(false);
   useEffect(() => {
     try {
@@ -51,7 +54,7 @@ export default function KitchenPage() {
       try {
         localStorage.setItem("restropi.kotVoice", n ? "1" : "0");
       } catch {}
-      if (n && "speechSynthesis" in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance("Orders will be read aloud"));
+      if (n) speak(voiceOnText(lang), lang);
       return n;
     });
   const seen = useRef<Set<string> | null>(null);
@@ -64,17 +67,10 @@ export default function KitchenPage() {
     const fresh = live.filter((o) => !seen.current!.has(o.id));
     fresh.forEach((o) => seen.current!.add(o.id));
     if (!fresh.length) return;
-    chime();
+    chime("kitchen");
     if (!voice || !("speechSynthesis" in window)) return;
-    for (const o of fresh) {
-      const where = o.tableName ? `Table ${o.tableName}` : o.type === "takeaway" ? `Parcel, token ${o.number || ""}` : `Order ${o.number || ""}`;
-      const items = o.lines.map((l) => `${l.qty} ${l.name}${l.note ? `, ${l.note}` : ""}`).join(". ");
-      const u = new SpeechSynthesisUtterance(`New order. ${where}. ${items}`);
-      u.lang = "en-IN";
-      u.rate = 0.95;
-      window.speechSynthesis.speak(u);
-    }
-  }, [orders, voice]);
+    for (const o of fresh) speak(ticketText(o, lang), lang);
+  }, [orders, voice, lang]);
 
   const visible = useMemo(
     () =>
@@ -104,7 +100,7 @@ export default function KitchenPage() {
 
   return (
     <div className="dark min-h-dvh bg-canvas text-ink lg:min-h-[calc(100dvh-24px)] lg:rounded-[28px]">
-      <div className="sticky top-[52px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:rounded-t-[28px] lg:px-8 lg:pt-8">
+      <div className="sticky top-[60px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:rounded-t-[28px] lg:px-8 lg:pt-8">
         <div className="flex items-center justify-between">
           <h1 className="large-title">Kitchen</h1>
           <button

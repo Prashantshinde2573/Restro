@@ -1,15 +1,17 @@
 "use client";
 
-import { CalendarRange, FileSpreadsheet, FileText, MessageCircle, Share2, SlidersHorizontal } from "lucide-react";
+import { CalendarRange, Download, FileSpreadsheet, FileText, MessageCircle, SlidersHorizontal } from "lucide-react";
 import { ReportBuilder } from "@/components/report-builder";
 import { useMemo, useState } from "react";
 import { Button, Group, Page, PageHeader, Segmented, inputCls } from "@/components/ui";
 import { Donut, TrendChart } from "@/components/charts";
 import { useToast } from "@/components/toast";
-import { billOf, paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu, useOrders } from "@/lib/live";
-import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, paidAmount, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
+import { paymentsText, useAccount, useCategories, useCurrentOutlet, useMenu } from "@/lib/live";
+import { useOrdersForRange } from "@/lib/report-orders";
+import { DAY_MS, between, byCategory, byDay, byMethod, inOutlet, live, paid, startOfDay, taxSplit, topDishes, totals } from "@/lib/stats";
 import { gstRate, halfGstLabel, inr } from "@/lib/format";
 import type { Order } from "@/lib/types";
+import { asDate, cellText, xlsxBlob, type XCell } from "@/lib/xlsx";
 
 type Period = "today" | "7d" | "30d" | "custom";
 const DAYS: Record<Exclude<Period, "custom">, number> = { today: 1, "7d": 7, "30d": 30 };
@@ -22,11 +24,11 @@ const niceDay = (t: number) => new Date(t).toLocaleDateString("en-IN", { day: "n
 /** Most days drawn in the chart; longer ranges show their last 62 days. */
 const CHART_MAX = 62;
 
-const csvCell = (v: unknown) => {
-  const s = String(v ?? "");
+const csvCell = (v: XCell) => {
+  const s = cellText(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
-const csvBlob = (rows: unknown[][]) => new Blob(["\uFEFF" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+const csvBlob = (rows: XCell[][]) => new Blob(["\uFEFF" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
 function downloadBlob(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -46,7 +48,6 @@ async function shareFile(name: string, blob: Blob, text: string): Promise<boolea
   }
   return true;
 }
-const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState<Period>("7d");
@@ -56,7 +57,6 @@ export default function ReportsPage() {
   const toast = useToast();
   const account = useAccount();
   const outlet = useCurrentOutlet();
-  const all = inOutlet(useOrders(), outlet.id);
   const menu = useMenu();
   const cats = useCategories();
   const catName = (id: string) => cats.find((c) => c.id === id)?.name ?? "";
@@ -73,6 +73,9 @@ export default function ReportsPage() {
     from = startOfDay(now) - (DAYS[period] - 1) * DAY_MS;
     to = now + 1;
   }
+  // every bill in the range and the same length before it (to compare), not only the ones loaded in the app
+  const range = useOrdersForRange(from - (to - from), to);
+  const all = inOutlet(range.orders, outlet.id);
   const end = Math.min(to - 1, now);
   const days = Math.max(1, Math.round((startOfDay(end) - from) / DAY_MS) + 1);
   const orders = useMemo(() => between(all, from, to), [all, from, to]);
@@ -82,8 +85,9 @@ export default function ReportsPage() {
   const span = to - from;
   const prevSales = totals(between(all, from - span, from)).sales;
   const prevChange = prevSales > 0 ? Math.round(((t.sales - prevSales) / prevSales) * 100) : null;
-  const top = topDishes(orders, 10);
-  const categories = byCategory(orders, menu, catName);
+  // dishes and categories from paid bills, so they add up with Sales
+  const top = topDishes(paid(orders), 10);
+  const categories = byCategory(paid(orders), menu, catName);
   const net = Math.max(0, t.sales - t.gst);
   const stamp = new Date().toISOString().slice(0, 10);
   const label = period === "today" ? "today" : period === "custom" ? `${isoDay(from)}-to-${isoDay(end)}` : `last-${days}-days`;
@@ -91,13 +95,9 @@ export default function ReportsPage() {
   const chartDays = Math.min(Math.max(days, 7), CHART_MAX);
 
   // Excel files: every one starts with who / which dates, and carries Date + Day and CGST + SGST
-  const dateText = (t: number) => {
-    const d = new Date(t);
-    return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
-  };
   const dayName = (t: number) => new Date(t).toLocaleDateString("en-IN", { weekday: "long" });
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const head = (title: string): unknown[][] => [[`${title} - ${account.name || "Restropi"}${outlet.name ? ` (${outlet.name})` : ""}`], ["From", dateText(from), "To", dateText(end)], []];
+  const head = (title: string): XCell[][] => [[`${title} - ${account.name || "Restropi"}${outlet.name ? ` (${outlet.name})` : ""}`], ["From", asDate(from), "To", asDate(end)], []];
   const paidList = live(orders).filter((o) => o.status === "paid");
   const dayRows = Array.from({ length: days }, (_, i) => {
     const d0 = startOfDay(from) + i * DAY_MS;
@@ -110,18 +110,18 @@ export default function ReportsPage() {
   });
   const sum = (k: "bills" | "taxable" | "cgst" | "sgst" | "total") => r2(dayRows.reduce((s, x) => s + x[k], 0));
 
-  const reports: { name: string; file: () => [string, unknown[][]] }[] = [
+  const reports: { name: string; file: () => [string, XCell[][]] }[] = [
     {
       name: "Bills",
       file: () => [
-        `bills-${label}-${stamp}.csv`,
+        `bills-${label}-${stamp}`,
         [
           ...head("Bills"),
           ["Bill no.", "Date", "Day", "Time", "Type", "Table", "Status", "Items", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total (Rs)", "Paid by", "Staff"],
           ...live(orders).map((o: Order) => {
             const t0 = new Date(o.createdAt).getTime();
             const x = taxSplit(o);
-            return [o.number, dateText(t0), dayName(t0), new Date(t0).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.type, o.tableName ?? "", o.status,
+            return [o.number, asDate(t0), dayName(t0), new Date(t0).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), o.type, o.tableName ?? "", o.status,
               o.lines.map((l) => `${l.qty} x ${l.name}`).join("; "), x.taxable, x.cgst, x.sgst, x.total, paymentsText(o.payments).replace(/₹/g, "Rs "), o.staff];
           }),
         ],
@@ -130,11 +130,11 @@ export default function ReportsPage() {
     {
       name: "Item-wise sales",
       file: () => [
-        `items-${label}-${stamp}.csv`,
+        `items-${label}-${stamp}`,
         [
           ...head("Item-wise sales"),
           ["Dish", "Category", "Qty sold", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
-          ...topDishes(orders, 1000).map((d) => {
+          ...topDishes(paid(orders), 1000).map((d) => {
             const g = r2(d.sales * gstRate());
             const cat = catName(menu.find((m) => m.id === d.id)?.categoryId ?? "");
             return [d.name, cat, d.qty, d.sales, r2(g / 2), r2(g - r2(g / 2)), r2(d.sales + g)];
@@ -145,11 +145,11 @@ export default function ReportsPage() {
     {
       name: "Day-wise sales",
       file: () => [
-        `days-${label}-${stamp}.csv`,
+        `days-${label}-${stamp}`,
         [
           ...head("Day-wise sales"),
           ["Date", "Day", "Paid bills", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
-          ...dayRows.map((d) => [dateText(d.d0), dayName(d.d0), d.bills, d.taxable, d.cgst, d.sgst, d.total]),
+          ...dayRows.map((d) => [asDate(d.d0), dayName(d.d0), d.bills, d.taxable, d.cgst, d.sgst, d.total]),
           ["Total", "", sum("bills"), sum("taxable"), sum("cgst"), sum("sgst"), sum("total")],
         ],
       ],
@@ -157,7 +157,7 @@ export default function ReportsPage() {
     {
       name: "GST summary",
       file: () => [
-        `gst-${label}-${stamp}.csv`,
+        `gst-${label}-${stamp}`,
         [
           ...head("GST summary"),
           ["", "Amount (Rs)"],
@@ -169,7 +169,7 @@ export default function ReportsPage() {
           ["Total with GST", sum("total")],
           [],
           ["Date", "Day", "Taxable value (Rs)", `CGST ${halfGstLabel()} (Rs)`, `SGST ${halfGstLabel()} (Rs)`, "Total with GST (Rs)"],
-          ...dayRows.filter((d) => d.bills).map((d) => [dateText(d.d0), dayName(d.d0), d.taxable, d.cgst, d.sgst, d.total]),
+          ...dayRows.filter((d) => d.bills).map((d) => [asDate(d.d0), dayName(d.d0), d.taxable, d.cgst, d.sgst, d.total]),
         ],
       ],
     },
@@ -205,11 +205,22 @@ export default function ReportsPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(summary)}`, "_blank", "noopener");
   };
 
+  // Excel (.xlsx: real dates, bold headings) by default; CSV for other software
+  const [format, setFormat] = useState<"xlsx" | "csv">("xlsx");
+  const fileOf = (r: (typeof reports)[number]): [string, Blob] => {
+    const [base, rows] = r.file();
+    return format === "csv" ? [`${base}.csv`, csvBlob(rows)] : [`${base}.xlsx`, xlsxBlob([{ name: r.name, rows }])];
+  };
+  const download = (r: (typeof reports)[number]) => {
+    const [name, blob] = fileOf(r);
+    downloadBlob(name, blob);
+    toast(`${r.name} downloaded`);
+  };
   const shareCsv = async (r: (typeof reports)[number]) => {
-    const [name, rows] = r.file();
-    const ok = await shareFile(name, csvBlob(rows), `${r.name} · ${who} · ${rangeText}`);
+    const [name, blob] = fileOf(r);
+    const ok = await shareFile(name, blob, `${r.name} · ${who} · ${rangeText}`);
     if (!ok) {
-      downloadBlob(name, csvBlob(rows));
+      downloadBlob(name, blob);
       toast("Downloaded. Attach it in WhatsApp to send.");
     }
   };
@@ -248,6 +259,8 @@ export default function ReportsPage() {
             </div>
           )}
         </div>
+        {range.loading && <p className="mt-2 text-[13px] text-muted">Loading every bill in this range…</p>}
+        {range.failed && <p className="mt-2 text-[13px] font-medium text-[#B54708]">Couldn&apos;t load older bills. These numbers count only the latest 1,000 orders. Check the internet and open Reports again.</p>}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
           <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> Build report</Button>
           <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> WhatsApp</Button>
@@ -348,29 +361,27 @@ export default function ReportsPage() {
           </Group>
         </div>
 
-        <Group title={`Download · ${rangeText}`} flush>
+        <Group
+          title="Download"
+          action={<Segmented value={format} onChange={setFormat} options={[{ value: "xlsx", label: "Excel" }, { value: "csv", label: "CSV" }]} />}
+          flush
+        >
           {reports.map((r) => (
-            <div key={r.name} className="flex items-center gap-1 border-b border-line/80 pr-2 last:border-0 lg:pr-3">
-              <button
-                onClick={() => {
-                  const [name, rows] = r.file();
-                  downloadBlob(name, csvBlob(rows));
-                }}
-                className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40 lg:px-5"
-              >
-                <FileSpreadsheet size={17} className="shrink-0 text-jade" />
-                <span className="flex-1 truncate text-[15px]">{r.name}</span>
-                <span className="text-[13px] text-muted">Excel (CSV)</span>
+            <div key={r.name} className="flex items-center gap-1 border-b border-line/80 pl-4 pr-2 last:border-0 lg:pl-5 lg:pr-3">
+              <FileSpreadsheet size={17} className="shrink-0 text-jade" />
+              <span className="ml-2 min-w-0 flex-1 truncate py-3 text-[15px]">{r.name}</span>
+              <button onClick={() => download(r)} aria-label={`Download ${r.name}`} title="Download" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink hover:bg-sunken">
+                <Download size={18} />
               </button>
-              <button onClick={() => shareCsv(r)} aria-label={`Share ${r.name} on WhatsApp`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#1fa855] hover:bg-sunken">
-                <Share2 size={17} />
+              <button onClick={() => shareCsv(r)} aria-label={`Send ${r.name} on WhatsApp`} title="WhatsApp" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1fa855] hover:bg-sunken">
+                <MessageCircle size={18} />
               </button>
             </div>
           ))}
           <button onClick={printPdf} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40 lg:px-5">
             <FileText size={17} className="text-jade" />
-            <span className="flex-1 text-[15px]">Build your own report</span>
-            <span className="text-[13px] text-muted">PDF or Excel</span>
+            <span className="flex-1 text-[15px]">PDF report · pick what goes in</span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-full text-ink"><Download size={18} /></span>
           </button>
         </Group>
       </Page>

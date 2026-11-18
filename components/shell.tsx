@@ -3,44 +3,29 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Activity,
-  BarChart3,
-  Boxes,
-  ChefHat,
-  ChevronsUpDown,
-  LayoutGrid,
-  Megaphone,
-  MoreHorizontal,
-  ReceiptText,
-  Settings,
-  Sparkles,
-  SquarePlus,
-  UtensilsCrossed,
-  Users,
-  UserRound,
-  Check,
-  Lock,
-  KeyRound,
-  BellRing,
-  X,
-  Plus,
-  History,
-  CircleHelp,
-} from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
-import { FEATURES, PLAN_NAME, RENEW_WARN_DAYS, daysLeft, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
-import { sessionActions, useAccount, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
+import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
+import { liveCalls, toAccept, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
+import { useReady } from "@/lib/store";
 import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
-import { NoticeBell } from "./notifications";
+import { GatewayBooking } from "./gateway-booking";
+import { WaAuto } from "./wa-auto";
+import { CallAlerts, WaiterCallBar } from "./waiter-calls";
+import { TableJanitor } from "./table-janitor";
+import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
+import { PlanNotice, RenewBanner, usePlanStatus, useRenewBadge } from "./plan-reminder";
+import { dateIN } from "@/lib/plan-status";
+import { useAttendance } from "@/lib/payroll";
+import { useTables } from "@/lib/tables";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
 
@@ -62,6 +47,8 @@ const groups: { key: TKey; items: NavItem[] }[] = [
       { href: "/app/inventory", key: "inventory", icon: Boxes },
       { href: "/app/team", key: "staff", icon: UserRound },
       { href: "/app/access", key: "access", icon: KeyRound },
+      { href: "/app/payroll", key: "payroll", icon: Wallet },
+      { href: "/app/attendance", key: "attendance", icon: CalendarCheck },
     ],
   },
   {
@@ -117,6 +104,7 @@ function useNav() {
   const state = (href: string): NavState | null => {
     const r = routeFor(href);
     if (!r) return "ok"; // home
+    if (href === "/app/attendance" && !onPayroll(me)) return null; // the owner, and sub admins the owner doesn't pay through the app
     if (r.feature) {
       const f = featureState(r.feature, plan, outletKinds(outlet));
       if (f === "type") return null; // not used in this kind of outlet — hidden
@@ -125,20 +113,50 @@ function useNav() {
     if (r.perm && r.perm !== "ownerOrSettings" && !owner && !(hasPerm(me, r.perm) && inOutlet(me, outlet.id))) return null;
     return "ok";
   };
-  const waiting = useOrders().filter((o) => o.status === "new" && (!o.outletId || o.outletId === outlet.id)).length;
+  // number bubbles: things waiting for someone in this outlet
+  const here = (o?: string) => !o || o === outlet.id;
+  const orders = useOrders().filter((o) => here(o.outletId));
+  const waiting = orders.filter(toAccept).length; // to accept
+  const cooking = orders.filter((o) => o.status === "accepted" || o.status === "preparing").length; // in the kitchen
+  const tables = useTables().filter((t) => here(t.outletId));
+  const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
+  const tableAsks = tables.reduce((n, t) => n + t.parties.filter((p) => p.pendingApproval || p.status === "billing" || p.paymentPending).length, 0);
+  const lowStock = useStock().filter((x) => here(x.outletId) && x.par > 0 && x.stock < x.par).length;
+  const outletPeople = new Set(useMembers().filter((m) => onPayroll(m) && m.outletIds.includes(outlet.id)).map((m) => m.id));
+  const asks = useAttendance().filter((a) => a.status === "pending" && a.memberId !== me?.id && outletPeople.has(a.memberId)).length;
+  const counts: Record<string, number> = {
+    "/app/orders": waiting,
+    "/app/kitchen": cooking,
+    "/app/tables": calls + tableAsks,
+    "/app/inventory": lowStock,
+    "/app/payroll": asks,
+  };
+  const badgeOf = (href: string) => counts[href] || undefined;
   const navGroups = groups
-    .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)!, badge: it.href === "/app/orders" && waiting ? waiting : undefined }] : [])) }))
+    .map((g) => ({ ...g, items: g.items.flatMap((it) => (state(it.href) ? [{ ...it, state: state(it.href)!, badge: badgeOf(it.href) }] : [])) }))
     .filter((g) => g.items.length);
-  return { navGroups, state };
+  return { navGroups, state, badgeOf };
 }
 
-/** Days until the plan ends, when the owner should be reminded (≤ 10), else null. */
-function useRenewDays() {
-  const me = useMe();
-  const { renewsAt } = useAccount();
-  const d = daysLeft(renewsAt);
-  return isOwner(me) && d <= RENEW_WARN_DAYS ? d : null;
+/** A small red number on an icon (tab bar, More). */
+function Bubble({ n, className }: { n: number; className?: string }) {
+  return (
+    <span className={clsx("absolute", className)}>
+      <Count n={n} />
+    </span>
+  );
 }
+/** The round red number: the same look everywhere (side menu, tabs, More, Settings). */
+function Count({ n }: { n: number }) {
+  return (
+    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold leading-none text-white tnum" aria-label={`${n} waiting`}>
+      {n > 99 ? "99+" : n}
+    </span>
+  );
+}
+
+/** Days left on the plan (or grace period) on a reminder day, for the owner's badge; else null. */
+const useRenewDays = useRenewBadge;
 
 function Badge({ n }: { n: number }) {
   return (
@@ -156,16 +174,36 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   useEffect(() => setOpen(false), [path]);
+  // another outlet has something waiting (a new order, a payment to confirm, a waiter call): a dot, no sound
+  const orders = useOrders();
+  const calls = liveCalls(useCalls());
+  const waitingIn = (oid: string) =>
+    orders.some((o) => o.outletId === oid && (toAccept(o) || (!!o.payClaim && o.status !== "paid"))) ||
+    calls.some((c) => c.outletId === oid && c.status === "open");
+  const elsewhere = outlets.some((o) => o.id !== current.id && waitingIn(o.id));
   const initials = account.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
     <>
       {compact ? (
-        <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} aria-label={`Outlet: ${current.name}`} className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-white text-[12.5px] font-bold text-ink">
-          {initials}
+        <button
+          onClick={() => setOpen(true)}
+          disabled={outlets.length < 2 && !isOwner(me)}
+          aria-label={`Outlet: ${current.name}`}
+          className="flex h-[38px] max-w-[160px] items-center gap-2 rounded-full px-3.5 text-[14.5px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10 disabled:hover:bg-transparent"
+        >
+          <span className="relative shrink-0">
+            <Store size={17} strokeWidth={1.9} />
+            {elsewhere && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-saffron ring-2 ring-ink" aria-label="Something waiting in another outlet" />}
+          </span>
+          <span className="min-w-0 truncate">{current.name || account.name}</span>
+          {(outlets.length > 1 || isOwner(me)) && <ChevronDown size={15} className="shrink-0 text-white/80" />}
         </button>
       ) : (
       <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} className="flex w-full items-center gap-3 rounded-ctl px-2 py-2 text-left hover:bg-surface/60 disabled:hover:bg-transparent">
-        <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink text-[13px] font-bold text-canvas">{initials}</span>
+        <span className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink text-[13px] font-bold text-canvas">
+          {initials}
+          {elsewhere && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-canvas" aria-label="Something waiting in another outlet" />}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-semibold">{account.name}</span>
           <span className="block truncate text-[12px] text-muted">{current.name} · {current.businessType === "cafe" ? "Café" : "Restaurant"}</span>
@@ -188,6 +226,7 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
                 <span className="block text-[15px] font-medium">{o.name}</span>
                 <span className="block text-[12.5px] text-muted">{o.businessType === "cafe" ? "Café" : "Restaurant"}</span>
               </span>
+              {o.id !== current.id && waitingIn(o.id) && <span className="rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">Waiting</span>}
               {o.id === current.id && <Check size={18} className="text-jade" />}
             </button>
           ))}
@@ -213,7 +252,7 @@ function MeButton({ compact }: { compact?: boolean }) {
   return (
     <>
       <button onClick={() => setOpen(true)} className={clsx("flex items-center gap-2.5 rounded-[10px] text-left", compact ? "" : "w-full px-2 py-1.5 hover:bg-surface/60")} aria-label="Signed in as">
-        <Avatar name={me.name} hue={me.hue} size={compact ? 34 : 30} />
+        <Avatar name={me.name} hue={me.hue} photo={me.photo} size={compact ? 32 : 30} />
         {!compact && (
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13.5px] font-semibold">{me.name}</span>
@@ -227,7 +266,7 @@ function MeButton({ compact }: { compact?: boolean }) {
         ) : (
           <>
             <div className="flex items-center gap-3 rounded-group bg-surface p-4">
-              <Avatar name={me.name} hue={me.hue} size={40} />
+              <Avatar name={me.name} hue={me.hue} photo={me.photo} size={40} />
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold">{me.name}</div>
                 <div className="truncate text-[13px] text-muted">{me.role === "owner" ? `Owner · ${cloud.email ?? ""}` : me.title}</div>
@@ -240,6 +279,7 @@ function MeButton({ compact }: { compact?: boolean }) {
                 </button>
               ))}
             </div>
+            <div className="mt-3"><SoundRow /></div>
             {cloud.role === "owner" && (
               <button onClick={() => setPw(true)} className="mt-3 flex w-full items-center gap-2 rounded-group bg-surface px-4 py-3 text-left text-[15px] font-medium">
                 <KeyRound size={17} className="text-jade" /> Change password
@@ -264,19 +304,47 @@ function MeButton({ compact }: { compact?: boolean }) {
 
 function Sidebar() {
   const path = usePathname();
+  const router = useRouter();
   const { t } = useT();
   const { navGroups } = useNav();
+  // Load every page in the menu ahead of time (the lower ones are out of view, so Next.js
+  // didn't fetch them), and show at once that a tap was taken while a page opens.
+  const hrefs = navGroups.flatMap((g) => g.items.map((i) => i.href)).join("|");
+  useEffect(() => {
+    const id = window.setTimeout(() => hrefs.split("|").forEach((h) => h && router.prefetch(h)), 1200);
+    return () => window.clearTimeout(id);
+  }, [hrefs, router]);
+  const [opening, setOpening] = useState<string | null>(null);
+  useEffect(() => setOpening(null), [path]);
+  const navRef = useRef<HTMLElement>(null);
+  const [more, setMore] = useState(false);
+  const checkMore = () => {
+    const el = navRef.current;
+    setMore(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > 8);
+  };
+  useEffect(() => {
+    checkMore();
+    window.addEventListener("resize", checkMore);
+    return () => window.removeEventListener("resize", checkMore);
+  }, [hrefs]); // eslint-disable-line react-hooks/exhaustive-deps
   const renew = useRenewDays();
+  // the browser tab shows how many orders and waiter calls are waiting: "(2) Restropi"
+  const urgent = navGroups.flatMap((g) => g.items).filter((i) => i.state === "ok" && (i.href === "/app/orders" || i.href === "/app/tables")).reduce((n, i) => n + (i.badge ?? 0), 0);
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\)\s*/, "");
+    document.title = urgent ? `(${urgent > 99 ? "99+" : urgent}) ${base}` : base;
+  }, [urgent, path]);
   return (
     <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col px-3 py-5 lg:flex">
-      <div className="flex items-center justify-between px-2 pb-5">
+      <div className="flex items-center justify-between px-2 pb-4">
         <Link href="/app">
           <Wordmark className="h-[30px]" />
         </Link>
         <div className="flex items-center gap-1.5"><HelpButton /><NoticeBell /></div>
       </div>
       <OutletSwitcher />
-      <nav className="no-scrollbar mt-3 flex-1 space-y-3.5 overflow-y-auto">
+      <div className="relative mt-3 flex min-h-0 flex-1 flex-col">
+      <nav ref={navRef} onScroll={checkMore} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto [scrollbar-width:thin]">
         {navGroups.map((g) => (
           <div key={g.key}>
             <div className="px-3 pb-1 text-[12px] font-medium text-faint">{t(g.key)}</div>
@@ -287,21 +355,33 @@ function Sidebar() {
                 <Link
                   key={it.href}
                   href={it.href}
+                  onClick={() => { if (!active) setOpening(it.href); }}
                   className={clsx(
-                    "flex items-center gap-3 rounded-[10px] px-3 py-[7px] text-[14.5px] font-medium transition-colors",
+                    "flex items-center gap-3 rounded-[10px] px-3 py-[6px] text-[14.5px] font-medium transition-colors",
                     active ? "bg-surface text-ink shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
                     it.state === "locked" && "opacity-60",
                   )}
                 >
                   <Icon size={18} strokeWidth={active ? 2.2 : 1.8} className={active ? "text-jade" : undefined} />
                   <span className="flex-1">{t(it.key)}</span>
-                  {it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <span className="rounded-full bg-saffron px-1.5 text-[11px] font-bold text-white tnum">{it.badge}</span> : null}
+                  {opening === it.href ? <Loader2 size={15} className="animate-spin text-jade" /> : it.state === "locked" ? <Lock size={13} className="text-faint" /> : it.badge ? <Count n={it.badge} /> : null}
                 </Link>
               );
             })}
           </div>
         ))}
       </nav>
+      {/* more items below on a short laptop screen: a fade and a hint, never a half-cut row */}
+      {more && (
+        <button
+          type="button"
+          onClick={() => navRef.current?.scrollBy({ top: 200, behavior: "smooth" })}
+          className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-10 items-end justify-center bg-gradient-to-t from-sunken via-sunken/90 to-transparent pb-1 text-[12px] font-semibold text-muted"
+        >
+          More ↓
+        </button>
+      )}
+      </div>
       <div className="mt-3 space-y-1 border-t border-line pt-3">
         <Link
           href="/app/help"
@@ -334,33 +414,41 @@ function TabBar() {
   const path = usePathname();
   const { t, lang, setLang } = useT();
   const [more, setMore] = useState(false);
-  const { navGroups, state } = useNav();
+  const { navGroups, state, badgeOf } = useNav();
   const renew = useRenewDays();
   const myTabs = tabs.filter((tb) => state(tb.href) === "ok");
   const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }, { href: "/app/help", key: "help" as TKey, icon: CircleHelp, state: "ok" as NavState }].filter(
     (i) => !myTabs.some((tb) => tb.href === i.href),
   );
   const moreActive = moreItems.some((i) => isActive(path, i.href));
+  const moreCount = moreItems.reduce((n, i) => n + (i.state === "ok" ? badgeOf(i.href) ?? 0 : 0), 0);
   // a link in "More" was tapped: close it once the new page is showing
   useEffect(() => setMore(false), [path]);
+  // the kitchen screen is dark: the tab bar goes dark with it (no bright strip under the tickets)
+  const dark = path.startsWith("/app/kitchen");
   return (
     <>
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-canvas/85 backdrop-blur-xl lg:hidden">
+      <nav className={clsx("pb-safe fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl lg:hidden", dark ? "border-white/10 bg-[#0a0a0a]/90" : "border-line/70 bg-canvas/85")}>
         <div className="mx-auto flex max-w-lg">
           {myTabs.map((it) => {
             const active = isActive(path, it.href);
             const Icon = it.icon;
             return (
-              <Link key={it.href} href={it.href} className="flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : "text-faint"} />
-                <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : "text-faint")}>{t(it.key)}</span>
+              <Link key={it.href} href={it.href} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
+                <Icon size={23} strokeWidth={active ? 2.2 : 1.7} className={active ? "text-jade" : dark ? "text-white/55" : "text-faint"} />
+                {!!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-[calc(50%-20px)] top-1" />}
+                <span className={clsx("text-[10.5px] font-medium", active ? "text-jade" : dark ? "text-white/55" : "text-faint")}>{t(it.key)}</span>
               </Link>
             );
           })}
           <button onClick={() => setMore(true)} className="relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2">
-            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : "text-faint"} />
-            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : "text-faint")}>{t("more")}</span>
-            {renew !== null && <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>}
+            <MoreHorizontal size={23} strokeWidth={moreActive ? 2.2 : 1.7} className={moreActive ? "text-jade" : dark ? "text-white/55" : "text-faint"} />
+            <span className={clsx("text-[10.5px] font-medium", moreActive ? "text-jade" : dark ? "text-white/55" : "text-faint")}>{t("more")}</span>
+            {renew !== null ? (
+              <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>
+            ) : moreCount > 0 ? (
+              <Bubble n={moreCount} className="right-[calc(50%-20px)] top-1" />
+            ) : null}
           </button>
         </div>
       </nav>
@@ -383,6 +471,7 @@ function TabBar() {
                 <span className="text-center text-[13px] font-medium">{t(it.key)}</span>
                 {it.state === "locked" && <Lock size={12} className="absolute right-2.5 top-2.5 text-faint" />}
                 {it.href === "/app/settings" && renew !== null && <span className="absolute right-2 top-2"><Badge n={renew} /></span>}
+                {it.state === "ok" && !!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-2 top-2" />}
               </Link>
             );
           })}
@@ -403,50 +492,6 @@ function TabBar() {
   );
 }
 
-/** Owner reminder from 10 days before the plan ends. Hidden for the day once closed. */
-function RenewBanner() {
-  const days = useRenewDays();
-  const { plan, renewsAt } = useAccount();
-  const key = `restropi.renewHidden.${new Date().toDateString()}`;
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(key) === "1";
-    } catch {
-      return false;
-    }
-  });
-  if (days === null || (hidden && days > 0)) return null;
-  const date = new Date(renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  const ended = days <= 0;
-  return (
-    <div className={clsx("flex items-center gap-3 px-4 py-2.5 text-[13.5px] lg:rounded-t-[28px] lg:px-6", ended ? "bg-rose text-white" : "bg-rose-soft text-rose")} role="status">
-      <BellRing size={16} className="shrink-0" />
-      <span className="min-w-0 flex-1">
-        {ended ? (
-          <><b>Your {PLAN_NAME[plan]} plan has ended.</b> Renew to keep billing running.</>
-        ) : (
-          <><b>{PLAN_NAME[plan]} plan ends in {days} {days === 1 ? "day" : "days"}</b> ({date}). Renew to avoid any break.</>
-        )}
-      </span>
-      <button onClick={() => openPlanSheet()} className={clsx("shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold", ended ? "bg-white text-rose" : "bg-rose text-white")}>Renew</button>
-      {!ended && (
-        <button
-          aria-label="Hide for today"
-          onClick={() => {
-            setHidden(true);
-            try {
-              localStorage.setItem(key, "1");
-            } catch {}
-          }}
-          className="shrink-0 p-1"
-        >
-          <X size={15} />
-        </button>
-      )}
-    </div>
-  );
-}
-
 /** Blocks a screen the plan, outlet type or person's access doesn't allow. */
 function RouteGate({ children }: { children: ReactNode }) {
   const path = usePathname();
@@ -454,7 +499,10 @@ function RouteGate({ children }: { children: ReactNode }) {
   const outlet = useCurrentOutlet();
   const { plan } = useAccount();
   const r = routeFor(path);
+  const membersReady = useReady("members");
   if (!r) return <>{children}</>;
+  // who you are isn't known for a moment after opening: wait, don't say "No access"
+  if (!me && !membersReady) return <FullLoader />;
   const f = r.feature ? featureState(r.feature, plan, outletKinds(outlet)) : "ok";
   const allowed = isOwner(me) || (r.perm && r.perm !== "ownerOrSettings" ? hasPerm(me, r.perm) && inOutlet(me, outlet.id) : true);
   if (f === "ok" && allowed) return <>{children}</>;
@@ -512,6 +560,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   const cloud = useCloud();
   const me = useMe();
   const account = useAccount();
+  const plan = usePlanStatus();
   const router = useRouter();
   const [waited, setWaited] = useState(false);
   useEffect(() => {
@@ -538,6 +587,20 @@ function AuthGate({ children }: { children: ReactNode }) {
         <h1 className="text-[22px] font-semibold">No restaurant on this login</h1>
         <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Restropi support to set up your restaurant.</p>
         <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+      </Centered>
+    );
+  }
+  if (cloud.status === "ready" && (cloud.role === "owner" || cloud.role === "staff") && account.status !== "suspended" && plan.locked && account.name) {
+    return (
+      <Centered>
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
+        <h1 className="mt-4 text-[22px] font-semibold">The {PLAN_NAME[account.plan]} plan has ended</h1>
+        <p className="mt-2 text-[15px] text-muted">
+          {account.name || "This restaurant"}&apos;s plan ended on {dateIN(account.renewsAt)}{account.graceUntil ? ` and the grace period on ${dateIN(account.graceUntil)}` : ""}. Billing and the QR menu are off until it&apos;s renewed. Your data is safe.
+        </p>
+        {cloud.role === "owner" ? <Button className="mt-6" onClick={() => openPlanSheet()}>Renew plan</Button> : <p className="mt-4 text-[14px] text-muted">Please ask the owner to renew.</p>}
+        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        {cloud.role === "owner" && <PlanSheet />}
       </Centered>
     );
   }
@@ -589,13 +652,15 @@ function MobileTopBar() {
     return () => window.removeEventListener("scroll", on);
   }, []);
   return (
-    <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] text-white transition-shadow lg:hidden", scrolled && "shadow-[0_8px_20px_-12px_rgb(0_0_0/.5)]")}>
-      <div className="grid h-[52px] grid-cols-[1fr_auto_1fr] items-center px-4">
-        <div className="justify-self-start"><OutletSwitcher compact /></div>
-        <Link href="/app" aria-label="Restropi home" className="justify-self-center">
+    <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] transition-shadow lg:hidden", scrolled && "shadow-[0_10px_24px_-12px_rgb(0_0_0/.55)]")}>
+      {/* dark bar, edge to edge: logo on the left; outlet, alerts and you on the right */}
+      <div className="flex h-[54px] items-center gap-2 pl-4 pr-2 text-white">
+        <Link href="/app" aria-label="Restropi home" className="mr-auto shrink-0">
           <Wordmark light className="h-[26px]" />
         </Link>
-        <div className="flex items-center gap-1 justify-self-end"><HelpButton dark /><NoticeBell dark /><MeButton compact /></div>
+        <OutletSwitcher compact />
+        <NoticeBell dark />
+        <MeButton compact />
       </div>
     </div>
   );
@@ -613,9 +678,15 @@ function AppFrame({ children }: { children: ReactNode }) {
             <MobileTopBar />
             <div aria-hidden className="h-3 lg:hidden" />
             <RenewBanner />
+            <PlanNotice />
             <RouteGate>{children}</RouteGate>
             <PlanSheet />
             <OrderAlerts />
+            <GatewayBooking />
+            <WaAuto />
+            <CallAlerts />
+            <TableJanitor />
+            <WaiterCallBar />
             <HelpSheet />
           </ClientOnly>
         </div>

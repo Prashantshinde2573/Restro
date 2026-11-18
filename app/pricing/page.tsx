@@ -1,12 +1,19 @@
+import type { Metadata } from "next";
+import { JsonLd } from "@/components/site/json-ld";
+import { pageMeta } from "@/lib/site";
 import { PricingTable } from "@/components/pricing";
-import { SiteFooter, SiteNav, WhatsAppTab } from "@/components/site/chrome";
+import { SiteFooter, SiteNav } from "@/components/site/chrome";
 import { HelpChat } from "@/components/site/chat";
 import { SiteMotion } from "@/components/site/motion";
 import { SectionHead } from "@/components/site/head";
 import { MobileCta } from "@/components/site/chrome";
 import { plans } from "@/lib/plans";
 
-export const metadata = { title: "Pricing" };
+export const metadata: Metadata = pageMeta(
+  "/pricing",
+  "Pricing · plans from ₹699 a month per outlet",
+  "Restropi plans for cafés, restaurants and chains: Starter ₹699, Growth ₹1,999 and Pro ₹2,999 a month per outlet. Unlimited bills, free updates, WhatsApp support. Change or cancel any time.",
+);
 
 /** Each plan includes everything in the one before it, plus its own list. */
 function comparison() {
@@ -24,18 +31,19 @@ export default function PricingPage() {
   return (
     <SiteMotion>
       <div className="min-h-dvh overflow-x-clip bg-canvas">
+        <JsonLd page="pricing" />
         <SiteNav />
         <main>
           <section className="relative isolate overflow-hidden pb-14 pt-28 lg:pb-28 lg:pt-40">
             <div className="relative mx-auto max-w-[1240px] px-5 text-center lg:px-8">
-              <SectionHead eyebrow="Pricing" title="Pick a *plan.*" sub="Change or cancel any time. Prices are per outlet." />
+              <SectionHead as="h1" eyebrow="Pricing" title="Pick a *plan.*" sub="Change or cancel any time. Prices are per outlet." />
               <div className="mt-6 text-left lg:mt-8">
                 <PricingTable />
               </div>
             </div>
           </section>
 
-          <section className="pb-14 lg:pb-28">
+          <section id="compare" className="scroll-mt-24 pb-14 lg:pb-28">
             <div className="mx-auto max-w-[1240px] px-5 lg:px-8">
               <SectionHead eyebrow="Side by side" title="Compare *plans.*" />
               <div data-reveal className="glass mt-8 overflow-x-auto rounded-[28px] lg:mt-12">
@@ -69,13 +77,13 @@ export default function PricingPage() {
                   </tbody>
                 </table>
               </div>
+              <p className="mt-4 text-center text-[12px] text-ink/65">* Prices are per outlet. Plans and offerings are indicative and subject to change.</p>
             </div>
           </section>
         </main>
         <SiteFooter />
         <MobileCta />
         <HelpChat />
-        <WhatsAppTab />
       </div>
     </SiteMotion>
   );

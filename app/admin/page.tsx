@@ -4,15 +4,19 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
-import { Button, Chips, Field, Group, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import { ChangePassword, PasswordInput } from "@/components/owner-auth";
 import { PlanCouponsSheet, PlatformSheet } from "@/components/admin-extras";
+import { planStatus } from "@/lib/plan-status";
+import { fitLogo } from "@/lib/fit-logo";
 import { RevenueSheet } from "@/components/admin-revenue";
+import { ErrorsSheet } from "@/components/admin-errors";
+import { BackupsSheet } from "@/components/admin-backups";
 import {
   adminCreate,
   adminDelete,
@@ -21,6 +25,11 @@ import {
   adminUpdate,
   cloudSignOut,
   useCloud,
+  sendWelcomeEmail,
+  adminSetLogo,
+  adminRemoveLogo,
+  adminSyncOwner,
+  adminPlanEmail,
   verifyMyPassword,
   type AdminRestaurant,
 } from "@/lib/cloud";
@@ -39,6 +48,8 @@ const planPrice = (id: string) => plans.find((p) => p.id === id)?.monthly ?? 0;
 
 function renewState(r: AdminRestaurant): { tone: "jade" | "saffron" | "rose" | "neutral"; text: string } {
   if (r.status === "suspended") return { tone: "neutral", text: "Suspended" };
+  const g = planStatus(r);
+  if (g.inGrace) return { tone: "saffron", text: `Grace · ${g.daysLeft <= 0 ? "ends today" : `${g.daysLeft}d left`}` };
   const d = daysLeft(r.renewsAt);
   if (d < 0) return { tone: "rose", text: `Expired ${-d}d ago` };
   if (d <= RENEW_WARN_DAYS) return { tone: "saffron", text: d === 0 ? "Ends today" : `${d}d left` };
@@ -55,10 +66,12 @@ export default function AdminPage() {
   const [f, setF] = useState<Filter>("all");
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [creds, setCreds] = useState<{ title: string; email: string; password: string } | null>(null);
+  const [creds, setCreds] = useState<{ title: string; email: string; password: string; welcome?: "sending" | "sent" | "off" | "failed" } | null>(null);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [couponsOpen, setCouponsOpen] = useState(false);
   const [revenueOpen, setRevenueOpen] = useState(false);
+  const [errorsOpen, setErrorsOpen] = useState(false);
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
@@ -146,7 +159,9 @@ export default function AdminPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
-            <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & WhatsApp</Button>
+            <Button variant="tinted" onClick={() => setErrorsOpen(true)}><AlertTriangle size={17} /> App errors</Button>
+            <Button variant="tinted" onClick={() => setBackupsOpen(true)}><Archive size={17} /> Backups</Button>
+            <Button variant="tinted" onClick={() => setPlatformOpen(true)}><MessageCircle size={17} /> Payments & reminders</Button>
             <Button variant="tinted" onClick={() => setCouponsOpen(true)}><Ticket size={17} /> Plan coupons</Button>
             <Button onClick={() => setAdding(true)}><Plus size={18} /> Add restaurant</Button>
           </div>
@@ -238,8 +253,12 @@ export default function AdminPage() {
         onClose={() => setAdding(false)}
         onCreated={(res, name) => {
           setAdding(false);
-          setCreds({ title: `${name} is ready`, email: res.ownerEmail, password: res.tempPassword });
+          setCreds({ title: `${name} is ready`, email: res.ownerEmail, password: res.tempPassword, welcome: "sending" });
           void load();
+          // the restaurant is saved: now email the owner a welcome with a "set your password" link (no password in it)
+          sendWelcomeEmail(res.rid)
+            .then((r) => setCreds((c) => (c && c.email === res.ownerEmail ? { ...c, welcome: r ? "sent" : "off" } : c)))
+            .catch(() => setCreds((c) => (c && c.email === res.ownerEmail ? { ...c, welcome: "failed" } : c)));
         }}
       />
 
@@ -254,12 +273,14 @@ export default function AdminPage() {
       )}
 
       <Sheet open={!!creds} onClose={() => setCreds(null)} title={creds?.title ?? ""}>
-        {creds && <Credentials email={creds.email} password={creds.password} />}
+        {creds && <Credentials email={creds.email} password={creds.password} welcome={creds.welcome} />}
       </Sheet>
 
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
       <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
       <RevenueSheet open={revenueOpen} onClose={() => setRevenueOpen(false)} list={list ?? []} />
+      <BackupsSheet open={backupsOpen} onClose={() => setBackupsOpen(false)} />
+      <ErrorsSheet open={errorsOpen} onClose={() => setErrorsOpen(false)} names={Object.fromEntries((list ?? []).map((r) => [r.id, r.name]))} />
 
       <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change password">
         <ChangePassword title="" onDone={() => { setPwOpen(false); toast("Password changed"); }} />
@@ -269,12 +290,24 @@ export default function AdminPage() {
 }
 
 /* ---------------- owner login to hand over ---------------- */
-function Credentials({ email, password }: { email: string; password: string }) {
+function Credentials({ email, password, welcome }: { email: string; password: string; welcome?: "sending" | "sent" | "off" | "failed" }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
   const text = `Your Restropi login\n${url}\nEmail: ${email}\nTemporary password: ${password}\nYou'll be asked to set your own password the first time.`;
   return (
     <div className="space-y-4">
+      {welcome && (
+        <p className={clsx("flex items-start gap-2 rounded-group p-3 text-[14px]", welcome === "sent" ? "bg-jade-soft text-ink" : welcome === "sending" ? "bg-surface text-muted" : "bg-saffron-soft text-ink")}>
+          <Mail size={17} className="mt-0.5 shrink-0" />
+          {welcome === "sent"
+            ? `Welcome email sent to ${email} with a link to set their password.`
+            : welcome === "sending"
+              ? "Sending the welcome email…"
+              : welcome === "off"
+                ? "Welcome emails aren't set up yet (email keys missing). Share the details below instead."
+                : "The welcome email couldn't be sent. Share the details below, or send it again from the restaurant's page."}
+        </p>
+      )}
       <p className="text-[14.5px] text-muted">Send this to the owner. The password is shown only now — they&apos;ll set their own when they first sign in.</p>
       <div className="space-y-2 rounded-group bg-surface p-4 font-mono text-[14px]">
         <div className="break-all"><span className="text-muted">Link </span>{url}</div>
@@ -324,7 +357,7 @@ const blank = {
   notes: "",
 };
 
-function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (r: { ownerEmail: string; tempPassword: string }, name: string) => void }) {
+function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (r: { rid: string; ownerEmail: string; tempPassword: string }, name: string) => void }) {
   const [d, setD] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -521,7 +554,36 @@ function RestaurantSheet({
   const extend = (months: number) => {
     const from = Math.max(Date.now(), new Date(r.renewsAt).getTime());
     const iso = new Date(from + months * 30 * DAY).toISOString();
-    return run(() => adminUpdate(r.id, { renewsAt: iso }), `Renewed till ${dateText(iso)}`);
+    return run(() => adminUpdate(r.id, { renewsAt: iso }).then(() => adminPlanEmail(r.id, "renewed")), `Renewed till ${dateText(iso)}`);
+  };
+  // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
+  const [graceDate, setGraceDate] = useState("");
+  // logo: picked here, shrunk in the browser, stored by our server
+  const [logo, setLogo] = useState<string | null>(r.logo ?? null);
+  useEffect(() => setLogo(r.logo ?? null), [r.logo]);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const pickLogo = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return setErr("Choose an image (PNG or JPG)");
+    const png = await fitLogo(f).catch(() => null);
+    if (!png) return setErr("Couldn't read that image");
+    confirmThen("Change the logo", async () => {
+      setLogoBusy(true);
+      setErr("");
+      try {
+        setLogo(await adminSetLogo(r.id, png));
+        onChanged("Logo saved · guests and bills show it now");
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setLogoBusy(false);
+      }
+    });
+  };
+  const giveGrace = (days: number) => {
+    const base = Math.max(Date.now(), new Date(r.renewsAt).getTime(), r.graceUntil ? new Date(r.graceUntil).getTime() : 0);
+    const iso = new Date(base + days * DAY).toISOString();
+    return run(() => adminUpdate(r.id, { graceUntil: iso }).then(() => adminPlanEmail(r.id, "grace")), `Grace period till ${dateText(iso)}`);
   };
   const s = renewState(r);
   const infoChanged = info.name !== r.name || info.owner !== r.owner || info.phone !== r.phone || info.city !== r.city || info.notes !== r.notes;
@@ -554,7 +616,7 @@ function RestaurantSheet({
         {err && <p className="rounded-group bg-rose-soft p-3 text-[14px] text-rose">{err}</p>}
 
         <Section title="Plan">
-          <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }), `Plan changed to ${planName(v)}`)} />
+          <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }).then(() => adminPlanEmail(r.id, "plan")), `Plan changed to ${planName(v)}`)} />
         </Section>
 
         <Section title="Renewal">
@@ -572,10 +634,60 @@ function RestaurantSheet({
             <input type="date" className={clsx(inputCls, "flex-1")} value={date} onChange={(e) => setDate(e.target.value)} />
             <Button
               disabled={busy || !date || date === r.renewsAt.slice(0, 10)}
-              onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }), "Renewal date saved")}
+              onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "renewed")), "Renewal date saved")}
             >
               Set date
             </Button>
+          </div>
+        </Section>
+
+        <Section title="Grace period">
+          <p className="text-[13.5px] text-muted">
+            After the plan ends the store stops (billing and the QR menu). A grace period keeps it running a few more days. The owner gets one email and sees a banner in the app every day until it ends.
+          </p>
+          {r.graceUntil && new Date(r.graceUntil).getTime() > Date.now() ? (
+            <div className="flex flex-wrap items-center gap-2 text-[14.5px]">
+              <Pill tone="saffron">Grace till {dateText(r.graceUntil)}</Pill>
+              <Button variant="plain" className="!bg-surface" disabled={busy} onClick={() => run(() => adminUpdate(r.id, { graceUntil: null }), "Grace period removed")}>Remove grace</Button>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {[3, 7, 15].map((n) => (
+              <Button key={n} variant="plain" className="!bg-surface" disabled={busy} onClick={() => giveGrace(n)}>
+                +{n} days
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input type="date" className={clsx(inputCls, "flex-1")} value={graceDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setGraceDate(e.target.value)} aria-label="Grace period until" />
+            <Button disabled={busy || !graceDate} onClick={() => run(() => adminUpdate(r.id, { graceUntil: new Date(`${graceDate}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "grace")), `Grace period till ${dateText(`${graceDate}T23:59:00+05:30`)}`)}>
+              Set grace
+            </Button>
+          </div>
+        </Section>
+
+        <Section title="Logo">
+          <p className="text-[13.5px] text-muted">Shown next to the restaurant&apos;s name on the guest QR menu and on printed bills. Owners can&apos;t change it; they send you a request on WhatsApp.</p>
+          <div className="flex items-center gap-4">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-white ring-1 ring-line">
+              {logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logo} alt={`${r.name} logo`} className="h-full w-full object-contain p-1" />
+              ) : (
+                <span className="text-[24px] font-bold text-muted">{r.name.trim().charAt(0).toUpperCase() || "R"}</span>
+              )}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <label className={clsx("inline-flex h-11 cursor-pointer items-center rounded-ctl bg-surface px-4 text-[15px] font-semibold", logoBusy && "pointer-events-none opacity-60")}>
+                {logoBusy ? "Uploading…" : logo ? "Change logo" : "Upload logo"}
+                <input type="file" accept="image/*" className="sr-only" disabled={logoBusy} onChange={(e) => { void pickLogo(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              {logo && !logoBusy && (
+                <Button variant="plain" className="!bg-surface" onClick={() => confirmThen("Remove the logo", async () => { setLogoBusy(true); setErr(""); try { await adminRemoveLogo(r.id); setLogo(null); onChanged("Logo removed"); } catch (e) { setErr((e as Error).message); } finally { setLogoBusy(false); } })}>
+                  Remove
+                </Button>
+              )}
+            </div>
           </div>
         </Section>
 
@@ -590,7 +702,12 @@ function RestaurantSheet({
             <input className={clsx(inputCls, "text-muted")} value={r.ownerEmail} readOnly />
           </Field>
           <Field label="Notes"><input className={inputCls} value={info.notes} onChange={(e) => setInfo({ ...info, notes: e.target.value })} /></Field>
-          <Button disabled={busy || !infoChanged || info.name.trim().length < 2} onClick={() => run(() => adminUpdate(r.id, info), "Details saved")}>Save details</Button>
+          <Button
+            disabled={busy || !infoChanged || info.name.trim().length < 2}
+            onClick={() => run(() => adminUpdate(r.id, info).then(() => (info.owner !== r.owner ? adminSyncOwner(r.id) : undefined)), "Details saved")}
+          >
+            Save details
+          </Button>
         </Section>
 
         <Section title="Access">
@@ -625,6 +742,25 @@ function RestaurantSheet({
               className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] font-medium"
             >
               <KeyRound size={18} className="text-jade" /> Reset owner password
+            </button>
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setErr("");
+                try {
+                  const res = await sendWelcomeEmail(r.id, true);
+                  if (!res) setErr("Email isn't set up yet (add the Resend keys in Vercel).");
+                  else onChanged(`Welcome email sent to ${res.to ?? "the owner"}`);
+                } catch (e) {
+                  setErr((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left text-[15px] font-medium"
+            >
+              <Mail size={18} className="text-jade" /> Email the owner a sign-in link
             </button>
           </div>
         </Section>

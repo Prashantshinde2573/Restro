@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Field, Segmented, Sheet, Toggle, inputCls } from "./ui";
 import { useToast } from "./toast";
 import { isValidUpi } from "./upi";
-import { deletePlanCoupon, getPlatformSettings, listPlanCoupons, savePlanCoupon, savePlatformSettings, type PlanCoupon, type PlatformSettings } from "@/lib/cloud";
+import { DEFAULT_REMINDERS, deletePlanCoupon, getPlatformSettings, listPlanCoupons, savePlanCoupon, savePlatformSettings, type PlanCoupon, type PlanReminders, type PlatformSettings } from "@/lib/cloud";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
 
@@ -17,13 +17,23 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "
 /* ---------------- contact and payments ---------------- */
 export function PlatformSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const toast = useToast();
-  const [p, setP] = useState<PlatformSettings>({ whatsapp: "", upi: "", payee: "" });
+  const [p, setP] = useState<PlatformSettings>({ whatsapp: "", upi: "", payee: "", reminders: DEFAULT_REMINDERS });
+  const rem = p.reminders ?? DEFAULT_REMINDERS;
+  const setRem = (patch: Partial<PlanReminders>) => setP((x) => ({ ...x, reminders: { ...(x.reminders ?? DEFAULT_REMINDERS), ...patch } }));
+  const [newDay, setNewDay] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) getPlatformSettings().then(setP).catch(() => {});
   }, [open]);
   const digits = p.whatsapp.replace(/\D/g, "");
-  const err = digits && digits.length < 10 ? "WhatsApp number looks short" : p.upi && !isValidUpi(p.upi) ? "UPI ID looks wrong (like name@bank)" : null;
+  const err =
+    digits && digits.length < 10
+      ? "WhatsApp number looks short"
+      : p.upi && !isValidUpi(p.upi)
+        ? "UPI ID looks wrong (like name@bank)"
+        : rem.email && !rem.days.length
+          ? "Add at least one email day"
+          : null;
 
   const save = async () => {
     setBusy(true);
@@ -43,7 +53,7 @@ export function PlatformSheet({ open, onClose }: { open: boolean; onClose: () =>
     <Sheet
       open={open}
       onClose={onClose}
-      title="Payments & WhatsApp"
+      title="Payments, WhatsApp & reminders"
       footer={<Button size="lg" className="w-full" disabled={busy || !!err} onClick={save}>{err ?? (busy ? "Saving…" : "Save")}</Button>}
     >
       <div className="space-y-4">
@@ -57,6 +67,56 @@ export function PlatformSheet({ open, onClose }: { open: boolean; onClose: () =>
         <Field label="Name shown on UPI">
           <input className={inputCls} value={p.payee} onChange={(e) => setP({ ...p, payee: e.target.value })} placeholder="Restropi" />
         </Field>
+
+        {/* plan reminders: when owners hear that their plan is ending */}
+        <div className="space-y-3 border-t border-line pt-5">
+          <div>
+            <div className="text-[16px] font-semibold">Plan ending reminders</div>
+            <p className="text-[13.5px] text-muted">How owners hear that their plan is ending. When it ends and you give a grace period, they get one email and see a banner every day.</p>
+          </div>
+          <Field label="In the app: every day from" hint="A banner and a bell notice each day, from this many days before the plan ends.">
+            <div className="flex items-center gap-2">
+              <input className={clsx(inputCls, "!w-24")} inputMode="numeric" value={String(rem.from)} onChange={(e) => setRem({ from: Math.max(1, Math.min(60, Number(e.target.value.replace(/\D/g, "")) || 1)) })} aria-label="Days before, in the app" />
+              <span className="text-[14.5px] text-muted">days before</span>
+            </div>
+          </Field>
+          <Field label="Email on these days before" hint="0 = on the last day. Example: 10, 3, 1">
+            <div className="flex flex-wrap items-center gap-2">
+              {rem.days.map((d) => (
+                <span key={d} className="flex items-center gap-1 rounded-full bg-jade-soft py-1 pl-3 pr-1 text-[14px] font-semibold text-jade-deep">
+                  {d === 0 ? "Last day" : `${d} day${d === 1 ? "" : "s"}`}
+                  <button type="button" aria-label={`Remove ${d}`} onClick={() => setRem({ days: rem.days.filter((x) => x !== d) })} className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/60">×</button>
+                </span>
+              ))}
+              <span className="flex items-center gap-1">
+                <input className={clsx(inputCls, "!h-9 !w-20 !text-[14px]")} inputMode="numeric" placeholder="Days" value={newDay} onChange={(e) => setNewDay(e.target.value.replace(/\D/g, "").slice(0, 2))} aria-label="Add an email day" />
+                <Button
+                  size="sm"
+                  variant="plain"
+                  className="!bg-surface"
+                  onClick={() => {
+                    const n = Math.round(Number(newDay));
+                    if (newDay === "" || !Number.isFinite(n) || n < 0 || n > 60) return;
+                    setRem({ days: [...new Set([...rem.days, n])].sort((a, b) => b - a) });
+                    setNewDay("");
+                  }}
+                >
+                  Add
+                </Button>
+              </span>
+            </div>
+          </Field>
+          <div className="overflow-hidden rounded-group bg-surface">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="flex-1 text-[15px]">Show in the owner&apos;s app</span>
+              <Toggle checked={rem.app} onChange={(v) => setRem({ app: v })} label="Show reminders in the app" />
+            </div>
+            <div className="flex items-center gap-3 border-t border-line/80 px-4 py-3">
+              <span className="flex-1 text-[15px]">Email the owner before the plan ends</span>
+              <Toggle checked={rem.email} onChange={(v) => setRem({ email: v })} label="Email reminders" />
+            </div>
+          </div>
+        </div>
       </div>
     </Sheet>
   );

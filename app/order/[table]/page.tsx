@@ -1,26 +1,16 @@
 "use client";
 
+import { GUEST_LANGS, tx, type GuestLang as Lang } from "@/lib/guest-lang";
+import { GamesCard, GamesSheet, type GameId } from "@/components/games/games-sheet";
+import { StampCard } from "@/components/stamps";
+import { playSound, unlockSound } from "@/components/sound";
+import { liveStamps, programOf, rewardOff } from "@/lib/stamps";
+import { planStatus } from "@/lib/plan-status";
+import { hasSizes, sizedName } from "@/lib/sizes";
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
-import {
-  Banknote,
-  BellRing,
-  Check,
-  ClipboardCheck,
-  Copy,
-  CreditCard,
-  MessageCircle,
-  Minus,
-  Plus,
-  QrCode,
-  ReceiptText,
-  Search,
-  ShoppingBag,
-  Users,
-  UtensilsCrossed,
-  X,
-} from "lucide-react";
+import { Banknote, BellRing, Check, ChevronDown, ConciergeBell, CreditCard, Languages, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DietMark, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -29,33 +19,44 @@ import { PhotoSlide } from "@/components/menu-bits";
 import { OtpSheet, type GuestProfile } from "@/components/otp-sheet";
 import {
   ActiveFilters,
-  CategoryRail,
-  DishRow,
+  MenuBar,
+  DishCard,
   FilterButton,
+  GuestTabs,
   FilterSheet,
   applyFilters,
   noFilters,
   sheetFilterCount,
   type MenuFilters,
 } from "@/components/guest-menu";
-import { PayPanel, ThankYou } from "@/components/guest-pay";
+import { CouponBox, PayPanel, ThankYou, guestCouponOff } from "@/components/guest-pay";
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
-import { isShared, tableActions, useAllTables } from "@/lib/tables";
-import { cloudConfigured, feedbackActions, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
-import { ensureGuest, useCloud } from "@/lib/cloud";
-import type { MenuItem, Order, Payment } from "@/lib/types";
+import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
+import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { useReady } from "@/lib/store";
+import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
+import { payOnline } from "@/lib/gateway-checkout";
+import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
 const STEPS = ["Received", "Accepted", "Preparing", "Ready", "Served"] as const;
 const STEPS_MR = ["मिळाली", "स्वीकारली", "बनत आहे", "तयार", "टेबलवर"] as const;
 const stepOf = (s: Order["status"]) => (s === "new" ? 0 : s === "accepted" ? 1 : s === "preparing" ? 2 : s === "ready" ? 3 : 4);
 const PAIRINGS: Record<string, string> = { mains: "m10", starters: "m19", rice: "m16", breads: "m6", desserts: "m21", drinks: "m4", hot: "m16" };
 const sumOf = (p: Payment[]) => p.reduce((s, x) => s + x.amount, 0);
+const WAITER_REASONS = [
+  { en: "Water", mr: "पाणी", icon: "💧" },
+  { en: "Order more", mr: "अजून ऑर्डर", icon: "🍽️" },
+  { en: "Need help", mr: "मदत हवी", icon: "🙋" },
+  { en: "Cutlery / tissues", mr: "चमचे / टिश्यू", icon: "🥄" },
+  { en: "Bill", mr: "बिल", icon: "🧾" },
+];
+const DONE_TTL = 6 * 60 * 60 * 1000; // a finished visit stays closed on this phone for 6 hours (unless the QR is scanned again)
 const num = (n: number) => (n ? n : "…"); // cloud: number arrives a moment after the order
 
-function StatusTrack({ status, lang }: { status: Order["status"]; lang: "en" | "mr" }) {
+function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) {
   const cur = stepOf(status);
-  const labels = lang === "mr" ? STEPS_MR : STEPS;
+  const labels = STEPS.map((en, i) => tx(lang, en, STEPS_MR[i]));
   return (
     <ol className="flex items-start" aria-label={`Order status: ${STEPS[cur]}`}>
       {labels.map((l, i) => (
@@ -79,11 +80,9 @@ function StatusTrack({ status, lang }: { status: Order["status"]; lang: "en" | "
   );
 }
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
-type Waiting = { ids: string[]; kind: "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean };
+type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean; online?: boolean };
 type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
 
 export default function GuestOrder() {
@@ -94,14 +93,20 @@ export default function GuestOrder() {
   const settings = useSettings();
   const cafe = settings.businessType === "cafe" && !settings.mixed; // counter only, no tables
   const payNow = counter || settings.payFirst; // pay before the order goes to the kitchen
-  // QR ordering is a Growth feature; on Starter the QR shows the menu only.
+  // QR ordering is in every plan (it is the Restropi USP); the check stays for outlet types and future plans.
   const qrOn = useFeature("qrOrdering") === "ok";
   const menuAll = useMenu();
+  const everyDish = useAllMenu(); // a brand-wide stamp card's free dish can be on another outlet's menu
   const menu = useMemo(() => menuAll.filter((m) => m.available), [menuAll]);
   const cats = useCategories();
   const tables = useAllTables(); // every outlet: the QR link names the table
   const allOrders = useOrders();
   const t = counter ? undefined : tables.find((x) => x.id.toUpperCase() === table) ?? tables.find((x) => x.name.toUpperCase() === table);
+  // this table is pushed up against another one: the group orders and pays on that table's QR
+  const joinedMain = t?.joinedTo ? tables.find((x) => x.id === t.joinedTo) : undefined;
+  useEffect(() => {
+    if (joinedMain) window.location.replace(`/order/${encodeURIComponent(joinedMain.id)}${window.location.search}`);
+  }, [joinedMain?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cloud: sign this phone in as a guest of the restaurant in the QR link (?r=…).
   const cloud = useCloud();
@@ -115,10 +120,16 @@ export default function GuestOrder() {
       if (rid) localStorage.setItem("restropi.rid", rid);
     } catch {}
     if (!rid) {
-      setCloudErr("This QR code is missing the restaurant link.");
+      setCloudErr("link");
       return;
     }
-    ensureGuest(rid).catch(() => setCloudErr("Couldn't connect. Check your internet and scan again."));
+    const tryConnect = (tries: number): void =>
+      void ensureGuest(rid!).catch((e: Error) => {
+        if (e.message === "OTHER_RESTAURANT") return setCloudErr("other");
+        if (tries > 0) return void window.setTimeout(() => tryConnect(tries - 1), 1500);
+        setCloudErr("net");
+      });
+    tryConnect(2);
     const id = window.setTimeout(() => setWaitedLong(true), 6000);
     return () => window.clearTimeout(id);
   }, []);
@@ -131,14 +142,50 @@ export default function GuestOrder() {
   // a suspended or deleted restaurant never loads: give up after a while instead of spinning
   const [gaveUp, setGaveUp] = useState(false);
   useEffect(() => {
-    const id = window.setTimeout(() => setGaveUp(true), 15000);
+    const id = window.setTimeout(() => setGaveUp(true), 25000);
     return () => window.clearTimeout(id);
   }, []);
-  const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !waitedLong));
+  // Only call a table "not found" once the tables have really arrived from the server.
+  const tablesReady = useReady("tables");
+  const cloudLoading = cloudConfigured && !cloudErr && !gaveUp && (!cloud.rid || !account.name || (!counter && !t && !(tablesReady && waitedLong)));
 
-  const [lang, setLang] = useState<Lang>("en");
-  const mr = lang === "mr";
-  const [view, setView] = useState<"menu" | "orders">("menu");
+  const [lang, setLangState] = useState<Lang>("en");
+  useEffect(() => {
+    try {
+      const l = localStorage.getItem("restropi.guestLang");
+      if (l === "en" || l === "mr" || l === "hi") setLangState(l);
+    } catch {}
+  }, []);
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    try { localStorage.setItem("restropi.guestLang", l); } catch {}
+  };
+  // ---- after the bill is paid this visit is over: back / reload lands on the thank-you page, a fresh QR scan starts again ----
+  const doneKey = `restropi.done.${table}`;
+  const thanksUrl = () => `/order/${encodeURIComponent(params?.table ?? table)}/thanks${window.location.search}`;
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const check = (fromCache: boolean) => {
+      try {
+        const raw = localStorage.getItem(doneKey);
+        if (!raw) return;
+        const at = Number(JSON.parse(raw).at) || 0;
+        const nav = (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type;
+        const fresh = !fromCache && nav === "navigate"; // the QR was scanned again (or the link opened anew)
+        if (fresh || Date.now() - at > DONE_TTL) return localStorage.removeItem(doneKey);
+        setLeaving(true);
+        window.location.replace(thanksUrl());
+      } catch {}
+    };
+    check(false);
+    const onShow = (e: PageTransitionEvent) => e.persisted && check(true); // restored from the back/forward cache
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doneKey]);
+  const [view, setView] = useState<"menu" | "browse" | "orders">("menu");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [game, setGame] = useState<GameId | null>(null);
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<MenuFilters>(noFilters);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -155,10 +202,16 @@ export default function GuestOrder() {
   const [billOpen, setBillOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false); // pay-first: pay for the cart
   const [tipPct, setTipPct] = useState(0);
+  const [useReward, setUseReward] = useState(true);
+  // coupon code from the restaurant's WhatsApp offer: shown only when the restaurant has one running
+  const [couponsOn, setCouponsOn] = useState(false);
+  const [coupon, setCoupon] = useState<GuestCoupon | null>(null);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
+  // the outlet takes payments on its own gateway (Razorpay / Cashfree)
+  const [gw, setGw] = useState<GatewayInfo | null>(null);
+  const [onlineBusy, setOnlineBusy] = useState(false);
   const [thanks, setThanks] = useState<Thanks | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [, tick] = useState(0);
 
   // ---- who is this phone? (its group for this visit to the table, guest profile) ----
   const storeKey = t ? `restropi.party.${t.name}.${t.visitId}` : "";
@@ -166,6 +219,7 @@ export default function GuestOrder() {
   const [mine, setMine] = useState<string[]>([]); // counter orders placed from this phone
   const [guestCount, setGuestCount] = useState<number | null>(null); // asked right after the scan (tables only)
   const [countOpen, setCountOpen] = useState(false); // "change" from the header
+  const [skipAsk, setSkipAsk] = useState(false); // just paid and tapped Done: show the menu, ask guests only if they order again
   const [guest, setGuest] = useState<GuestProfile | null>(null);
   useEffect(() => {
     try {
@@ -187,9 +241,13 @@ export default function GuestOrder() {
     },
     [storeKey],
   );
+  // most guests this group can pick: the table's seats (with any joined tables), less other groups there
+  const maxGuests = t ? Math.max(1, capacity(t, tables) - t.parties.filter((x) => x.id !== myParty).reduce((a, x) => a + x.guests, 0)) : 40;
   const pickGuests = (n: number) => {
+    n = Math.min(n, maxGuests);
     setGuestCount(n);
     setCountOpen(false);
+    window.scrollTo({ top: 0 }); // start the menu from the top
     try { localStorage.setItem(storeKey + ".guests", String(n)); } catch {}
     // already seated: update the party so staff see the right number
     const pp = t?.parties.find((x) => x.id === myParty);
@@ -205,9 +263,29 @@ export default function GuestOrder() {
     });
 
   const party = t?.parties.find((p) => p.id === myParty);
+  // "Call a waiter": this phone's latest call to this table that is still going
+  const calls = useCalls();
+  const myCall = t ? liveCalls(calls).find((c) => c.tableId === t.id) : undefined;
+  // The Waiter tab never calls at once (it was easy to tap by mistake): it opens a sheet to confirm,
+  // with an optional reason. A fresh call can't follow within 20 s of the last one.
+  const [waiterOpen, setWaiterOpen] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (!cooldown) return;
+    const t = window.setTimeout(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => window.clearTimeout(t);
+  }, [cooldown]);
+  const callWaiter = () => {
+    if (!t) return;
+    callActions.call({ outletId: t.outletId, tableId: t.id, tableName: t.name, partyId: myParty ?? undefined, customer: guest?.name, reason: reason ?? undefined });
+    setCooldown(20);
+    toast(tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…"));
+  };
+  // a new group at this table: ask how many guests before the menu
+  const needCount = !!t && !counter && !party && (t.parties.length === 0 || ownBill) && !guestCount;
   const shared = t ? isShared(t) : false;
   const groupName = party ? (shared ? `Group ${party.id}` : tx(lang, "Your group", "तुमचा गट")) : "";
-  const unclaimed = !party ? t?.parties.find((p) => p.source === "captain" && !p.phoneClaimed) : undefined;
 
   const myOrders = useMemo(() => {
     // cancelled orders stay visible for an hour, so the guest knows what happened
@@ -218,34 +296,226 @@ export default function GuestOrder() {
       : [];
   }, [allOrders, t, myParty, counter, mine]);
   const openOrders = useMemo(() => myOrders.filter((o) => o.status !== "paid" && o.status !== "cancelled"), [myOrders]);
+  // This visit's orders on top; finished orders from earlier visits go under "Previous orders".
+  const [nowOrders, pastOrders] = useMemo(() => {
+    const visitFrom = party ? Date.parse(party.since) - 60_000 : null;
+    const done = (o: Order) => o.status === "paid" || o.status === "cancelled" || (counter && o.status === "served");
+    const past = (o: Order) => done(o) && (visitFrom != null ? Date.parse(o.createdAt) < visitFrom : minutesSince(o.createdAt) > 30);
+    return [myOrders.filter((o) => !past(o)), myOrders.filter(past)];
+  }, [myOrders, party, counter]);
+  const [showPast, setShowPast] = useState(false);
+  // stamp card: the program, and this guest's own stamps
+  const stampsFeature = useFeature("stamps") === "ok";
+  const stampProg = stampsFeature && settings.stamps?.on ? programOf(settings.stamps) : null;
+  const [myStamps, setMyStamps] = useState<number | null>(null);
+  // The restaurant adds the stamp when it takes the money, a moment after the bill changes here:
+  // look again when any order changes (and once more a little later), and every 30 s while open.
+  const orderSig = myOrders.map((o) => `${o.id}:${o.status}`).join(",");
+  useEffect(() => {
+    if (!stampProg || cloud.status !== "ready") return;
+    let live = true;
+    const load = () =>
+      guestStamps().then((r) => {
+        if (live && r) setMyStamps(r.stamps.length ? liveStamps({ stamps: r.stamps as Stamp[] }, stampProg).length : r.rewards ? 0 : null);
+      });
+    void load();
+    const later = [window.setTimeout(load, 4000), window.setTimeout(load, 12000)];
+    const every = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30000);
+    return () => {
+      live = false;
+      later.forEach((t) => window.clearTimeout(t));
+      window.clearInterval(every);
+    };
+  }, [!!stampProg, orderSig, cloud.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (cloud.status !== "ready" || !cloud.rid) return;
+    let live = true;
+    guestCouponsOn(t?.outletId ?? currentOutletId()).then((on) => live && setCouponsOn(on)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [cloud.status, cloud.rid]);
+  // online payment: the outlet of this table (or the counter) decides
+  const payOutletId = t?.outletId ?? currentOutletId();
+  useEffect(() => {
+    if (cloud.status !== "ready" || !cloud.rid || !payOutletId) return;
+    let live = true;
+    gatewayFor(payOutletId).then((g) => live && setGw(g)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [cloud.status, cloud.rid, payOutletId]);
+  const stampCard = stampProg ? (
+    <div>
+    <StampCard
+      compact
+      have={myStamps ?? 0}
+      needed={stampProg.needed}
+      reward={stampProg.reward}
+      title={tx(lang, "Your stamp card", "तुमचं स्टॅम्प कार्ड")}
+      note={
+        myStamps == null
+          ? tx(lang, "A stamp on every bill with your number.", "तुमच्या नंबरच्या प्रत्येक बिलावर एक स्टॅम्प.")
+          : myStamps >= stampProg.needed
+            ? payNow || counter
+              ? tx(lang, "Card full! Show this when you pay.", "कार्ड भरलं! पैसे भरताना हे दाखवा.")
+              : tx(lang, "Card full! It comes off the bill when you tap Pay.", "कार्ड भरलं! \"भरा\" दाबल्यावर बिलातून कमी होईल.")
+            : null
+      }
+    />
+    {stampProg.terms && <p className="mt-1 px-1 text-[11.5px] text-faint">{stampProg.terms}</p>}
+    </div>
+  ) : null;
+  // When an order reaches the table, open "My orders": that's where the bill and Pay are.
+  const ordersReadyEarly = useReady("orders");
+  const served = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!ordersReadyEarly) return;
+    const now = new Set(myOrders.filter((o) => o.status === "served").map((o) => o.id));
+    if (served.current === null) {
+      served.current = now; // what was already served when the page opened
+      return;
+    }
+    const fresh = [...now].some((id) => !served.current!.has(id));
+    served.current = now;
+    if (fresh && !payNow) {
+      setView("orders");
+      setCartOpen(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      toast(tx(lang, "Served · your bill and Pay are here", "टेबलवर आली · बिल आणि पेमेंट इथे आहे"));
+    }
+  }, [myOrders, ordersReadyEarly]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Counter / token orders: when the kitchen marks one Ready, tell the guest right away:
+  // a banner with the token, a sound and a buzz (phones that allow it), until it's picked up.
+  const readySeen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    // the guest's first tap lets the "ready" sound play later
+    const once = () => unlockSound();
+    window.addEventListener("pointerdown", once, { once: true });
+    return () => window.removeEventListener("pointerdown", once);
+  }, []);
+  const readyNow = useMemo(() => (counter || payNow ? myOrders.filter((o) => o.status === "ready") : []), [myOrders, counter, payNow]);
+  useEffect(() => {
+    if (!ordersReadyEarly) return;
+    const ids = new Set(readyNow.map((o) => o.id));
+    if (readySeen.current === null) {
+      readySeen.current = ids;
+      return;
+    }
+    const fresh = readyNow.filter((o) => !readySeen.current!.has(o.id));
+    readySeen.current = ids;
+    if (!fresh.length) return;
+    try {
+      navigator.vibrate?.([400, 150, 400, 150, 700]);
+    } catch {
+      /* no buzz on this phone */
+    }
+    playSound("bell");
+    window.setTimeout(() => playSound("bell"), 1600);
+  }, [readyNow, ordersReadyEarly]);
   // Restaurant flow: the running bill. Pay-first orders are already settled from the phone.
   const unbilled = useMemo(() => openOrders.filter((o) => !(o.prepaid ?? []).length && !o.payClaim && !(payNow && o.payPreference)), [openOrders, payNow]);
   // where this phone's bill stands: nothing to pay / payment sent (restaurant confirms) / paid
   const sentClaim = openOrders.find((o) => o.payClaim)?.payClaim;
+  // pay at the end: Pay shows only once every order on the bill is served at the table
+  const awaitingKitchen = !payNow && unbilled.some((o) => o.status === "new");
+  const awaitingServe = !payNow && unbilled.some((o) => o.status !== "served");
   const paidOrders = myOrders.filter((o) => o.status === "paid");
   const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
   const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
+  // Bill settled (pay at the end): close this visit on the phone and go to the thank-you page.
+  const finishing = useRef(false);
+  const finishVisit = (pays: Payment[], orderNo?: number) => {
+    if (finishing.current) return;
+    finishing.current = true;
+    try {
+      localStorage.setItem(doneKey, JSON.stringify({ at: Date.now() }));
+      localStorage.setItem(
+        `restropi.thanks.${table}`,
+        JSON.stringify({
+          place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: pays, orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now(),
+          ...(stampProg ? { stampProg, stampsHave: myStamps } : {}),
+          outletId: t?.outletId ?? currentOutletId() ?? "",
+        }),
+      );
+    } catch {}
+    setLeaving(true);
+    window.location.replace(thanksUrl());
+  };
+  // The restaurant marked the bill paid while this page was open (e.g. paid to the captain without tapping Pay here).
+  const lastBill = useRef(billState);
+  const lastOpen = useRef<string[]>([]);
+  useEffect(() => {
+    const was = lastBill.current;
+    lastBill.current = billState;
+    const openIds = lastOpen.current;
+    if (payNow || counter || billState !== "paid" || (was !== "open" && was !== "sent")) return;
+    const settled = paidOrders.filter((o) => openIds.includes(o.id));
+    const pays = (settled.length ? settled : paidOrders).flatMap((o) => o.payments ?? []);
+    finishVisit(pays, (settled[0] ?? paidOrders[0])?.number);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billState]);
+  useEffect(() => {
+    if (openOrders.length) lastOpen.current = openOrders.map((o) => o.id); // the bill that's being settled
+  }, [openOrders]);
 
-  // ---- settling: show the thank-you once staff have the money ----
+  // ---- settling: show the thank-you once the money is confirmed ----
+  // Remember a payment we are waiting on, so a reload keeps the "being confirmed" screen.
+  const waitKey = `restropi.waiting.${table}`;
+  const ordersReady = ordersReadyEarly;
+  useEffect(() => {
+    try {
+      const w = localStorage.getItem(waitKey);
+      const saved = w ? (JSON.parse(w) as Waiting & { at?: number }) : null;
+      // only a recent one (a few hours): old leftovers are dropped
+      if (saved && saved.at && Date.now() - saved.at < 6 * 3600_000) setWaiting(saved);
+      else if (w) localStorage.removeItem(waitKey);
+    } catch {}
+  }, [waitKey]);
+  useEffect(() => {
+    try {
+      if (waiting && !waiting.payFirst) localStorage.setItem(waitKey, JSON.stringify({ ...waiting, at: Date.now() }));
+      else localStorage.removeItem(waitKey);
+    } catch {}
+  }, [waiting, waitKey]);
   useEffect(() => {
     if (!waiting) return;
     const os = allOrders.filter((o) => waiting.ids.includes(o.id));
-    if (!os.length) return;
+    if (!os.length) {
+      if (ordersReady) setWaiting(null); // a saved wait for orders this phone can't see any more
+      return;
+    }
     const payments: Payment[] =
       waiting.kind === "mixed"
         ? [{ method: "upi", amount: waiting.upiPart ?? 0 }, { method: "cash", amount: waiting.amount - (waiting.upiPart ?? 0) }]
         : [{ method: waiting.kind, amount: waiting.amount }];
-    // Pay-first: staff accept the order once they have the cash/card payment at the counter.
-    // staff took the money (paid, or marked paid and waiting for the owner's OK)
-    const settled = waiting.payFirst ? os.every((o) => o.status !== "new") : os.every((o) => o.status === "paid" || !!o.payClaim);
-    if (settled) {
-      setThanks({ payments: waiting.payFirst ? payments : os[0].payments ?? os[0].payClaim?.payments ?? payments, orderNo: os[0].number, orderId: os[0].id, token: waiting.payFirst });
-      setWaiting(null);
-      setConfirmed(null);
-      setBillOpen(false);
+    if (waiting.payFirst) {
+      // Pay-first: staff accept the order once they have the cash/card payment at the counter.
+      if (os.every((o) => o.status !== "new")) {
+        const online = os[0].gateway ? os.flatMap((o) => o.prepaid ?? []) : [];
+        setThanks({ payments: online.length ? online : payments, orderNo: os[0].number, orderId: os[0].id, token: true });
+        setWaiting(null);
+        setConfirmed(null);
+      }
       return;
     }
-  }, [waiting, allOrders]);
+    // Pay at the end: say thank you only once the owner has confirmed the money (the bill is paid).
+    if (os.every((o) => o.status === "paid" || o.status === "cancelled") && os.some((o) => o.status === "paid")) {
+      const paid = os.find((o) => o.status === "paid")!;
+      setWaiting(null);
+      try { localStorage.removeItem(waitKey); } catch {}
+      finishVisit(paid.payments ?? payments, paid.number);
+      return;
+    }
+    const claimed = os.some((o) => !!o.payClaim);
+    if (claimed && !waiting.claimSeen) setWaiting({ ...waiting, claimSeen: true });
+    else if (!claimed && waiting.claimSeen) {
+      // the owner tapped "Not received": the bill is open again
+      setWaiting(null);
+      setBillOpen(true);
+      toast(tx(lang, "The restaurant hasn't received this payment yet. Please check and pay again, or ask our staff.", "रेस्टॉरंटला अजून हे पैसे मिळालेले नाहीत. तपासून पुन्हा भरा, किंवा स्टाफला विचारा."));
+    }
+  }, [waiting, allOrders, ordersReady]);
 
 
 
@@ -295,6 +565,16 @@ export default function GuestOrder() {
       if (raf) cancelAnimationFrame(raf);
     };
   }, [grouped, view, barH, cloudLoading]);
+  /** Menu tab → a category: back to home, scrolled to it. */
+  const openCat = (id: string) => {
+    setQ("");
+    setFilters((f) => ({ ...f, cats: [] }));
+    setView("menu");
+    window.setTimeout(() => {
+      setActiveCat(id);
+      document.getElementById(`cat-${id}`)?.scrollIntoView({ block: "start" });
+    }, 60);
+  };
   const jumpTo = (id: string) => {
     setActiveCat(id);
     document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -307,7 +587,11 @@ export default function GuestOrder() {
       return i >= 0 ? c.map((x, j) => (j === i ? { ...x, qty: x.qty + line.qty } : x)) : [...c, line];
     });
   const changeLine = (key: string, d: number) => setCart((c) => c.flatMap((x) => (x.key !== key ? [x] : x.qty + d <= 0 ? [] : [{ ...x, qty: x.qty + d }])));
-  const tapAdd = (m: MenuItem) => (m.options?.length ? setDetail(m) : addLine(makeLine(m, 1)));
+  const tapAdd = (m: MenuItem) => {
+    // after paying and leaving, a new order at this table asks for the number of guests again
+    if (needCount && skipAsk) return setSkipAsk(false);
+    return m.options?.length || hasSizes(m) ? setDetail(m) : addLine(makeLine(m, 1));
+  };
   const tapLess = (m: MenuItem) => {
     const last = [...cart].reverse().find((l) => l.item.id === m.id);
     if (last) changeLine(last.key, -1);
@@ -315,8 +599,10 @@ export default function GuestOrder() {
 
   const count = cart.reduce((s, l) => s + l.qty, 0);
   const itemTotal = cart.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-  const gst = Math.round(itemTotal * gstRate() * 100) / 100;
-  const payable = Math.round(itemTotal + gst);
+  // pay first (café / counter): the coupon comes off before GST, like the bill at the counter
+  const cartOff = payNow ? guestCouponOff(coupon, itemTotal) : 0;
+  const gst = Math.round(Math.max(0, itemTotal - cartOff) * gstRate() * 100) / 100;
+  const payable = Math.round(Math.max(0, itemTotal - cartOff) + gst);
 
   const pairing = useMemo(() => {
     if (!cart.length) return null;
@@ -351,7 +637,7 @@ export default function GuestOrder() {
       status: p?.pendingApproval ? "new" : "accepted",
       lines: cart.map((l) => ({
         itemId: l.item.id,
-        name: l.item.name,
+        name: sizedName(l.item.name, l.size),
         qty: l.qty,
         price: l.unitPrice,
         station: l.item.station,
@@ -371,19 +657,27 @@ export default function GuestOrder() {
     return order;
   };
 
-  // QR ordering only in the hours the owner set (Settings → Ordering), and not while paused.
+  // Table QR ordering only in the opening hours (Settings → Details on bills), and not while paused.
   const [, tickHours] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => tickHours((n) => n + 1), 30_000);
     return () => window.clearInterval(id);
   }, []);
-  const hours = orderingOpen(settings);
+  // opening hours apply to table QR only; the counter QR takes orders any time (pause still stops both)
+  const hours = orderingOpen(counter ? { ordersPaused: settings.ordersPaused } : settings);
   const isOpen = hours.open;
   const closedText = hours.open
     ? ""
     : hours.why === "paused"
       ? tx(lang, "Ordering from the phone is paused right now. Please order with our staff.", "आत्ता फोनवरून ऑर्डर बंद आहे. कृपया स्टाफकडे ऑर्डर द्या.")
       : tx(lang, `You can browse the menu — ordering opens at ${hours.opensAt}.`, `मेनू पाहू शकता — ऑर्डर ${hours.opensAt} पासून.`);
+  // After a table order: straight to My orders — live status, the bill so far and the games are all there.
+  const showMyOrders = () => {
+    setCartOpen(false);
+    setView("orders");
+    window.scrollTo({ top: 0 });
+    toast(tx(lang, "Order placed", "ऑर्डर पाठवली"));
+  };
   const placeOrder = () => {
     if (!isOpen) return toast(closedText);
     if (payNow) {
@@ -398,13 +692,15 @@ export default function GuestOrder() {
       afterOtp.current = "order";
       return setOtpOpen(true);
     }
-    setConfirmed(sendOrder(guest).id);
+    sendOrder(guest);
+    showMyOrders();
   };
 
   // ---- pay-first outcomes (café) ----
   const payFirstUpi = () => {
     if (!guest) return;
-    const o = sendOrder(guest, { prepaid: [{ method: "upi", amount: payable }], payPreference: "upi", status: "accepted" });
+    const o = sendOrder(guest, { prepaid: [{ method: "upi", amount: payable }], payPreference: "upi", status: "accepted", ...(cartOff > 0 ? { wantsCoupon: coupon!.code } : {}) });
+    if (cartOff > 0) setCoupon(null);
     setPayOpen(false);
     setThanks({ payments: [{ method: "upi", amount: payable }], orderNo: o.number, orderId: o.id, token: true });
   };
@@ -414,49 +710,152 @@ export default function GuestOrder() {
       status: "new",
       payPreference: kind === "card" ? "card" : "cash",
       ...(kind === "mixed" && upiPart ? { prepaid: [{ method: "upi" as const, amount: upiPart }] } : {}),
+      ...(cartOff > 0 ? { wantsCoupon: coupon!.code } : {}),
     });
+    if (cartOff > 0) setCoupon(null);
     setPayOpen(false);
     setWaiting({ ids: [o.id], kind, amount: payable, upiPart, payFirst: true });
     setConfirmed(o.id);
   };
 
+  /** Pay-first, online: the order waits as "new" until the server hears from the gateway, then goes to the kitchen by itself. */
+  const payFirstOnline = async () => {
+    if (!guest || onlineBusy) return;
+    setOnlineBusy(true);
+    const lines = cart;
+    const usedCoupon = cartOff > 0 ? coupon : null;
+    const o = sendOrder(guest, { status: "new", payPreference: "online", ...(usedCoupon ? { wantsCoupon: usedCoupon.code } : {}) });
+    const r = await payOnline([o.id], { name: settings.name, phone: guest.phone, guestName: guest.name });
+    setOnlineBusy(false);
+    if (r.status === "paid" || r.status === "pending") {
+      if (usedCoupon) setCoupon(null);
+      setPayOpen(false);
+      setWaiting({ ids: [o.id], kind: "upi", amount: r.amount || payable, payFirst: true, online: true });
+      setConfirmed(o.id);
+      return;
+    }
+    // not paid: take the order back, so the guest can pay another way
+    orderActions.setStatus(o.id, "cancelled");
+    setCart(lines);
+    if (/off here/i.test(r.message ?? "")) setGw(null); // the owner turned it off meanwhile
+    toast(r.status === "cancelled" ? tx(lang, "Payment not completed. Choose how to pay.", "पेमेंट पूर्ण झालं नाही. कसे भरायचे ते निवडा.") : r.message || tx(lang, "The payment didn't go through. Try again or pay another way.", "पेमेंट झालं नाही. पुन्हा करा किंवा दुसऱ्या प्रकारे भरा."));
+  };
+
   // ---- the group's bill (restaurant flow) ----
   const billItems = unbilled.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
-  const billGst = Math.round(billItems * gstRate() * 100) / 100;
+  // a full stamp card: the guest can use the reward on this bill (on by default; the restaurant confirms it with the payment)
+  const rewardReady = !!stampProg && myStamps != null && myStamps >= stampProg.needed;
+  const rewardAmt = rewardReady && useReward ? rewardOff(stampProg!, billItems, everyDish) : 0;
+  const couponAmt = payNow ? 0 : Math.min(Math.max(0, billItems - rewardAmt), guestCouponOff(coupon, billItems));
+  // One coupon per bill, the same on the phone and at the counter: a code the staff put on the
+  // bill shows here, and a code the guest applies here is put on the bill for the staff.
+  const billCode = payNow ? undefined : unbilled.find((o) => o.wantsCoupon)?.wantsCoupon;
+  const lastBillCode = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const was = lastBillCode.current;
+    lastBillCode.current = billCode;
+    if (billCode === was) return;
+    if (!billCode) {
+      if (was && coupon?.code === was) setCoupon(null); // the staff took it off
+      return;
+    }
+    if (coupon?.code === billCode) return;
+    let live = true;
+    guestCoupon(billCode, t?.outletId ?? currentOutletId()).then((r) => { if (live && r.coupon) setCoupon(r.coupon); }).catch(() => {});
+    return () => { live = false; };
+  }, [billCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const changeCoupon = (c: GuestCoupon | null) => {
+    setCoupon(c);
+    if (!payNow && unbilled.length) orderActions.askCoupon(unbilled.map((o) => o.id), c?.code);
+  };
+  const billTaxable = Math.max(0, billItems - rewardAmt - couponAmt);
+  const billGst = Math.round(billTaxable * gstRate() * 100) / 100;
   const tip = Math.round((billItems * tipPct) / 100);
-  const billTotal = Math.round(billItems + billGst + tip);
+  const billTotal = Math.round(billTaxable + billGst + tip);
   const billIds = unbilled.map((o) => o.id);
   const who = guest?.name ?? "Guest";
 
   const billUpi = () => {
     orderActions.setPreference(billIds, "upi");
     // The restaurant checks the money came in and confirms; the table closes then.
-    orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, { source: "guest" });
+    orderActions.settle(billIds, [{ method: "upi", amount: billTotal }], who, {
+      source: "guest",
+      ...(rewardAmt + couponAmt > 0 ? { discount: rewardAmt + couponAmt } : {}),
+      ...(rewardAmt > 0 ? { reward: { name: stampProg!.reward, amount: rewardAmt } } : {}),
+      ...(couponAmt > 0 ? { coupon: coupon!.code } : {}),
+    });
     if (t && party) tableActions.update(t.id, party.id, { status: "billing", paymentPending: true });
-    setBillOpen(false);
-    setThanks({ payments: [{ method: "upi", amount: billTotal }], orderNo: unbilled[0]?.number, orderId: unbilled[0]?.id });
+    // stay on the bill: it says "being confirmed" until the owner confirms, then thank you
+    setWaiting({ ids: billIds, kind: "upi", amount: billTotal, payFirst: false, claimSeen: true });
   };
   const billLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
+    if (rewardReady) orderActions.askReward(billIds, rewardAmt > 0); // staff see "use the reward" already on at checkout
+    orderActions.askCoupon(billIds, couponAmt > 0 ? coupon!.code : undefined); // and the guest's coupon already on the bill
     if (kind === "mixed" && upiPart) orderActions.prepay(billIds, { method: "upi", amount: upiPart }, who);
     else orderActions.setPreference(billIds, kind === "card" ? "card" : "cash");
     if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
     setWaiting({ ids: billIds, kind, amount: billTotal, upiPart, payFirst: false });
   };
 
+  /** Pay the bill online: the server works out the same bill (stamp card, coupon, GST) and closes it once the gateway confirms. */
+  const billOnline = async () => {
+    if (onlineBusy || !billIds.length) return;
+    setOnlineBusy(true);
+    orderActions.askReward(billIds, rewardAmt > 0);
+    orderActions.askCoupon(billIds, couponAmt > 0 ? coupon!.code : undefined);
+    const ids = [...billIds];
+    const r = await payOnline(ids, { name: settings.name, phone: guest?.phone, guestName: guest?.name });
+    setOnlineBusy(false);
+    if (r.status === "paid" || r.status === "pending") {
+      if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
+      setWaiting({ ids, kind: "upi", amount: r.amount || billTotal - tip, payFirst: false, online: true });
+      return;
+    }
+    if (/off here/i.test(r.message ?? "")) setGw(null); // the owner turned it off meanwhile
+    toast(r.status === "cancelled" ? tx(lang, "Payment not completed. You can try again or pay another way.", "पेमेंट पूर्ण झालं नाही. पुन्हा करा किंवा दुसऱ्या प्रकारे भरा.") : r.message || tx(lang, "The payment didn't go through. Try again or pay another way.", "पेमेंट झालं नाही. पुन्हा करा किंवा दुसऱ्या प्रकारे भरा."));
+  };
+
   const confirmedOrder = allOrders.find((o) => o.id === confirmed);
   const thanksOrder = thanks?.orderId ? allOrders.find((o) => o.id === thanks.orderId) : undefined;
 
+  if (leaving) return <FullLoader label="Thank you" />;
   if (cloudLoading) {
     return (
       <FullLoader label="Loading menu" />
     );
   }
-  if (cloudErr || !account.name || (!t && !counter)) {
+  if (cloudErr || !account.name || (!t && !counter) || planStatus(account).locked) {
+    // say what actually went wrong, so the guest (or the owner testing) knows what to do
+    const why: { title: string; body: string; action?: { label: string; run: () => void } } =
+      cloudErr === "other"
+        ? {
+            title: "You're signed in to another restaurant",
+            body: "This phone is signed in to a Restropi account of a different restaurant, so it can't open this menu. Sign out to open it as a guest, or scan with another phone.",
+            action: { label: "Sign out and open the menu", run: () => void cloudSignOut().finally(() => window.location.reload()) },
+          }
+        : cloudErr === "net" || (!account.name && !cloudErr)
+          ? {
+              title: "Couldn't open the menu",
+              body: "Check your internet and try again. If it keeps happening, please ask a staff member — this QR may no longer be active.",
+              action: { label: "Try again", run: () => window.location.reload() },
+            }
+          : cloudErr === "link"
+            ? { title: "This QR code isn't complete", body: "It is missing the restaurant link. Please ask a staff member for a new QR code." }
+            : account.status === "suspended" || planStatus(account).locked
+              ? { title: "Ordering is paused", body: "This restaurant isn't taking orders on this QR right now. Please order with our staff." }
+              : {
+                  title: "This QR code isn't active",
+                  body: "This table may have been removed or renamed. Please ask a staff member for help, or scan the code on your table again.",
+                  action: { label: "Try again", run: () => window.location.reload() },
+                };
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center bg-canvas px-6 text-center">
         <QrCode size={32} className="text-muted" />
-        <div className="mt-3 text-[20px] font-semibold">This QR code isn&apos;t active</div>
-        <p className="mt-2 text-[15px] text-muted">Please ask a staff member for help, or scan the code on your table again.</p>
+        <div className="mt-3 text-[20px] font-semibold">{why.title}</div>
+        <p className="mt-2 text-[15px] text-muted">{why.body}</p>
+        {why.action && (
+          <Button size="lg" className="mt-6" onClick={why.action.run}>{why.action.label}</Button>
+        )}
       </div>
     );
   }
@@ -474,47 +873,69 @@ export default function GuestOrder() {
               ? tx(lang, "Done. Enjoy!", "झालं. आनंद घ्या!")
               : tx(lang, "Served. Enjoy your meal!", "टेबलवर आली");
 
-  const placeLabel = counter ? tx(lang, "Counter", "काउंटर") : `${tx(lang, "Table", "टेबल")} ${t!.name}`;
+  const placeLabel = counter ? tx(lang, "Counter", "काउंटर") : `${tx(lang, "Table", "टेबल")} ${joinedName(t!, tables)}`;
   const cashWhere = payNow ? "counter" : "table";
 
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-canvas pb-36 sm:max-w-2xl">
+    <div className="pad-tabs mx-auto min-h-dvh max-w-md bg-canvas sm:max-w-2xl">
+      {/* ---------- token ready: collect at the counter ---------- */}
+      {readyNow.length > 0 && (
+        <div role="alert" className="sticky top-0 z-40 flex items-center gap-3 bg-jade px-4 py-3.5 text-white shadow-float">
+          <span className="flex h-12 min-w-12 items-center justify-center rounded-[14px] bg-white px-2 text-[22px] font-extrabold text-jade tnum">{readyNow.map((o) => num(o.number)).join(", ")}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[17px] font-bold leading-tight">{tx(lang, "Your order is ready!", "तयार आहे!")}</span>
+            <span className="block text-[14px] text-white/90">{tx(lang, "Collect it at the counter", "काउंटरवरून घ्या")}</span>
+          </span>
+        </div>
+      )}
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
-      {t && !counter && qrOn && isOpen && ((!party && (t.parties.length === 0 || ownBill) && !guestCount) || countOpen) && (
+      {t && !counter && qrOn && isOpen && !thanks && !waiting && ((needCount && !skipAsk) || countOpen) && (
         <GuestCountScreen
           place={placeLabel}
           restaurant={settings.name}
           lang={lang}
           initial={party?.guests ?? guestCount}
+          max={maxGuests}
+          seats={t ? capacity(t, tables) : undefined}
           onPick={pickGuests}
           onClose={countOpen ? () => setCountOpen(false) : ownBill && !party ? () => setOwnBill(false) : undefined}
         />
       )}
 
       {/* ---------- header ---------- */}
-      <header className="px-5 pb-3 pt-6">
+      <header className="px-4 pb-1 pt-4">
         <div className="flex items-center justify-between gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[22px] w-auto select-none" draggable={false} />
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-ink px-3 py-1.5 text-[13px] font-semibold text-canvas">
+          <img src="/brand/restropi-logo-dark.png" alt="Restropi" width={597} height={180} className="h-[26px] w-auto select-none" draggable={false} />
+          <div className="flex items-center gap-1">
+            <span className="rounded-full bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas">
               {placeLabel}
               {party && shared && <> · {groupName}</>}
             </span>
-            {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
-              <button onClick={() => setCountOpen(true)} aria-label={tx(lang, "Change number of guests", "किती जण ते बदला")} className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">
-                <Users size={14} /> <span className="tnum">{party?.guests ?? guestCount}</span>
-              </button>
-            ) : null}
-            <button onClick={() => setLang(mr ? "en" : "mr")} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold ring-1 ring-line">{mr ? "English" : "मराठी"}</button>
+            <button onClick={() => setMoreOpen(true)} aria-label={tx(lang, "More", "अधिक")} className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full active:bg-sunken">
+              <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M4 10h20M10 18h14" /></svg>
+            </button>
           </div>
         </div>
-        <h1 className="mt-4 text-[30px] font-semibold leading-tight tracking-tight">{settings.name}</h1>
-        <p className="text-[14px] text-muted">
+        <div className="mt-3.5 flex items-center gap-3">
+          {settings.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.logo} alt={`${settings.name} logo`} className="h-12 w-12 shrink-0 rounded-[14px] bg-white object-contain p-1 ring-1 ring-line" />
+          )}
+          <h1 className="min-w-0 text-[24px] font-bold leading-tight tracking-tight">{settings.name}</h1>
+        </div>
+        <p className="mt-0.5 text-[13.5px] text-ink/70">
           {payNow
             ? tx(lang, "Order and pay from your phone. We'll call your token when it's ready.", "फोनवरून ऑर्डर करा आणि पैसे भरा. तयार झालं की टोकन बोलावू.")
             : tx(lang, "Order from your phone. We'll bring it to your table.", "फोनवरून ऑर्डर करा. आम्ही टेबलवर आणू.")}
         </p>
+        {myCall && (
+          <div className="mt-2.5 flex">
+            <span className={clsx("flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold", myCall.status === "taken" ? "bg-jade-soft text-jade-deep" : "bg-saffron-soft text-saffron")}>
+              <BellRing size={13} /> {myCall.status === "taken" ? tx(lang, `${myCall.toName ?? "Waiter"} is coming`, `${myCall.toName ?? "वेटर"} येत आहे`) : tx(lang, "Waiter called", "वेटरला बोलावलं")}
+            </span>
+          </div>
+        )}
 
         {t && qrOn && !payNow && !cafe && (party ? (
           shared ? (
@@ -562,81 +983,126 @@ export default function GuestOrder() {
         </div>
       )}
 
-      {/* ---------- menu / my orders switch ---------- */}
-      {myOrders.length > 0 && (
-        <div className="px-4 pb-1">
-          <div className="flex rounded-ctl bg-sunken p-[3px]" role="tablist">
-            {(["menu", "orders"] as const).map((v) => (
-              <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", view === v ? "bg-surface shadow-float" : "text-muted")}>
-                {v === "menu" ? tx(lang, "Menu", "मेनू") : `${tx(lang, "My orders", "माझ्या ऑर्डर्स")} · ${myOrders.length}`}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {view === "menu" ? (
+        /* ---------- home: diet ▾ · category ▾ · filters, then dish cards ---------- */
         <>
-          {/* search, veg/non-veg, filters — each its own control */}
-          <div ref={barRef} className="sticky top-0 z-20 space-y-2 border-b border-line/60 bg-canvas px-4 pb-3 pt-3">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  type="search"
-                  enterKeyHint="search"
-                  placeholder={tx(lang, "Search menu", "मेनू शोधा")}
-                  className="h-11 w-full rounded-ctl bg-surface pl-10 pr-9 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade [&::-webkit-search-cancel-button]:hidden"
-                />
-                {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
+          <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-2 pt-2.5 backdrop-blur">
+            <MenuBar
+              diet={filters.diet}
+              onDiet={(d) => setFilters({ ...filters, diet: d })}
+              menu={menu}
+              groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))}
+              active={activeCat}
+              onPick={jumpTo}
+              filterCount={sheetFilterCount({ ...filters, diet: "all" })}
+              onFilters={() => setFilterOpen(true)}
+              lang={lang}
+            />
+            {(q.trim() || sheetFilterCount({ ...filters, diet: "all" }) > 0) && (
+              <div className="mt-2 flex items-center gap-2">
+                {q.trim() && (
+                  <button onClick={() => setQ("")} className="flex shrink-0 items-center gap-1 rounded-full bg-ink py-1 pl-3 pr-2 text-[13px] font-semibold text-canvas">
+                    “{q.trim()}” <X size={13} />
+                  </button>
+                )}
+                <div className="min-w-0 flex-1"><ActiveFilters f={{ ...filters, diet: "all" }} setF={(f) => setFilters({ ...f, diet: filters.diet })} cats={cats} lang={lang} /></div>
               </div>
-              <FilterButton count={sheetFilterCount(filters)} onClick={() => setFilterOpen(true)} lang={lang} />
-            </div>
-            <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
-          </div>
-
-          <div className="flex items-start gap-2.5 px-3 pt-3">
-            {grouped.length > 1 && (
-              <aside className="sticky z-10 flex w-[76px] shrink-0 self-start flex-col sm:w-[92px]" style={{ top: barH + 12, maxHeight: `calc(100dvh - ${barH + 12}px - ${count > 0 || openOrders.length > 0 ? 96 : 16}px)` }}>
-                <CategoryRail groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))} active={activeCat} onPick={jumpTo} lang={lang} />
-              </aside>
             )}
-            <main className="min-w-0 flex-1 space-y-6 pb-4">
-              {filtering && grouped.length > 0 && (
-                <p className="px-1 text-[13px] text-muted">{tx(lang, `${shownItems.length} dishes`, `${shownItems.length} डिश`)}</p>
-              )}
-              {grouped.length === 0 && (
-                <div className="py-16 text-center">
-                  <div className="text-[16px] font-semibold">{tx(lang, "No dishes match", "काही सापडलं नाही")}</div>
-                  <button onClick={() => { setQ(""); setFilters(noFilters); }} className="mt-2 text-[14px] font-semibold text-jade">{tx(lang, "Clear search and filters", "शोध आणि फिल्टर काढा")}</button>
-                </div>
-              )}
-              {grouped.map(({ c, items }) => (
-                <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 12 }}>
-                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[17px] font-semibold leading-tight tracking-tight">
-                    {c.icon && <span aria-hidden>{c.icon}</span>} {c.name}
-                    <span className="text-[13px] font-medium text-faint tnum">{items.length}</span>
-                  </h2>
-                  <div className="overflow-hidden rounded-[18px] bg-surface">
-                    {items.map((m) => (
-                      <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-              <PoweredBy />
-            </main>
           </div>
+          <main className="space-y-6 px-4 pb-4 pt-2.5">
+            {grouped.length === 0 && (
+              <div className="py-16 text-center">
+                <div className="text-[16px] font-semibold">{tx(lang, "No dishes match", "काही सापडलं नाही")}</div>
+                <button onClick={() => { setQ(""); setFilters(noFilters); }} className="mt-2 text-[14px] font-semibold text-jade">{tx(lang, "Clear search and filters", "शोध आणि फिल्टर काढा")}</button>
+              </div>
+            )}
+            {grouped.map(({ c, items }) => (
+              <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 8 }}>
+                <h2 className="mb-2.5 flex items-center gap-2 px-0.5">
+                  {c.icon ? <span aria-hidden className="text-[18px] leading-none">{c.icon}</span> : <ConciergeBell size={20} strokeWidth={1.8} className="text-jade-deep" aria-hidden />}
+                  <span className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-tight">{c.name}</span>
+                  <span className="shrink-0 text-[12.5px] font-semibold text-ink/60 tnum">{items.length} {items.length === 1 ? tx(lang, "item", "डिश") : tx(lang, "items", "डिश")}</span>
+                </h2>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {items.map((m) => (
+                    <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
+                  ))}
+                </div>
+              </section>
+            ))}
+            <PoweredBy />
+          </main>
         </>
+      ) : view === "browse" ? (
+        /* ---------- menu tab: search, filters, every category ---------- */
+        <main className="px-4 pt-2">
+          <div className="sticky top-0 z-20 -mx-4 flex gap-2 bg-canvas/95 px-4 pb-3 pt-2 backdrop-blur">
+            <div className="relative flex-1">
+              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                type="search"
+                enterKeyHint="search"
+                placeholder={tx(lang, "Search dishes", "डिश शोधा")}
+                className="h-11 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-1 focus:ring-jade/40 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
+            </div>
+            <FilterButton count={sheetFilterCount(filters)} onClick={() => setFilterOpen(true)} lang={lang} />
+          </div>
+          {filtering ? (
+            <>
+              <div className="mb-3 flex items-baseline justify-between px-0.5">
+                <span className="text-[15px] font-semibold">{tx(lang, `${shownItems.length} dishes`, `${shownItems.length} डिश`)}</span>
+                <button onClick={() => { setQ(""); setFilters(noFilters); }} className="text-[13.5px] font-semibold text-jade">{tx(lang, "Clear", "काढा")}</button>
+              </div>
+              <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {shownItems.map((m) => (
+                  <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
+                ))}
+              </div>
+              {shownItems.length === 0 && <p className="py-12 text-center text-[15px] text-muted">{tx(lang, "No dishes match", "काही सापडलं नाही")}</p>}
+            </>
+          ) : (
+            <>
+              <h2 className="mb-2.5 px-0.5 text-[17px] font-bold tracking-tight">{tx(lang, "Categories", "प्रकार")}</h2>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {cats.map((c) => {
+                  const n = menu.filter((m) => m.categoryId === c.id).length;
+                  if (!n) return null;
+                  const cover = menu.find((m) => m.categoryId === c.id && m.photos?.length) ?? menu.find((m) => m.categoryId === c.id)!;
+                  return (
+                    <button key={c.id} onClick={() => openCat(c.id)} className="overflow-hidden rounded-[16px] bg-surface text-left ring-1 ring-line/70 active:scale-[.98]">
+                      <PhotoSlide item={cover} className="aspect-[16/10] w-full" />
+                      <span className="flex items-center gap-1.5 px-2.5 py-2">
+                        {c.icon && <span aria-hidden className="text-[18px]">{c.icon}</span>}
+                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{c.name}</span>
+                        <span className="text-[12.5px] font-semibold text-muted tnum">{n}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </main>
       ) : (
         /* ---------- my orders ---------- */
         <main className="space-y-3 px-4 pt-3">
           {(billState === "sent" || billState === "paid") && (
             <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} compact />
           )}
-          {myOrders.map((o) => (
+          {nowOrders.length === 0 && (
+            <div className="flex flex-col items-center rounded-[22px] bg-surface px-6 py-10 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-sunken text-muted"><ReceiptText size={24} /></span>
+              <div className="mt-3 text-[17px] font-semibold">{tx(lang, "No orders yet", "अजून ऑर्डर नाही")}</div>
+              <p className="mt-1 max-w-xs text-[14px] text-muted">{tx(lang, "Add dishes from the menu and place your order. You can follow it here, and pay the bill from here too.", "मेनूमधून डिश जोडा आणि ऑर्डर द्या. ऑर्डरची स्थिती आणि बिल इथेच दिसेल.")}</p>
+              <Button size="lg" className="mt-5" onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}><UtensilsCrossed size={17} /> {tx(lang, "See the menu", "मेनू पहा")}</Button>
+            </div>
+          )}
+          {nowOrders.map((o) => (
             <section key={o.id} className="rounded-[22px] bg-surface p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-[16px] font-semibold">{payNow ? tx(lang, "Token", "टोकन") : tx(lang, "Order", "ऑर्डर")} #{num(o.number)}</span>
@@ -671,36 +1137,69 @@ export default function GuestOrder() {
             </section>
           ))}
           {!payNow && unbilled.length > 0 && (
-            <div className="flex items-baseline justify-between px-1 pt-1 text-[15px]">
-              <span className="text-muted">{tx(lang, "Bill so far", "आतापर्यंतचं बिल")} · incl. GST</span>
-              <span className="text-[20px] font-semibold tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span>
+            <div className="px-1 pt-1">
+              <div className="flex items-baseline justify-between text-[15px]">
+                <span className="text-muted">{tx(lang, "Bill so far", "आतापर्यंतचं बिल")} · incl. GST</span>
+                <span className="text-[20px] font-semibold tnum">
+                  {couponAmt > 0 && <span className="mr-2 text-[14px] font-medium text-faint line-through">{inr(Math.round(billItems * (1 + gstRate())))}</span>}
+                  {inr(Math.round(Math.max(0, billItems - couponAmt) * (1 + gstRate())))}
+                </span>
+              </div>
             </div>
           )}
-          {!counter && (
-            <button onClick={() => toast(tx(lang, "A waiter is on the way", "वेटर येत आहे"))} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
-              <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
-            </button>
+          {!payNow && unbilled.length > 0 && !waiting && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} />}
+          {openOrders.some((o) => o.status !== "served") && <GamesCard onGame={setGame} lang={lang} />}
+          {stampCard}
+          {pastOrders.length > 0 && (
+            <div className="overflow-hidden rounded-[22px] bg-surface">
+              <button onClick={() => setShowPast((v) => !v)} aria-expanded={showPast} className="flex w-full items-center justify-between px-4 py-3.5 text-left">
+                <span className="text-[15px] font-semibold">{tx(lang, "Previous orders", "आधीच्या ऑर्डर्स")} <span className="text-muted">({pastOrders.length})</span></span>
+                <ChevronDown size={18} className={clsx("text-muted transition-transform", showPast && "rotate-180")} />
+              </button>
+              {showPast && (
+                <ul className="divide-y divide-line/80 border-t border-line/80">
+                  {pastOrders.map((o) => (
+                    <li key={o.id} className="px-4 py-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[14px] font-semibold">{payNow ? tx(lang, "Token", "टोकन") : tx(lang, "Order", "ऑर्डर")} #{num(o.number)}</span>
+                        <span className="text-[12.5px] text-muted">{new Date(o.createdAt).toLocaleDateString(lang === "en" ? "en-IN" : lang === "hi" ? "hi-IN" : "mr-IN", { day: "numeric", month: "short" })} · {new Date(o.createdAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</span>
+                      </div>
+                      <div className="mt-0.5 text-[13px] text-muted">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(", ")}</div>
+                      <div className="mt-1 flex items-center justify-between text-[13px]">
+                        <span className={clsx("font-semibold", o.status === "cancelled" ? "text-rose" : "text-jade-deep")}>{o.status === "cancelled" ? tx(lang, "Not accepted", "स्वीकारली नाही") : tx(lang, "Paid", "पैसे भरले")}</span>
+                        <span className="font-semibold tnum">{inr(o.lines.reduce((a, l) => a + l.qty * l.price, 0))}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </main>
       )}
 
-      {/* ---------- bottom bar ---------- */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 [--safe-pb:16px] sm:max-w-2xl">
-        {count > 0 ? (
-          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-5 py-4 text-white shadow-float">
+      {/* ---------- above the tabs: cart total, or where the bill stands ---------- */}
+      <div className="above-tabs pointer-events-none fixed inset-x-0 z-30 mx-auto max-w-md bg-gradient-to-t from-canvas via-canvas/95 to-canvas/0 px-4 pb-2 pt-5 sm:max-w-2xl [&>*]:pointer-events-auto empty:hidden">
+        {count > 0 && view !== "orders" ? (
+          <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[16px] bg-jade-deep px-4 py-3 text-white">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
             <span className="text-[15px] tnum opacity-90">{inr(itemTotal)} <span className="text-[12px] opacity-75">+ GST</span></span>
-            <span className="ml-auto text-[16px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
+            <span className="ml-auto text-[15px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
           </button>
-        ) : openOrders.length > 0 || (!payNow && billState === "paid") ? (
-          <div className={clsx("grid gap-2", !payNow && billState !== "none" ? "grid-cols-2" : "grid-cols-1")}>
-            <Button size="lg" variant="plain" className="shadow-float" onClick={() => { setView(view === "menu" ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}>
-              {view === "menu" ? <><ReceiptText size={17} /> {tx(lang, "My orders", "माझ्या ऑर्डर्स")}</> : <><UtensilsCrossed size={17} /> {tx(lang, "Order more", "आणखी ऑर्डर")}</>}
-            </Button>
+        ) : view === "orders" && !payNow && billState !== "none" ? (
+          <div className="grid grid-cols-1 gap-2">
             {/* where the bill stands: pay it / already paid, owner confirming / paid */}
-            {!payNow && billState === "open" && (
-              <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setBillOpen(true); }}>
-                {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(Math.round(billItems * (1 + gstRate())))}</span></>}
+            {!payNow && billState === "open" && awaitingServe && !waiting && (
+              <div className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-3 text-center shadow-float ring-1 ring-line">
+                <span className="text-[14.5px] font-semibold">
+                  {awaitingKitchen ? tx(lang, "Waiting for the kitchen to accept", "किचनकडून ऑर्डर स्वीकारली जाण्याची वाट") : tx(lang, "Your food is on the way", "तुमचं जेवण तयार होत आहे")}
+                </span>
+                <span className="text-[11.5px] font-medium leading-tight text-muted">{tx(lang, "You can pay once your food is served", "जेवण टेबलवर आलं की पैसे भरता येतील")}</span>
+              </div>
+            )}
+            {!payNow && billState === "open" && (!awaitingServe || waiting) && (
+              <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setUseReward(true); setBillOpen(true); }}>
+                {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
               </Button>
             )}
             {!payNow && billState === "sent" && (
@@ -717,6 +1216,115 @@ export default function GuestOrder() {
           </div>
         ) : null}
       </div>
+
+      {/* ---------- bottom tabs ---------- */}
+      <GuestTabs
+        tab={view === "menu" ? "home" : view === "browse" ? "menu" : "orders"}
+        onTab={(tb) => {
+          if (tb === "cart") return count ? setCartOpen(true) : toast(tx(lang, "Your cart is empty · tap + on a dish", "कार्ट रिकामी आहे · डिशवर + दाबा"));
+          setView(tb === "home" ? "menu" : tb === "menu" ? "browse" : "orders");
+          window.scrollTo({ top: 0 });
+        }}
+        cartCount={count}
+        ordersBadge={openOrders.length}
+        showCart={qrOn}
+        waiter={counter || !t ? null : myCall ? myCall.status as "open" | "taken" : "idle"}
+        onWaiter={() => { setReason(null); setWaiterOpen(true); }}
+        lang={lang}
+      />
+      <Sheet open={waiterOpen} onClose={() => setWaiterOpen(false)} title={tx(lang, "Call a waiter", "वेटरला बोलवा")}>
+        {myCall?.status === "taken" ? (
+          <div className="space-y-4 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><Check size={26} /></span>
+            <p className="text-[17px] font-semibold">{tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}</p>
+            <Button size="lg" variant="plain" className="w-full !bg-surface" onClick={() => setWaiterOpen(false)}>{tx(lang, "OK", "ठीक आहे")}</Button>
+          </div>
+        ) : myCall?.status === "open" ? (
+          <div className="space-y-4 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-saffron-soft text-saffron"><BellRing size={26} className="animate-pulse" /></span>
+            <div>
+              <p className="text-[17px] font-semibold">{tx(lang, "A waiter has been called", "वेटरला बोलावलं आहे")}</p>
+              <p className="mt-1 text-[14px] text-muted">{myCall.reason ? `${myCall.reason} · ` : ""}{tx(lang, "Someone will come to your table shortly.", "थोड्याच वेळात कोणीतरी तुमच्या टेबलवर येईल.")}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="lg" variant="plain" className="!bg-surface" onClick={() => { callActions.cancel(myCall.id); setWaiterOpen(false); toast(tx(lang, "Call cancelled", "कॉल रद्द केला")); }}>{tx(lang, "Cancel call", "कॉल रद्द करा")}</Button>
+              <Button size="lg" onClick={() => setWaiterOpen(false)}>{tx(lang, "OK", "ठीक आहे")}</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-[15px] text-muted">{tx(lang, `A waiter will come to table ${t?.name ?? ""}. What do you need? (optional)`, `वेटर टेबल ${t?.name ?? ""} वर येईल. काय हवं आहे? (ऐच्छिक)`)}</p>
+            <div className="flex flex-wrap gap-2">
+              {WAITER_REASONS.map((r) => {
+                const label = tx(lang, r.en, r.mr);
+                return (
+                  <button key={r.en} type="button" aria-pressed={reason === r.en} onClick={() => setReason((x) => (x === r.en ? null : r.en))} className={clsx("rounded-full px-3.5 py-2 text-[14px] font-semibold ring-1", reason === r.en ? "bg-ink text-canvas ring-ink" : "bg-surface ring-line")}>
+                    {r.icon} {label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button size="lg" className="w-full" disabled={cooldown > 0} onClick={() => { callWaiter(); setWaiterOpen(false); toast(tx(lang, "Waiter called", "वेटरला बोलावलं")); }}>
+              <BellRing size={18} /> {cooldown > 0 ? tx(lang, `You just called · wait ${cooldown}s`, `आत्ताच बोलावलं · ${cooldown} सेकंद थांबा`) : tx(lang, "Call waiter", "वेटरला बोलवा")}
+            </Button>
+          </div>
+        )}
+      </Sheet>
+
+      <GamesSheet game={game} onGame={setGame} onClose={() => setGame(null)} lang={lang} />
+
+      {/* ---------- ☰ more: language, guests, call a waiter ---------- */}
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={settings.name}>
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-group bg-surface">
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-[15px] font-medium">{tx(lang, "You're at", "तुम्ही आहात")}</span>
+              <span className="text-[15px] font-semibold">{placeLabel}{party && shared ? ` · ${groupName}` : ""}</span>
+            </div>
+            {t && !counter && qrOn && (party?.guests || guestCount) && (party || !t.parties.length || ownBill) ? (
+              <button onClick={() => { setMoreOpen(false); setCountOpen(true); }} className="flex w-full items-center justify-between border-t border-line/80 px-4 py-3.5 text-left">
+                <span className="text-[15px] font-medium">{tx(lang, "Guests", "किती जण")}</span>
+                <span className="flex items-center gap-2 text-[15px] font-semibold"><Users size={15} /> {party?.guests ?? guestCount} <span className="text-[13px] font-semibold text-jade">{tx(lang, "Change", "बदला")}</span></span>
+              </button>
+            ) : null}
+            <div className="flex items-center justify-between border-t border-line/80 px-4 py-3">
+              <span className="flex items-center gap-2 text-[15px] font-medium"><Languages size={17} /> {tx(lang, "Language", "भाषा")}</span>
+              <div className="flex rounded-ctl bg-sunken p-[3px]">
+                {GUEST_LANGS.map((l) => (
+                  <button key={l.id} onClick={() => setLang(l.id)} className={clsx("rounded-[9px] px-2.5 py-1.5 text-[13px] font-semibold", lang === l.id ? "bg-surface shadow-float" : "text-muted")}>{l.label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+            {!counter && (
+              myCall?.status === "taken" ? (
+                <div className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-jade-soft py-3.5 text-[15px] font-semibold text-jade-deep">
+                  <Check size={17} /> {tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}
+                </div>
+              ) : myCall?.status === "open" ? (
+                <div className="flex w-full items-center gap-2 rounded-[18px] bg-saffron-soft py-2 pl-4 pr-2 text-saffron">
+                  <BellRing size={17} className="animate-pulse" />
+                  <span className="flex-1 text-[15px] font-semibold">{tx(lang, "Calling a waiter…", "वेटरला बोलावत आहे…")}</span>
+                  <button onClick={() => callActions.cancel(myCall.id)} className="rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-ink">{tx(lang, "Cancel", "रद्द करा")}</button>
+                </div>
+              ) : (
+                <button onClick={() => { setMoreOpen(false); setReason(null); window.setTimeout(() => setWaiterOpen(true), 350); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+                  <BellRing size={17} /> {tx(lang, "Call a waiter", "वेटरला बोलवा")}
+                </button>
+              )
+            )}
+          {stampCard}
+          <button onClick={() => { setMoreOpen(false); window.setTimeout(() => setGame("ludo"), 350); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+            🎮 {tx(lang, "Play a game", "खेळ खेळा")}
+          </button>
+          {myOrders.length > 0 && (
+            <button onClick={() => { setMoreOpen(false); setView("orders"); window.scrollTo({ top: 0 }); }} className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-surface py-3.5 text-[15px] font-semibold">
+              <ReceiptText size={17} /> {tx(lang, "My orders and bill", "माझ्या ऑर्डर्स आणि बिल")}
+            </button>
+          )}
+          <PoweredBy />
+        </div>
+      </Sheet>
 
       {/* ---------- dish detail / photos ---------- */}
       <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={qrOn && isOpen ? addLine : undefined} photosOnly={!qrOn || !isOpen} />
@@ -758,7 +1366,7 @@ export default function GuestOrder() {
               <div key={l.key} className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0">
                 <span className="mt-1"><DietMark diet={l.item.diet} /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-medium leading-snug">{l.item.name}</div>
+                  <div className="text-[15px] font-medium leading-snug">{sizedName(l.item.name, l.size)}</div>
                   {l.options.length > 0 && <div className="mt-0.5 text-[12.5px] text-muted">{l.options.join(" · ")}</div>}
                   <div className="mt-1 text-[13.5px] text-muted tnum">{inr(l.qty * l.unitPrice)}</div>
                 </div>
@@ -782,10 +1390,12 @@ export default function GuestOrder() {
             </div>
           )}
 
-          <input value={note} onChange={(e) => setNote(e.target.value)} className="h-12 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none placeholder:text-faint focus:ring-2 focus:ring-jade" placeholder={tx(lang, "Note for the kitchen (no onion, less sugar…)", "किचनसाठी सूचना (कमी तिखट, कांदा नको…)")} />
+          <input value={note} onChange={(e) => setNote(e.target.value)} className="h-12 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40" placeholder={tx(lang, "Note for the kitchen (no onion, less sugar…)", "किचनसाठी सूचना (कमी तिखट, कांदा नको…)")} />
 
+          {payNow && (couponsOn || coupon) && <CouponBox lang={lang} subtotal={itemTotal} applied={coupon} onChange={setCoupon} />}
           <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(itemTotal, { decimals: true })}</dd></div>
+            {cartOff > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Coupon", "कूपन")} {coupon!.code}</dt><dd className="tnum">−{inr(cartOff, { decimals: true })}</dd></div>}
             <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(gst, { decimals: true })}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
             <div className="flex justify-between border-t border-line pt-2 text-[16px] font-semibold"><dt>{tx(lang, "To pay", "एकूण")}</dt><dd className="tnum">{inr(payable)}</dd></div>
@@ -810,6 +1420,9 @@ export default function GuestOrder() {
             onCash={() => payFirstLater("cash")}
             onCard={() => payFirstLater("card")}
             onMixed={(upiPart) => payFirstLater("mixed", upiPart)}
+            online={gw}
+            onOnline={payFirstOnline}
+            onlineBusy={onlineBusy}
           />
         )}
       </Sheet>
@@ -829,7 +1442,8 @@ export default function GuestOrder() {
             setCartOpen(false);
             setPayOpen(true);
           } else {
-            setConfirmed(sendOrder(g).id);
+            sendOrder(g);
+            showMyOrders();
           }
         }}
       />
@@ -838,7 +1452,7 @@ export default function GuestOrder() {
       {confirmedOrder && !thanks && (
         <div className="fixed inset-0 z-40 mx-auto flex max-w-md animate-fade-in flex-col bg-canvas px-5 pb-6 pt-14" role="dialog" aria-label="Order placed">
           <div className="flex flex-1 flex-col items-center text-center">
-            {waiting?.payFirst ? (
+            {waiting?.payFirst && !waiting.online ? (
               <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-saffron-soft text-saffron">{waiting.kind === "card" ? <CreditCard size={36} /> : <Banknote size={36} />}</div>
             ) : (
               <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-jade text-white"><Check size={40} strokeWidth={2.5} /></div>
@@ -849,7 +1463,13 @@ export default function GuestOrder() {
               {placeLabel}
               {shared && party ? ` · ${groupName}` : ""} · {confirmedOrder.lines.reduce((s, l) => s + l.qty, 0)} {tx(lang, "items", "पदार्थ")}
             </div>
-            {waiting?.payFirst && (
+            {waiting?.payFirst && waiting.online && (
+              <div className="mt-6 flex w-full items-center gap-2 rounded-[22px] bg-jade-soft p-4 text-left text-[15px] text-jade-deep">
+                <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-jade" />
+                <span><b>{tx(lang, `Paid ${inr(waiting.amount)} online.`, `${inr(waiting.amount)} ऑनलाइन भरले.`)}</b> {tx(lang, "Confirming with the bank · your order goes to the kitchen by itself.", "बँकेकडून खात्री होत आहे · ऑर्डर आपोआप किचनला जाईल.")}</span>
+              </div>
+            )}
+            {waiting?.payFirst && !waiting.online && (
               <div className="mt-6 w-full rounded-[22px] bg-saffron-soft p-4 text-left text-[15px]">
                 <b>
                   {waiting.kind === "mixed"
@@ -886,11 +1506,10 @@ export default function GuestOrder() {
           orderNo={thanksOrder?.number || thanks.orderNo || undefined}
           token={thanks.token ? thanksOrder?.number || thanks.orderNo || undefined : undefined}
           lang={lang}
-          pending={!thanks.token && !!thanksOrder && thanksOrder.status !== "paid"}
           onRate={(stars, text) =>
             feedbackActions.add({ customer: guest?.name ?? "Guest", stars, text: text || (stars >= 4 ? "Loved it" : "Not happy"), routed: stars >= 4 ? "google" : "private" })
           }
-          onClose={() => { setThanks(null); setView(thanks.token ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}
+          onClose={() => { setThanks(null); setSkipAsk(true); setView(thanks.token ? "orders" : "menu"); window.scrollTo({ top: 0 }); }}
         >
           {thanks.token && thanksOrder && thanksOrder.status !== "paid" && (
             <div className="mt-3 border-t border-line pt-3">
@@ -907,7 +1526,9 @@ export default function GuestOrder() {
         onClose={() => setBillOpen(false)}
         title={waiting && !waiting.payFirst ? tx(lang, "Almost done", "जवळजवळ झालं") : tx(lang, "Your bill", "तुमचं बिल")}
       >
-        {waiting && !waiting.payFirst ? (
+        {waiting && !waiting.payFirst && (waiting.kind === "upi" || waiting.claimSeen) ? (
+          <BillDone state="sent" claimTotal={waiting.amount} paidTotal={0} lang={lang} />
+        ) : waiting && !waiting.payFirst ? (
           <div className="flex flex-col items-center pt-4 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-saffron-soft text-saffron">{waiting.kind === "card" ? <CreditCard size={30} /> : <Banknote size={30} />}</div>
             <p className="mt-4 max-w-xs text-[15px] text-muted">
@@ -917,7 +1538,7 @@ export default function GuestOrder() {
                   ? tx(lang, `Your captain is bringing the bill. Please keep ${inr(waiting.amount)} ready in cash.`, `कॅप्टन बिल घेऊन येत आहे. ${inr(waiting.amount)} रोख तयार ठेवा.`)
                   : tx(lang, "Your captain is bringing the card machine.", "कॅप्टन कार्ड मशीन घेऊन येत आहे.")}
             </p>
-            <p className="mt-3 text-[13px] text-faint">{tx(lang, "This screen says thank you once it's done.", "झालं की इथे धन्यवाद दिसेल.")}</p>
+            <p className="mt-3 text-[13px] text-faint">{tx(lang, "Once the restaurant confirms the payment, this screen says thank you.", "रेस्टॉरंटने पैसे मिळाल्याची खात्री केली की इथे धन्यवाद दिसेल.")}</p>
           </div>
         ) : unbilled.length === 0 ? (
           <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} />
@@ -933,6 +1554,26 @@ export default function GuestOrder() {
                 </div>
               ))}
             </div>
+            {rewardReady && (
+              <button
+                type="button"
+                onClick={() => setUseReward((v) => !v)}
+                aria-pressed={useReward}
+                className={clsx("flex w-full items-center gap-3 rounded-group p-4 text-left ring-1", useReward ? "bg-[#fff7e0] ring-saffron/40" : "bg-surface ring-line")}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[20px]">🎁</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">{tx(lang, `Use my reward: ${stampProg!.reward}`, `माझं बक्षीस वापरा: ${stampProg!.reward}`)}</span>
+                  <span className="block text-[12.5px] text-muted">
+                    {useReward
+                      ? tx(lang, `−${inr(rewardOff(stampProg!, billItems, everyDish))} on this bill · your card starts again after this`, `या बिलावर −${inr(rewardOff(stampProg!, billItems, everyDish))} · यानंतर कार्ड पुन्हा सुरू`)
+                      : tx(lang, "Tap to use it on this bill", "या बिलावर वापरण्यासाठी टॅप करा")}
+                  </span>
+                </span>
+                <span className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2", useReward ? "border-jade bg-jade text-white" : "border-line")}>{useReward && <Check size={14} strokeWidth={3} />}</span>
+              </button>
+            )}
+            {(couponsOn || coupon) && <CouponBox lang={lang} subtotal={billItems} applied={coupon} onChange={changeCoupon} />}
             <div>
               <div className="mb-2 text-[14px] font-semibold">{tx(lang, "Tip for the staff (optional)", "स्टाफसाठी टिप (ऐच्छिक)")}</div>
               <div className="grid grid-cols-4 gap-2">
@@ -945,6 +1586,8 @@ export default function GuestOrder() {
             </div>
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14.5px]">
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Item total", "पदार्थ")}</dt><dd className="tnum">{inr(billItems, { decimals: true })}</dd></div>
+              {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Stamp card reward", "स्टॅम्प कार्ड बक्षीस")} · {stampProg!.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
+              {couponAmt > 0 && <div className="flex justify-between text-jade"><dt>{tx(lang, "Coupon", "कूपन")} {coupon!.code}</dt><dd className="tnum">−{inr(couponAmt, { decimals: true })}</dd></div>}
               <div className="flex justify-between"><dt className="text-muted">CGST {halfGstLabel()} + SGST {halfGstLabel()}</dt><dd className="tnum">{inr(billGst, { decimals: true })}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Service charge", "सर्व्हिस चार्ज")}</dt><dd className="text-jade">{tx(lang, "None", "नाही")}</dd></div>
               {tip > 0 && <div className="flex justify-between"><dt className="text-muted">{tx(lang, "Tip", "टिप")}</dt><dd className="tnum">{inr(tip)}</dd></div>}
@@ -962,6 +1605,10 @@ export default function GuestOrder() {
               onCash={() => billLater("cash")}
               onCard={() => billLater("card")}
               onMixed={(upiPart) => billLater("mixed", upiPart)}
+              online={gw}
+              onlineAmount={billTotal - tip}
+              onOnline={billOnline}
+              onlineBusy={onlineBusy}
             />
           </div>
         )}
@@ -971,7 +1618,7 @@ export default function GuestOrder() {
 }
 
 /** The bill is settled (or sent): no pay buttons, just where it stands. */
-function BillDone({ state, claimTotal, paidTotal, lang, compact = false }: { state: "open" | "sent" | "paid" | "none"; claimTotal: number; paidTotal: number; lang: "en" | "mr"; compact?: boolean }) {
+function BillDone({ state, claimTotal, paidTotal, lang, compact = false }: { state: "open" | "sent" | "paid" | "none"; claimTotal: number; paidTotal: number; lang: Lang; compact?: boolean }) {
   if (state === "none" || state === "open") {
     return compact ? null : <p className="py-8 text-center text-[15px] text-muted">{tx(lang, "Nothing to pay yet. Your bill shows here once you order.", "अजून भरायचं काही नाही. ऑर्डर केल्यावर बिल इथे दिसेल.")}</p>;
   }

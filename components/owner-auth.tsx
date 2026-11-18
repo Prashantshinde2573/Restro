@@ -9,7 +9,7 @@ import { useState } from "react";
 // shows "Continue with Google" once the Google provider is set up in Supabase
 const GOOGLE_LOGIN = process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "1";
 import { Button, Field, inputCls } from "@/components/ui";
-import { changePassword, sendPasswordReset, signInOwner, signInWithGoogle } from "@/lib/cloud";
+import { changePassword, sendPasswordReset, sendSignInCode, signInOwner, signInWithCode, signInWithGoogle } from "@/lib/cloud";
 
 export function OwnerAuth() {
   const [email, setEmail] = useState("");
@@ -17,6 +17,8 @@ export function OwnerAuth() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [codeMode, setCodeMode] = useState<"off" | "ask" | "sent">("off"); // sign in with a code from email instead of the password
+  const [code, setCode] = useState("");
 
   const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const canGo = okEmail && password.length >= 6;
@@ -45,6 +47,74 @@ export function OwnerAuth() {
     }
   };
 
+  const askCode = async () => {
+    setError("");
+    setNote("");
+    if (!okEmail) return setError("Type your email first");
+    setBusy(true);
+    try {
+      await sendSignInCode(email);
+      setCodeMode("sent");
+      setCode("");
+      setNote(`If ${email.trim()} has a Restropi login, a 6-digit code is on its way. It expires in 1 hour.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const useCode = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      await signInWithCode(email, code);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (codeMode !== "off")
+    return (
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (busy) return;
+          if (codeMode === "ask") void askCode();
+          else if (code.replace(/\D/g, "").length === 6) void useCode();
+        }}
+      >
+        <Field label="Email">
+          <input className={inputCls} type="email" autoComplete="username" inputMode="email" placeholder="you@example.com" value={email} onChange={(e) => { setEmail(e.target.value); setCodeMode("ask"); }} />
+        </Field>
+        {codeMode === "sent" && (
+          <Field label="6-digit code from the email">
+            <input
+              className={clsx(inputCls, "text-center text-[22px] tracking-[0.4em] tnum")}
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              maxLength={7}
+              placeholder="••••••"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+              autoFocus
+            />
+          </Field>
+        )}
+        <Button size="lg" type="submit" className="w-full" disabled={busy || !okEmail || (codeMode === "sent" && code.length !== 6)}>
+          {busy ? "Please wait…" : codeMode === "ask" ? "Email me a code" : "Sign in"}
+        </Button>
+        <div className="flex justify-between text-[13.5px] font-medium">
+          <button type="button" onClick={() => { setCodeMode("off"); setNote(""); setError(""); }} className="text-jade">Use password instead</button>
+          {codeMode === "sent" && <button type="button" onClick={() => void askCode()} disabled={busy} className="text-jade">Send a new code</button>}
+        </div>
+        {note && <p className="rounded-group bg-jade-soft p-3 text-[14px] text-ink">{note}</p>}
+        {error && <p className="text-center text-[14px] font-medium text-rose">{error}</p>}
+      </form>
+    );
+
   return (
     <form
       className="space-y-4"
@@ -62,9 +132,10 @@ export function OwnerAuth() {
       <Button size="lg" type="submit" className="w-full" disabled={!canGo || busy}>
         {busy ? "Signing in…" : "Sign in"}
       </Button>
-      <button type="button" onClick={reset} className="block w-full text-center text-[13.5px] font-medium text-jade">
-        Forgot password?
-      </button>
+      <div className="flex justify-between text-[13.5px] font-medium">
+        <button type="button" onClick={reset} className="text-jade">Forgot password?</button>
+        <button type="button" onClick={() => { setCodeMode("ask"); setNote(""); setError(""); }} className="text-jade">Email me a code</button>
+      </div>
       {GOOGLE_LOGIN && (
         <>
           <div className="flex items-center gap-3 text-[12.5px] text-faint"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>

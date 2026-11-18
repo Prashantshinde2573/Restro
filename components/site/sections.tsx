@@ -1,95 +1,22 @@
 "use client";
 
 import clsx from "clsx";
-import Link from "next/link";
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { CONTACT_EMAIL, CONTACT_WA, Magnetic } from "./chrome";
-import { Mesh } from "./hero";
-import {
-  IconArrow,
-  IconBill,
-  IconChat,
-  IconForecast,
-  IconGuests,
-  IconKitchen,
-  IconOffline,
-  IconPulse,
-  IconReports,
-  IconShield,
-  IconSplit,
-  IconStar,
-  IconStock,
-  IconTable,
-  IconTeam,
-  IconVoice,
-} from "./icons";
-import { KotTicket, PhoneMenu, PhoneOwner, PulseNote, Receipt, TabletPOS, UpiCard } from "./mockups";
-import { Eyebrow, SectionHead } from "./head";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { IconArrow, IconBill, IconForecast, IconGuests, IconKitchen, IconPulse, IconShield, IconSplit, IconStock, IconTable, IconVoice } from "./icons";
+import { PulseNote } from "./mockups";
+import { SectionHead } from "./head";
 import { Swipe } from "./swipe";
-import { sb } from "@/lib/cloud";
-import { RiseText, ScrollTrigger, gsap, reducedMotion, useIsoLayoutEffect, useTilt } from "./motion";
+import { useTilt } from "./motion";
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
 
-
-/* ================= statement: words light up as you scroll, on a dark photo ================= */
-// Photo from Unsplash (free under the Unsplash License).
-const STATEMENT_IMG = "https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?auto=format&fit=crop&q=70&w=2000";
-
-export function Statement() {
-  const ref = useRef<HTMLParagraphElement>(null);
-  const text = "Everything your billing software, kitchen printer, stock register, order notebook and WhatsApp groups do today — in one place, talking to each other.";
-  useIsoLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const words = el.querySelectorAll<HTMLElement>(".lit-word");
-    if (reducedMotion()) {
-      words.forEach((w) => (w.style.color = "#fff"));
-      return;
-    }
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start: "top 80%",
-      end: "bottom 45%",
-      scrub: true,
-      onUpdate: (self) => {
-        const n = Math.round(self.progress * words.length);
-        words.forEach((w, i) => (w.style.color = i < n ? "#fff" : ""));
-      },
-    });
-    return () => st.kill();
-  }, []);
-  return (
-    <section className="px-2 py-2 sm:px-3">
-      <div className="relative isolate overflow-hidden rounded-[30px] bg-ink sm:rounded-[40px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={STATEMENT_IMG} alt="" aria-hidden loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover text-transparent opacity-45" data-parallax="-6" />
-        <div aria-hidden className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(16_22_20/.92)_0%,rgb(16_22_20/.75)_55%,rgb(16_22_20/.55)_100%)]" />
-        <div className="mx-auto max-w-[1100px] px-6 py-14 lg:px-8 lg:py-32">
-          <Eyebrow dark>One app instead of five</Eyebrow>
-          <p ref={ref} className="mt-5 text-[30px] font-semibold leading-[1.12] tracking-[-0.035em] sm:text-[46px] lg:text-[58px] [&_.lit-word]:text-white/20">
-            {text.split(" ").map((w, i) => (
-              <span key={i} className="lit-word">{w} </span>
-            ))}
-          </p>
-          <div data-reveal className="mt-10">
-            <a href="#contact" className="group inline-flex h-[52px] items-center gap-3 rounded-full bg-white pl-6 pr-2 text-[15.5px] font-semibold text-ink transition hover:bg-jade-soft">
-              Book a free demo
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-jade text-white transition-transform duration-500 group-hover:-rotate-45"><IconArrow size={16} /></span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 /* ================= features: white bento cards with live little scenes ================= */
 function Card({ className, t, d, art, artFirst = false }: { className?: string; t: string; d: string; art: ReactNode; artFirst?: boolean }) {
   const text = (
     <div className={clsx("relative z-10 px-7 lg:px-9", artFirst ? "pb-8 pt-2 lg:pb-10" : "pt-8 lg:pt-10")}>
       <h3 className="text-[26px] font-semibold leading-[1.1] tracking-[-0.035em] lg:text-[30px]">{t}</h3>
-      <p className="mt-2.5 max-w-[34ch] text-[15.5px] leading-relaxed text-ink/55 lg:text-[17px]">{d}</p>
+      <p className="mt-2.5 max-w-[34ch] text-[15.5px] leading-relaxed text-ink/70 lg:text-[17px]">{d}</p>
     </div>
   );
   return (
@@ -125,7 +52,7 @@ export function Features() {
         >
           <Card t="Tables and QR orders" d="See every table at a glance. Guests scan, order and pay from their phone." art={<ArtTables />} />
           <Card t="Sales, reports, GST." d="Today’s sales the moment you close, with GST on every bill." art={<ArtInsights />} />
-          <Card t="Your whole team" d="A PIN for every captain, chef and cashier. Each sees only their part." art={<ArtTeam />} />
+          <Card t="Your whole team" d="A PIN for every captain, chef and cashier. Each sees only their part. Attendance and salary slips too." art={<ArtTeam />} />
           <Card artFirst t="Get paid by UPI" d="Every bill carries a QR with the exact amount. No typing, no mistakes." art={<ArtUpi />} />
           <Card artFirst t="Stock and buy list" d="Track stock in, used and waste. A buy list for each supplier, ready to send on WhatsApp." art={<ArtStock />} />
         </Swipe>
@@ -153,7 +80,7 @@ function ArtTables() {
             <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#f2f3f1] text-[13px] font-bold">{n}</span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-medium">{t}</span>
-              <span className="block text-[12.5px] text-ink/50">{d}</span>
+              <span className="block text-[12.5px] text-ink/65">{d}</span>
             </span>
             <span className="text-[14px] font-medium text-jade">{s}</span>
           </div>
@@ -178,9 +105,9 @@ function ArtInsights() {
             <div className="text-[19px] font-semibold tracking-tight">Today so far</div>
             <div className="mt-8 flex items-end justify-between gap-6 pr-[38%]">
               <div>
-                <div className="text-[14px] text-ink/45">Sales</div>
+                <div className="text-[14px] text-ink/65">Sales</div>
                 <div className="text-[30px] font-semibold tracking-tight text-jade tnum">₹18,420</div>
-                <div className="mt-1 text-[12.5px] text-ink/40">Average bill ₹642</div>
+                <div className="mt-1 text-[12.5px] text-ink/65">Average bill ₹642</div>
               </div>
               <div className="flex h-28 items-end gap-2">
                 {bars.map((b, i) => (
@@ -261,7 +188,7 @@ function ArtStock() {
           <div className="flex items-center justify-between px-4 py-3.5">
             <span className="text-[16px] font-semibold">Stock</span>
             <span className="flex gap-1.5">
-              <span className="rounded-full bg-white px-3 py-1 text-[11.5px] text-ink/60 ring-1 ring-black/[.06]">Main kitchen</span>
+              <span className="rounded-full bg-white px-3 py-1 text-[11.5px] text-ink/70 ring-1 ring-black/[.06]">Main kitchen</span>
               <span className="rounded-full bg-white px-3 py-1 text-[11.5px] font-semibold text-jade ring-1 ring-black/[.06]">Today</span>
             </span>
           </div>
@@ -271,7 +198,7 @@ function ArtStock() {
                 <span className={clsx("flex h-11 w-11 items-center justify-center rounded-full text-[15px] font-semibold", v < 40 ? "bg-rose/15 text-rose" : v < 70 ? "bg-saffron/20 text-saffron" : "bg-jade/15 text-jade")}>{i}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-semibold">{n}</span>
-                  <span className="block text-[12.5px] text-ink/50">{d}</span>
+                  <span className="block text-[12.5px] text-ink/65">{d}</span>
                 </span>
                 <Ring v={v} />
               </div>
@@ -281,7 +208,7 @@ function ArtStock() {
       </div>
       {/* floating sales card */}
       <div className="absolute left-4 top-[50%] w-[230px] -rotate-[4deg] rounded-[18px] bg-white p-4 shadow-[0_30px_50px_-24px_rgb(16_24_20/.4)] ring-1 ring-black/[.05] transition-transform duration-700 ease-[cubic-bezier(.2,.8,.2,1)] group-hover:-rotate-[2deg] sm:left-8 lg:w-[270px]">
-        <div className="text-[11.5px] text-ink/50">Sold today</div>
+        <div className="text-[11.5px] text-ink/65">Sold today</div>
         <div className="flex items-end justify-between gap-2">
           <div>
             <div className="text-[22px] font-semibold tracking-tight tnum">142 dishes</div>
@@ -328,9 +255,9 @@ export function Story() {
           {steps.map((s, i) => (
             // earlier cards sit above later ones, so the arrow between two cards isn't covered
             <article key={s.n} style={{ zIndex: steps.length - i }} className="group relative flex h-full min-h-[250px] flex-col rounded-[22px] bg-[#f4f5f3] p-4 sm:min-h-[340px] sm:p-6 lg:min-h-[420px] lg:rounded-[28px] lg:p-7">
-              <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink/45 sm:text-[12.5px]">{s.n}</div>
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink/65 sm:text-[12.5px]">{s.n}</div>
               <h3 className="mt-1 text-[16px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">{s.t}</h3>
-              <p className="mt-1 hidden text-[14px] leading-snug text-ink/50 sm:block">{s.d}</p>
+              <p className="mt-1 hidden text-[14px] leading-snug text-ink/65 sm:block">{s.d}</p>
               <div className="relative -mx-2 flex max-h-[130px] flex-1 items-center justify-center overflow-hidden py-3 sm:mx-0 sm:max-h-none sm:overflow-visible sm:py-6">
                 <div className="origin-center scale-[.6] sm:scale-100">{s.art}</div>
               </div>
@@ -508,7 +435,7 @@ export function WhyRestropi() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-rose/10 text-rose"><I size={20} /></span>
                 <div>
                   <p className="text-[16.5px] font-semibold leading-snug tracking-[-0.01em] lg:text-[18px]">&ldquo;{pain}&rdquo;</p>
-                  <p className="mt-0.5 text-[12.5px] text-ink/45">{who}</p>
+                  <p className="mt-0.5 text-[12.5px] text-ink/65">{who}</p>
                 </div>
               </div>
               <div className="mt-4 flex flex-1 gap-3 border-t border-dashed border-ink/10 pt-4">

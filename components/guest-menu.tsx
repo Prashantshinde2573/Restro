@@ -1,20 +1,21 @@
 "use client";
 
 // Guest menu building blocks: filters (kept in separate groups, never mixed
-// into one row), the price slider, the category side bar and one dish row.
+// into one row), the price slider, ALL/VEG/NON-VEG, category chips, the dish
+// card and the bottom tabs.
 // Every filter option comes from the owner's own menu: the categories they
 // created, the labels they ticked, the price range of their dishes.
 
+import { fromPrice, hasSizes } from "@/lib/sizes";
+import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { Flame, Minus, Plus, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { BellRing, Check, ChevronDown, ClipboardList, Flame, House, LayoutGrid, Minus, Plus, ShoppingCart, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, DietMark, Sheet } from "./ui";
 import { PhotoSlide } from "./menu-bits";
 import { inr } from "@/lib/format";
 import type { Category, Diet, MenuItem } from "@/lib/types";
 
-type Lang = "en" | "mr";
-const tx = (lang: Lang, en: string, mr: string) => (lang === "mr" ? mr : en);
 
 /* ---------------- filter state ---------------- */
 export type Taste = "spicy" | "sweet";
@@ -42,7 +43,9 @@ export function applyFilters(menu: MenuItem[], f: MenuFilters, term: string, cat
   const q = term.trim().toLowerCase();
   const catName = new Map(cats.map((c) => [c.id, c.name.toLowerCase()]));
   return menu.filter((m) => {
-    if (f.diet !== "all" && m.diet !== f.diet) return false;
+    if (f.diet === "veg" && m.diet !== "veg") return false;
+    if (f.diet === "nonveg" && m.diet === "veg") return false; // egg dishes show under NON-VEG
+    if (f.diet === "egg" && m.diet !== "egg") return false;
     if (f.taste.length && !f.taste.some((t) => (t === "spicy" ? isSpicy(m) : !!m.sweet))) return false;
     if (f.specials.length && !specialsOf(m).some((s) => f.specials.includes(s))) return false;
     if (f.cats.length && !f.cats.includes(m.categoryId)) return false;
@@ -58,36 +61,6 @@ export const sheetFilterCount = (f: MenuFilters) => (f.diet !== "all" ? 1 : 0) +
 const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 const specialLabel = (s: string, lang: Lang) =>
   s === "Chef special" ? tx(lang, "Chef's special", "शेफ स्पेशल") : s === "Bestseller" ? tx(lang, "Bestseller", "बेस्टसेलर") : s === "New" ? tx(lang, "New", "नवीन") : s === "Seasonal" ? tx(lang, "Seasonal", "सीझनल") : s;
-
-/* ---------------- diet switch (always visible) ---------------- */
-export function DietSwitch({ value, onChange, menu, lang }: { value: MenuFilters["diet"]; onChange: (d: MenuFilters["diet"]) => void; menu: MenuItem[]; lang: Lang }) {
-  const has = (d: Diet) => menu.some((m) => m.diet === d);
-  const opts: { v: MenuFilters["diet"]; label: string }[] = [
-    { v: "all", label: tx(lang, "All", "सर्व") },
-    ...(has("veg") ? [{ v: "veg" as const, label: tx(lang, "Veg", "व्हेज") }] : []),
-    ...(has("nonveg") ? [{ v: "nonveg" as const, label: tx(lang, "Non-veg", "नॉन-व्हेज") }] : []),
-    ...(has("egg") ? [{ v: "egg" as const, label: tx(lang, "Egg", "अंडा") }] : []),
-  ];
-  return (
-    <div className="flex rounded-ctl bg-surface p-[3px]" role="radiogroup" aria-label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}>
-      {opts.map((o) => (
-        <button
-          key={o.v}
-          role="radio"
-          aria-checked={value === o.v}
-          onClick={() => onChange(o.v)}
-          className={clsx(
-            "flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[13.5px] font-semibold transition",
-            value === o.v ? (o.v === "veg" ? "bg-jade text-white" : o.v === "nonveg" ? "bg-rose text-white" : o.v === "egg" ? "bg-saffron text-white" : "bg-ink text-canvas") : "text-muted",
-          )}
-        >
-          {o.v !== "all" && <span className={clsx("inline-block h-2 w-2 rounded-full", value === o.v ? "bg-white" : o.v === "veg" ? "bg-jade" : o.v === "nonveg" ? "bg-rose" : "bg-saffron")} />}
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /* ---------------- active filter pills (removable) ---------------- */
 export function ActiveFilters({ f, setF, cats, lang }: { f: MenuFilters; setF: (f: MenuFilters) => void; cats: Category[]; lang: Lang }) {
@@ -176,7 +149,7 @@ function Group({ title, hint, children }: { title: string; hint?: string; childr
 
 function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button aria-pressed={on} onClick={onClick} className={clsx("flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[14px] font-semibold transition", on ? "bg-ink text-canvas" : "bg-sunken text-ink")}>
+    <button aria-pressed={on} onClick={onClick} className={clsx("flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[14px] font-semibold transition", on ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-transparent bg-sunken text-ink")}>
       {children}
     </button>
   );
@@ -210,7 +183,6 @@ export function FilterSheet({
   const specials = useMemo(() => ["Bestseller", "Chef special", "New", "Seasonal"].filter((s) => menu.some((m) => specialsOf(m).includes(s))), [menu]);
   const hasSweet = menu.some((m) => m.sweet);
   const hasSpicy = menu.some(isSpicy);
-  const catCount = (id: string) => menu.filter((m) => m.categoryId === id).length;
 
   return (
     <Sheet
@@ -219,7 +191,7 @@ export function FilterSheet({
       title={tx(lang, "Filters", "फिल्टर")}
       footer={
         <div className="grid grid-cols-[auto_1fr] gap-2">
-          <Button size="lg" variant="plain" onClick={() => setF({ ...noFilters })}>{tx(lang, "Clear all", "सर्व काढा")}</Button>
+          <Button size="lg" variant="plain" onClick={() => setF({ ...noFilters, diet: f.diet })}>{tx(lang, "Clear all", "सर्व काढा")}</Button>
           <Button size="lg" disabled={shown === 0} onClick={() => { onApply(f); onClose(); }}>
             {shown === 0 ? tx(lang, "No dishes match", "काही सापडलं नाही") : tx(lang, `Show ${shown} dishes`, `${shown} डिश दाखवा`)}
           </Button>
@@ -227,44 +199,23 @@ export function FilterSheet({
       }
     >
       <div className="space-y-3">
-        <Group title={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}>
-          <DietSwitch value={f.diet} onChange={(diet) => setF({ ...f, diet })} menu={menu} lang={lang} />
-        </Group>
-
-        {(hasSpicy || hasSweet) && (
-          <Group title={tx(lang, "Taste", "चव")}>
-            <div className="flex flex-wrap gap-2">
-              {hasSpicy && <Choice on={f.taste.includes("spicy")} onClick={() => setF({ ...f, taste: toggle(f.taste, "spicy") })}><Flame size={15} /> {tx(lang, "Spicy", "तिखट")}</Choice>}
-              {hasSweet && <Choice on={f.taste.includes("sweet")} onClick={() => setF({ ...f, taste: toggle(f.taste, "sweet") })}>🍬 {tx(lang, "Sweet", "गोड")}</Choice>}
-            </div>
-          </Group>
-        )}
-
         <Group title={tx(lang, "Price", "किंमत")} hint={tx(lang, "Before GST, per dish", "GST आधी, प्रति डिश")}>
           <PriceRange bounds={bounds} value={f.price ?? bounds} onChange={(p) => setF({ ...f, price: p[0] === bounds[0] && p[1] === bounds[1] ? null : p })} lang={lang} />
         </Group>
 
-        {specials.length > 0 && (
-          <Group title={tx(lang, "Specials", "स्पेशल")}>
+        {(specials.length > 0 || hasSpicy || hasSweet) && (
+          <Group title={tx(lang, "Show only", "फक्त हे दाखवा")}>
             <div className="flex flex-wrap gap-2">
               {specials.map((s) => (
                 <Choice key={s} on={f.specials.includes(s)} onClick={() => setF({ ...f, specials: toggle(f.specials, s) })}>
                   {s === "New" ? <Sparkles size={14} /> : null} {specialLabel(s, lang)}
                 </Choice>
               ))}
+              {hasSpicy && <Choice on={f.taste.includes("spicy")} onClick={() => setF({ ...f, taste: toggle(f.taste, "spicy") })}><Flame size={15} /> {tx(lang, "Spicy", "तिखट")}</Choice>}
+              {hasSweet && <Choice on={f.taste.includes("sweet")} onClick={() => setF({ ...f, taste: toggle(f.taste, "sweet") })}>🍬 {tx(lang, "Sweet", "गोड")}</Choice>}
             </div>
           </Group>
         )}
-
-        <Group title={tx(lang, "Categories", "प्रकार")} hint={tx(lang, "Pick one or more", "एक किंवा जास्त निवडा")}>
-          <div className="flex flex-wrap gap-2">
-            {cats.filter((c) => catCount(c.id) > 0).map((c) => (
-              <Choice key={c.id} on={f.cats.includes(c.id)} onClick={() => setF({ ...f, cats: toggle(f.cats, c.id) })}>
-                {c.icon && <span>{c.icon}</span>} {c.name} <span className="font-normal opacity-60 tnum">{catCount(c.id)}</span>
-              </Choice>
-            ))}
-          </div>
-        </Group>
       </div>
     </Sheet>
   );
@@ -272,46 +223,132 @@ export function FilterSheet({
 
 export function FilterButton({ count, onClick, lang }: { count: number; onClick: () => void; lang: Lang }) {
   return (
-    <button onClick={onClick} className={clsx("relative flex h-11 shrink-0 items-center gap-1.5 rounded-ctl px-3.5 text-[14px] font-semibold", count ? "bg-ink text-canvas" : "bg-surface text-ink")}>
+    <button onClick={onClick} className={clsx("relative flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[14px] font-semibold", count ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-line bg-surface text-ink")}>
       <SlidersHorizontal size={16} /> {tx(lang, "Filters", "फिल्टर")}
       {count > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-jade px-1 text-[11.5px] font-bold text-white tnum">{count}</span>}
     </button>
   );
 }
 
-/* ---------------- category side bar (right side) ---------------- */
-export function CategoryRail({ groups, active, onPick, lang }: { groups: { c: Category; n: number }[]; active: string | null; onPick: (id: string) => void; lang: Lang }) {
-  const railRef = useRef<HTMLElement>(null);
-  // keep the active category visible inside the rail
+/* ---------------- one row: diet ▾ · category ▾ · filters ---------------- */
+// Our own dropdown (the phone's picker is a big dark sheet).
+type DropOption = { value: string; label: string; dot?: "veg" | "nonveg" };
+function Drop({ label, value, options, onChange }: { label: string; value: string; options: DropOption[]; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const cur = options.find((o) => o.value === value) ?? options[0];
   useEffect(() => {
-    if (!active) return;
-    railRef.current?.querySelector<HTMLElement>(`[data-cat="${active}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [active]);
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    // keep the picked one in view
+    box.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const dot = (d?: DropOption["dot"]) => d && <span className={clsx("h-2 w-2 shrink-0 rounded-full", d === "veg" ? "bg-jade" : "bg-rose")} />;
   return (
-    <nav ref={railRef} aria-label={tx(lang, "Menu categories", "मेनू प्रकार")} className="no-scrollbar flex min-h-0 max-h-full flex-col gap-0.5 overflow-y-auto rounded-[18px] bg-surface p-1 pb-5 [mask-image:linear-gradient(to_bottom,black_calc(100%-22px),transparent)]">
-      {groups.map(({ c, n }) => {
-        const on = active === c.id;
-        return (
-          <button
-            key={c.id}
-            data-cat={c.id}
-            onClick={() => onPick(c.id)}
-            aria-current={on ? "true" : undefined}
-            className={clsx("relative flex flex-col items-center gap-1 rounded-[14px] px-1 py-2 text-center transition", on ? "bg-jade text-white shadow-[0_6px_16px_-8px_rgb(15_122_85/.7)]" : "lg:hover:bg-sunken/60")}
-          >
-            <span className={clsx("flex h-9 w-9 items-center justify-center rounded-full text-[18px]", on ? "bg-white/20 text-white" : "bg-sunken")}>{c.icon ?? c.name[0]}</span>
-            <span className={clsx("w-full break-words text-[11.5px] font-semibold leading-[1.2]", on ? "text-white" : "text-ink")}>{c.name}</span>
-            <span className={clsx("text-[10.5px] leading-none tnum", on ? "text-white/75" : "text-faint")}>{n}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <div ref={box} className="relative min-w-0">
+      <button
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={clsx("flex h-10 w-full min-w-0 items-center gap-2 rounded-full border bg-surface pl-3.5 pr-3 text-left text-[13.5px] font-semibold transition-colors", open ? "border-jade/40" : "border-line")}
+      >
+        {dot(cur?.dot)}
+        <span className="min-w-0 flex-1 truncate">{cur?.label}</span>
+        <ChevronDown size={16} className={clsx("shrink-0 text-muted transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <ul role="listbox" aria-label={label} className="absolute left-0 top-full z-40 mt-1.5 max-h-[55vh] w-max min-w-full max-w-[78vw] animate-pop overflow-y-auto rounded-[16px] border border-line bg-surface p-1 shadow-[0_14px_34px_-14px_rgb(16_24_20/.28)]">
+          {options.map((o) => {
+            const on = o.value === cur?.value;
+            return (
+              <li key={o.value} role="option" aria-selected={on}>
+                <button
+                  type="button"
+                  onClick={() => { onChange(o.value); setOpen(false); }}
+                  className={clsx("flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-left text-[14px]", on ? "bg-jade-soft font-semibold text-jade-deep" : "font-medium text-ink active:bg-sunken")}
+                >
+                  {dot(o.dot)}
+                  <span className="min-w-0 flex-1">{o.label}</span>
+                  {on && <Check size={16} className="shrink-0" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function MenuBar({
+  diet,
+  onDiet,
+  menu,
+  groups,
+  active,
+  onPick,
+  filterCount,
+  onFilters,
+  lang,
+}: {
+  diet: MenuFilters["diet"];
+  onDiet: (d: MenuFilters["diet"]) => void;
+  menu: MenuItem[];
+  groups: { c: Category; n: number }[];
+  active: string | null;
+  onPick: (id: string) => void;
+  filterCount: number;
+  onFilters: () => void;
+  lang: Lang;
+}) {
+  const mixed = menu.some((m) => m.diet !== "veg");
+  return (
+    <div className="flex items-center gap-2">
+      {mixed && (
+        <div className="w-[118px] shrink-0">
+          <Drop
+            label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}
+            value={diet === "egg" ? "nonveg" : diet}
+            onChange={(v) => onDiet(v as MenuFilters["diet"])}
+            options={[
+              { value: "all", label: tx(lang, "All", "सर्व") },
+              { value: "veg", label: tx(lang, "Veg", "व्हेज"), dot: "veg" },
+              { value: "nonveg", label: tx(lang, "Non-veg", "नॉन-व्हेज"), dot: "nonveg" },
+            ]}
+          />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <Drop
+          label={tx(lang, "Menu categories", "मेनू प्रकार")}
+          value={active && groups.some((g) => g.c.id === active) ? active : groups[0]?.c.id ?? ""}
+          onChange={onPick}
+          options={groups.map(({ c, n }) => ({ value: c.id, label: `${c.icon ? `${c.icon} ` : ""}${c.name} (${n})` }))}
+        />
+      </div>
+      <button
+        onClick={onFilters}
+        aria-label={tx(lang, "Filters", "फिल्टर")}
+        className={clsx("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border", filterCount ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-line bg-surface text-ink")}
+      >
+        <SlidersHorizontal size={17} />
+        {filterCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-white tnum">{filterCount}</span>}
+      </button>
+    </div>
   );
 }
 
 /* ---------------- one dish (grid card) ---------------- */
-// First look stays simple: photo, veg/non-veg mark, name, price. Description,
-// spice, labels and choices open when the guest taps the dish.
+// Photo on top, veg mark, name, one line about it, price and a round + button.
 export function DishCard({
   m,
   qty,
@@ -329,84 +366,99 @@ export function DishCard({
   lang: Lang;
   readOnly?: boolean;
 }) {
+  const badge = m.tags?.includes("Bestseller") ? tx(lang, "Bestseller", "बेस्टसेलर") : m.isNew ? tx(lang, "New", "नवीन") : m.tags?.includes("Chef special") ? tx(lang, "Chef's special", "शेफ स्पेशल") : null;
   return (
-    <div className="flex flex-col overflow-hidden rounded-[16px] bg-surface">
-      <button onClick={onOpen} aria-label={`Open ${m.name}`} className="block">
-        <PhotoSlide item={m} className="aspect-square w-full" />
+    <div className="flex flex-col overflow-hidden rounded-[16px] bg-surface ring-1 ring-line/70">
+      <button onClick={onOpen} aria-label={`Open ${m.name}`} className="relative block">
+        <PhotoSlide item={m} className="aspect-[4/3] w-full" />
+        {badge && <span className="absolute left-1.5 top-1.5 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-ink backdrop-blur">{badge}</span>}
       </button>
-      <div className="flex flex-1 flex-col p-2.5">
-        <button onClick={onOpen} className="flex items-start gap-1.5 text-left">
-          <span className="mt-[3px] shrink-0"><DietMark diet={m.diet} /></span>
-          <span className="line-clamp-2 min-h-[2.5em] text-[14px] font-semibold leading-[1.25]">{m.name}</span>
+      <div className="flex flex-1 flex-col px-2.5 pb-2.5 pt-2">
+        <button onClick={onOpen} className="flex flex-1 flex-col items-start justify-start text-left">
+          <span className="flex items-center gap-1.5">
+            <DietMark diet={m.diet} />
+            {isSpicy(m) && <span className="text-[11px]" aria-label="Spicy">🌶</span>}
+          </span>
+          <span className="mt-1 line-clamp-2 text-[14px] font-bold leading-snug tracking-tight">{m.name}</span>
+          {m.desc && <span className="mt-0.5 line-clamp-1 text-[12px] text-muted">{m.desc}</span>}
         </button>
-        <div className="mt-1.5 text-[14px] font-semibold tnum">{inr(m.price)}</div>
-        {!readOnly && (
-          <div className="mt-2">
-            {qty === 0 ? (
-              <button onClick={onAdd} className="h-9 w-full rounded-[10px] border border-jade/30 bg-jade-soft text-[13.5px] font-bold text-jade">
-                {tx(lang, "ADD", "जोडा")}
+        <div className="mt-2 flex min-h-8 items-center justify-between gap-2">
+          <span className="text-[15px] font-bold text-jade-deep tnum">{hasSizes(m) && <span className="mr-0.5 text-[11.5px] font-semibold text-muted">{tx(lang, "from", "पासून")}</span>}{inr(fromPrice(m))}</span>
+          {!readOnly &&
+            (qty === 0 ? (
+              <button onClick={onAdd} aria-label={tx(lang, `Add ${m.name}`, `${m.name} जोडा`)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep transition active:scale-90">
+                <Plus size={17} strokeWidth={2.4} />
               </button>
             ) : (
-              <div className="flex h-9 w-full items-center justify-between rounded-[10px] bg-jade px-1 text-white">
-                <button aria-label="Less" onClick={onLess} className="flex h-8 w-8 items-center justify-center"><Minus size={15} /></button>
-                <span className="text-[14px] font-bold tnum">{qty}</span>
-                <button aria-label="More" onClick={onAdd} className="flex h-8 w-8 items-center justify-center"><Plus size={15} /></button>
+              <div className="flex h-8 shrink-0 items-center rounded-full bg-jade-deep text-white">
+                <button aria-label={`One less ${m.name}`} onClick={onLess} className="flex h-8 w-7 items-center justify-center"><Minus size={14} strokeWidth={2.4} /></button>
+                <span className="min-w-3 text-center text-[13.5px] font-bold tnum">{qty}</span>
+                <button aria-label={`One more ${m.name}`} onClick={onAdd} className="flex h-8 w-7 items-center justify-center"><Plus size={14} strokeWidth={2.4} /></button>
               </div>
-            )}
-          </div>
-        )}
+            ))}
+        </div>
+        {!readOnly && m.options?.length ? <span className="mt-0.5 text-[10.5px] text-faint">{tx(lang, "Customisable", "बदल करता येतात")}</span> : null}
       </div>
     </div>
   );
 }
 
-/* ---------------- one dish (list row) ---------------- */
-// One dish per row: veg/non-veg mark, name and price on the left; photo with
-// the ADD button on the right. Details open on tap.
-export function DishRow({
-  m,
-  qty,
-  onOpen,
-  onAdd,
-  onLess,
+/* ---------------- bottom tabs: Home · Menu · Cart · Orders ---------------- */
+export type GuestTab = "home" | "menu" | "cart" | "orders";
+export function GuestTabs({
+  tab,
+  onTab,
+  cartCount,
+  ordersBadge,
+  showCart,
+  waiter,
+  onWaiter,
   lang,
-  readOnly,
 }: {
-  m: MenuItem;
-  qty: number;
-  onOpen: () => void;
-  onAdd: () => void;
-  onLess: () => void;
+  tab: GuestTab;
+  onTab: (t: GuestTab) => void;
+  cartCount: number;
+  ordersBadge: number;
+  showCart: boolean;
+  /** table orders: call a waiter (null hides it on the counter QR) */
+  waiter: "idle" | "open" | "taken" | null;
+  onWaiter: () => void;
   lang: Lang;
-  readOnly?: boolean;
 }) {
+  const items: { id: GuestTab; label: string; icon: ReactNode; badge?: number }[] = [
+    { id: "home", label: tx(lang, "Home", "होम"), icon: <House size={21} strokeWidth={tab === "home" ? 2.4 : 1.8} fill={tab === "home" ? "currentColor" : "none"} /> },
+    { id: "menu", label: tx(lang, "Menu", "मेनू"), icon: <LayoutGrid size={21} strokeWidth={tab === "menu" ? 2.4 : 1.8} /> },
+    ...(showCart ? [{ id: "cart" as const, label: tx(lang, "Cart", "कार्ट"), icon: <ShoppingCart size={21} strokeWidth={tab === "cart" ? 2.4 : 1.8} />, badge: cartCount }] : []),
+    { id: "orders", label: tx(lang, "Orders", "ऑर्डर्स"), icon: <ClipboardList size={21} strokeWidth={tab === "orders" ? 2.4 : 1.8} />, badge: ordersBadge },
+  ];
   return (
-    <div className="flex items-center gap-3 border-b border-line/80 px-3.5 py-3 last:border-0">
-      <button onClick={onOpen} className="min-w-0 flex-1 self-stretch text-left">
-        <span className="flex h-full flex-col justify-center">
-          <DietMark diet={m.diet} />
-          <span className="mt-1.5 line-clamp-2 text-[15.5px] font-semibold leading-snug">{m.name}</span>
-          <span className="mt-1 text-[14.5px] font-semibold tnum">{inr(m.price)}</span>
-        </span>
-      </button>
-      <div className={clsx("relative w-[92px] shrink-0", !readOnly && "pb-4")}>
-        <button onClick={onOpen} aria-label={`Open ${m.name}`} className="block overflow-hidden rounded-[14px]">
-          <PhotoSlide item={m} className="aspect-square w-[92px]" />
-        </button>
-        {!readOnly && (
-          <div className="absolute inset-x-0 bottom-0 flex justify-center">
-            {qty === 0 ? (
-              <button onClick={onAdd} className="h-8 w-[80px] rounded-[10px] border border-line bg-surface text-[13.5px] font-bold text-jade shadow-float">{tx(lang, "ADD", "जोडा")}</button>
-            ) : (
-              <div className="flex h-8 w-[80px] items-center justify-between rounded-[10px] bg-jade px-1 text-white shadow-float">
-                <button aria-label="Less" onClick={onLess} className="flex h-7 w-7 items-center justify-center"><Minus size={14} /></button>
-                <span className="text-[14px] font-bold tnum">{qty}</span>
-                <button aria-label="More" onClick={onAdd} className="flex h-7 w-7 items-center justify-center"><Plus size={14} /></button>
-              </div>
-            )}
-          </div>
+    <nav aria-label={tx(lang, "Sections", "विभाग")} className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[20px] border-t border-line bg-surface [--safe-pb:4px] sm:max-w-2xl">
+      <div className="mx-auto flex h-14 max-w-[420px] px-2">
+        {items.map((it) => {
+          const on = tab === it.id;
+          return (
+            <button key={it.id} onClick={() => onTab(it.id)} aria-current={on ? "page" : undefined} className={clsx("relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11.5px]", on ? "font-bold text-jade-deep" : "font-medium text-ink/80")}>
+              <span className="relative">
+                {it.icon}
+                {!!it.badge && (
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-white tnum">{it.badge}</span>
+                )}
+              </span>
+              {it.label}
+            </button>
+          );
+        })}
+        {waiter !== null && (
+          <button
+            onClick={onWaiter}
+            aria-label={waiter === "open" ? tx(lang, "Cancel waiter call", "वेटर कॉल रद्द करा") : tx(lang, "Call a waiter", "वेटरला बोलवा")}
+            className={clsx("relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11.5px]", waiter === "idle" ? "font-medium text-ink/80" : waiter === "open" ? "font-bold text-saffron" : "font-bold text-jade-deep")}
+          >
+            <BellRing size={21} strokeWidth={waiter === "idle" ? 1.8 : 2.4} className={clsx(waiter === "open" && "animate-pulse")} />
+            {waiter === "open" ? tx(lang, "Calling…", "बोलावत आहे…") : waiter === "taken" ? tx(lang, "Coming", "येत आहे") : tx(lang, "Waiter", "वेटर")}
+          </button>
         )}
       </div>
-    </div>
+    </nav>
   );
 }

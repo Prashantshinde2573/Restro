@@ -3,8 +3,10 @@
 // Table + party helpers and the shared tables store (Tables screen, POS and
 // the guest QR page all read the same live state).
 import { createStore } from "./store";
-import { logActivity, useCurrentOutlet } from "./live";
-import type { Party, Table, TableStatus } from "./types";
+import { useMemo } from "react";
+import { logActivity, useCurrentOutlet, useOrders } from "./live";
+import { orderTotal } from "./format";
+import type { Order, Party, Table, TableStatus } from "./types";
 
 const rank: Record<Party["status"], number> = { seated: 1, ordered: 2, billing: 3 };
 
@@ -15,15 +17,16 @@ export function tableState(t: Table): TableStatus {
 }
 
 export const seatsTaken = (t: Table) => t.parties.reduce((s, p) => s + p.guests, 0);
-export const seatsFree = (t: Table) => Math.max(0, t.seats - seatsTaken(t));
+/** Tables pushed up against this one. */
+export const joinedOf = (t: Table, all: Table[]) => all.filter((x) => x.joinedTo === t.id && x.id !== t.id);
+/** Seats at this table, with any tables joined to it. */
+export const capacity = (t: Table, all: Table[] = []) => t.seats + joinedOf(t, all).reduce((s, x) => s + x.seats, 0);
+export const seatsFree = (t: Table, all: Table[] = []) => Math.max(0, capacity(t, all) - seatsTaken(t));
+/** "T3 + T4" for a joined table. */
+export const joinedName = (t: Table, all: Table[]) => [t.name, ...joinedOf(t, all).map((x) => x.name)].join(" + ");
 export const isShared = (t: Table) => t.parties.length > 1;
 export const tableTotal = (t: Table) => t.parties.reduce((s, p) => s + (p.total ?? 0), 0);
 export const oldestSince = (t: Table) => t.parties.map((p) => p.since).sort()[0];
-
-/** "T6" for a single party, "T6 · B" when the table is shared. */
-export function partyLabel(tableName: string, partyId?: string, shared = true) {
-  return partyId && shared ? `${tableName} · ${partyId}` : tableName;
-}
 
 export const nextPartyId = (t: Table) => {
   const used = new Set(t.parties.map((p) => p.id));
@@ -48,11 +51,46 @@ export function useTables() {
   return all.filter((t) => !t.outletId || !outlet.id || t.outletId === outlet.id).sort(byTableName);
 }
 
+/**
+ * The orders are the truth for "has this group ordered, and how much". A party's own status/total can lag
+ * (two quick writes from a guest's phone can arrive out of order), so staff screens read them from the orders.
+ */
+export function withOrders(tables: Table[], orders: Order[]): Table[] {
+  return tables.map((t) => {
+    if (!t.parties.length) return t;
+    let changed = false;
+    const parties = t.parties.map((p) => {
+      const from = Date.parse(p.since) - 2 * 60_000; // orders of this sitting only
+      const mine = orders.filter((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id && o.status !== "cancelled" && Date.parse(o.createdAt) >= from);
+      if (!mine.length) return p;
+      const total = mine.reduce((s, o) => s + orderTotal(o.lines), 0);
+      const status: Party["status"] = p.status === "billing" || mine.every((o) => o.status === "paid") ? "billing" : "ordered";
+      if (status === p.status && total === p.total) return p;
+      changed = true;
+      return { ...p, status, total };
+    });
+    return changed ? { ...t, parties } : t;
+  });
+}
+
+/** Tables of the outlet on screen with each group's status and bill worked out from its orders (staff screens). */
+export function useLiveTables() {
+  const tables = useTables();
+  const orders = useOrders();
+  return useMemo(() => withOrders(tables, orders), [tables, orders]);
+}
+
 export const getTable = (nameOrId: string) =>
   all().find((t) => t.id === nameOrId || t.name.toLowerCase() === nameOrId.toLowerCase());
 
 function patch(tableId: string, fn: (t: Table) => Table) {
+  const had = (all().find((x) => x.id === tableId)?.parties.length ?? 0) > 0;
   tableStore.set(all().map((t) => (t.id === tableId ? fn(t) : t)));
+  // the group left the main table: the tables joined to it are their own tables again
+  const t = all().find((x) => x.id === tableId);
+  if (had && t && !t.parties.length && all().some((x) => x.joinedTo === tableId)) {
+    tableStore.set(all().map((x) => (x.joinedTo === tableId ? { ...x, joinedTo: undefined } : x)));
+  }
 }
 
 const sortKey = (name: string) => name.replace(/\d+/g, (d) => d.padStart(5, "0")).toLowerCase();
@@ -132,6 +170,22 @@ export const tableActions = {
       const parties = x.parties.filter((p) => p.id !== partyId);
       return { ...x, parties, visitId: parties.length ? x.visitId : `${x.id}-${Date.now().toString(36)}` };
     });
+  },
+  /** A big group: push a free table up against this one. Its seats count here until they leave. */
+  join(mainId: string, otherId: string) {
+    const main = all().find((x) => x.id === mainId);
+    const other = all().find((x) => x.id === otherId);
+    if (!main || !other || other.parties.length || other.joinedTo || main.joinedTo || all().some((x) => x.joinedTo === otherId)) return false;
+    tableStore.set(all().map((x) => (x.id === otherId ? { ...x, joinedTo: mainId, reservedAt: undefined } : x)));
+    logActivity("table", `Joined ${other.name} with ${main.name}`, main.outletId);
+    return true;
+  },
+  /** Take a joined table back apart. */
+  separate(otherId: string) {
+    const other = all().find((x) => x.id === otherId);
+    const main = other?.joinedTo ? all().find((x) => x.id === other.joinedTo) : undefined;
+    tableStore.set(all().map((x) => (x.id === otherId ? { ...x, joinedTo: undefined } : x)));
+    if (other) logActivity("table", `${other.name} is a separate table again${main ? ` (was joined with ${main.name})` : ""}`, other.outletId);
   },
   /** Two parties turn out to be together: one bill. */
   merge(tableId: string, fromId: string, intoId: string) {

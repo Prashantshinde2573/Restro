@@ -1,39 +1,47 @@
 "use client";
 
-import { Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, QrCode, Receipt, ShieldCheck, Store, Users } from "lucide-react";
+import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, LogOut, MessageCircle, QrCode, Receipt, ShieldCheck, Stamp as StampIcon, Store, Users } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { UpiPayCard, isValidUpi } from "@/components/upi";
-import { openPlanSheet } from "@/components/plan-sheet";
+import { openPlanSheet, teamWhatsApp, usePlatform } from "@/components/plan-sheet";
+import { dateIN, planStatus } from "@/lib/plan-status";
 import { ChangePassword } from "@/components/owner-auth";
+import { StampSettings } from "@/components/stamps";
+import { OnlinePayments } from "@/components/online-payments";
+import { WhatsAppApi } from "@/components/whatsapp-api";
 import { useToast } from "@/components/toast";
 import {
   billOf,
+  memberActions,
   niceTime,
   paymentsText,
   settingsActions,
   useAccount,
   useCan,
+  useAllCategories,
   useCategories,
   useCurrentOutlet,
-  useFeedback,
-  useGuests,
+  useFeature,
+  useAllFeedback,
+  useAllGuests,
   useMe,
-  useMenu,
+  useAllMenu,
   useOrders,
   useOutlets,
   useSettings,
 } from "@/lib/live";
 import { useAllTables } from "@/lib/tables";
-import { cloudSignOut, signOutEverywhere, useCloud } from "@/lib/cloud";
-import { RENEW_WARN_DAYS, daysLeft, isOwner } from "@/lib/access";
+import { cloudSignOut, signOutEverywhere, uploadProfilePhoto, useCloud } from "@/lib/cloud";
+import { RENEW_WARN_DAYS, daysLeft, isMixed, isOwner } from "@/lib/access";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
 import type { OutletSettings } from "@/lib/types";
+import type { Member } from "@/lib/access";
 
-type Panel = "restaurant" | "payments" | "ordering" | "security" | "data" | null;
+type Panel = "restaurant" | "payments" | "ordering" | "stamps" | "whatsapp" | "security" | "data" | null;
 
 function Item({ icon, tint, title, value, onClick }: { icon: ReactNode; tint: string; title: string; value?: ReactNode; onClick: () => void }) {
   return (
@@ -56,6 +64,8 @@ export default function SettingsPage() {
   const me = useMe();
   const owner = isOwner(me);
   const canOutlet = useCan("outletSettings");
+  const stampsFeature = useFeature("stamps");
+  const waApi = useFeature("waApi");
   const account = useAccount();
   const outlets = useOutlets();
   const outlet = useCurrentOutlet();
@@ -64,23 +74,35 @@ export default function SettingsPage() {
   const days = daysLeft(account.renewsAt);
   const renewDate = new Date(account.renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   const [planOpen, setPlanOpen] = useState(false);
+  const pst = planStatus(account);
   useEffect(() => {
     if (owner && window.location.hash === "#plan") setPlanOpen(true);
   }, [owner]);
   const [panel, setPanelRaw] = useState<Panel>(null);
   const settings = useSettings();
   const [draft, setDraft] = useState<OutletSettings>(settings);
+  // opening hours: the times decide table QR ordering, and the bill prints them
+  const setHours = (from: string, to: string) =>
+    setDraft((d) => ({ ...d, orderFrom: from, orderTo: to, hours: from && to ? `${niceTime(from)} – ${niceTime(to)}` : from || to ? d.hours : "" }));
   const setPanel = (p: Panel) => {
     setDraft(settings);
     setPanelRaw(p);
   };
   const upiOk = isValidUpi(draft.upi);
-  const saves = panel === "restaurant" || panel === "payments" || panel === "ordering";
+  const saves = panel === "restaurant" || panel === "payments";
+  // Ordering switches take effect the moment they're flipped (no Save button to miss).
+  const saveNow = (patch: Partial<OutletSettings>, msg: string) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    settingsActions.update(patch);
+    toast(msg);
+  };
 
   const titles: Record<Exclude<Panel, null>, string> = {
     restaurant: `Details on bills · ${outlet.name}`,
     payments: `Payments · ${outlet.name}`,
     ordering: `Ordering · ${outlet.name}`,
+    stamps: `Stamp card · ${outlet.name}`,
+    whatsapp: "WhatsApp API",
     security: "Password and sign-in",
     data: "Export your data",
   };
@@ -89,15 +111,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" />
       <Page className="mx-auto max-w-2xl space-y-6 lg:mx-0">
-        {me && (
-          <div className="flex items-center gap-4 rounded-group bg-surface p-4">
-            <Avatar name={me.name} hue={me.hue} size={52} />
-            <div className="min-w-0 flex-1">
-              <div className="text-[17px] font-semibold">{me.name}</div>
-              <div className="truncate text-[14px] text-muted">{owner ? `Owner · ${cloud.email ?? ""}` : `${me.title} · ${outlet.name}`}</div>
-            </div>
-          </div>
-        )}
+        {me && <ProfileCard me={me} subtitle={owner ? `Owner · ${cloud.email ?? ""}` : `${me.title} · ${outlet.name}`} />}
 
         {/* Subscription: set by the Restropi team; owner sees it */}
         {owner && (
@@ -108,9 +122,14 @@ export default function SettingsPage() {
                 <div className="text-[24px] font-semibold tracking-tight">{plan.name}</div>
                 <div className="text-[14px] text-canvas/70">{plan.monthly ? `${inr(plan.monthly)} per outlet / month · ` : ""}{outlets.length} outlet{outlets.length === 1 ? "" : "s"}</div>
               </div>
-              <Pill tone={days < 0 ? "rose" : days <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{days < 0 ? "Ended" : days <= RENEW_WARN_DAYS ? `${days} days left` : "Active"}</Pill>
+              <Pill tone={pst.inGrace || days < 0 ? "rose" : days <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{pst.inGrace ? "Grace period" : days < 0 ? "Ended" : days <= RENEW_WARN_DAYS ? `${days} days left` : "Active"}</Pill>
             </div>
             <div className="mt-4 text-[13px] text-canvas/70">{days < 0 ? `Ended on ${renewDate}` : `Runs until ${renewDate}`}</div>
+            {pst.inGrace && account.graceUntil && (
+              <div className="mt-2 rounded-[12px] bg-white/10 px-3 py-2 text-[13px] text-canvas">
+                Your store is running on a grace period until <b>{dateIN(account.graceUntil)}</b> ({pst.daysLeft <= 0 ? "ends today" : `${pst.daysLeft} day${pst.daysLeft === 1 ? "" : "s"} left`}). Please renew to keep it on.
+              </div>
+            )}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button size="sm" className="!bg-canvas !text-ink hover:!bg-canvas/90" onClick={() => openPlanSheet()}>{days < 0 ? "Restart plan" : "Renew"}</Button>
               <Button size="sm" variant="ghost" className="!text-canvas/80 hover:!bg-white/10" onClick={() => setPlanOpen(true)}>Change plan</Button>
@@ -118,12 +137,12 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {owner && (
+        {(owner || me?.role === "subadmin") && (
           <div className="overflow-hidden rounded-group bg-surface">
             <Link href="/app/access" className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40">
               <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#2C6EC8] text-white"><Users size={16} /></span>
-              <span className="flex-1 text-[15px]">Outlets, members & access</span>
-              <span className="text-[14px] text-muted">{outlets.length} outlet{outlets.length === 1 ? "" : "s"}</span>
+              <span className="flex-1 text-[15px]">{owner ? "Outlets, members & access" : "Staff & access"}</span>
+              <span className="text-[14px] text-muted">{owner ? `${outlets.length} outlet${outlets.length === 1 ? "" : "s"}` : outlet.name}</span>
               <ChevronRight size={17} className="text-faint" />
             </Link>
           </div>
@@ -131,17 +150,21 @@ export default function SettingsPage() {
 
         {(owner || canOutlet) && (
           <div>
-            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}{outlet.mixed ? " · tables + counter" : ""}</div>
+            <div className="mb-1.5 px-1 text-[13px] font-medium text-muted">{outlet.name} · {outlet.businessType === "cafe" ? "Café" : "Restaurant"}{isMixed(outlet) ? " · tables + counter" : ""}</div>
             <div className="overflow-hidden rounded-group bg-surface">
               <Item icon={<CreditCard size={16} />} tint="#0E7A5F" title="Payments" value={settings.upi || "Add UPI ID"} onClick={() => setPanel("payments")} />
-              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo ? `QR orders ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
+              <Item icon={<QrCode size={16} />} tint="#2C6EC8" title="Ordering" value={settings.ordersPaused ? "QR orders paused" : settings.orderFrom && settings.orderTo && settings.orderFrom !== settings.orderTo ? `Table QR ${niceTime(settings.orderFrom)} – ${niceTime(settings.orderTo)}` : settings.mixed ? `Tables + counter · ${settings.payFirst ? "pay first" : "pay at the end"}` : settings.businessType === "cafe" ? "Counter · pay first" : settings.payFirst ? "Tables · pay first" : "Tables · pay at the end"} onClick={() => setPanel("ordering")} />
               <Item icon={<Receipt size={16} />} tint="#DE9122" title="Details on bills" value={settings.gstin || "GSTIN, FSSAI, address"} onClick={() => setPanel("restaurant")} />
+              {(owner || me?.role === "subadmin") && stampsFeature === "ok" && (
+                <Item icon={<StampIcon size={16} />} tint="#8A4FD1" title="Stamp card" value={settings.stamps?.on ? `${settings.stamps.needed} stamps → ${settings.stamps.reward}` : "Off"} onClick={() => setPanel("stamps")} />
+              )}
             </div>
           </div>
         )}
 
         {owner && (
           <div className="overflow-hidden rounded-group bg-surface">
+            {cloud.rid && <Item icon={<MessageCircle size={16} />} tint="#25D366" title="WhatsApp API" value={waApi === "ok" ? undefined : "Pro plan"} onClick={() => setPanel("whatsapp")} />}
             <Item icon={<ShieldCheck size={16} />} tint="#D24242" title="Password and sign-in" onClick={() => setPanel("security")} />
             <Item icon={<Database size={16} />} tint="#68716D" title="Export your data" onClick={() => setPanel("data")} />
           </div>
@@ -165,7 +188,7 @@ export default function SettingsPage() {
                 <ul className="mt-2 space-y-1 text-[13.5px]">
                   {p.features.map((f) => <li key={f} className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-jade" />{f}</li>)}
                 </ul>
-                <Button size="sm" variant={cur ? "tinted" : "primary"} className="mt-3 w-full" onClick={() => { setPlanOpen(false); openPlanSheet(p.id); }}>{cur ? "Renew this plan" : p.monthly ? `Switch to ${p.name}` : "Talk to us"}</Button>
+                <Button size="sm" variant={cur ? "tinted" : "primary"} className="mt-3 w-full" onClick={() => { setPlanOpen(false); window.setTimeout(() => openPlanSheet(p.id), 350); }}>{cur ? "Renew this plan" : p.monthly ? `Switch to ${p.name}` : "Talk to us"}</Button>
               </div>
             );
           })}
@@ -182,9 +205,10 @@ export default function SettingsPage() {
             <Button
               size="lg"
               className="w-full"
-              disabled={(panel === "payments" && !!draft.upi && !upiOk) || (panel === "restaurant" && draft.name.trim().length < 2)}
+              disabled={panel === "payments" && !!draft.upi && !upiOk}
               onClick={() => {
-                settingsActions.update(draft);
+                const { name: _name, logo: _logo, ...rest } = draft; // name + logo come from the Restropi team
+                settingsActions.update(rest);
                 setPanel(null);
                 toast(panel === "payments" ? "Saved · every new bill QR uses this UPI ID" : "Saved");
               }}
@@ -196,13 +220,26 @@ export default function SettingsPage() {
       >
         {panel === "restaurant" && (
           <div className="space-y-4">
-            <Field label="Name on bills and the guest menu"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
+            {owner ? <BrandField /> : <Field label="Name on bills and the guest menu"><input className={inputCls} value={settings.name} readOnly /></Field>}
             <Field label="Outlet address"><input className={inputCls} value={draft.address ?? ""} onChange={(e) => setDraft({ ...draft, address: e.target.value })} /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Phone"><input className={inputCls} inputMode="tel" value={draft.phone ?? ""} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} /></Field>
-              <Field label="Opening hours"><input className={inputCls} placeholder="11:00 am – 11:00 pm" value={draft.hours ?? ""} onChange={(e) => setDraft({ ...draft, hours: e.target.value })} /></Field>
               <Field label="GSTIN" hint="Leave empty if not GST-registered."><input className={inputCls} autoCapitalize="characters" value={draft.gstin ?? ""} onChange={(e) => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })} /></Field>
               <Field label="FSSAI licence"><input className={inputCls} inputMode="numeric" value={draft.fssai ?? ""} onChange={(e) => setDraft({ ...draft, fssai: e.target.value })} /></Field>
+            </div>
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Opens at"><input type="time" className={inputCls} value={draft.orderFrom ?? ""} onChange={(e) => setHours(e.target.value, draft.orderTo ?? "")} /></Field>
+                <Field label="Closes at"><input type="time" className={inputCls} value={draft.orderTo ?? ""} onChange={(e) => setHours(draft.orderFrom ?? "", e.target.value)} /></Field>
+              </div>
+              <p className="mt-1.5 text-[12.5px] text-muted">
+                {draft.orderFrom && draft.orderTo && draft.orderFrom !== draft.orderTo
+                  ? `Table QR orders work only from ${niceTime(draft.orderFrom)} to ${niceTime(draft.orderTo)}${draft.orderTo < draft.orderFrom ? " (closes after midnight)" : ""}. The counter QR works any time. Staff can always take orders.`
+                  : "Set both times to take table QR orders only while you're open. The counter QR works any time."}
+              </p>
+              {(draft.orderFrom || draft.orderTo) && (
+                <button type="button" onClick={() => setHours("", "")} className="mt-1 text-[13px] font-semibold text-muted underline underline-offset-4">Clear opening hours</button>
+              )}
             </div>
             <Field label="Message at the bottom of the bill"><input className={inputCls} placeholder="Thank you! Visit again" value={draft.billFooter ?? ""} onChange={(e) => setDraft({ ...draft, billFooter: e.target.value })} /></Field>
             <Field label="GST on bills" hint="Most restaurants and cafés charge 5%. Choose 0% if this outlet isn't GST-registered.">
@@ -234,6 +271,7 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={draft.acceptCard ?? true} onChange={(v) => setDraft({ ...draft, acceptCard: v })} label="Card machine" />
             </div>
+            {owner && cloud.rid && outlet.id && <OnlinePayments outletId={outlet.id} outletName={outlet.name} />}
           </div>
         )}
         {panel === "ordering" && (
@@ -242,7 +280,7 @@ export default function SettingsPage() {
               <Segmented
                 className="w-full"
                 value={draft.businessType}
-                onChange={(v) => setDraft({ ...draft, businessType: v, payFirst: v === "cafe" ? true : draft.payFirst })}
+                onChange={(v) => saveNow({ businessType: v, payFirst: v === "cafe" ? true : draft.payFirst }, v === "cafe" ? "Saved · café" : "Saved · restaurant")}
                 options={[{ value: "restaurant", label: "Restaurant · table service" }, { value: "cafe", label: "Café · counter + token" }]}
               />
             </Field>
@@ -255,49 +293,55 @@ export default function SettingsPage() {
                     : "Some guests order at the counter: a counter QR and token orders, along with your tables."}
                 </div>
               </div>
-              <Toggle checked={!!draft.mixed} onChange={(v) => setDraft({ ...draft, mixed: v })} label="Tables and counter both" />
+              <Toggle checked={isMixed(draft)} onChange={(v) => saveNow({ mixed: v }, v ? "Tables and counter both · on" : "Tables and counter both · off")} label="Tables and counter both" />
             </div>
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
               <div>
                 <div className="text-[15px]">Guests pay before the kitchen starts</div>
                 <div className="text-[12.5px] text-muted">Order → pay (UPI, cash, or both) → token. Usual for cafés. Off: guests pay at the end.</div>
               </div>
-              <Toggle checked={draft.payFirst} onChange={(v) => setDraft({ ...draft, payFirst: v })} label="Guests pay first" />
+              <Toggle checked={!!draft.payFirst} onChange={(v) => saveNow({ payFirst: v }, v ? "Guests now pay before the kitchen starts" : "Guests now pay at the end")} label="Guests pay first" />
             </div>
+            {(draft.businessType === "cafe" || draft.mixed) && (
+              <div className="overflow-hidden rounded-group bg-surface">
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div>
+                    <div className="text-[15px]">Self-service counter</div>
+                    <div className="text-[12.5px] text-muted">Guest orders and pays by the counter QR, gets a token on the phone, and hears “ready, collect at the counter”. Staff tap Picked up.</div>
+                  </div>
+                  <Toggle checked={!!draft.selfService} onChange={(v) => saveNow({ selfService: v, ...(v ? { payFirst: true } : {}) }, v ? "Self-service on · open the Now serving screen on a TV or tablet" : "Self-service off")} label="Self-service counter" />
+                </div>
+                {draft.selfService && (
+                  <a href="/tokens" target="_blank" rel="noopener noreferrer" className="block border-t border-line/80 px-4 py-3 text-[14px] font-semibold text-jade">Open the Now serving screen ↗</a>
+                )}
+              </div>
+            )}
             <div className="overflow-hidden rounded-group bg-surface">
               <div className="flex items-center justify-between gap-4 px-4 py-3">
                 <div>
                   <div className="text-[15px]">Pause QR orders now</div>
                   <div className="text-[12.5px] text-muted">Guests can still see the menu but can&apos;t order from their phone. Staff can still take orders.</div>
                 </div>
-                <Toggle checked={!!draft.ordersPaused} onChange={(v) => setDraft({ ...draft, ordersPaused: v })} label="Pause QR orders" />
+                <Toggle checked={!!draft.ordersPaused} onChange={(v) => saveNow({ ordersPaused: v }, v ? "QR orders paused" : "QR orders are back on")} label="Pause QR orders" />
               </div>
-              <div className="flex items-center justify-between gap-4 border-t border-line/80 px-4 py-3">
+              <button type="button" onClick={() => setPanel("restaurant")} className="flex w-full items-center justify-between gap-4 border-t border-line/80 px-4 py-3 text-left">
                 <div>
-                  <div className="text-[15px]">Take QR orders only in these hours</div>
-                  <div className="text-[12.5px] text-muted">Outside these times guests see &ldquo;closed&rdquo; and when ordering opens.</div>
+                  <div className="text-[15px]">Table QR ordering hours</div>
+                  <div className="text-[12.5px] text-muted">
+                    {draft.orderFrom && draft.orderTo && draft.orderFrom !== draft.orderTo ? `${niceTime(draft.orderFrom)} – ${niceTime(draft.orderTo)}, your opening hours. Counter QR works any time.` : "Any time. Set your opening hours in Details on bills."}
+                  </div>
                 </div>
-                <Toggle
-                  checked={!!(draft.orderFrom && draft.orderTo)}
-                  onChange={(v) => setDraft({ ...draft, orderFrom: v ? draft.orderFrom || "09:00" : "", orderTo: v ? draft.orderTo || "22:00" : "" })}
-                  label="Ordering hours"
-                />
-              </div>
-              {!!(draft.orderFrom && draft.orderTo) && (
-                <div className="grid grid-cols-2 gap-3 border-t border-line/80 px-4 py-3">
-                  <Field label="Opens at"><input type="time" className={inputCls} value={draft.orderFrom ?? ""} onChange={(e) => setDraft({ ...draft, orderFrom: e.target.value })} /></Field>
-                  <Field label="Closes at"><input type="time" className={inputCls} value={draft.orderTo ?? ""} onChange={(e) => setDraft({ ...draft, orderTo: e.target.value })} /></Field>
-                  {draft.orderFrom === draft.orderTo && <p className="col-span-2 text-[12.5px] text-saffron">Opening and closing are the same, so guests can order any time.</p>}
-                  {!!draft.orderFrom && !!draft.orderTo && draft.orderTo < draft.orderFrom && <p className="col-span-2 text-[12.5px] text-muted">Closes after midnight, the next day.</p>}
-                </div>
-              )}
+                <span className="shrink-0 text-[14px] font-semibold text-jade">Change</span>
+              </button>
             </div>
             <Link href="/app/tables" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Tables and their QR codes →</Link>
             {(draft.businessType === "cafe" || draft.mixed) && cloud.rid && (
-              <Link href={`/order/counter?r=${cloud.rid}`} className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu →</Link>
+              <a href={`/order/counter?r=${cloud.rid}${outlet.id ? `&o=${encodeURIComponent(outlet.id)}` : ""}`} target="_blank" rel="noopener noreferrer" className="block rounded-group bg-surface px-4 py-3 text-[14px] font-semibold text-jade">Preview the counter QR menu ↗</a>
             )}
           </div>
         )}
+        {panel === "stamps" && <StampSettings onDone={(msg) => { setPanel(null); toast(msg); }} />}
+        {panel === "whatsapp" && <WhatsAppApi />}
         {panel === "security" && <Security onDone={() => { setPanel(null); toast("Password changed"); }} />}
         {panel === "data" && <Export />}
       </Sheet>
@@ -353,10 +397,10 @@ function Export() {
   const account = useAccount();
   const outlets = useOutlets();
   const orders = useOrders();
-  const menu = useMenu();
-  const categories = useCategories();
-  const guests = useGuests();
-  const feedback = useFeedback();
+  const menu = useAllMenu(); // every outlet's dishes
+  const categories = useAllCategories();
+  const guests = useAllGuests();
+  const feedback = useAllFeedback();
   const tables = useAllTables();
   const stamp = new Date().toISOString().slice(0, 10);
   const slug = (account.name || "restropi").toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -396,6 +440,121 @@ function Export() {
       >
         <Store size={17} /> Everything (backup file)
       </Button>
+    </div>
+  );
+}
+
+/* ---------------- your profile photo ---------------- */
+/** Crop to a square in the middle and shrink, so a profile photo stays small. */
+async function squarePhoto(file: File, side = 320): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(bmp.width, bmp.height);
+  const c = document.createElement("canvas");
+  c.width = c.height = Math.min(side, s);
+  c.getContext("2d")!.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, c.width, c.height);
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read the photo"))), "image/jpeg", 0.85));
+}
+
+/** Shrink a logo to fit 400 × 400, keeping its shape and transparent background. */
+/** Name and logo are set by the Restropi team (super admin). The owner asks for a change on WhatsApp. */
+function BrandField() {
+  const account = useAccount();
+  const cloud = useCloud();
+  const platform = usePlatform();
+  const [newName, setNewName] = useState("");
+  const [logoToo, setLogoToo] = useState(false);
+  const msg = [
+    "Hi Restropi team, please change our restaurant details.",
+    "",
+    `Restaurant: ${account.name || "-"}`,
+    `Restaurant ID: ${cloud.rid ?? "-"}`,
+    `Login: ${cloud.email ?? "-"}`,
+    ...(newName.trim() ? [`New name: ${newName.trim()}`] : []),
+    ...(logoToo ? ["New logo: I'm sending the logo image in this chat."] : []),
+  ].join("\n");
+  const ready = !!newName.trim() || logoToo;
+  return (
+    <div className="space-y-3 rounded-group bg-surface p-4">
+      <div className="flex items-center gap-3">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-white ring-1 ring-line">
+          {account.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={account.logo} alt={`${account.name} logo`} className="h-full w-full object-contain p-1" />
+          ) : (
+            <span className="text-[22px] font-bold text-muted">{account.name.trim().charAt(0).toUpperCase() || "R"}</span>
+          )}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-[17px] font-semibold">{account.name}</div>
+          <div className="text-[12.5px] text-muted">Name and logo on the guest menu and bills. Set by the Restropi team.</div>
+        </div>
+      </div>
+      <div className="border-t border-line/80 pt-3">
+        <div className="mb-2 text-[14px] font-semibold">Want to change them?</div>
+        <input className={inputCls} placeholder="New name (leave empty to keep it)" value={newName} onChange={(e) => setNewName(e.target.value.slice(0, 80))} aria-label="New restaurant name" />
+        <label className="mt-2 flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={logoToo} onChange={(e) => setLogoToo(e.target.checked)} className="h-4 w-4 accent-[var(--jade,#0e7a5f)]" />
+          I want a new logo (I&apos;ll send the image on WhatsApp)
+        </label>
+        {platform?.whatsapp ? (
+          <a href={ready ? teamWhatsApp(platform.whatsapp, msg) : undefined} target="_blank" rel="noreferrer" aria-disabled={!ready} className={clsx("mt-3 block", !ready && "pointer-events-none opacity-50")}>
+            <Button className="w-full !bg-[#25D366] hover:!bg-[#1fb757]"><MessageCircle size={17} /> Send the request on WhatsApp</Button>
+          </a>
+        ) : (
+          <p className="mt-3 text-[13px] text-muted">{platform ? "The Restropi team hasn't added their WhatsApp number yet." : "Loading…"}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProfileCard({ me, subtitle }: { me: Member; subtitle: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  // only the owner and sub admins can change team records (staff ask the owner)
+  const canEdit = me.role !== "staff";
+  const pick = async (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return toast("Choose a photo (JPG or PNG)");
+    setBusy(true);
+    try {
+      const url = await uploadProfilePhoto(await squarePhoto(f), me.id);
+      memberActions.setPhoto(me.id, url);
+      toast("Profile photo updated");
+    } catch (e) {
+      toast(`Couldn't upload the photo: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex items-center gap-4 rounded-group bg-surface p-4">
+      <label className={clsx("relative shrink-0", canEdit && "cursor-pointer")} aria-label={canEdit ? "Change profile photo" : undefined}>
+        <Avatar name={me.name} hue={me.hue} photo={me.photo} size={56} />
+        {canEdit && (
+          <>
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-white ring-2 ring-surface">
+              {busy ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Camera size={12} />}
+            </span>
+            <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+          </>
+        )}
+      </label>
+      <div className="min-w-0 flex-1">
+        <div className="text-[17px] font-semibold">{me.name}</div>
+        <div className="truncate text-[14px] text-muted">{subtitle}</div>
+        {canEdit ? (
+          <div className="mt-1.5 flex gap-3 text-[13.5px] font-semibold">
+            <label className="cursor-pointer text-jade hover:underline">
+              {me.photo ? "Change photo" : "Add a photo"}
+              <input type="file" accept="image/*" className="sr-only" disabled={busy} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+            </label>
+            {me.photo && <button onClick={() => { memberActions.setPhoto(me.id, undefined); toast("Photo removed"); }} className="text-muted hover:text-rose">Remove</button>}
+          </div>
+        ) : (
+          <div className="mt-1 text-[12.5px] text-faint">Ask the owner to change your photo.</div>
+        )}
+      </div>
     </div>
   );
 }

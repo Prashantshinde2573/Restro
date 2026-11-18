@@ -6,7 +6,6 @@ import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { plans } from "@/lib/plans";
-import { HELP_LANGS, MANUAL_FILE, MANUAL_PDF } from "@/lib/help";
 import { CONTACT_WA } from "./chrome";
 import { IconArrow } from "./icons";
 import { Logo } from "./mockups";
@@ -18,30 +17,16 @@ const chain = plans.find((p) => !p.monthly);
 
 type QA = { q: string; a: ReactNode };
 
-const MANUAL_NAME = { en: "English", mr: "मराठी", hi: "हिंदी" } as const;
-function ManualLinks() {
-  return (
-    <span className="mt-2 grid grid-cols-3 gap-1.5">
-      {HELP_LANGS.map((l) => (
-        <a key={l} href={MANUAL_PDF[l]} download={MANUAL_FILE[l]} className="flex flex-col items-center gap-0.5 rounded-[12px] bg-[#f4f5f3] px-2 py-2 text-center ring-1 ring-black/[.05] hover:bg-jade-soft">
-          <span className="text-[13.5px] font-semibold">{MANUAL_NAME[l]}</span>
-          <span className="text-[11.5px] text-ink/55">PDF ↓</span>
-        </a>
-      ))}
-    </span>
-  );
-}
-
 const faqs: QA[] = [
   {
     q: "What is Restropi?",
-    a: "One app to run your café or restaurant: billing with GST and UPI QR, orders sent to the kitchen on a phone or tablet, tables and QR ordering, stock, staff and reports. It works on the phone, tablet or laptop you already have.",
+    a: "One app to run your café or restaurant: billing with GST and UPI QR, orders sent to the kitchen on a phone or tablet, tables and QR ordering, stock, staff attendance and salary, and reports. It works on the phone, tablet or laptop you already have.",
   },
   {
     q: "How much does it cost?",
     a: (
       <>
-        Prices are per outlet, per month, plus GST:
+        Prices are per outlet, per month:
         <span className="mt-2 block space-y-1">
           {priced.map((p) => (
             <span key={p.id} className="flex justify-between gap-4">
@@ -77,13 +62,8 @@ const faqs: QA[] = [
     a: "English, मराठी and हिंदी. Each person can pick their own language, and support is available in all three.",
   },
   {
-    q: "Is there a user manual?",
-    a: (
-      <>
-        Yes — a complete step-by-step manual, with every plan and feature, in three languages. Read it inside the app under Help center, or download it here:
-        <ManualLinks />
-      </>
-    ),
+    q: "Is there help inside the app?",
+    a: "Yes. Tap the ? button at the top of the app, or open Help center: a help chat in English, मराठी and हिंदी with step-by-step guides and answers to common problems.",
   },
   {
     q: "Is my data safe?",

@@ -1,18 +1,21 @@
 "use client";
 
+import { ClaimCheck } from "@/components/claim-check";
 import { useCloud } from "@/lib/cloud";
 import clsx from "clsx";
 import Link from "next/link";
-import { ArrowLeftRight, Check, Clock, LayoutGrid, Merge, Minus, Pencil, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Trash2, Users, UserPlus } from "lucide-react";
+import { Check, Clock, LayoutGrid, Link2, LogOut, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Unlink, Users, UserPlus } from "lucide-react";
 import { useState } from "react";
-import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet, Field, inputCls } from "@/components/ui";
+import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
-import { Checkout } from "@/components/checkout";
+import dynamic from "next/dynamic";
+// the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
+const Checkout = dynamic(() => import("@/components/checkout").then((m) => m.Checkout), { ssr: false });
 import { useToast } from "@/components/toast";
 import { gstRate, inr, minutesSince, timeAgo } from "@/lib/format";
-import { getOrders, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";
+import { counterPref, getOrders, payingOnline, orderActions, paymentsText, useCan, useCanConfirm, useCurrentOutlet, useMe, useOrders } from "@/lib/live";
 import { closeBill, confirmPayment, rejectPayment } from "@/lib/billing";
-import { isShared, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useTables } from "@/lib/tables";
+import { capacity, isShared, joinedName, joinedOf, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useLiveTables } from "@/lib/tables";
 import { TableManager } from "@/components/table-manager";
 import { CookingLoader } from "@/components/loader";
 import { useReady } from "@/lib/store";
@@ -39,15 +42,15 @@ function Stepper({ value, onChange, min = 1, max = 20 }: { value: number; onChan
 export default function TablesPage() {
   const cloud = useCloud();
   const toast = useToast();
-  const tables = useTables();
+  const tables = useLiveTables();
   const tablesReady = useReady("tables");
   const [zone, setZone] = useState("all");
   const [selId, setSelId] = useState<string | null>(null);
   const [qr, setQr] = useState(false);
   const [seat, setSeat] = useState<{ tableId: string; guests: number } | null>(null);
-  const [move, setMove] = useState<{ tableId: string; partyId: string } | null>(null);
   const [pay, setPay] = useState<{ tableId: string; party: Party; label: string } | null>(null);
   const [manage, setManage] = useState(false);
+  const [joining, setJoining] = useState(false);
   const me = useMe();
   const outlet = useCurrentOutlet();
   const canManage = useCan("outletSettings");
@@ -68,13 +71,16 @@ export default function TablesPage() {
     getOrders().filter((o) => o.tableId === tableId && (o.partyId ?? "A") === partyId && !["paid", "cancelled"].includes(o.status));
   const acceptParty = (tableId: string, _name: string, partyId: string) => {
     tableActions.update(tableId, partyId, { pendingApproval: false, server: myName });
-    partyOrders(tableId, partyId).filter((o) => o.status === "new").forEach((o) => orderActions.setStatus(o.id, "accepted"));
+    partyOrders(tableId, partyId).filter((o) => o.status === "new" && !payingOnline(o)).forEach((o) => orderActions.setStatus(o.id, "accepted"));
   };
   const rejectParty = (tableId: string, _name: string, partyId: string) => {
     partyOrders(tableId, partyId).forEach((o) => orderActions.setStatus(o.id, "cancelled"));
     tableActions.close(tableId, partyId);
   };
-  const openSeat = (t: Table) => setSeat({ tableId: t.id, guests: Math.max(1, Math.min(2, seatsFree(t) || 1)) });
+  const openSeat = (t: Table) => setSeat({ tableId: t.id, guests: Math.max(1, Math.min(2, seatsFree(t, tables) || 1)) });
+  const mainOf = (t: Table) => (t.joinedTo ? tables.find((x) => x.id === t.joinedTo) : undefined);
+  // tables that can be pushed up against the open one: free, not joined to anything
+  const joinable = sel ? tables.filter((x) => x.id !== sel.id && !x.parties.length && !x.joinedTo && !joinedOf(x, tables).length) : [];
 
   return (
     <>
@@ -83,7 +89,7 @@ export default function TablesPage() {
         subtitle={tables.length ? `${outlet.name ? `${outlet.name} · ` : ""}${busy} busy · ${tables.filter((t) => tableState(t) === "free").length} free${shared ? ` · ${shared} shared` : ""}` : outlet.name}
         actions={
           <div className="flex gap-2">
-            {tables.length > 0 && <Link href="/print/tables"><Button variant="plain" size="sm"><Printer size={16} /> QR codes</Button></Link>}
+            {tables.length > 0 && (me?.role === "owner" || me?.role === "subadmin") && <Link href="/print/tables"><Button variant="plain" size="sm"><Printer size={16} /> QR codes</Button></Link>}
             {canManage && <Button variant="tinted" size="sm" onClick={() => setManage(true)}><Settings2 size={16} /> Manage tables</Button>}
           </div>
         }
@@ -121,6 +127,20 @@ export default function TablesPage() {
           <div>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
               {shown.map((t) => {
+                const main = mainOf(t);
+                if (main)
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelId(main.id)}
+                      className={clsx("relative flex flex-col justify-between rounded-[22px] border-2 border-dashed border-line bg-sunken/60 p-3 text-left transition active:scale-[.97] lg:p-4", t.seats >= 6 ? "col-span-2 aspect-[2.1/1]" : "aspect-square")}
+                    >
+                      <span className="text-[22px] font-semibold tracking-tight text-muted lg:text-[26px]">{t.name}</span>
+                      <span className="flex items-center gap-1 text-[12px] font-semibold leading-tight text-jade lg:text-[13px]"><Link2 size={12} /> Joined with {main.name}</span>
+                    </button>
+                  );
+                const joined = joinedOf(t, tables);
+                const cap = capacity(t, tables);
                 const st = tableState(t);
                 const s = statusStyle[st];
                 const since = oldestSince(t);
@@ -142,7 +162,10 @@ export default function TablesPage() {
                     )}
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <span className="text-[22px] font-semibold tracking-tight lg:text-[26px]">{t.name}</span>
+                      <span className="text-[22px] font-semibold tracking-tight lg:text-[26px]">
+                        {t.name}
+                        {joined.length > 0 && <span className="ml-1 text-[13px] font-semibold text-jade lg:text-[14px]">+{joined.map((x) => x.name).join(" +")}</span>}
+                      </span>
                       {isShared(t) ? (
                         <span className="mt-1 flex gap-1">
                           {t.parties.map((p) => (
@@ -154,14 +177,14 @@ export default function TablesPage() {
                       )}
                     </div>
                     <div className="text-[12px] leading-tight text-muted lg:text-[13px]">
-                      {st === "free" && <span className="flex items-center gap-1"><Users size={12} /> {t.seats} seats</span>}
+                      {st === "free" && <span className="flex items-center gap-1"><Users size={12} /> {cap} seats</span>}
                       {st === "reserved" && t.reservedAt && <span>{timeAgo(t.reservedAt).replace("in ", "In ")}</span>}
                       {t.parties.length > 0 && (
                         <>
                           <span className={clsx("flex items-center gap-1", long && "font-semibold text-rose")}>
-                            <Clock size={12} /> {mins} min · {seatsTaken(t)}/{t.seats}
+                            <Clock size={12} /> {mins} min · {seatsTaken(t)}/{cap}
                           </span>
-                          {toConfirm ? <span className="font-semibold text-saffron">Paid? Confirm</span> : total ? <span className="font-semibold text-ink tnum">{inr(total)}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} bills</span>}</span> : <span>Not ordered</span>}
+                          {toConfirm ? <span className="font-semibold text-saffron">Paid? Confirm</span> : total ? <span className="font-semibold text-ink tnum">{inr(Math.round(total * (1 + gstRate())))}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} bills</span>}</span> : <span>Not ordered</span>}
                         </>
                       )}
                     </div>
@@ -181,18 +204,39 @@ export default function TablesPage() {
       </Page>
 
       {/* ---------- Table detail ---------- */}
-      <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel ? `Table ${sel.name}` : ""} wide>
+      <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel ? `Table ${joinedName(sel, tables)}` : ""} wide>
         {sel && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-[14px] text-muted">
               <Pill tone={statusStyle[tableState(sel)].tone}>{statusStyle[tableState(sel)].label}</Pill>
-              <span>{sel.zone} · {seatsTaken(sel)} of {sel.seats} seats taken</span>
+              <span>{sel.zone} · {seatsTaken(sel)} of {capacity(sel, tables)} seats taken</span>
               {isShared(sel) && <Pill tone="neutral">Shared · {sel.parties.length} separate bills</Pill>}
             </div>
 
             {sel.parties.length === 0 && (
               <Button size="lg" className="w-full" onClick={() => openSeat(sel)}><Users size={18} /> Seat guests</Button>
             )}
+
+            {/* big group: push tables together (staff only; guests see the extra seats) */}
+            <div className="rounded-group bg-surface p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link2 size={17} className="text-jade" />
+                <span className="flex-1 text-[15px] font-semibold">Join tables</span>
+                {joinable.length > 0 && <Button size="sm" variant="tinted" onClick={() => setJoining(true)}><Plus size={15} /> Join a table</Button>}
+              </div>
+              {joinedOf(sel, tables).length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {joinedOf(sel, tables).map((x) => (
+                    <span key={x.id} className="flex items-center gap-2 rounded-full bg-jade-soft py-1 pl-3 pr-1 text-[14px] font-semibold text-jade-deep">
+                      {x.name} · {x.seats} seats
+                      <button onClick={() => { tableActions.separate(x.id); toast(`${x.name} is a separate table again`); }} className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12.5px]" aria-label={`Separate ${x.name}`}><Unlink size={13} /> Separate</button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-[13px] text-muted">For a big group, join a free table to {sel.name}. Its seats add to {sel.name}, so guests can pick up to {sel.seats}+ seats on the QR. It separates by itself when they leave.</p>
+              )}
+            </div>
 
             {sel.parties.map((p) => {
               const label = isShared(sel) ? `Party ${p.id}` : "Guests";
@@ -212,17 +256,17 @@ export default function TablesPage() {
                         {minutesSince(p.since)} min · {p.server ?? "No captain yet"} · {p.source === "qr" ? "opened from QR" : "seated by captain"}
                         {p.phoneClaimed && <> · <Smartphone size={12} className="inline -translate-y-px" /> phone linked</>}
                       </div>
-                      <div className="mt-1 text-[12.5px] text-muted">Join code for friends: <b className="tracking-widest text-ink tnum">{p.code}</b></div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[18px] font-semibold tnum">{p.total ? inr(p.total) : "—"}</div>
-                      <div className="text-[12px] text-muted">{p.total ? "before GST" : "no order yet"}</div>
+                      <div className="text-[18px] font-semibold tnum">{p.total ? inr(Math.round(p.total * (1 + gstRate()))) : "—"}</div>
+                      <div className="text-[12px] text-muted">{p.total ? "incl. GST" : "no order yet"}</div>
                     </div>
                   </div>
                   {claim && (
                     <div className="border-t border-line/80 bg-saffron-soft/60 px-4 py-3 text-[13.5px]">
                       <b>{claim.by}</b> marked this paid · {paymentsText(claim.payments)} · {minutesSince(claim.at)} min ago.
                       {canConfirm ? " Check the money came in, then confirm." : " Waiting for the owner to confirm."}
+                      <ClaimCheck claimId={claim.id} />
                       {canConfirm && (
                         <div className="mt-2 flex gap-2">
                           <Button size="sm" onClick={() => { confirmPayment(claim.id); toast(`Payment confirmed · ${label} closed`); }}><Check size={15} /> Money received</Button>
@@ -240,7 +284,11 @@ export default function TablesPage() {
                     {p.total && !claim && canCharge ? (
                       <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
-                    <Button size="sm" variant="plain" onClick={() => setMove({ tableId: sel.id, partyId: p.id })}><ArrowLeftRight size={15} /> Move</Button>
+                    {!p.total && !partyOrders(sel.id, p.id).length && !p.pendingApproval && (
+                      <Button size="sm" variant="plain" onClick={() => { tableActions.close(sel.id, p.id, "freed, no order"); toast(isShared(sel) ? `Party ${p.id} removed · no order` : `${sel.name} is free`); if (sel.parties.length <= 1) setSelId(null); }}>
+                        <LogOut size={15} /> Free table
+                      </Button>
+                    )}
                     {others.map((o) => (
                       <Button key={o.id} size="sm" variant="plain" onClick={() => { tableActions.merge(sel.id, p.id, o.id); orderActions.moveParty(sel.id, p.id, { tableId: sel.id, tableName: sel.name, partyId: o.id }); toast(`Party ${p.id} joined Party ${o.id} · one bill now`); }}>
                         <Merge size={15} /> Merge with {o.id}
@@ -257,16 +305,13 @@ export default function TablesPage() {
                 <span className="flex-1">
                   <span className="block text-[15px] font-semibold">Share table · seat another party</span>
                   <span className="block text-[13px] text-muted">
-                    {seatsFree(sel) > 0 ? `${seatsFree(sel)} seat${seatsFree(sel) > 1 ? "s" : ""} free. They get their own order and bill.` : "Table is full — add only if guests agree to squeeze in."}
+                    {seatsFree(sel, tables) > 0 ? `${seatsFree(sel, tables)} seat${seatsFree(sel, tables) > 1 ? "s" : ""} free. They get their own order and bill.` : "Table is full — join a table, or add only if guests agree to squeeze in."}
                   </span>
                 </span>
               </button>
             )}
 
             <Button variant="plain" className="w-full" onClick={() => setQr(true)}><QrCode size={16} /> Show table QR</Button>
-            {canManage && sel.parties.length === 0 && (
-              <Button variant="plain" className="w-full" onClick={() => { setSelId(null); setManage(true); }}><Pencil size={16} /> Edit or remove this table</Button>
-            )}
           </div>
         )}
       </Sheet>
@@ -299,7 +344,7 @@ export default function TablesPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between rounded-group bg-surface px-4 py-3">
                 <span className="text-[15px] font-medium">How many guests?</span>
-                <Stepper value={seat.guests} onChange={(n) => setSeat({ ...seat, guests: n })} max={t.seats} />
+                <Stepper value={seat.guests} onChange={(n) => setSeat({ ...seat, guests: n })} max={40} />
               </div>
               {t.parties.length > 0 && (
                 <div className="rounded-group bg-surface p-4 text-[14px] leading-relaxed text-muted">
@@ -308,38 +353,26 @@ export default function TablesPage() {
                   When they scan the table QR and pick &ldquo;I&apos;m on my own&rdquo;, their phone links to this party automatically.
                 </div>
               )}
-              {seatsTaken(t) + seat.guests > t.seats && <p className="text-[13px] font-medium text-saffron">That&apos;s more guests than seats at {t.name}.</p>}
+              {seatsTaken(t) + seat.guests > capacity(t, tables) && <p className="text-[13px] font-medium text-saffron">That&apos;s more guests than seats at {joinedName(t, tables)}. Join a table for them from the table screen.</p>}
             </div>
           );
         })()}
       </Sheet>
 
-      {/* ---------- Move a party ---------- */}
-      <Sheet open={!!move} onClose={() => setMove(null)} title="Move to which table?">
-        {move && (
-          <div className="grid grid-cols-4 gap-2">
-            {tables.filter((t) => t.id !== move.tableId).map((t) => {
-              const free = tableState(t) === "free";
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    const from = tables.find((x) => x.id === move.tableId)!;
-                    const p = tableActions.move(move.tableId, move.partyId, t.id);
-                    orderActions.moveParty(move.tableId, move.partyId, { tableId: t.id, tableName: t.name, partyId: p.id });
-                    setMove(null);
-                    setSelId(t.id);
-                    toast(`Moved from ${from.name} to ${t.name}${t.parties.length ? ` · Party ${p.id}` : ""} · order moved too`);
-                  }}
-                  className={clsx("rounded-[14px] py-3 text-center", free ? "bg-surface" : "bg-sunken text-muted")}
-                >
-                  <div className="text-[17px] font-semibold">{t.name}</div>
-                  <div className="text-[11px]">{free ? `${t.seats} seats` : `${seatsFree(t)} free`}</div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <Sheet open={joining && !!sel} onClose={() => setJoining(false)} title={`Join a table to ${sel?.name ?? ""}`}>
+        <p className="mb-3 text-[14px] text-muted">Pick the free table you pushed up against {sel?.name}. Guests order and pay on {sel?.name}&apos;s QR; the joined table&apos;s QR sends them there.</p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {joinable.map((x) => (
+            <button
+              key={x.id}
+              onClick={() => { if (sel && tableActions.join(sel.id, x.id)) toast(`${x.name} joined with ${sel.name} · ${capacity(sel, tables) + x.seats} seats`); setJoining(false); }}
+              className="flex aspect-square flex-col items-center justify-center rounded-[18px] bg-surface ring-1 ring-line hover:ring-jade"
+            >
+              <span className="text-[20px] font-semibold">{x.name}</span>
+              <span className="text-[12.5px] text-muted">{x.seats} seats · {x.zone}</span>
+            </button>
+          ))}
+        </div>
       </Sheet>
 
       <Sheet open={qr} onClose={() => setQr(false)} title={`Table ${sel?.name ?? ""} QR`}>
@@ -364,10 +397,16 @@ export default function TablesPage() {
         onClose={() => setPay(null)}
         subtotal={pay?.party.total ?? 0}
         label={pay?.label ?? ""}
-        preferred={pay ? partyOrders(pay.tableId, pay.party.id).find((o) => o.payPreference)?.payPreference : undefined}
+        preferred={pay ? counterPref(partyOrders(pay.tableId, pay.party.id)) : undefined}
         prepaid={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.prepaid ?? []) : undefined}
         lines={pay ? partyOrders(pay.tableId, pay.party.id).flatMap((o) => o.lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))) : undefined}
         billNo={pay ? partyOrders(pay.tableId, pay.party.id)[0]?.number : undefined}
+        couponCode={pay ? partyOrders(pay.tableId, pay.party.id).find((o) => o.wantsCoupon)?.wantsCoupon : undefined}
+        onCoupon={(code) => { if (pay) orderActions.askCoupon(partyOrders(pay.tableId, pay.party.id).map((o) => o.id), code); }}
+        guest={(() => {
+          const o = pay ? partyOrders(pay.tableId, pay.party.id).find((x) => x.guestPhone) : undefined;
+          return o ? { name: o.customer, phone: o.guestPhone } : undefined;
+        })()}
         onPaid={(payments, extra) => {
           if (!pay) return;
           const ids = partyOrders(pay.tableId, pay.party.id).map((o) => o.id);

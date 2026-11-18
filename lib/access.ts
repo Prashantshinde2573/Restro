@@ -32,10 +32,13 @@ export type Feature =
   | "guests"
   | "campaigns"
   | "coupons"
+  | "stamps"
   | "voice"
   | "prepForecast"
   | "insights"
-  | "menuEngineering";
+  | "menuEngineering"
+  | "payroll"
+  | "waApi";
 
 const BOTH: BusinessType[] = ["restaurant", "cafe"];
 export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: BusinessType[] }> = {
@@ -48,25 +51,30 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   tableSharing: { label: "Shared tables", plan: "starter", types: ["restaurant"] },
   splitByGuest: { label: "Split bill by guest", plan: "growth", types: ["restaurant"] },
   counterToken: { label: "Counter orders with token", plan: "starter", types: ["cafe"] },
-  qrOrdering: { label: "QR ordering", plan: "growth", types: BOTH },
+  qrOrdering: { label: "QR ordering", plan: "starter", types: BOTH },
   stock: { label: "Stock and recipes", plan: "growth", types: BOTH },
   pulse: { label: "Restropi Pulse briefing", plan: "growth", types: BOTH },
   team: { label: "Team", plan: "starter", types: BOTH },
   guests: { label: "Guests", plan: "growth", types: BOTH },
   campaigns: { label: "Campaigns", plan: "growth", types: BOTH },
   coupons: { label: "Discount coupons", plan: "growth", types: BOTH },
+  stamps: { label: "Stamp card (loyalty)", plan: "growth", types: BOTH },
   voice: { label: "Voice ordering", plan: "pro", types: BOTH },
   prepForecast: { label: "Prep forecast", plan: "pro", types: BOTH },
   insights: { label: "Insights and Leak guard", plan: "pro", types: BOTH },
   menuEngineering: { label: "What's working (menu engineering)", plan: "pro", types: BOTH },
+  payroll: { label: "Staff attendance and salary", plan: "growth", types: BOTH },
+  waApi: { label: "WhatsApp API (automatic messages)", plan: "pro", types: BOTH },
 };
 
 /** The ways an outlet serves guests. `mixed` outlets run both. */
-export const outletKinds = (o: { businessType: BusinessType; mixed?: boolean }): BusinessType[] => (o.mixed ? ["restaurant", "cafe"] : [o.businessType]);
+/** Restaurants also take counter orders unless the owner turned it off; cafés serve at tables only when turned on. */
+export const isMixed = (o: { businessType: BusinessType; mixed?: boolean }) => o.mixed ?? o.businessType === "restaurant";
+export const outletKinds = (o: { businessType: BusinessType; mixed?: boolean }): BusinessType[] => (isMixed(o) ? ["restaurant", "cafe"] : [o.businessType]);
 /** Has tables (dine-in at a table, table QR, captains). */
-export const hasTables = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "restaurant" || !!o.mixed;
+export const hasTables = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "restaurant" || isMixed(o);
 /** Takes counter orders with a token (counter QR, pay first). */
-export const hasCounter = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "cafe" || !!o.mixed;
+export const hasCounter = (o: { businessType: BusinessType; mixed?: boolean }) => o.businessType === "cafe" || isMixed(o);
 
 export type FeatureState = "ok" | "plan" | "type";
 export function featureState(f: Feature, plan: PlanId, type: BusinessType | BusinessType[]): FeatureState {
@@ -97,7 +105,8 @@ export type Perm =
   | "insights"
   | "reports"
   | "activity"
-  | "outletSettings";
+  | "outletSettings"
+  | "payroll";
 
 export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; feature?: Feature }[] }[] = [
   {
@@ -125,6 +134,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "menu", label: "Edit menu and prices", feature: "menu" },
       { key: "stock", label: "Stock and purchases", feature: "stock" },
       { key: "team", label: "Manage staff and their access", feature: "team" },
+      { key: "payroll", label: "Staff attendance and salary (approve days, pay)", feature: "payroll" },
       { key: "outletSettings", label: "Outlet settings (UPI, GST, QR ordering)" },
     ],
   },
@@ -140,7 +150,6 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
   },
 ];
 export const ALL_PERMS: Perm[] = PERM_GROUPS.flatMap((g) => g.perms.map((p) => p.key));
-export const permMeta = (p: Perm) => PERM_GROUPS.flatMap((g) => g.perms).find((x) => x.key === p)!;
 
 /** Starting ticks for common jobs — the admin can change any box after. */
 export const PRESETS: { name: string; types: BusinessType[]; perms: Perm[] }[] = [
@@ -163,10 +172,17 @@ export interface Member {
   perms: Perm[];
   active: boolean;
   hue: number;
+  /** profile photo (public link), shown instead of the initials */
+  photo?: string;
+  /** sub admin only: the owner tracks their attendance and salary too (staff always are) */
+  payrollOn?: boolean;
 }
 
 export const isOwner = (m?: Member | null) => m?.role === "owner";
-export const hasPerm = (m: Member | null | undefined, p: Perm) => !!m && m.active && (m.role === "owner" || m.perms.includes(p));
+/** Whose days and salary are kept: every staff member, and a sub admin only when the owner turned it on. Never the owner. */
+export const onPayroll = (m?: Member | null) => !!m && (m.role === "staff" || (m.role === "subadmin" && !!m.payrollOn));
+/** The owner can do everything; a sub admin everything in their own outlets (screens check the outlet); staff what is ticked. */
+export const hasPerm = (m: Member | null | undefined, p: Perm) => !!m && m.active && (m.role === "owner" || m.role === "subadmin" || m.perms.includes(p));
 /** Owner, or staff the owner trusts to confirm payments. Everyone else's "paid" waits for them. */
 export const canConfirmPay = (m: Member | null | undefined) => hasPerm(m, "confirmPay");
 export const inOutlet = (m: Member | null | undefined, outletId: string) => !!m && (m.role === "owner" || m.outletIds.includes(outletId));
@@ -180,11 +196,11 @@ export function canManage(editor: Member | null | undefined, target: Member) {
   if (!editor || !editor.active) return false;
   if (target.role === "owner") return false;
   if (editor.role === "owner") return true;
-  if (editor.role !== "subadmin" || !editor.perms.includes("team")) return false;
+  if (editor.role !== "subadmin") return false;
   return target.role === "staff" && target.outletIds.length > 0 && target.outletIds.every((o) => editor.outletIds.includes(o));
 }
 /** Which boxes `editor` may tick for someone else: never more than they have themselves. */
-export const grantable = (editor: Member | null | undefined): Perm[] => (!editor ? [] : editor.role === "owner" ? ALL_PERMS : editor.perms);
+export const grantable = (editor: Member | null | undefined): Perm[] => (!editor ? [] : editor.role === "owner" || editor.role === "subadmin" ? ALL_PERMS : editor.perms);
 /** Which outlets `editor` may assign. */
 export const assignableOutlets = (editor: Member | null | undefined, all: string[]) => (!editor ? [] : editor.role === "owner" ? all : all.filter((o) => editor.outletIds.includes(o)));
 
@@ -199,6 +215,8 @@ export const ROUTES: { href: string; feature?: Feature; perm?: Perm | "ownerOrSe
   { href: "/app/inventory", feature: "stock", perm: "stock" },
   { href: "/app/team", feature: "team", perm: "team" },
   { href: "/app/access", feature: "team", perm: "team" },
+  { href: "/app/payroll", feature: "payroll", perm: "payroll" },
+  { href: "/app/attendance", feature: "payroll" },
   { href: "/app/guests", feature: "guests", perm: "guests" },
   { href: "/app/campaigns", feature: "campaigns", perm: "campaigns" },
   { href: "/app/insights", feature: "insights", perm: "insights" },

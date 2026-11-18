@@ -1,17 +1,19 @@
 "use client";
 
-import { hasTables } from "@/lib/access";
+import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Camera, FolderPlus, Plus, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, LocalSegmented, Sheet, SwitchRow, Toggle, inputCls } from "@/components/ui";
+import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { categoryActions, menuActions, useCategories, useCurrentOutlet, useFeature, useMenu, useOrders } from "@/lib/live";
+import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
+import { DragGhost, DragHandle, useDishDrag } from "@/components/dish-drag";
 import { MenuFromPhoto } from "@/components/menu-import";
-import { OptionsEditor, PhotoUploader } from "@/components/dish-editor";
+import { OptionsEditor, PhotoUploader, SizesEditor } from "@/components/dish-editor";
+import { hasSizes, sizesOf } from "@/lib/sizes";
 import { inr } from "@/lib/format";
-import type { Diet, MenuItem, OptionGroup } from "@/lib/types";
+import type { Diet, MenuItem, OptionGroup, Size } from "@/lib/types";
 
 // Emoji the owner can give a category — shown in the guest menu side bar.
 const CAT_ICONS = ["🍢", "🍛", "🫓", "🍚", "🍨", "🥤", "☕", "🍕", "🍔", "🥪", "🍜", "🥗", "🍰", "🍦", "🥘", "🍳", "🥟", "🍹", "🧁", "🍽️"];
@@ -28,6 +30,7 @@ type Draft = {
   isNew: boolean;
   tags: string[];
   options: OptionGroup[];
+  sizes: Size[];
   cost: string; // ₹ per plate (ingredients)
 };
 
@@ -42,8 +45,20 @@ const qMeta: Record<Quadrant, { name: string; hint: string; tone: "jade" | "sky"
 export default function MenuPage() {
   const toast = useToast();
   const [tab, setTab] = useState<"dishes" | "engineering">("dishes");
-  const menuRaw = useMenu();
-  const orders = useOrders();
+  const menuRaw = useMenu(); // the dishes of the outlet on screen
+  const orders = useOutletOrders(); // sold here
+  // each outlet has its own menu; its people with menu access change it
+  const me = useMe();
+  const outlets = useOutlets();
+  const outletNow = useCurrentOutlet();
+  const allMenu = useAllMenu();
+  const many = outlets.length > 1;
+  const canEditDishes = hasPerm(me, "menu") && inOutlet(me, outletNow.id);
+  // copy dishes from another outlet
+  const [copyOpen, setCopyOpen] = useState(false);
+  const mainId = mainOutletId(outlets);
+  const otherOutlets = outlets.filter((o) => o.id !== outletNow.id).map((o) => ({ ...o, dishes: menuFor(allMenu, o, mainId).length })).filter((o) => o.dishes > 0);
+  const [confirmDel, setConfirmDel] = useState(false);
   // "sold" = plates in the last 7 days, from real orders
   const items = useMemo(() => {
     const since = Date.now() - 7 * 86_400_000;
@@ -56,16 +71,24 @@ export default function MenuPage() {
   }, [menuRaw, orders]);
   const [edit, setEditRaw] = useState<MenuItem | "new" | null>(null);
   const cats = useCategories();
-  const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
+  // edit / delete a category
+  const [catEdit, setCatEdit] = useState<{ id: string; name: string; icon: string } | null>(null);
+  const [catDel, setCatDel] = useState<{ id: string; dishes: string } | null>(null); // dishes: another category id, or "delete"
+  const askDelete = (id: string) => {
+    setCatEdit(null);
+    setCatDel({ id, dishes: cats.find((x) => x.id !== id)?.id ?? "delete" });
+  };
+  const cafe = !hasTables(outletNow); // counter-only café: no tandoor
   const engineeringOn = useFeature("menuEngineering") === "ok";
-  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], cost: "" });
+  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], sizes: [], cost: "" });
   const [draft, setDraft] = useState<Draft>(blank());
   const setEdit = (m: MenuItem | "new" | null, catId?: string) => {
     setEditRaw(m);
+    setConfirmDel(false);
     const it = m && m !== "new" ? m : null;
     setDraft(
       it
-        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], cost: it.cost ? String(it.cost) : "" }
+        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], sizes: it.sizes ?? [], cost: it.cost ? String(it.cost) : "" }
         : blank(catId),
     );
     setNewCat(null);
@@ -84,8 +107,12 @@ export default function MenuPage() {
     toast(`“${c.name}” added · guests see it as a filter now`);
     return c.id;
   };
-  const priceNum = Number(draft.price);
-  const draftOk = draft.name.trim().length > 1 && priceNum > 0 && !!draft.categoryId;
+  // sizes: at least two, each with a name and a price; the dish's price is then the smallest
+  const sizes = draft.sizes.filter((z) => z.name.trim() && z.price > 0).map((z) => ({ ...z, name: z.name.trim() }));
+  const sized = sizes.length > 1;
+  const sizesBad = draft.sizes.length > 0 && (draft.sizes.length < 2 || sizes.length !== draft.sizes.length);
+  const priceNum = sized ? Math.min(...sizes.map((z) => z.price)) : Number(draft.price);
+  const draftOk = draft.name.trim().length > 1 && priceNum > 0 && !!draft.categoryId && !sizesBad;
 
   const avgSold = items.length ? items.reduce((s, m) => s + m.soldThisWeek, 0) / items.length : 0;
   const avgMargin = items.length ? items.reduce((s, m) => s + (m.price - m.cost), 0) / items.length : 0;
@@ -102,21 +129,26 @@ export default function MenuPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
-  const maxSold = Math.max(1, ...items.map((m) => m.soldThisWeek));
-  const maxMargin = Math.max(1, ...items.map((m) => m.price - m.cost));
   const editing = edit && edit !== "new" ? edit : null;
   const [fromPhoto, setFromPhoto] = useState(false);
+  // drag a dish onto another category
+  const catName = (id: string | null) => cats.find((c) => c.id === id)?.name ?? "";
+  const { drag, start: startDrag } = useDishDrag((dishId, toCat) => {
+    const m = items.find((x) => x.id === dishId);
+    menuActions.update(dishId, { categoryId: toCat });
+    toast(`${m?.name ?? "Dish"} moved to ${catName(toCat)}`);
+  });
 
   return (
     <>
       <PageHeader
         title="Menu"
-        subtitle={`${items.length} dishes · ${items.filter((m) => !m.available).length} sold out`}
+        subtitle={`${many ? `${outletNow.name} · ` : ""}${items.length} dish${items.length === 1 ? "" : "es"} · ${items.filter((m) => !m.available).length} sold out`}
         actions={
           <div className="flex gap-2">
-            <Button size="sm" variant="plain" aria-label="Categories" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /><span className="hidden sm:inline">Categories</span></Button>
-            <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">From</span> photo</Button>
-            <Button size="sm" onClick={() => setEdit("new")}><Plus size={16} /> Add dish</Button>
+            <Button size="sm" variant="plain" aria-label="Categories" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /> Categories</Button>
+            {canEditDishes && <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">From photo</span><span className="sm:hidden">Photo</span></Button>}
+            {canEditDishes && <Button size="sm" onClick={() => setEdit("new")}><Plus size={16} /> Add dish</Button>}
           </div>
         }
       >
@@ -125,11 +157,28 @@ export default function MenuPage() {
       <MenuFromPhoto open={fromPhoto} onClose={() => setFromPhoto(false)} />
 
       <Page>
+        {many && canEditDishes && otherOutlets.length > 0 && (
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-group bg-surface px-4 py-3">
+            <div className="min-w-0 flex-1 text-[13.5px] text-muted">
+              <b className="font-semibold text-ink">Menu of {outletNow.name}.</b> Dishes and prices here are only for this outlet.
+            </div>
+            <Button size="sm" variant="tinted" onClick={() => setCopyOpen(true)}>Copy from another outlet</Button>
+          </div>
+        )}
         {tab === "dishes" || !engineeringOn ? (
           <div className="grid gap-6 lg:grid-cols-2">
             {cats.map((c) => (
-              <Group key={c.id} title={`${c.icon ? c.icon + " " : ""}${c.name}`} flush>
-                {!items.some((m) => m.categoryId === c.id) && (
+              <div
+                key={c.id}
+                data-drop-cat={c.id}
+                className={clsx("rounded-[24px] transition", drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft/60 ring-2 ring-jade ring-offset-4 ring-offset-canvas")}
+              >
+              <Group
+                title={`${c.icon ? c.icon + " " : ""}${c.name}`}
+                action={<button onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> Edit</button>}
+                flush
+              >
+                {canEditDishes && !items.some((m) => m.categoryId === c.id) && (
                   <button onClick={() => setEdit("new", c.id)} className="flex w-full items-center gap-2 px-4 py-3.5 text-left text-[14px] font-semibold text-jade lg:px-5">
                     <Plus size={16} /> Add the first dish to {c.name}
                   </button>
@@ -137,8 +186,9 @@ export default function MenuPage() {
                 {items.filter((m) => m.categoryId === c.id).map((m) => {
                   const margin = Math.round(((m.price - m.cost) / m.price) * 100);
                   return (
-                    <div key={m.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5">
-                      <button onClick={() => setEdit(m)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                    <div key={m.id} className={clsx("flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5", drag?.id === m.id && "opacity-40")}>
+                      <DragHandle name={m.name} onPointerDown={startDrag(m)} />
+                      <button onClick={() => (canEditDishes ? setEdit(m) : toast("Ask the owner or your manager to change this dish. You can mark it sold out here."))} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                         <PhotoSlide item={m} className="h-11 w-11 shrink-0 rounded-[12px]" />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -146,7 +196,7 @@ export default function MenuPage() {
                             <span className={clsx("truncate text-[15px] font-medium", !m.available && "text-muted")}>{m.name}</span>
                           </div>
                           <div className="text-[13px] text-muted tnum">
-                            {inr(m.price)}{m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>} · {m.soldThisWeek} sold
+                            {hasSizes(m) ? `${sizesOf(m).map((z) => `${z.name} ${inr(z.price)}`).join(" · ")}` : inr(m.price)}{m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>} · {m.soldThisWeek} sold
                             {m.photos?.length ? ` · ${m.photos.length} photos` : ""}
                           </div>
                         </div>
@@ -155,15 +205,17 @@ export default function MenuPage() {
                         label={`${m.name} available`}
                         checked={m.available}
                         onChange={(v) => {
-                          menuActions.update(m.id, { available: v });
-                          toast(v ? `${m.name} is back on the menu` : `${m.name} marked sold out everywhere`);
+                          menuActions.setAvailable(m.id, v);
+                          toast(v ? `${m.name} is back on the menu` : `${m.name} marked sold out${many ? ` at ${outletNow.name}` : ""}`);
                         }}
                       />
                     </div>
                   );
                 })}
               </Group>
+              </div>
             ))}
+            <DragGhost drag={drag} label={catName} />
           </div>
         ) : (
           <div className="space-y-6">
@@ -185,40 +237,7 @@ export default function MenuPage() {
             })()}
 
             <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-              <Group title="Popularity vs profit, this week" overflowVisible>
-                <div className="relative aspect-[4/3] w-full">
-                  <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px overflow-hidden rounded-[14px] bg-line/70">
-                    {(["puzzle", "star", "dog", "plowhorse"] as Quadrant[]).map((q) => (
-                      <div key={q} className="relative bg-sunken/40 p-2.5">
-                        <span className="rounded-full bg-surface/80 px-2 py-0.5 text-[12px] font-semibold text-muted">{qMeta[q].name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {items.map((m) => {
-                    const x = (m.soldThisWeek / maxSold) * 92 + 4;
-                    const y = 100 - (((m.price - m.cost) / maxMargin) * 88 + 6);
-                    const q = quadrant(m);
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => setEdit(m)}
-                        title={`${m.name} · ${m.soldThisWeek} sold · ${inr(m.price - m.cost)} margin`}
-                        className={clsx(
-                          "group absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface transition hover:z-20 hover:scale-150 focus-visible:z-20",
-                          q === "star" ? "bg-jade" : q === "plowhorse" ? "bg-sky" : q === "puzzle" ? "bg-saffron" : "bg-rose",
-                        )}
-                        style={{ left: `${x}%`, top: `${y}%` }}
-                      >
-                        <span className="pointer-events-none absolute bottom-4 left-1/2 z-30 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11px] text-canvas group-hover:block group-focus-visible:block">{m.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 flex justify-between text-[12px] text-faint">
-                  <span>Fewer orders</span>
-                  <span>More orders</span>
-                </div>
-              </Group>
+              <EarnedChart items={items} quadrant={quadrant} onOpen={setEdit} />
 
               <div className="space-y-4">
                 {(["star", "puzzle", "plowhorse", "dog"] as Quadrant[]).map((q) => (
@@ -244,6 +263,27 @@ export default function MenuPage() {
         )}
       </Page>
 
+      <Sheet open={copyOpen} onClose={() => setCopyOpen(false)} title={`Copy dishes to ${outletNow.name}`}>
+        <p className="text-[14.5px] text-muted">The dishes are copied with their prices, photos and categories. After that each outlet changes its own; dishes {outletNow.name} already has (same name) are skipped.</p>
+        <div className="mt-4 space-y-2.5">
+          {otherOutlets.map((o) => (
+            <Button
+              key={o.id}
+              size="lg"
+              variant="tinted"
+              className="w-full"
+              onClick={() => {
+                const n = menuActions.copyMenu(o.id, outletNow.id);
+                setCopyOpen(false);
+                toast(n ? `Copied ${n} dishes from ${o.name}` : `${outletNow.name} already has all of ${o.name}'s dishes`);
+              }}
+            >
+              From {o.name} ({o.dishes} dishes)
+            </Button>
+          ))}
+        </div>
+      </Sheet>
+
       <Sheet
         open={!!edit}
         onClose={() => setEdit(null)}
@@ -267,6 +307,7 @@ export default function MenuPage() {
                 tags: draft.tags,
                 cost: Math.max(0, Math.round(Number(draft.cost) || 0)),
                 options: draft.options.filter((g) => g.name && g.choices.some((c) => c.name)).map((g) => ({ ...g, choices: g.choices.filter((c) => c.name) })),
+                sizes: sized ? sizes : [],
               };
               if (editing) menuActions.update(editing.id, patch);
               else
@@ -282,7 +323,7 @@ export default function MenuPage() {
               toast(editing ? "Dish saved · guests see it on the QR menu now" : "Dish added · it's on the guest menu now");
             }}
           >
-            {!draftOk ? "Add a name, price and category" : editing ? "Save dish" : "Add dish"}
+            {sizesBad ? "Give every size a name and price" : !draftOk ? "Add a name, price and category" : editing ? "Save dish" : "Add dish"}
           </Button>
         }
       >
@@ -291,7 +332,11 @@ export default function MenuPage() {
           <Field label="Dish name"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Paneer Tikka" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Price (₹, before GST)">
-              <input className={inputCls} inputMode="decimal" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
+              {sized ? (
+                <div className="flex h-12 items-center rounded-ctl bg-sunken/60 px-4 text-[15px] text-muted">from ₹{priceNum} · sizes below</div>
+              ) : (
+                <input className={inputCls} inputMode="decimal" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
+              )}
             </Field>
             <Field label="Category">
               <select
@@ -354,13 +399,119 @@ export default function MenuPage() {
               ))}
             </div>
           </Field>
-          <Field label="Choices for guests (spice, add-ons, size)">
+          <div>
+            <div className="mb-1.5 text-[13px] font-medium text-muted">Sizes (each with its own price)</div>
+            <SizesEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
+          </div>
+          <Field label="Choices for guests (spice, add-ons)">
             <OptionsEditor groups={draft.options} onChange={(options) => setDraft({ ...draft, options })} />
           </Field>
           <Field label="Cost per plate (₹)" hint="What the ingredients cost you. Used for margins in “What's working”. Optional.">
             <input className={inputCls} inputMode="decimal" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
           </Field>
+          {editing && canEditDishes && (
+            confirmDel ? (
+              <div className="space-y-2 rounded-group bg-rose-soft/50 p-4">
+                <p className="text-[14px]">
+                  Delete <b>{editing.name}</b> from {outletNow.name}? Old bills and reports keep its name.
+                  {isStampReward(editing.id) && " It is the free dish of your stamp card: pick another dish there after this."}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="plain" onClick={() => setConfirmDel(false)}>Keep</Button>
+                  <Button variant="danger" onClick={() => { menuActions.remove(editing.id); setConfirmDel(false); setEdit(null); toast(`${editing.name} deleted`); }}>Delete dish</Button>
+                </div>
+              </div>
+            ) : (
+              <Button variant="danger" className="w-full" onClick={() => setConfirmDel(true)}><Trash2 size={16} /> Delete dish</Button>
+            )
+          )}
         </div>
+      </Sheet>
+
+      {/* edit a category */}
+      <Sheet
+        open={!!catEdit}
+        onClose={() => setCatEdit(null)}
+        title="Edit category"
+        footer={
+          catEdit && (() => {
+            const name = catEdit.name.trim();
+            const taken = cats.some((x) => x.id !== catEdit.id && x.name.trim().toLowerCase() === name.toLowerCase());
+            return (
+              <div className="space-y-2">
+                {taken && <p className="text-center text-[13px] font-medium text-rose">{name} already exists</p>}
+                <div className="grid grid-cols-[auto_1fr] gap-2">
+                  <Button variant="plain" className="!text-rose" onClick={() => askDelete(catEdit.id)}><Trash2 size={16} /> Delete</Button>
+                  <Button disabled={!name || taken} onClick={() => { categoryActions.update(catEdit.id, { name, icon: catEdit.icon }); toast(`${name} saved`); setCatEdit(null); }}>Save</Button>
+                </div>
+              </div>
+            );
+          })()
+        }
+      >
+        {catEdit && (
+          <div className="space-y-4">
+            <Field label="Category name">
+              <input autoFocus className={inputCls} value={catEdit.name} onChange={(e) => setCatEdit({ ...catEdit, name: e.target.value })} placeholder="e.g. Cold drinks" />
+            </Field>
+            <div>
+              <div className="mb-1.5 text-[13px] font-medium text-muted">Icon (shown in the guest menu side bar)</div>
+              <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-10">
+                {[...new Set([catEdit.icon, ...CAT_ICONS])].map((x) => (
+                  <button key={x} aria-pressed={catEdit.icon === x} onClick={() => setCatEdit({ ...catEdit, icon: x })} className={clsx("flex aspect-square items-center justify-center rounded-[10px] text-[20px]", catEdit.icon === x ? "bg-jade-soft ring-2 ring-jade" : "bg-sunken")}>
+                    {x}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Sheet>
+
+      {/* delete a category */}
+      <Sheet
+        open={!!catDel}
+        onClose={() => setCatDel(null)}
+        title={`Delete ${cats.find((x) => x.id === catDel?.id)?.name ?? "category"}?`}
+        footer={
+          catDel && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="plain" onClick={() => setCatDel(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  const c = cats.find((x) => x.id === catDel.id);
+                  const n = items.filter((m) => m.categoryId === catDel.id).length;
+                  const to = cats.find((x) => x.id === catDel.dishes);
+                  categoryActions.remove(catDel.id, n ? (catDel.dishes === "delete" ? "delete" : { moveTo: catDel.dishes }) : null);
+                  toast(`${c?.name ?? "Category"} deleted${n ? (to ? ` · ${n} dishes moved to ${to.name}` : ` with its ${n} dishes`) : ""}`);
+                  setCatDel(null);
+                }}
+              >
+                Delete category
+              </Button>
+            </div>
+          )
+        }
+      >
+        {catDel && (() => {
+          const n = items.filter((m) => m.categoryId === catDel.id).length;
+          const others = cats.filter((x) => x.id !== catDel.id);
+          return n === 0 ? (
+            <p className="text-[15px] text-muted">This category has no dishes. Guests won&apos;t see it any more.</p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[15px] text-muted">It has <b className="text-ink">{n} {n === 1 ? "dish" : "dishes"}</b>. What should happen to {n === 1 ? "it" : "them"}?</p>
+              <Field label="Dishes in this category">
+                <select className={inputCls} value={catDel.dishes} onChange={(e) => setCatDel({ ...catDel, dishes: e.target.value })}>
+                  {others.map((o) => <option key={o.id} value={o.id}>Move to {o.icon ? o.icon + " " : ""}{o.name}</option>)}
+                  <option value="delete">Delete the {n === 1 ? "dish" : `${n} dishes`} too</option>
+                </select>
+              </Field>
+              {catDel.dishes === "delete" && <p className="rounded-ctl bg-rose-soft px-3 py-2 text-[13.5px] text-rose">The dishes are removed from your menu. Past bills and reports keep them.</p>}
+            </div>
+          );
+        })()}
       </Sheet>
 
       <Sheet open={catsOpen} onClose={() => setCatsOpen(false)} title="Categories">
@@ -371,25 +522,17 @@ export default function MenuPage() {
               const n = items.filter((m) => m.categoryId === c.id).length;
               return (
                 <div key={c.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0">
-                  <select
-                    aria-label={`Icon for ${c.name}`}
-                    value={c.icon ?? ""}
-                    onChange={(e) => categoryActions.update(c.id, { icon: e.target.value })}
-                    className="h-10 w-[4.25rem] rounded-[10px] bg-sunken pl-3 text-[20px] outline-none"
-                  >
-                    {[...new Set([c.icon ?? "🍽️", ...CAT_ICONS])].map((x) => <option key={x} value={x}>{x}</option>)}
-                  </select>
-                  <input
-                    aria-label="Category name"
-                    value={c.name}
-                    onChange={(e) => categoryActions.update(c.id, { name: e.target.value })}
-                    className="h-10 min-w-0 flex-1 rounded-[10px] bg-transparent px-2 text-[15px] font-medium outline-none focus:bg-sunken/60"
-                  />
-                  <span className="text-[13px] text-muted tnum">{n} {n === 1 ? "dish" : "dishes"}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-sunken text-[20px]">{c.icon || "🍽️"}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-medium">{c.name}</div>
+                    <div className="text-[12.5px] text-muted tnum">{n} {n === 1 ? "dish" : "dishes"}</div>
+                  </div>
                   <div className="flex">
                     <button aria-label="Move up" disabled={i === 0} onClick={() => categoryActions.move(c.id, -1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowUp size={16} /></button>
                     <button aria-label="Move down" disabled={i === cats.length - 1} onClick={() => categoryActions.move(c.id, 1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowDown size={16} /></button>
                   </div>
+                  <button aria-label={`Edit ${c.name}`} onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink"><Pencil size={15} /></button>
+                  <button aria-label={`Delete ${c.name}`} onClick={() => askDelete(c.id)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose/10 text-rose"><Trash2 size={15} /></button>
                 </div>
               );
             })}
@@ -442,5 +585,69 @@ function NewCategory({
         <Button disabled={!value.name.trim()} onClick={onAdd}>Add category</Button>
       </div>
     </div>
+  );
+}
+
+/** "What each dish earned you this week": plates sold × profit per plate, biggest first. */
+const qBar: Record<Quadrant, string> = { star: "bg-jade", plowhorse: "bg-sky", puzzle: "bg-saffron", dog: "bg-rose" };
+const qShort: Record<Quadrant, string> = { star: "Star", plowhorse: "Workhorse", puzzle: "Hidden gem", dog: "Rethink" };
+function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant: (m: MenuItem) => Quadrant; onOpen: (m: MenuItem) => void }) {
+  const [all, setAll] = useState(false);
+  const sold = items.filter((m) => m.soldThisWeek > 0).map((m) => ({ m, per: Math.max(0, m.price - m.cost), q: quadrant(m) })).map((r) => ({ ...r, earned: r.per * r.m.soldThisWeek }));
+  sold.sort((a, b) => b.earned - a.earned || b.m.soldThisWeek - a.m.soldThisWeek);
+  const none = items.filter((m) => m.soldThisWeek === 0);
+  const max = Math.max(1, ...sold.map((r) => r.earned));
+  const total = sold.reduce((s, r) => s + r.earned, 0);
+  const noCost = items.some((m) => !m.cost);
+  const shown = all ? sold : sold.slice(0, 10);
+  return (
+    <Group title="What each dish earned you this week">
+      <p className="text-[13px] leading-relaxed text-muted">
+        Each bar = <b className="text-ink">plates sold × profit per plate</b>. Longer bar, more money. The colour tells you what to do with the dish (see the boxes).
+        {noCost && " Dishes without a cost per plate count the full price as profit, so add costs for true numbers."}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-muted">
+        {(["star", "plowhorse", "puzzle", "dog"] as Quadrant[]).map((q) => (
+          <span key={q} className="inline-flex items-center gap-1.5"><span className={clsx("h-2.5 w-2.5 rounded-full", qBar[q])} />{qShort[q]}</span>
+        ))}
+      </div>
+      {sold.length === 0 ? (
+        <p className="mt-4 rounded-[14px] bg-sunken/60 p-4 text-[14px] text-muted">No dish was ordered in the last 7 days yet. Bars show up as orders come in.</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {shown.map(({ m, per, q, earned }) => (
+            <li key={m.id}>
+              <button onClick={() => onOpen(m)} title={`${m.name}: ${m.soldThisWeek} sold × ${inr(per)} = ${inr(earned)}`} className="group block w-full text-left">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate text-[14.5px] font-medium group-hover:underline">{m.name}</span>
+                  <span className="shrink-0 text-[14.5px] font-semibold tnum">{inr(earned)}</span>
+                </div>
+                <div className="mt-1 h-2.5 w-full rounded-full bg-sunken">
+                  <div className={clsx("h-full rounded-full", qBar[q])} style={{ width: `${Math.max(2, (earned / max) * 100)}%` }} />
+                </div>
+                <div className="mt-1 text-[12.5px] text-muted tnum">
+                  {qShort[q]} · {m.soldThisWeek} sold × {inr(per)} profit
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {sold.length > 10 && (
+        <button onClick={() => setAll((v) => !v)} className="mt-3 text-[13.5px] font-semibold text-jade">{all ? "Show top 10" : `Show all ${sold.length} dishes`}</button>
+      )}
+      {sold.length > 0 && <div className="mt-4 flex justify-between border-t border-line/80 pt-3 text-[14px]"><span className="text-muted">Total profit from all dishes this week</span><b className="tnum">{inr(total)}</b></div>}
+      {none.length > 0 && (
+        <div className="mt-4">
+          <div className="text-[12.5px] font-semibold text-muted">Not ordered this week ({none.length})</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {none.slice(0, all ? undefined : 12).map((m) => (
+              <button key={m.id} onClick={() => onOpen(m)} className="rounded-full bg-sunken px-2.5 py-1 text-[12.5px] font-medium hover:bg-line">{m.name}</button>
+            ))}
+            {!all && none.length > 12 && <span className="px-1 py-1 text-[12.5px] text-muted">+{none.length - 12} more</span>}
+          </div>
+        </div>
+      )}
+    </Group>
   );
 }

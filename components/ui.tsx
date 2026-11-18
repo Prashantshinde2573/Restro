@@ -192,13 +192,14 @@ export function Chips<T extends string>({
   options: { value: T; label: string; count?: number }[];
 }) {
   return (
-    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+    // phones: one row that scrolls, fading at the edge so it's clear there is more; wide screens: wrap
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pr-8 [mask-image:linear-gradient(to_right,#000_86%,transparent)] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:[mask-image:none]">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           className={clsx(
-            "shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition",
+            "min-h-[38px] shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition",
             value === o.value ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
           )}
         >
@@ -246,7 +247,12 @@ export function DietMark({ diet }: { diet: Diet }) {
   );
 }
 
-export function Avatar({ name, hue = 160, size = 36 }: { name: string; hue?: number; size?: number }) {
+export function Avatar({ name, hue = 160, size = 36, photo }: { name: string; hue?: number; size?: number; photo?: string }) {
+  if (photo)
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={photo} alt={name} width={size} height={size} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />
+    );
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold"
@@ -264,20 +270,6 @@ export function Avatar({ name, hue = 160, size = 36 }: { name: string; hue?: num
 }
 
 /* Dish art placeholder until real photos are uploaded to Storage */
-export function DishArt({ hue, className }: { hue: number; name?: string; className?: string }) {
-  return (
-    <div
-      aria-hidden
-      className={clsx("relative overflow-hidden", className)}
-      style={{ background: `linear-gradient(150deg, hsl(${hue} 70% 88%), hsl(${hue} 55% 74%))` }}
-    >
-      <span
-        className="absolute left-1/2 top-1/2 h-[64%] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{ background: `radial-gradient(circle, hsl(${hue} 60% 62%) 0 42%, rgb(255 255 255 / .55) 43% 60%, rgb(255 255 255 / .25) 61%)` }}
-      />
-    </div>
-  );
-}
 
 /* ---------- Sheet: bottom sheet on phones, side panel on desktop ----------
    Rendered in a portal on <body> so no page container (sticky headers,
@@ -287,6 +279,25 @@ export function DishArt({ hue, className }: { hue: number; name?: string; classN
    the last sheet closes. */
 const sheetStack: number[] = [];
 let sheetSeq = 0;
+
+/**
+ * A sheet closed by its button leaves its history entry behind, marked spent. When the user next
+ * presses back from it, we skip the same-page entry underneath so one back press is enough.
+ */
+let onSpent = false; // the screen we're on is a spent sheet entry
+let spentHref = "";
+let watching = false;
+function watchSpent() {
+  if (watching || typeof window === "undefined") return;
+  watching = true;
+  window.addEventListener("popstate", () => {
+    const arrivedSpent = !!(window.history.state as { __spent?: boolean } | null)?.__spent;
+    const leftSpent = onSpent;
+    onSpent = arrivedSpent;
+    // back from a spent entry lands on the same page underneath: take one more step
+    if (leftSpent && !arrivedSpent && window.location.href === spentHref) window.history.back();
+  });
+}
 
 export function Sheet({
   open,
@@ -322,9 +333,14 @@ export function Sheet({
     document.body.style.overflow = "hidden";
     // Phone back button / swipe-back closes the sheet instead of leaving the page.
     // The extra history entry keeps the router's own state so going back stays on this page.
+    watchSpent();
     let mine = false;
     try {
-      window.history.pushState({ ...(window.history.state ?? {}), __sheet: id }, "", window.location.href);
+      const { __spent: spent, ...base } = (window.history.state ?? {}) as Record<string, unknown>;
+      // reuse a spent entry (from a sheet closed earlier) instead of stacking up new ones
+      if (spent) window.history.replaceState({ ...base, __sheet: id }, "", window.location.href);
+      else window.history.pushState({ ...base, __sheet: id }, "", window.location.href);
+      onSpent = false;
       mine = true;
     } catch {}
     const onPop = () => {
@@ -340,8 +356,18 @@ export function Sheet({
       const i = sheetStack.indexOf(id);
       if (i >= 0) sheetStack.splice(i, 1);
       if (sheetStack.length === 0) document.body.style.overflow = "";
-      // closed by a button: take our history entry back off (only if it's still on top)
-      if (mine && (window.history.state as { __sheet?: number } | null)?.__sheet === id) window.history.back();
+      // Closed by a button. Going back here (history.back) is async: a tap on a tab right after it
+      // got undone ("tabs sometimes don't work"). Instead the entry is marked spent; the next back
+      // press skips over it.
+      const st = window.history.state as { __sheet?: number } | null;
+      if (mine && st?.__sheet === id) {
+        const { __sheet: _s, ...rest } = st;
+        try {
+          window.history.replaceState({ ...rest, __spent: true }, "", window.location.href);
+          onSpent = true;
+          spentHref = window.location.href;
+        } catch {}
+      }
     };
   }, [open, setLayer]);
 
@@ -383,7 +409,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 export const inputCls =
-  "h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade";
+  "h-12 w-full rounded-ctl bg-surface px-4 text-[16px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-1 focus:ring-jade/40";
 
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -405,41 +431,6 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 }
 
 /* ---------- Tiny charts (SVG, no chart lib) ---------- */
-export function Bars({
-  data,
-  height = 120,
-  highlightLast,
-  format,
-}: {
-  data: { label: string; value: number; ghost?: number }[];
-  height?: number;
-  highlightLast?: boolean;
-  format?: (n: number) => string;
-}) {
-  const max = Math.max(...data.map((d) => Math.max(d.value, d.ghost ?? 0)), 1);
-  return (
-    <div className="flex items-end gap-1.5" style={{ height }}>
-      {data.map((d, i) => {
-        const isLast = i === data.length - 1;
-        return (
-          <div key={d.label} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
-            <div className="relative flex w-full flex-1 items-end justify-center">
-              {d.ghost !== undefined && (
-                <div className="absolute bottom-0 w-full rounded-[5px] bg-sunken" style={{ height: `${(d.ghost / max) * 100}%` }} />
-              )}
-              <div
-                title={format ? format(d.value) : String(d.value)}
-                className={clsx("relative w-full rounded-[5px] transition-all", highlightLast && !isLast ? "bg-jade/35" : "bg-jade")}
-                style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value ? 3 : 0 }}
-              />
-            </div>
-            <span className="text-[11px] text-faint tnum">{d.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export function Ring({ value, size = 64, stroke = 7, tone = "jade" }: { value: number; size?: number; stroke?: number; tone?: "jade" | "saffron" | "rose" }) {
   const r = (size - stroke) / 2;
@@ -461,16 +452,6 @@ export function Ring({ value, size = 64, stroke = 7, tone = "jade" }: { value: n
         style={{ transition: "stroke-dashoffset .8s cubic-bezier(.2,.9,.3,1)" }}
       />
     </svg>
-  );
-}
-
-export function Stat({ label, value, delta, tone }: { label: string; value: ReactNode; delta?: string; tone?: "up" | "down" }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[13px] text-muted">{label}</div>
-      <div className="mt-0.5 text-[22px] font-semibold tracking-tight tnum">{value}</div>
-      {delta && <div className={clsx("text-[12px] font-medium tnum", tone === "down" ? "text-rose" : "text-jade")}>{delta}</div>}
-    </div>
   );
 }
 

@@ -9,13 +9,14 @@ import { useEffect, useRef, useState } from "react";
 import { IconArrow, IconMenu } from "./icons";
 import { Brand } from "./mockups";
 import { SectionHead } from "./head";
+import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/lib/site";
 import { CallBack, LeadForm } from "./lead";
 import { SCROLL_LOCK_EVENT, gsap, lockScroll, pageScrollY, reducedMotion, scrollLocked, useLenis } from "./motion";
 
 const links = [
   { href: "/#features", label: "Features" },
   { href: "/#story", label: "How it works" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/#contact", label: "Contact" },
 ];
 
@@ -67,10 +68,12 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           light && "text-white",
         )}
       >
+        {/* same width and side space as the page content below it (hero: 1400px, sections: 1240px) */}
+        <div className={clsx("mx-auto mt-3 transition-[max-width,padding] duration-500", light ? "max-w-[1400px] px-3 sm:px-8 lg:px-14" : "max-w-[1240px] px-3 sm:px-5 lg:px-8")}>
         <div
           className={clsx(
-            "mx-3 mt-3 flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:mx-6 sm:px-4",
-            light ? "max-w-[1400px] border border-transparent sm:mx-8 sm:px-6 lg:mx-auto lg:px-10" : "max-w-6xl lg:mx-auto",
+            "flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:px-4",
+            light ? "border border-transparent sm:px-2 lg:px-0" : "",
             !light && (scrolled || open ? "nav-solid" : "glass"),
           )}
         >
@@ -79,7 +82,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           </Link>
           <nav className={clsx("hidden items-center gap-1 whitespace-nowrap lg:flex", light ? "mx-auto" : "ml-6")} aria-label="Main">
             {links.map((l) => (
-              <Link key={l.href} href={l.href} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : "text-ink/65 hover:bg-white/60 hover:text-ink")}>
+              <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : path === l.href ? "bg-white/70 font-semibold text-ink" : "text-ink/65 hover:bg-white/60 hover:text-ink")}>
                 {l.label}
               </Link>
             ))}
@@ -100,6 +103,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
             </button>
           </div>
         </div>
+        </div>
       </header>
 
       {open && (
@@ -117,6 +121,7 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
           <div className="mt-auto grid gap-3">
             <div className="overflow-hidden"><Link data-m href="/login" className="glass flex h-14 items-center justify-center rounded-full text-[16px] font-semibold">Sign in</Link></div>
             <div className="overflow-hidden"><Link data-m href="/#contact" onClick={() => setOpen(false)} className="flex h-14 items-center justify-center rounded-full bg-jade text-[16px] font-semibold text-white">Book a free demo</Link></div>
+            <div className="overflow-hidden"><div data-m className="flex justify-center pt-2"><Socials /></div></div>
           </div>
         </div>
       )}
@@ -194,24 +199,6 @@ export function MobileCta() {
 export const CONTACT_WA = (process.env.NEXT_PUBLIC_CONTACT_WHATSAPP || DEFAULT_CONTACT_WHATSAPP).replace(/\D/g, "");
 export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL;
 
-/** Square WhatsApp button stuck to the right edge, halfway down the screen. */
-export function WhatsAppTab() {
-  if (!CONTACT_WA) return null;
-  return (
-    <a
-      href={`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent("Hi Restropi, I'd like to know more.")}`}
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Chat with Restropi on WhatsApp"
-      className="group fixed right-0 top-1/2 z-[45] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-l-[14px] bg-[#25D366] text-white shadow-[0_12px_30px_-12px_rgb(16_24_20/.55)] transition-[width] duration-300 hover:w-14 sm:h-14 sm:w-14 sm:hover:w-16"
-    >
-      <svg width="26" height="26" viewBox="0 0 32 32" fill="currentColor" aria-hidden>
-        <path d="M16.04 3C9.0 3 3.3 8.7 3.3 15.74c0 2.25.6 4.45 1.72 6.38L3.2 29l7.05-1.78a12.7 12.7 0 0 0 5.79 1.4h.01c7.04 0 12.75-5.7 12.75-12.74C28.8 8.7 23.08 3 16.04 3zm0 23.4h-.01a10.6 10.6 0 0 1-5.4-1.48l-.39-.23-4.18 1.06 1.12-4.07-.25-.42a10.6 10.6 0 0 1-1.62-5.62c0-5.86 4.77-10.63 10.64-10.63 5.86 0 10.63 4.77 10.63 10.64 0 5.86-4.77 10.62-10.54 10.62zm5.83-7.96c-.32-.16-1.89-.93-2.18-1.04-.29-.1-.5-.16-.72.16-.21.32-.82 1.04-1 1.25-.19.21-.37.24-.69.08-.32-.16-1.35-.5-2.57-1.59-.95-.85-1.59-1.9-1.78-2.22-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.56.16-.19.21-.32.32-.53.1-.21.05-.4-.03-.56-.08-.16-.72-1.73-.98-2.37-.26-.62-.52-.54-.72-.55h-.61c-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.57 1.14 3.08 1.3 3.29.16.21 2.24 3.42 5.43 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.89-.77 2.15-1.52.27-.75.27-1.39.19-1.52-.08-.13-.29-.21-.61-.37z" />
-      </svg>
-    </a>
-  );
-}
-
 /** "Book a free demo" dialog. Any link to #contact opens it. */
 function DemoDialog() {
   const [open, setOpen] = useState(false);
@@ -244,7 +231,7 @@ function DemoDialog() {
   return (
     <div role="dialog" aria-modal="true" aria-label="Book a free demo" className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/40 p-2 backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setOpen(false)}>
       <div className="relative w-full max-w-[460px] animate-[sheet-in_.45s_cubic-bezier(.2,.8,.2,1)]" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => setOpen(false)} aria-label="Close" className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f5f3] text-ink/60 hover:text-ink">
+        <button onClick={() => setOpen(false)} aria-label="Close" className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f5f3] text-ink/70 hover:text-ink">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
         <LeadForm />
@@ -253,10 +240,27 @@ function DemoDialog() {
   );
 }
 
+/** Round social buttons: Instagram, and WhatsApp when a number is set. */
+function Socials({ className }: { className?: string }) {
+  const btn = "flex h-11 w-11 items-center justify-center rounded-full bg-ink text-white transition hover:-translate-y-0.5 hover:bg-jade";
+  return (
+    <div className={clsx("flex items-center gap-2.5", className)}>
+      <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" aria-label={`Restropi on Instagram (${INSTAGRAM_HANDLE})`} title={`Instagram ${INSTAGRAM_HANDLE}`} className={btn}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" /></svg>
+      </a>
+      {CONTACT_WA && (
+        <a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" aria-label="Message Restropi on WhatsApp" title="WhatsApp" className={btn}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.6 11.6 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.7-1.2 2.2 2.2 0 0 0 .2-1.2c0-.1-.2-.2-.5-.3Z" /></svg>
+        </a>
+      )}
+    </div>
+  );
+}
+
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
-  { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/#pricing", label: "Pricing" }, { href: "/pricing", label: "Compare plans" }] },
+  { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/pricing", label: "Pricing" }, { href: "/pricing#compare", label: "Compare plans" }] },
   { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
-  { t: "Restropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/#contact", label: "Contact us" }] },
+  { t: "Restropi", links: [{ href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/privacy", label: "Privacy policy" }, { href: "/#contact", label: "Contact us" }] },
 ];
 
 export function SiteFooter() {
@@ -276,7 +280,7 @@ export function SiteFooter() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>
               Book a free demo
             </a>
-            <Link href="/#pricing" className="flex h-14 w-full items-center justify-center rounded-[16px] bg-white px-7 text-[16px] font-semibold ring-1 ring-black/[.06] transition hover:bg-jade-soft sm:w-auto">
+            <Link href="/pricing" className="flex h-14 w-full items-center justify-center rounded-[16px] bg-white px-7 text-[16px] font-semibold ring-1 ring-black/[.06] transition hover:bg-jade-soft sm:w-auto">
               See plans (from ₹699/mo)
             </Link>
           </div>
@@ -287,27 +291,27 @@ export function SiteFooter() {
           <div className="grid gap-10 lg:grid-cols-[1.1fr_1.6fr] lg:gap-16">
             <div>
               <Brand className="h-9" />
+              <Socials className="mt-5" />
               <p className="mt-7 text-[16px] font-semibold">Want a call from us?</p>
               <div className="mt-3 max-w-[440px]"><CallBack /></div>
-              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/45">We only use your number to call you about Restropi. No spam, no sharing.</p>
+              <p className="mt-3 max-w-[440px] text-[12.5px] leading-relaxed text-ink/65">We only use your number to call you about Restropi. No spam, no sharing.</p>
             </div>
             <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
               {footerCols.map((c) => (
                 <div key={c.t}>
                   <div className="text-[15px] font-semibold">{c.t}</div>
-                  <ul className="mt-4 space-y-3 text-[15px] text-ink/60">
+                  <ul className="mt-4 space-y-3 text-[15px] text-ink/70">
                     {c.links.map((l) => (
-                      <li key={l.label}><Link href={l.href} className="transition hover:text-jade">{l.label}</Link></li>
+                      <li key={l.label}><Link href={l.href} className="inline-block py-1 transition hover:text-jade">{l.label}</Link></li>
                     ))}
                     {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
-                    {c.t === "Restropi" && CONTACT_WA && <li><a href={`https://wa.me/${CONTACT_WA}`} target="_blank" rel="noreferrer" className="transition hover:text-jade">WhatsApp</a></li>}
-                    {c.t === "Restropi" && <li className="text-ink/45">Pune · Satara · Kolhapur</li>}
+                    {c.t === "Restropi" && <li className="text-ink/65">Pune · Satara · Kolhapur</li>}
                   </ul>
                 </div>
               ))}
             </div>
           </div>
-          <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/45 sm:flex-row sm:items-center">
+          <div className="mt-12 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-[13.5px] text-ink/65 sm:flex-row sm:items-center">
             <span>© {new Date().getFullYear()} Restropi. All rights reserved. · UPI payments go straight to your bank.</span>
             <span className="sm:ml-auto">Made in Pune for Indian restaurants</span>
           </div>

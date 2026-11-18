@@ -14,18 +14,44 @@
 //   guest  → anonymous sign-in, no screen
 import { createClient, type RealtimeChannel, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { cloudConfigured, createStore, remoteBindings, setReady, setRemoteWriter, type RemoteBinding } from "./store";
+import { diffFields, flushAll, initQueue, send, setQueueScope, waitingIds } from "./sync-queue";
 
 export { cloudConfigured };
 
 import { SUPABASE_KEY as KEY, SUPABASE_URL as URL_ } from "./config";
 
 let _sb: SupabaseClient | null = null;
+
+/**
+ * A sign-in saved on this device for a different Supabase project (e.g. after the
+ * move to the Mumbai project) is useless there: every request fails with 401 and the
+ * app waits forever. Drop it, so the person simply sees the sign-in screen again.
+ */
+function dropForeignSession() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("restropi.auth");
+    if (!raw) return;
+    const token = (JSON.parse(raw) as { access_token?: string })?.access_token;
+    const part = token?.split(".")[1];
+    if (!part) return;
+    const iss = (JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/"))) as { iss?: string })?.iss;
+    if (typeof iss === "string" && !iss.startsWith(URL_)) localStorage.removeItem("restropi.auth");
+  } catch {
+    /* unreadable: leave it to the client */
+  }
+}
+
 export function sb(): SupabaseClient {
+  if (!_sb) dropForeignSession();
   if (!_sb) _sb = createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "restropi.auth" } });
   return _sb;
 }
 
 /** Store key → table name. */
+/** Guest table writes, chained per table so they reach the server in order. */
+const partyChain = new Map<string, Promise<unknown>>();
+
 const TABLE: Record<string, string> = {
   outlets: "outlets",
   members: "members",
@@ -38,6 +64,10 @@ const TABLE: Record<string, string> = {
   stock: "stock_items",
   coupons: "coupons",
   activity: "activity",
+  calls: "waiter_calls",
+  attendance: "attendance",
+  staffPay: "staff_pay",
+  payEntries: "pay_entries",
 };
 
 /* ---------------- who is signed in on this device ---------------- */
@@ -81,8 +111,23 @@ export let emailLink: "recovery" | "expired" | null = null;
 export function startCloud(onSignedIn: (s: CloudState) => void) {
   if (!cloudConfigured || started || typeof window === "undefined") return;
   started = true;
+  initQueue(sb, logError);
+  watchCrashes();
   // Read the email link before Supabase takes the tokens out of the address bar.
   const h = new URLSearchParams(window.location.hash.replace(/^#/, "") + "&" + window.location.search.replace(/^\?/, ""));
+  // Our own emails (Resend) carry ?token_hash=…&type=recovery: sign in with it here, then ask for a new password.
+  const tokenHash = h.get("token_hash");
+  if (tokenHash && h.get("type") === "recovery") {
+    window.history.replaceState(null, "", window.location.pathname); // the token never stays in the address bar
+    void sb()
+      .auth.verifyOtp({ token_hash: tokenHash, type: "recovery" })
+      .then(({ error }) => {
+        if (!error) return;
+        emailLink = "expired";
+        setRecovering(false);
+        window.location.replace("/login?link=expired");
+      });
+  }
   if (h.get("type") === "recovery") {
     emailLink = "recovery";
     setRecovering(true);
@@ -213,10 +258,45 @@ export async function signInWithGoogle() {
   const { error } = await sb().auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/login` } });
   if (error) throw new Error(friendly(error.message));
 }
+/** POST to one of our own email routes (app/api/...). Returns null when the route isn't set up (fall back). */
+async function emailApi<T>(path: string, body: unknown, withUser = false): Promise<T | null> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (withUser) {
+    const { data } = await sb().auth.getSession();
+    if (data.session) headers.authorization = `Bearer ${data.session.access_token}`;
+  }
+  let r: Response;
+  try {
+    r = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  } catch {
+    return null;
+  }
+  const j = (await r.json().catch(() => ({}))) as { error?: string };
+  if (r.status === 503 || r.status === 404) return null; // email keys not added yet
+  if (!r.ok) throw new Error(j.error ?? "Something went wrong");
+  return j as T;
+}
+
+/** Forgot password: a branded email from support@restropi.com (Resend); Supabase's own email only as a fallback. */
 export async function sendPasswordReset(email: string) {
+  const done = await emailApi<{ ok: boolean }>("/api/auth/reset", { email: email.trim() });
+  if (done) return;
   const { error } = await sb().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/login` });
   if (error) throw new Error(friendly(error.message));
 }
+
+/** Owner sign-in with a 6-digit code sent to their email. */
+export async function sendSignInCode(email: string) {
+  const done = await emailApi<{ ok: boolean }>("/api/auth/code", { email: email.trim() });
+  if (!done) throw new Error("Email sign-in isn't available right now. Use your password.");
+}
+export async function signInWithCode(email: string, code: string) {
+  const { error } = await sb().auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.replace(/\D/g, ""), type: "email" });
+  if (error) throw new Error(/expired|invalid/i.test(error.message) ? "That code is wrong or has expired. Ask for a new one." : friendly(error.message));
+}
+
+/** Super admin: email the new owner a welcome with a one-time "set your password" link. */
+export const sendWelcomeEmail = (rid: string, resend = false) => emailApi<{ ok: boolean; to?: string; already?: boolean }>("/api/email/welcome", { rid, resend }, true);
 
 async function callFn<T>(name: string, body: unknown, withUser = false): Promise<T> {
   const headers: Record<string, string> = { "content-type": "application/json", apikey: KEY };
@@ -230,10 +310,12 @@ async function callFn<T>(name: string, body: unknown, withUser = false): Promise
   return j as T;
 }
 
-export async function signInStaff(rid: string, memberId: string, pin: string) {
-  const t = await callFn<{ access_token: string; refresh_token: string }>("staff-login", { rid, memberId, pin });
-  const { error } = await sb().auth.setSession(t);
+/** Staff sign in with their mobile number + 4-digit PIN, on any phone or tablet. */
+export async function signInStaff(phone: string, pin: string) {
+  const t = await callFn<{ access_token: string; refresh_token: string; rid: string; memberId: string }>("staff-login", { phone, pin });
+  const { error } = await sb().auth.setSession({ access_token: t.access_token, refresh_token: t.refresh_token });
   if (error) throw new Error(error.message);
+  return { rid: t.rid, memberId: t.memberId };
 }
 /** Guests on the QR page: an anonymous account, no login screen. */
 export async function ensureGuest(rid: string) {
@@ -246,6 +328,8 @@ export async function ensureGuest(rid: string) {
   }
   const uid = data.session!.user.id;
   const cur = getCloud();
+  // An owner or staff login of ANOTHER restaurant on this phone can't read this restaurant's menu.
+  if (!data.session!.user.is_anonymous && cur.rid && cur.rid !== rid && cur.role && cur.role !== "guest") throw new Error("OTHER_RESTAURANT");
   if (cur.role === "guest" || !cur.rid || data.session!.user.is_anonymous) {
     const role: Role = data.session!.user.is_anonymous ? "guest" : (cur.role ?? "guest");
     stateStore.set({ status: "ready", role, rid, uid, memberId: cur.memberId });
@@ -273,6 +357,15 @@ export async function uploadMenuPhoto(blob: Blob): Promise<string> {
   if (error) throw new Error(error.message);
   return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
 }
+/** Upload a profile photo (already cropped and shrunk) and get its public link. */
+export async function uploadProfilePhoto(blob: Blob, memberId: string): Promise<string> {
+  const rid = stateStore.get().rid;
+  if (!rid) throw new Error("Not signed in");
+  const path = `${rid}/profile-${memberId}-${Date.now().toString(36)}.jpg`;
+  const { error } = await sb().storage.from("menu-photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (error) throw new Error(error.message);
+  return sb().storage.from("menu-photos").getPublicUrl(path).data.publicUrl;
+}
 /** Owner or sub admin sets a staff member's 4-digit PIN (stored hashed on the server). */
 export async function setStaffPin(rid: string, memberId: string, pin: string) {
   await flushWrites();
@@ -292,7 +385,7 @@ export async function publicInfo(rid: string): Promise<{ name: string } | null> 
 /* ---------------- this device's copy (screens open instantly, then refresh) ---------------- */
 // Only for the owner's and staff's own restaurant, on their own device. Cleared on sign-out.
 const CACHE = "restropi.cache.";
-const CACHE_MAX: Record<string, number> = { orders: 300, activity: 200 };
+const CACHE_MAX: Record<string, number> = { orders: 300, activity: 200, calls: 50 };
 const cacheKey = (rid: string, key: string) => `${CACHE}${rid}.${key}`;
 function readCache<T>(rid: string, key: string): T | null {
   try {
@@ -332,7 +425,12 @@ const pending = new Set<Promise<unknown>>();
 /** Rows this device just wrote (kept even if the first load doesn't have them yet). */
 const pendingIds = new Set<string>();
 
+/** Stops the catch-up listeners of the current connection. */
+let stopSync: (() => void) | null = null;
+
 function disconnect() {
+  stopSync?.();
+  stopSync = null;
   if (channel) void sb().removeChannel(channel);
   channel = null;
   connected = null;
@@ -342,13 +440,14 @@ function disconnect() {
 type Row = { id: string; data: Record<string, unknown>; number?: number };
 const fromRow = (key: string, r: Row) => (key === "orders" ? { ...r.data, id: r.id, number: r.number ?? r.data.number ?? 0 } : { ...r.data, id: r.id });
 
-type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string };
-const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status });
+type AccountRow = { name: string; owner: string; plan: string; renews_at: string; status: string; logo?: string | null; grace_until?: string | null };
+const fromAccount = (r: AccountRow) => ({ name: r.name, owner: r.owner, plan: r.plan, renewsAt: r.renews_at, status: r.status, logo: r.logo ?? "", graceUntil: r.grace_until ?? undefined });
 
 export function connect(rid: string, role: Role, uid: string) {
   if (connected && connected.rid === rid && connected.role === role && connected.uid === uid) return;
   disconnect();
   connected = { rid, role, uid };
+  setQueueScope(`${uid}.${rid}`);
   const client = sb();
   const cached = role === "owner" || role === "staff";
   const scope = `${uid}.${rid}`; // per person: staff never see the owner's copy on a shared device
@@ -361,6 +460,8 @@ export function connect(rid: string, role: Role, uid: string) {
   };
 
   const ch = client.channel(`restropi:${rid}:${uid}`);
+  // Reloaders per list: used to catch up after the phone slept, lost signal, or the live link dropped.
+  const reloads = new Map<string, () => void>();
   for (const b of remoteBindings) {
     const g = b.spec.guest ?? "none";
     if (role === "guest" && g === "none") {
@@ -375,12 +476,20 @@ export function connect(rid: string, role: Role, uid: string) {
         if (cached) writeCache(scope, b.key, v);
       };
       ch.on("postgres_changes", { event: "UPDATE", schema: "public", table: "restaurants", filter: `id=eq.${rid}` }, (p) => got(fromAccount(p.new as AccountRow)));
-      void client
-        .from("restaurants")
-        .select("name, owner, plan, renews_at, status")
-        .eq("id", rid)
-        .maybeSingle()
-        .then(({ data }) => data && got(fromAccount(data as AccountRow)));
+      // a weak connection (a guest on mobile data) can drop the first try: retry a few times
+      const loadAccount = (tries: number) =>
+        void client
+          .from("restaurants")
+          .select("name, owner, plan, renews_at, status, logo, grace_until")
+          .eq("id", rid)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (connected?.rid !== rid) return;
+            if (error && tries > 0) return void setTimeout(() => loadAccount(tries - 1), 1200 * (4 - tries));
+            if (data) got(fromAccount(data as AccountRow));
+          });
+      loadAccount(3);
+      reloads.set(b.key, () => loadAccount(1));
       continue;
     }
     const table = TABLE[b.key];
@@ -418,11 +527,23 @@ export function connect(rid: string, role: Role, uid: string) {
         if (map.delete(o.id)) publish(b);
       }
     });
-    let q = client.from(table).select(b.key === "orders" ? "id, data, number" : "id, data").eq("rid", rid);
-    if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
-    if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
-    if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
-    void q.then(({ data, error }) => {
+    const query = () => {
+      let q = client.from(table).select(b.key === "orders" ? "id, data, number" : "id, data").eq("rid", rid);
+      if (role === "guest" && g === "own") q = q.eq("guest_uid", uid);
+      if (b.key === "orders") q = q.order("updated_at", { ascending: false }).limit(1000);
+      if (b.key === "activity") q = q.order("updated_at", { ascending: false }).limit(500);
+      if (b.key === "calls") q = q.order("updated_at", { ascending: false }).limit(100);
+      return q;
+    };
+    const load = (tries: number): void => {
+      touched.clear(); // only changes that arrive while this load is on its way beat it
+      void query().then(({ data, error }) => {
+      if (connected?.rid !== rid) return;
+      // a network hiccup (not a "not allowed"): try again before giving up
+      if (error && tries > 0 && /fetch|network|timeout|Failed|503|502|504/i.test(`${error.message} ${error.code ?? ""}`)) {
+        setTimeout(() => load(tries - 1), 1200 * (4 - tries));
+        return;
+      }
       if (error) {
         // not allowed (or the table isn't there yet): don't keep showing an old copy
         if (map.size) {
@@ -436,12 +557,51 @@ export function connect(rid: string, role: Role, uid: string) {
       const onServer = new Set(rows.map((r) => r.id));
       // the server wins over this device's old copy; live changes win over both
       for (const r of rows) if (!touched.has(r.id)) map.set(r.id, fromRow(b.key, r));
-      for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id)) map.delete(id);
+      const waiting = waitingIds();
+      for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id) && !waiting.has(id)) map.delete(id);
       publish(b);
       setReady(b.key, true);
-    });
+      });
+    };
+    load(3);
+    reloads.set(b.key, () => load(1));
   }
-  ch.subscribe();
+
+  // ---- catch up: live changes missed while the screen was off or the connection dropped ----
+  let lastSync = Date.now();
+  let wasDown = false;
+  const resync = (keys?: string[]) => {
+    if (connected?.rid !== rid || connected.uid !== uid) return;
+    if (!keys && Date.now() - lastSync < 4000) return;
+    if (!keys) lastSync = Date.now();
+    for (const [k, f] of reloads) if (!keys || keys.includes(k)) f();
+  };
+  const onVisible = () => document.visibilityState === "visible" && resync();
+  const onOnline = () => resync();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("pageshow", onOnline);
+  // a quiet safety net: guests' order status every 20 s, the team's lists every 2 min (only while on screen)
+  const tick = window.setInterval(
+    () => {
+      if (document.visibilityState !== "visible") return;
+      if (role === "guest") resync(["orders", "calls", "tables"]);
+      else resync();
+    },
+    role === "guest" ? 20_000 : 120_000,
+  );
+  stopSync = () => {
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("online", onOnline);
+    window.removeEventListener("pageshow", onOnline);
+    window.clearInterval(tick);
+  };
+  ch.subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      if (wasDown) resync(); // back online after a drop: fetch what we missed
+      wasDown = false;
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") wasDown = true;
+  });
   channel = ch;
   setRemoteWriter((b, prev, next) => write(rid, role, uid, b, prev, next));
 }
@@ -449,6 +609,8 @@ export function connect(rid: string, role: Role, uid: string) {
 const sortLike = (key: string, list: unknown[]) => {
   const l = list as Record<string, unknown>[];
   if (key === "orders") return l.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if (key === "calls") return l.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (key === "attendance" || key === "payEntries") return l.sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
   if (key === "categories" || key === "outlets") return l.sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0));
   if (key === "tables" || key === "members") return l.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
   return l;
@@ -463,19 +625,15 @@ const track = <T,>(p: PromiseLike<T>) => {
 /** Wait for writes still on their way (e.g. save a person before setting their PIN). */
 export const flushWrites = async () => {
   await Promise.allSettled([...pending]);
+  await flushAll();
 };
 
 function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unknown, next: unknown) {
   const g = b.spec.guest ?? "none";
   if (role === "guest" && g === "none") return;
-  const client = sb();
 
-  if (b.spec.kind === "doc") {
-    if (role !== "owner") return; // only the owner renames; plan changes go through billing
-    const n = next as { name?: string; owner?: string };
-    track(client.from("restaurants").update({ name: n.name, owner: n.owner }).eq("id", rid).then(check));
-    return;
-  }
+  // the restaurant row (name, owner, logo, plan) is changed only by the Restropi team (super admin)
+  if (b.spec.kind === "doc") return;
   const table = TABLE[b.key];
   if (!table) return;
   const before = new Map(((prev as { id: string }[]) ?? []).map((x) => [x.id, x]));
@@ -488,17 +646,28 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
     changed.push(data);
   });
 
+  // Every save goes through the queue (lib/sync-queue.ts): sent at once, or kept and
+  // sent again when the internet is back, and never lost silently.
   if (role === "guest") {
     // Guests: tables only change through a narrow server function; orders are their own.
     if (b.key === "tables") {
-      for (const t of changed) track(client.rpc("guest_set_parties", { r: rid, t: t.id, parties: t.parties ?? [] }).then(check));
+      // one write at a time per table, in order — two quick changes (seat, then "ordered") must not land the wrong way round
+      for (const t of changed) {
+        const id = String(t.id);
+        const run = (partyChain.get(id) ?? Promise.resolve()).then(() => send({ op: "rpc", fn: "guest_set_parties", args: { r: rid, t: id, parties: t.parties ?? [] } }));
+        partyChain.set(id, run.catch(() => undefined));
+        track(run);
+      }
       return;
     }
-    if (b.key !== "orders") return;
+    if (b.key !== "orders" && b.key !== "calls") return;
     for (const o of changed) {
       const isNew = !before.has(String(o.id));
-      const row = { rid, id: String(o.id), data: o, guest_uid: uid };
-      track((isNew ? client.from(table).insert(row) : client.from(table).update({ data: o }).eq("rid", rid).eq("id", String(o.id))).then(check));
+      track(
+        isNew
+          ? send({ op: "insert", table, rows: [{ rid, id: String(o.id), data: o, guest_uid: uid }] })
+          : send({ op: "update", table, rid, id: String(o.id), data: o }),
+      );
     }
     return;
   }
@@ -511,39 +680,162 @@ function write(rid: string, role: Role, uid: string, b: RemoteBinding, prev: unk
   if (b.key === "activity") {
     // the log only grows: new lines are added, nothing is changed or removed
     const fresh = changed.filter((d) => !before.has(String(d.id)));
-    if (fresh.length) track(client.from(table).insert(fresh.map((d) => ({ rid, id: String(d.id), data: d }))).then(check));
+    if (fresh.length) track(send({ op: "insert", table, rows: fresh.map((d) => ({ rid, id: String(d.id), data: d })) }));
     return;
   }
   if (b.key === "orders") {
     // insert new ones and update the rest separately, so an update never uses up an order number
     const fresh = changed.filter((o) => !before.has(String(o.id)));
     const edits = changed.filter((o) => before.has(String(o.id)));
-    if (fresh.length) track(client.from(table).insert(fresh.map((d) => ({ rid, id: String(d.id), data: d }))).then(check));
-    for (const d of edits) track(client.from(table).update({ data: d }).eq("rid", rid).eq("id", String(d.id)).then(check));
+    if (fresh.length) track(send({ op: "insert", table, rows: fresh.map((d) => ({ rid, id: String(d.id), data: d })) }));
+    // an edit sends only the fields that changed, so two phones changing one order
+    // (kitchen marks it ready while a captain adds a dish) keep both changes
+    for (const d of edits) {
+      const id = String(d.id);
+      const { set, drop } = diffFields(before.get(id) as Record<string, unknown> | undefined, d);
+      if (!Object.keys(set).length && !drop.length) continue;
+      track(send({ op: "patchOrder", rid, id, set, drop, full: d }));
+    }
   } else if (changed.length) {
     const rows = changed.map((d) => ({ rid, id: String(d.id), data: d, updated_at: new Date().toISOString() }));
-    track(client.from(table).upsert(rows, { onConflict: "rid,id" }).then(check));
+    track(send({ op: "upsert", table, rows }));
   }
   const gone = [...before.keys()].filter((id) => !keep.has(id));
-  if (gone.length) track(client.from(table).delete().eq("rid", rid).in("id", gone).then(check));
+  if (gone.length) track(send({ op: "delete", table, rid, ids: gone }));
 }
 
-const check = ({ error }: { error: unknown }) => {
-  if (error) report(error);
-};
 const report = (e: unknown) => console.error("[restropi] cloud write failed", e);
 
-/** New order: the server trigger gives it the next order number (0 until it arrives). */
-export function createOrderInCloud(order: { id: string } & Record<string, unknown>) {
-  // The normal store writer inserts it (guests: with their uid); nothing extra needed.
-  void order;
+/* ---------------- error tracking (Admin → App errors) ---------------- */
+let errorsSent = 0;
+const lastErrors = new Map<string, number>();
+/** Report a problem to the super admin. At most 20 a page load; the same message once a minute. */
+export function logError(kind: string, message: string, context: Record<string, unknown> = {}) {
+  try {
+    if (!cloudConfigured || errorsSent >= 20) return;
+    const key = `${kind}:${message}`.slice(0, 200);
+    const now = Date.now();
+    if (now - (lastErrors.get(key) ?? 0) < 60_000) return;
+    lastErrors.set(key, now);
+    errorsSent += 1;
+    const rid = connected?.rid ?? stateStore.get().rid ?? null;
+    const page = typeof window !== "undefined" ? window.location.pathname : "";
+    void sb()
+      .rpc("log_error", { p_rid: rid, p_kind: kind, p_message: message.slice(0, 1000), p_context: { ...context, page, ua: navigator.userAgent.slice(0, 160), online: navigator.onLine } })
+      .then(() => undefined, () => undefined);
+  } catch {
+    /* never let error reporting break the app */
+  }
 }
+let watching = false;
+function watchCrashes() {
+  if (watching) return;
+  watching = true;
+  const noise = /ResizeObserver loop|Script error\.?$|chrome-extension:|moz-extension:|Non-Error promise rejection/i;
+  window.addEventListener("error", (e) => {
+    const msg = String(e.message || e.error?.message || "");
+    if (!msg || noise.test(msg) || noise.test(String(e.filename ?? ""))) return;
+    logError("crash", msg, { file: String(e.filename ?? "").slice(-120), line: e.lineno, stack: String(e.error?.stack ?? "").slice(0, 800) });
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = e.reason as { message?: string; stack?: string } | string | undefined;
+    const msg = typeof r === "string" ? r : String(r?.message ?? "");
+    if (!msg || noise.test(msg)) return;
+    logError("crash", msg, { stack: typeof r === "object" ? String(r?.stack ?? "").slice(0, 800) : "" });
+  });
+}
+
+/**
+ * Orders made between two moments, straight from the server, for reports.
+ * The app itself keeps only the latest 1,000 orders; a report over a longer
+ * time needs the rest. Null when it could not load (offline, not signed in).
+ */
+export async function fetchOrdersBetween(fromIso: string, toIso: string): Promise<Record<string, unknown>[] | null> {
+  const rid = connected?.rid;
+  if (!rid || !cloudConfigured || connected?.role === "guest") return null;
+  const out: Record<string, unknown>[] = [];
+  const PAGE = 1000;
+  for (let i = 0; i < 200; i++) {
+    const { data, error } = await sb()
+      .from("orders")
+      .select("id, data, number")
+      .eq("rid", rid)
+      .gte("data->>createdAt", fromIso)
+      .lt("data->>createdAt", toIso)
+      .order("id")
+      .range(i * PAGE, i * PAGE + PAGE - 1);
+    if (error) {
+      report(error);
+      return null;
+    }
+    const rows = (data as unknown as Row[]) ?? [];
+    for (const r of rows) out.push(fromRow("orders", r) as Record<string, unknown>);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+export interface AppError {
+  id: number;
+  at: string;
+  rid: string | null;
+  role: string | null;
+  kind: string;
+  message: string;
+  context: Record<string, unknown>;
+}
+/** Super admin: the latest problems the app reported (crashes, saves the server refused). */
+export async function adminErrors(limit = 200): Promise<AppError[]> {
+  const { data, error } = await sb().from("app_errors").select("id, at, rid, role, kind, message, context").order("at", { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AppError[];
+}
+export async function adminClearErrors(): Promise<void> {
+  const { error } = await sb().from("app_errors").delete().gt("id", 0);
+  if (error) throw new Error(error.message);
+}
+
 export const isConnected = () => !!connected;
 
 /** Guests add/update only their own customer record (name, phone), or leave feedback. */
+/** Guest QR page: this guest's own stamp card (found from the number on their own orders). */
+export async function guestStamps(): Promise<{ stamps: { at: string }[]; rewards: number } | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("guest_stamps", { r: rid });
+  if (error || !data) return null;
+  return data as { stamps: { at: string }[]; rewards: number };
+}
+
+/** Thank-you page (no live connection): this guest's stamp card at this restaurant. */
+export async function guestStampsFor(rid: string): Promise<{ stamps: { at: string }[]; rewards: number } | null> {
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("guest_stamps", { r: rid });
+  if (error || !data) return null;
+  return data as { stamps: { at: string }[]; rewards: number };
+}
+/** Guest QR page: does this restaurant have a coupon the guest could use? */
+export async function guestCouponsOn(outletId?: string): Promise<boolean> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return false;
+  const { data, error } = await sb().rpc("guest_coupons_on", { r: rid, ...(outletId ? { p_outlet: outletId } : {}) });
+  return !error && data === true;
+}
+export type GuestCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number };
+/** Guest QR page: check one coupon code. Returns the coupon, or why it can't be used. */
+export async function guestCoupon(code: string, outletId?: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return { problem: "Coupons are not available here" };
+  const { data, error } = await sb().rpc("guest_coupon", { r: rid, p_code: code, ...(outletId ? { p_outlet: outletId } : {}) });
+  if (error || !data) return { problem: "Couldn't check the code. Try again." };
+  const d = data as GuestCoupon & { problem?: string };
+  if (d.problem) return { problem: d.problem };
+  return { coupon: { code: d.code, kind: d.kind, value: Number(d.value) || 0, maxOff: d.maxOff ?? undefined, minBill: d.minBill ?? undefined } };
+}
+
 export function guestUpsert(rid: string, id: string, data: Record<string, unknown>, coll: "guests" | "feedback" | "activity" = "guests") {
-  if (coll === "guests") track(sb().rpc("guest_touch", { r: rid, rec: { ...data, id } }).then(check));
-  else track(sb().from(coll).insert({ rid, id, data }).then(check));
+  if (coll === "guests") track(send({ op: "rpc", fn: "guest_touch", args: { r: rid, rec: { ...data, id } } }));
+  else track(send({ op: "insert", table: coll, rows: [{ rid, id, data }] }));
 }
 
 /* ---------------- super admin ---------------- */
@@ -556,7 +848,9 @@ export interface AdminRestaurant {
   city: string;
   notes: string;
   plan: "starter" | "growth" | "pro" | "chain";
+  logo?: string | null;
   renewsAt: string;
+  graceUntil: string | null;
   status: "active" | "suspended";
   createdAt: string;
   outlets: number;
@@ -576,7 +870,10 @@ export async function adminSales(from: Date, to: Date): Promise<{ rid: string; b
   if (error) throw new Error(error.message);
   return ((data as { rid: string; bills: number; sales: number | string }[]) ?? []).map((r) => ({ rid: r.rid, bills: Number(r.bills), sales: Number(r.sales) }));
 }
-export async function adminUpdate(rid: string, patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">>) {
+export async function adminUpdate(
+  rid: string,
+  patch: Partial<Pick<AdminRestaurant, "plan" | "renewsAt" | "status" | "name" | "owner" | "phone" | "city" | "notes">> & { graceUntil?: string | null },
+) {
   const { error } = await sb().rpc("admin_update_restaurant", { r: rid, patch });
   if (error) throw new Error(error.message);
 }
@@ -595,24 +892,88 @@ export interface NewRestaurant {
 }
 export const adminCreate = (r: NewRestaurant) =>
   callFn<{ rid: string; ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "create", ...r }, true);
+/** Super admin: email the owner about a plan change (renewed / grace given / plan switched). */
+export async function adminPlanEmail(rid: string, event: "renewed" | "grace" | "plan") {
+  const { data } = await sb().auth.getSession();
+  try {
+    const r = await fetch("/api/email/plan", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
+      body: JSON.stringify({ rid, event }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+export interface BackupList {
+  rid: string;
+  name: string;
+  files: { date: string; size: number; url: string | null }[];
+}
+/** Super admin: the nightly restaurant-wise backups (Admin → Backups). */
+export async function adminBackups(action?: "run"): Promise<BackupList[] | { saved: number; failed: { rid: string; reason: string }[] }> {
+  const { data } = await sb().auth.getSession();
+  const r = await fetch("/api/admin/backups", {
+    method: action ? "POST" : "GET",
+    headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
+    ...(action ? { body: JSON.stringify({ action }) } : {}),
+  });
+  const j = (await r.json().catch(() => ({}))) as { error?: string; restaurants?: BackupList[]; saved?: number; failed?: { rid: string; reason: string }[] };
+  if (r.status === 503) throw new Error("Add SUPABASE_SERVICE_ROLE_KEY in Vercel to use backups.");
+  if (!r.ok) throw new Error(j.error ?? "Could not load backups");
+  return action ? { saved: j.saved ?? 0, failed: j.failed ?? [] } : (j.restaurants ?? []);
+}
+/** Super admin: the restaurant's brand (logo, owner name on the team list). Goes through our server. */
+async function brandApi(body: Record<string, unknown>) {
+  const { data } = await sb().auth.getSession();
+  const r = await fetch("/api/admin/brand", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  const j = (await r.json().catch(() => ({}))) as { error?: string; logo?: string | null };
+  if (r.status === 503) throw new Error("Add SUPABASE_SERVICE_ROLE_KEY in Vercel to change logos.");
+  if (!r.ok) throw new Error(j.error ?? "Could not save");
+  return j;
+}
+export async function adminSetLogo(rid: string, png: Blob): Promise<string> {
+  const buf = new Uint8Array(await png.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return (await brandApi({ rid, action: "logo", png: btoa(bin) })).logo ?? "";
+}
+export const adminRemoveLogo = (rid: string) => brandApi({ rid, action: "removeLogo" });
+/** After the super admin renames the owner: the owner's name in the team list follows. */
+export const adminSyncOwner = (rid: string) => brandApi({ rid, action: "syncOwner" }).catch(() => undefined);
 export const adminResetOwnerPassword = (rid: string) =>
   callFn<{ ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "reset_owner_password", rid }, true);
 export const adminDelete = (rid: string, confirmName: string) =>
   callFn<{ ok: true }>("admin-restaurants", { action: "delete", rid, confirmName }, true);
 
 /* ---------------- platform (Restropi team) ---------------- */
-export interface PlatformSettings { whatsapp: string; upi: string; payee: string }
+import { DEFAULT_REMINDERS, remindersOf, type PlanReminders } from "./plan-status";
+export { DEFAULT_REMINDERS, remindersOf, type PlanReminders };
+export interface PlatformSettings { whatsapp: string; upi: string; payee: string; reminders?: PlanReminders }
 export interface PlanCoupon { code: string; kind: "percent" | "flat"; value: number; plans: string[]; valid_to: string | null; max_uses: number | null; uses: number; active: boolean; note: string | null }
 
 /** Where owners send plan requests and pay. Any signed-in person can read it. */
 export async function getPlatformSettings(): Promise<PlatformSettings> {
-  const { data } = await sb().from("platform_settings").select("whatsapp, upi, payee").eq("id", 1).maybeSingle();
-  return { whatsapp: data?.whatsapp ?? "", upi: data?.upi ?? "", payee: data?.payee ?? "" };
+  const { data } = await sb().from("platform_settings").select("*").eq("id", 1).maybeSingle();
+  return { whatsapp: data?.whatsapp ?? "", upi: data?.upi ?? "", payee: data?.payee ?? "", reminders: remindersOf(data) };
 }
 export async function savePlatformSettings(p: PlatformSettings) {
   const { error } = await sb()
     .from("platform_settings")
-    .update({ whatsapp: p.whatsapp || null, upi: p.upi || null, payee: p.payee || null, updated_at: new Date().toISOString() })
+    .update({
+      whatsapp: p.whatsapp || null,
+      upi: p.upi || null,
+      payee: p.payee || null,
+      ...(p.reminders
+        ? { remind_days: p.reminders.days, remind_from: p.reminders.from, remind_email: p.reminders.email, remind_app: p.reminders.app }
+        : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", 1);
   if (error) throw error;
 }
@@ -643,3 +1004,97 @@ export interface ReadMenu {
   left: number | null; // photos left today (null = no daily limit set up)
 }
 export const readMenuPhotos = (rid: string, photos: { mime: string; data: string }[]) => callFn<ReadMenu>("menu-from-photo", { rid, photos }, true);
+
+/* ---------------- the restaurant's own payment gateway (Razorpay / Cashfree) ----------------
+ * Keys live only on the server (Supabase Vault). The browser only ever sees the public key id
+ * (Razorpay's checkout needs it) and the amount the server worked out. */
+export type GatewayInfo = { provider: "razorpay" | "cashfree"; keyId: string; mode: "test" | "live" };
+/** Is online payment on for this outlet? (guests and staff) */
+export async function gatewayFor(outletId: string | undefined): Promise<GatewayInfo | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !outletId || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("gateway_for", { r: rid, p_outlet: outletId });
+  if (error || !data) return null;
+  return data as GatewayInfo;
+}
+export type GatewayRow = { outlet_id: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; key_id: string; last4: string | null; active: boolean; verified_at: string | null; has_webhook: boolean };
+/** Owner: the gateways saved for each outlet (never the secrets). */
+export async function gatewayList(): Promise<GatewayRow[]> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return [];
+  const { data } = await sb().from("pay_gateways").select("outlet_id,provider,mode,key_id,last4,active,verified_at,webhook_ref").eq("rid", rid);
+  return ((data ?? []) as (Omit<GatewayRow, "has_webhook"> & { webhook_ref: string | null })[]).map(({ webhook_ref, ...g }) => ({ ...g, has_webhook: !!webhook_ref }));
+}
+/** Owner: connect an outlet to their own gateway. The keys are checked with the gateway before they are saved. */
+export const gatewaySetup = (g: { outletId: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; keyId: string; secret: string; webhook?: string }) =>
+  callFn<{ ok: true; last4: string }>("gateway-setup", { rid: stateStore.get().rid, ...g }, true);
+export const gatewayOff = (outletId: string) => callFn<{ ok: true }>("gateway-setup", { rid: stateStore.get().rid, outletId, action: "off" }, true);
+/** The address the owner pastes into the gateway's webhook settings. */
+export const gatewayWebhookUrl = (provider: "razorpay" | "cashfree", outletId: string) =>
+  `${URL_}/functions/v1/pay-webhook?p=${provider}&r=${encodeURIComponent(stateStore.get().rid ?? "")}&o=${encodeURIComponent(outletId)}`;
+export type PayStart = { intentId: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; keyId: string; orderId: string; sessionId?: string; amount: number };
+/** Guest: open a payment for these orders. The amount comes from the server. */
+export async function payCreate(orderIds: string[]): Promise<PayStart> {
+  await flushWrites(); // the server reads the orders (coupon, stamp card) from the database
+  return callFn<PayStart>("pay-create", { rid: stateStore.get().rid, orderIds }, true);
+}
+export type PayState = { status: "created" | "paid" | "failed"; note?: string };
+/** Has this payment gone through? (asked from the gateway by the server) */
+export const payStatus = (intentId: string, razorpay?: { orderId: string; paymentId: string; signature: string }) =>
+  callFn<PayState>("pay-status", { intentId, ...(razorpay ? { razorpay } : {}) }, true);
+/** Payments that need the owner (paid twice, amount didn't match): refund them from the gateway's dashboard. */
+export async function gatewayProblems(): Promise<{ id: string; outlet_id: string; provider: string; amount_paise: number; payment_id: string | null; note: string; paid_at: string | null; created_at: string }[]> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return [];
+  const { data } = await sb().from("pay_intents").select("id,outlet_id,provider,amount_paise,payment_id,note,paid_at,created_at").eq("rid", rid).not("note", "is", null).order("created_at", { ascending: false }).limit(20);
+  return (data ?? []) as never;
+}
+/** Staff device: take on the guest bookkeeping for one paid online bill (only one device gets it). */
+export async function claimGatewayBooking(intentId: string): Promise<{ bill: Record<string, unknown> } | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("claim_gateway_booking", { r: rid, p_intent: intentId });
+  if (error || data !== true) return null;
+  const { data: row } = await sb().from("pay_intents").select("bill").eq("id", intentId).maybeSingle();
+  return row ? { bill: (row as { bill: Record<string, unknown> }).bill ?? {} } : { bill: {} };
+}
+
+/* ---------------- WhatsApp Business API on the restaurant's own number (Pro and up) ----------------
+ * The token and app secret go once to the server (Vault) and never come back. */
+export type WaStatus = { display: string; name: string; bill: boolean; ready: boolean };
+/** Team: is WhatsApp API on, and which messages go out by themselves? */
+export async function waStatus(): Promise<WaStatus | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data, error } = await sb().rpc("wa_status", { r: rid });
+  return error || !data ? null : (data as WaStatus);
+}
+export type WaAccountRow = { phone_number_id: string; waba_id: string; display_phone: string | null; verified_name: string | null; verify_token: string; last4: string | null; active: boolean; settings: { bill?: { template: string; lang: string } | null; ready?: { template: string; lang: string } | null }; verified_at: string | null };
+/** Owner: the saved account (ids, number, settings; never the token). */
+export async function waAccount(): Promise<WaAccountRow | null> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return null;
+  const { data } = await sb().from("wa_accounts").select("phone_number_id,waba_id,display_phone,verified_name,verify_token,last4,active,settings,verified_at").eq("rid", rid).maybeSingle();
+  return (data as WaAccountRow) ?? null;
+}
+export type WaTemplate = { name: string; language: string; category: string; body: string; params: number; ok: boolean; why?: string };
+const wa = <T>(body: Record<string, unknown>) => callFn<T>("wa-setup", { rid: stateStore.get().rid, ...body }, true);
+export const waConnect = (x: { phoneId: string; wabaId: string; token: string; appSecret?: string }) => wa<{ ok: true; display: string; name: string; verifyToken: string }>({ action: "connect", ...x });
+export const waOff = () => wa<{ ok: true }>({ action: "off" });
+export const waTemplates = () => wa<{ templates: WaTemplate[] }>({ action: "templates" }).then((r) => r.templates);
+export const waSaveAuto = (settings: { bill: { template: string; lang: string } | null; ready: { template: string; lang: string } | null }) => wa<{ ok: true }>({ action: "settings", settings });
+export const waTest = (to: string, template: string, lang: string) => wa<{ ok: true }>({ action: "test", to, template, lang });
+export const waWebhookUrl = () => `${URL_}/functions/v1/wa-webhook?r=${encodeURIComponent(stateStore.get().rid ?? "")}`;
+/** Bills and "ready" messages: the server reads the order and sends only to its number, once. */
+export const waAuto = (kind: "bill" | "ready", orderIds: string[]) =>
+  callFn<{ ok?: true; skipped?: string; error?: string }>("wa-send", { rid: stateStore.get().rid, kind, ...(kind === "bill" ? { orderIds } : { orderId: orderIds[0] }) }, true);
+export type WaCampaignResult = { sent: number; failed: number; noOptIn: number; stopped: number; recent: number; limit: number; errors: string[] };
+export const waCampaign = (x: { outletId: string; template: string; lang: string; extra: string[]; phones: string[] }) =>
+  callFn<WaCampaignResult>("wa-send", { rid: stateStore.get().rid, kind: "campaign", ...x }, true);
+export type WaMessage = { id: string; kind: string; to_phone: string; template: string | null; status: string; error: string | null; created_at: string };
+export async function waMessages(limit = 50): Promise<WaMessage[]> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return [];
+  const { data } = await sb().from("wa_messages").select("id,kind,to_phone,template,status,error,created_at").eq("rid", rid).order("created_at", { ascending: false }).limit(limit);
+  return (data ?? []) as WaMessage[];
+}

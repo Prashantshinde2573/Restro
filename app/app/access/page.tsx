@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Plus, Store, UserPlus } from "lucide-react";
+import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Store, Trash2, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Avatar, Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -23,9 +23,11 @@ import {
   isOwner,
   type Member,
   type Perm,
+  isMixed,
 } from "@/lib/access";
-import { memberActions, outletActions, useAccount, useMe, useMembers, useOutlets } from "@/lib/live";
+import { mainOutletId, memberActions, menuActions, menuFor, outletActions, useAccount, useAllMenu, useMe, useMembers, useOutlets } from "@/lib/live";
 import { setStaffPin, useCloud } from "@/lib/cloud";
+import { tableActions, useAllTables } from "@/lib/tables";
 import type { BusinessType, Outlet } from "@/lib/types";
 
 const typeLabel = (t: BusinessType) => (t === "cafe" ? "Café" : "Restaurant");
@@ -107,13 +109,24 @@ export default function AccessPage() {
   };
   const togglePerm = (p: Perm) => draft && setDraft({ ...draft, perms: draft.perms.includes(p) ? draft.perms.filter((x) => x !== p) : [...draft.perms, p] });
   const applyPreset = (name: string, perms: Perm[]) => draft && setDraft({ ...draft, title: name, perms: perms.filter((p) => !permState(p).disabled) });
-  const phoneOk = (draft?.phone.replace(/\D/g, "").length ?? 0) === 10;
+  const phoneDigits = draft?.phone.replace(/\D/g, "") ?? "";
+  // staff sign in with mobile + PIN, so two people here can't share a number
+  const takenBy = draft && phoneDigits.length === 10 ? members.find((m) => m.id !== draft.id && m.role !== "owner" && (m.phone ?? "").replace(/\D/g, "").slice(-10) === phoneDigits) : undefined;
+  const phoneTaken = !!takenBy;
+  // the number belongs to someone turned off: offer to bring that person back instead
+  const reopen = (m: Member) => {
+    setConfirmRemove(false);
+    setPin("");
+    setDraft({ ...m, active: true });
+    toast(`${m.name} is back on · set a PIN and save`);
+  };
+  const phoneOk = phoneDigits.length === 10 && !phoneTaken;
   const pinOk = !cloud.rid || (draft?.isNew ? /^\d{4}$/.test(pin) : pin === "" || /^\d{4}$/.test(pin));
   const draftOk = !!draft && draft.name.trim().length > 1 && phoneOk && draft.outletIds.length > 0 && (draft.role === "subadmin" || draft.perms.length > 0) && pinOk;
 
   const staffLink = typeof window !== "undefined" && cloud.rid ? `${window.location.origin}/login?r=${cloud.rid}` : "";
   const inviteText = (name?: string) =>
-    [`Hi${name ? ` ${name.split(" ")[0]}` : ""},`, "", `Sign in to *${account.name || "our restaurant"}* on Restropi:`, staffLink, "", "Open the link, tap your name and enter your 4-digit PIN. Save the page to your home screen for next time."].join("\n");
+    [`Hi${name ? ` ${name.split(" ")[0]}` : ""},`, "", `Sign in to *${account.name || "our restaurant"}* on Restropi:`, staffLink, "", "Open the link, tap *Staff*, then enter your mobile number and 4-digit PIN. It works on any phone or tablet."].join("\n");
   const [inviteFor, setInviteFor] = useState<{ name: string; phone: string } | null>(null);
   const save = () => {
     if (!draft || !draftOk) return;
@@ -139,14 +152,38 @@ export default function AccessPage() {
       return;
     }
     setOutletDraft({ id: "", name: "", address: "", businessType: "restaurant", upi: "", payFirst: false, isNew: true });
+    setCopyMenuFrom(menuSources[0]?.id ?? "");
   };
   const outletOk = !!outletDraft && outletDraft.name.trim().length > 1 && isValidUpi(outletDraft.upi);
+  // a new outlet starts with a copy of another outlet's menu (the first outlet by default) or empty
+  const allMenu = useAllMenu();
+  const menuMain = mainOutletId(outlets);
+  const menuSources = outlets
+    .map((o) => ({ id: o.id, name: o.name, dishes: menuFor(allMenu, o, menuMain).length }))
+    .filter((o) => o.dishes > 0)
+    .sort((a, b) => (a.id === menuMain ? -1 : b.id === menuMain ? 1 : 0));
+  const [copyMenuFrom, setCopyMenuFrom] = useState<string>("");
+  // delete an outlet: the owner types its name to be sure
+  const allTables = useAllTables();
+  const [delName, setDelName] = useState<string | null>(null);
+  const deleteOutlet = () => {
+    if (!outletDraft || outletDraft.isNew) return;
+    const why = outletActions.removeProblem(outletDraft.id);
+    if (why) return toast(why);
+    const busy = allTables.filter((t) => t.outletId === outletDraft.id && t.parties.length).length;
+    if (busy) return toast(`${busy} table${busy === 1 ? " has" : "s have"} guests. Free ${busy === 1 ? "it" : "them"} first.`);
+    allTables.filter((t) => t.outletId === outletDraft.id).forEach((t) => tableActions.remove(t.id));
+    if (outletActions.remove(outletDraft.id)) toast(`${outletDraft.name} deleted`);
+    setDelName(null);
+    setOutletDraft(null);
+  };
   const saveOutlet = () => {
     if (!outletDraft || !outletOk) return;
     const { isNew, id, ...o } = outletDraft;
     if (isNew) {
       const created = outletActions.add({ ...o, name: o.name.trim(), upi: o.upi.trim() });
-      toast(`${created.name} created · add its sub admin and staff next`);
+      const n = copyMenuFrom ? menuActions.copyMenu(copyMenuFrom, created.id) : 0;
+      toast(`${created.name} created${n ? ` with ${n} dishes` : ""} · add its sub admin and staff next`);
     } else {
       outletActions.update(id, { ...o, name: o.name.trim(), upi: o.upi.trim() });
       toast("Outlet saved");
@@ -168,7 +205,7 @@ export default function AccessPage() {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-jade-soft text-jade"><Link2 size={19} /></span>
             <div className="min-w-0 flex-1">
               <div className="text-[15px] font-semibold">Staff sign-in link</div>
-              <p className="text-[13px] text-muted">Send it to your staff once. They open it on their phone or tablet, tap their name and enter their 4-digit PIN.</p>
+              <p className="text-[13px] text-muted">Send it to your staff once. On any phone or tablet they sign in with their mobile number and 4-digit PIN.</p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button size="sm" variant="tinted" onClick={() => { navigator.clipboard?.writeText(staffLink).then(() => toast("Link copied"), () => toast(staffLink)); }}><Copy size={15} /> Copy</Button>
@@ -194,17 +231,16 @@ export default function AccessPage() {
                       <span className={clsx("flex h-9 w-9 items-center justify-center rounded-[10px] text-white", o.businessType === "cafe" ? "bg-saffron" : "bg-jade")}>
                         {o.businessType === "cafe" ? <Coffee size={17} /> : <Store size={17} />}
                       </span>
-                      <Pill tone={o.businessType === "cafe" ? "saffron" : "jade"}>{typeLabel(o.businessType)}{o.mixed ? " + " + (o.businessType === "cafe" ? "tables" : "counter") : ""}</Pill>
+                      <Pill tone={o.businessType === "cafe" ? "saffron" : "jade"}>{typeLabel(o.businessType)}{isMixed(o) ? " + " + (o.businessType === "cafe" ? "tables" : "counter") : ""}</Pill>
                     </div>
                     <div className="mt-3 text-[15.5px] font-semibold">{o.name}</div>
                     <div className="text-[13px] text-muted">{n} {n === 1 ? "person" : "people"} · {subs.length ? `Sub admin: ${subs.map((s) => s.name.split(" ")[0]).join(", ")}` : "No sub admin yet"}</div>
                   </button>
                 );
               })}
-              <button onClick={openNewOutlet} className="flex min-h-[124px] flex-col items-center justify-center gap-1.5 rounded-group border-2 border-dashed border-line text-muted hover:border-jade hover:text-jade">
-                <Building2 size={20} />
-                <span className="text-[14px] font-semibold">Add outlet</span>
-                {outlets.length >= outletLimit && <span className="text-[12px]">Upgrade to add more</span>}
+              <button onClick={openNewOutlet} className="flex min-h-[64px] items-center justify-center gap-2 rounded-group border-2 border-dashed border-line px-4 text-muted hover:border-jade hover:text-jade">
+                <Building2 size={18} />
+                <span className="text-[14px] font-semibold">{outlets.length >= outletLimit ? `Add outlet · upgrade from ${PLAN_NAME[account.plan]}` : "Add outlet"}</span>
               </button>
             </div>
           </section>
@@ -234,7 +270,7 @@ export default function AccessPage() {
                   onClick={() => { setConfirmRemove(false); setPin(""); setDraft({ ...m }); }}
                   className={clsx("flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 lg:px-5", editable ? "hover:bg-sunken/40" : "cursor-default", !m.active && "opacity-50")}
                 >
-                  <Avatar name={m.name} hue={m.hue} size={40} />
+                  <Avatar name={m.name} hue={m.hue} photo={m.photo} size={40} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[15px] font-medium">{m.name}</span>
@@ -245,7 +281,7 @@ export default function AccessPage() {
                     </div>
                   </div>
                   <div className="hidden text-right text-[12.5px] text-muted sm:block tnum">
-                    {m.role === "owner" ? "Everything" : `${m.perms.length} of ${ALL_PERMS.length} access`}
+                    {m.role === "owner" ? "Everything" : m.role === "subadmin" ? "Everything in their outlet" : `${m.perms.length} of ${ALL_PERMS.length} access`}
                   </div>
                   <Pill tone={m.role === "owner" ? "jade" : m.role === "subadmin" ? "sky" : "neutral"}>{m.active ? roleLabel(m) : "Paused"}</Pill>
                 </button>
@@ -264,7 +300,7 @@ export default function AccessPage() {
         wide
         footer={
           <Button size="lg" className="w-full" disabled={!draftOk} onClick={save}>
-            {!draft ? "" : !draft.name.trim() || !phoneOk ? "Add name and 10-digit mobile" : !pinOk ? "Set a 4-digit PIN" : !draft.outletIds.length ? "Pick at least one outlet" : draft.role === "staff" && !draft.perms.length ? "Tick at least one box" : draft.isNew ? "Add member" : "Save access"}
+            {!draft ? "" : phoneTaken ? "That mobile is already used by someone else" : !draft.name.trim() || !phoneOk ? "Add name and 10-digit mobile" : !pinOk ? "Set a 4-digit PIN" : !draft.outletIds.length ? "Pick at least one outlet" : draft.role === "staff" && !draft.perms.length ? "Tick at least one box" : draft.isNew ? "Add member" : "Save access"}
           </Button>
         }
       >
@@ -272,7 +308,21 @@ export default function AccessPage() {
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Name"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Full name" /></Field>
-              <Field label="Mobile (WhatsApp)"><input className={inputCls} inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/[^\d ]/g, "").slice(0, 11) })} placeholder="98xxx xxxxx" /></Field>
+              <Field
+                label="Mobile (WhatsApp)"
+                hint={
+                  takenBy
+                    ? `${takenBy.name}${takenBy.active ? "" : " (turned off)"} already has this number${takenBy.outletIds.length ? ` · ${takenBy.outletIds.map(outletName).join(", ")}` : ""}`
+                    : "They sign in with this number and their PIN"
+                }
+              >
+                <input className={inputCls} inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/[^\d ]/g, "").slice(0, 11) })} placeholder="98xxx xxxxx" />
+              </Field>
+              {takenBy && !takenBy.active && canManage(me, takenBy) && (
+                <button type="button" onClick={() => reopen(takenBy)} className="rounded-ctl bg-sky-soft/60 px-4 py-3 text-left text-[14px] font-semibold text-jade sm:col-span-2">
+                  Turn {takenBy.name.split(" ")[0]} back on instead →
+                </button>
+              )}
             </div>
 
             {cloud.rid && (
@@ -335,6 +385,25 @@ export default function AccessPage() {
               <input className={inputCls} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Or type a job name (e.g. Barista)" />
             </div>
 
+            {draft.role === "subadmin" ? (
+              <div className="rounded-group bg-sky-soft/60 p-4 text-[14px] leading-relaxed">
+                <div className="font-semibold">Admin of {draft.outletIds.length ? draft.outletIds.map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") : "their outlet"}</div>
+                <p className="mt-1 text-muted">
+                  Can do everything the owner does in this outlet: orders, bills and payments, tables, kitchen, stock, staff and their access, attendance and salary
+                  (approve days, pay), outlet settings, stamp card, guests, campaigns and coupons, reports, insights and activity.
+                </p>
+                <p className="mt-2 text-muted">Can&apos;t: see or change other outlets, or the plan and billing.</p>
+                {owner && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
+                    <div>
+                      <div className="text-[15px] font-semibold text-ink">Attendance &amp; salary</div>
+                      <div className="text-[12.5px] text-muted">Keep their days and pay like staff (My attendance for them)</div>
+                    </div>
+                    <Toggle checked={!!draft.payrollOn} onChange={(payrollOn) => setDraft({ ...draft, payrollOn })} label="Attendance and salary" />
+                  </div>
+                )}
+              </div>
+            ) : (
             <div>
               <div className="mb-1.5 flex items-baseline justify-between">
                 <span className="text-[13px] font-medium text-muted">What they can see and do</span>
@@ -366,6 +435,7 @@ export default function AccessPage() {
                 })}
               </div>
             </div>
+            )}
 
             {!draft.isNew && (
               <div className="space-y-2">
@@ -390,7 +460,7 @@ export default function AccessPage() {
       {/* ---------- add / edit outlet ---------- */}
       <Sheet
         open={!!outletDraft}
-        onClose={() => setOutletDraft(null)}
+        onClose={() => { setOutletDraft(null); setDelName(null); }}
         title={outletDraft?.isNew ? "New outlet" : outletDraft?.name ?? ""}
         footer={
           <Button size="lg" className="w-full" disabled={!outletOk} onClick={saveOutlet}>
@@ -411,7 +481,7 @@ export default function AccessPage() {
               />
             </Field>
             <p className="-mt-2 text-[13px] text-muted">
-              {outletDraft.mixed
+              {isMixed(outletDraft)
                 ? "Tables and counter both: table QR, dine-in and split bills, plus counter orders with tokens."
                 : outletDraft.businessType === "cafe"
                   ? "Counter orders with tokens. Turn on tables below if some guests sit and order."
@@ -419,7 +489,7 @@ export default function AccessPage() {
             </p>
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
               <span className="text-[15px]">{outletDraft.businessType === "cafe" ? "Also serve at tables" : "Also take counter orders"}</span>
-              <Toggle checked={!!outletDraft.mixed} onChange={(v) => setOutletDraft({ ...outletDraft, mixed: v })} label="Tables and counter both" />
+              <Toggle checked={isMixed(outletDraft)} onChange={(v) => setOutletDraft({ ...outletDraft, mixed: v })} label="Tables and counter both" />
             </div>
             <Field label="UPI ID for this outlet's bills">
               <input className={clsx(inputCls, outletDraft.upi && !isValidUpi(outletDraft.upi) && "ring-2 ring-rose")} autoCapitalize="none" value={outletDraft.upi} onChange={(e) => setOutletDraft({ ...outletDraft, upi: e.target.value.replace(/\s/g, "") })} placeholder="name@bank" />
@@ -428,6 +498,43 @@ export default function AccessPage() {
               <span className="text-[15px]">Guests pay before the kitchen starts</span>
               <Toggle checked={outletDraft.payFirst} onChange={(payFirst) => setOutletDraft({ ...outletDraft, payFirst })} label="Guests pay first" />
             </div>
+            {outletDraft.isNew && menuSources.length > 0 && (
+              <Field label="Menu" hint="Each outlet has its own menu. A copy can be changed freely; you can also copy later from Menu.">
+                <Segmented
+                  className="w-full"
+                  value={copyMenuFrom}
+                  onChange={setCopyMenuFrom}
+                  options={[...menuSources.slice(0, 2).map((o) => ({ value: o.id, label: `Copy ${o.name} (${o.dishes})` })), { value: "", label: "Start empty" }]}
+                />
+              </Field>
+            )}
+
+            {owner && !outletDraft.isNew && outlets.length > 1 && (
+              <div className="rounded-group border border-rose/30 bg-rose-soft/40 p-4">
+                {delName === null ? (
+                  <Button variant="danger" className="w-full" onClick={() => { const why = outletActions.removeProblem(outletDraft.id); if (why) toast(why); else setDelName(""); }}>
+                    <Trash2 size={16} /> Delete this outlet
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-[15px] font-semibold text-rose">Delete {outletDraft.name}?</div>
+                    <ul className="list-disc space-y-1 pl-5 text-[13.5px] text-ink/80">
+                      <li>Its tables, stock, menu and its coupons are deleted.</li>
+                      <li>People who work only here can&apos;t sign in any more (they stay in your list, turned off).</li>
+                      <li>Past bills stay in your reports and data export.</li>
+                      <li>This can&apos;t be undone.</li>
+                    </ul>
+                    <Field label={`Type ${outletDraft.name} to confirm`}>
+                      <input className={inputCls} value={delName} onChange={(e) => setDelName(e.target.value)} placeholder={outletDraft.name} autoCapitalize="none" />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="plain" onClick={() => setDelName(null)}>Keep it</Button>
+                      <Button variant="danger" disabled={delName.trim().toLowerCase() !== outletDraft.name.trim().toLowerCase()} onClick={deleteOutlet}><Trash2 size={16} /> Delete</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Sheet>

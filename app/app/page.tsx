@@ -1,15 +1,16 @@
 "use client";
 
+import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText } from "lucide-react";
-import { hasTables, isOwner } from "@/lib/access";
-import { useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders } from "@/lib/live";
+import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText, CalendarDays, MapPin } from "lucide-react";
+import { hasPerm, hasTables, isOwner } from "@/lib/access";
+import { toAccept, useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders, useOutletOrders } from "@/lib/live";
 import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { BarChart, TrendChart } from "@/components/charts";
 import { UserChip } from "@/components/shell";
 import { DAY_MS, between, byChannel, byDay, byHour, change, inOutlet, startOfDay, topDishes, totals } from "@/lib/stats";
-import { isShared, useTables } from "@/lib/tables";
+import { isShared, useLiveTables, useTables } from "@/lib/tables";
 import { inr, minutesSince } from "@/lib/format";
 import { NeedsYou } from "@/components/notifications";
 
@@ -17,14 +18,22 @@ import { NeedsYou } from "@/components/notifications";
 function StaffHome() {
   const me = useMe();
   const outlet = useCurrentOutlet();
+  // live counts on the tiles, so the start screen says what needs doing
+  const live = useOutletOrders().filter((o) => o.status !== "paid" && o.status !== "cancelled");
+  const ready = live.filter((o) => o.status === "ready").length;
+  const cooking = live.filter((o) => o.status === "accepted" || o.status === "preparing").length;
+  const tablesHere = useTables();
+  const billAsks = tablesHere.reduce((n, t) => n + t.parties.filter((p) => p.status === "billing" || p.paymentPending).length, 0);
+  const busy = tablesHere.filter((t) => t.parties.length).length;
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const links = [
     { href: "/app/pos", label: "New order", perm: "pos" as const, icon: SquarePlus },
-    { href: "/app/orders", label: "Orders", perm: "orders" as const, icon: ReceiptText },
-    { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true },
-    { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat },
+    { href: "/app/orders", label: "Orders", perm: "orders" as const, icon: ReceiptText, note: live.length ? `${plural(live.length, "open")}${ready ? ` · ${ready} ready to serve` : ""}` : "", hot: ready > 0 },
+    { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true, note: busy ? `${busy} busy${billAsks ? ` · ${plural(billAsks, "bill")} asked` : ""}` : "", hot: billAsks > 0 },
+    { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat, note: cooking ? `${cooking} cooking` : "" },
     { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
     { href: "/app/activity", label: "Activity", perm: "activity" as const, icon: History },
-  ].filter((l) => me?.perms.includes(l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
+  ].filter((l) => hasPerm(me, l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
   return (
     <>
       <PageHeader title={`Hi, ${me?.name.split(" ")[0] ?? ""}`} subtitle={outlet.name} actions={<UserChip />} />
@@ -34,7 +43,10 @@ function StaffHome() {
           {links.map((l) => (
             <Link key={l.href} href={l.href} className="flex flex-col gap-3 rounded-group bg-surface p-5 hover:shadow-float">
               <l.icon size={24} className="text-jade" />
-              <span className="text-[16px] font-semibold">{l.label}</span>
+              <span>
+                <span className="block text-[16px] font-semibold">{l.label}</span>
+                {"note" in l && l.note ? <span className={clsx("mt-0.5 block text-[13px] font-medium", "hot" in l && l.hot ? "text-saffron" : "text-muted")}>{l.note}</span> : null}
+              </span>
             </Link>
           ))}
         </div>
@@ -55,7 +67,7 @@ function OwnerHome() {
   const outlet = useCurrentOutlet();
   const cafe = !hasTables(outlet); // counter only
   const pulseOn = useFeature("pulse") === "ok";
-  const tables = useTables();
+  const tables = useLiveTables();
   const menu = useMenu();
   const members = useMembers();
   const orders = inOutlet(useOrders(), outlet.id);
@@ -81,22 +93,34 @@ function OwnerHome() {
   const shared = tables.filter(isShared).length;
   const kitchenQueue = orders.filter((o) => ["new", "accepted", "preparing"].includes(o.status));
   const oldest = kitchenQueue.reduce((m, o) => Math.max(m, minutesSince(o.createdAt)), 0);
-  const waiting = orders.filter((o) => o.status === "new").length;
+  const waiting = orders.filter(toAccept).length;
   const qrOpen = orders.filter((o) => o.channel !== "pos" && o.status !== "paid" && o.status !== "cancelled");
   const hour = new Date(now).getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const steps = [
-    { done: !!outlet.upi, text: "Add your UPI ID for payment QRs", href: "/app/settings" },
-    { done: menu.length > 0, text: "Add your menu", href: "/app/menu" },
-    ...(cafe ? [] : [{ done: tables.length > 0, text: "Set up your tables", href: "/app/tables" }]),
-    { done: members.some((m) => m.role !== "owner"), text: "Add your staff and their PINs", href: "/app/access" },
-    { done: orders.length > 0, text: "Take your first order", href: "/app/pos" },
+    { id: "upi", done: !!outlet.upi, text: "Add your UPI ID for payment QRs", href: "/app/settings" },
+    { id: "menu", done: menu.length > 0, text: "Add your menu", href: "/app/menu" },
+    ...(cafe ? [] : [{ id: "tables", done: tables.length > 0, text: "Set up your tables", href: "/app/tables" }]),
+    { id: "staff", done: members.some((m) => m.role !== "owner"), text: "Add your staff and their PINs", href: "/app/access" },
+    { id: "order", done: orders.length > 0, text: "Take your first order", href: "/app/pos" },
   ];
   const doneSteps = steps.filter((s) => s.done).length;
+  // steps the owner chose to skip for now (kept on this device, per outlet)
+  const skipKey = `restropi.setupSkip.${outlet.id || "main"}`;
+  const [skipped, setSkipped] = useState<string[]>([]);
+  useEffect(() => {
+    try { setSkipped(JSON.parse(localStorage.getItem(skipKey) || "[]")); } catch { setSkipped([]); }
+  }, [skipKey]);
+  const setSkip = (ids: string[]) => {
+    setSkipped(ids);
+    try { localStorage.setItem(skipKey, JSON.stringify(ids)); } catch {}
+  };
+  const pending = steps.filter((s) => !s.done && !skipped.includes(s.id));
   const vs = (a: number, b: number) => {
     const c = change(a, b);
-    return c === null ? { note: `vs ${dayName} last week: —`, up: true } : { note: `${c >= 0 ? "+" : ""}${c}% vs last ${dayName}`, up: c >= 0 };
+    // nothing to compare with (no sales last week): say nothing rather than "—"
+    return c === null ? { note: "", up: true } : { note: `${c >= 0 ? "+" : ""}${c}% vs last ${dayName}`, up: c >= 0 };
   };
   const pulse =
     today.orders === 0
@@ -110,30 +134,59 @@ function OwnerHome() {
     <>
       <PageHeader
         title={`${greeting}, ${me?.name.split(" ")[0] ?? ""}`}
-        subtitle={`${new Date(now).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} · ${outlet.name}`}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1.5"><CalendarDays size={16} strokeWidth={1.8} className="text-faint" />{new Date(now).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</span>
+            {outlet.name && (
+              <>
+                <span aria-hidden className="h-1 w-1 rounded-full bg-faint" />
+                <span className="inline-flex items-center gap-1.5"><MapPin size={16} strokeWidth={1.8} className="text-faint" />{outlet.name}</span>
+              </>
+            )}
+          </span>
+        }
         actions={<UserChip />}
       />
       <Page className="space-y-6">
         <NeedsYou />
-        {doneSteps < steps.length && (
+        {pending.length > 0 && (
           <section className="rounded-[24px] bg-surface p-5 lg:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-[19px] font-semibold tracking-tight">Get your restaurant ready</h2>
-                <p className="text-[14px] text-muted">{doneSteps} of {steps.length} done</p>
+                <p className="text-[14px] text-muted">
+                  {doneSteps} of {steps.length} done
+                  <button onClick={() => setSkip(steps.filter((x) => !x.done).map((x) => x.id))} className="ml-2 font-semibold text-ink/60 underline-offset-4 hover:text-ink hover:underline">Skip all for now</button>
+                </p>
               </div>
               <Ring value={doneSteps / steps.length} size={48} stroke={6} />
             </div>
             <div className="mt-4 space-y-2">
-              {steps.map((s) => (
-                <Link key={s.text} href={s.href} className="flex items-center gap-3 rounded-[14px] bg-canvas px-3.5 py-3 text-[15px] hover:bg-sunken">
-                  <span className={s.done ? "flex h-6 w-6 items-center justify-center rounded-full bg-jade text-white" : "h-6 w-6 rounded-full ring-2 ring-line"}>
-                    {s.done && <Check size={14} strokeWidth={3} />}
-                  </span>
-                  <span className={s.done ? "flex-1 text-muted line-through" : "flex-1 font-medium"}>{s.text}</span>
-                  {!s.done && <ArrowUpRight size={16} className="text-faint" />}
-                </Link>
-              ))}
+              {steps.map((s) => {
+                const skip = !s.done && skipped.includes(s.id);
+                return (
+                  <div key={s.id} className="flex items-center gap-2 rounded-[14px] bg-canvas pr-2 hover:bg-sunken">
+                    <Link href={s.href} className="flex min-w-0 flex-1 items-center gap-3 px-3.5 py-3 text-[15px]">
+                      <span className={s.done ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-jade text-white" : skip ? "h-6 w-6 shrink-0 rounded-full border-2 border-dashed border-line" : "h-6 w-6 shrink-0 rounded-full ring-2 ring-line"}>
+                        {s.done && <Check size={14} strokeWidth={3} />}
+                      </span>
+                      <span className={s.done ? "min-w-0 flex-1 text-muted line-through" : skip ? "min-w-0 flex-1 text-muted" : "min-w-0 flex-1 font-medium"}>
+                        {s.text}
+                        {skip && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[11.5px] font-semibold text-muted">Skipped</span>}
+                      </span>
+                      {!s.done && !skip && <ArrowUpRight size={16} className="shrink-0 text-faint" />}
+                    </Link>
+                    {!s.done && (
+                      <button
+                        onClick={() => setSkip(skip ? skipped.filter((x) => x !== s.id) : [...skipped, s.id])}
+                        className="h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold text-muted ring-1 ring-line hover:text-ink"
+                      >
+                        {skip ? "Undo" : "Skip"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
@@ -157,13 +210,15 @@ function OwnerHome() {
           {[
             { label: "Sales today", value: inr(today.sales), ...vs(today.sales, before.sales) },
             { label: "Orders", value: String(today.orders), ...vs(today.orders, before.orders) },
-            { label: "Average bill", value: today.avgBill ? inr(today.avgBill) : "—", ...vs(today.avgBill, before.avgBill) },
+            today.avgBill
+              ? { label: "Average bill", value: inr(today.avgBill), ...vs(today.avgBill, before.avgBill) }
+              : { label: "Paid bills", value: String(today.paidOrders ?? 0), note: "first bill shows the average", up: true },
             { label: "Not paid yet", value: inr(today.open), note: "open bills today", up: true },
           ].map((s) => (
             <div key={s.label} className="bg-surface p-4 lg:p-5">
               <div className="text-[13px] text-muted">{s.label}</div>
               <div className="mt-1 text-[26px] font-semibold tracking-tight tnum lg:text-[30px]">{s.value}</div>
-              <div className={s.up ? "text-[12.5px] font-medium text-muted" : "text-[12.5px] font-medium text-rose"}>{s.note}</div>
+              {s.note && <div className={s.up ? "text-[12.5px] font-medium text-muted" : "text-[12.5px] font-medium text-rose"}>{s.note}</div>}
             </div>
           ))}
         </div>

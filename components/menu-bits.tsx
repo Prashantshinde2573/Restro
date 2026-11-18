@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Flame, ImageIcon } from "lucide-react";
+import { Flame } from "lucide-react";
 import type { MenuItem } from "@/lib/types";
 
 /** Bestseller / Chef's special / New / Seasonal, each with its own look. */
@@ -79,20 +79,6 @@ export function PhotoSlide({ item, index = 0, className }: { item: MenuItem; ind
 }
 
 export const photoTotal = (item: MenuItem) => item.photos?.length || item.photoCount || 1;
-
-export function PhotosChip({ item, onClick }: { item: MenuItem; onClick: () => void }) {
-  const n = photoTotal(item);
-  if (n < 2) return null;
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur"
-      aria-label={`See ${n} photos of ${item.name}`}
-    >
-      <ImageIcon size={11} /> {n}
-    </button>
-  );
-}
 
 /** Swipeable gallery: same 4:3 ratio for every photo. */
 export function Gallery({ item }: { item: MenuItem }) {

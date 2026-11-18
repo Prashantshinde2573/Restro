@@ -6,8 +6,8 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
-  // camera: menu photos; microphone: voice ordering
-  { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(), payment=()" },
+  // camera: menu photos; microphone: voice ordering; payment: the restaurant's own Razorpay / Cashfree checkout
+  { key: "Permissions-Policy", value: 'camera=(self), microphone=(self), geolocation=(), payment=(self "https://api.razorpay.com" "https://checkout.razorpay.com" "https://sdk.cashfree.com" "https://api.cashfree.com" "https://sandbox.cashfree.com")' },
 ];
 
 const nextConfig: NextConfig = {
