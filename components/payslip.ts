@@ -23,7 +23,7 @@ export function openPayslipPdf(args: {
   const dayRows = days
     .filter((d) => d.status === "approved" && d.date.startsWith(p.month))
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((d) => `<tr><td>${esc(dayLabel(d.date))}</td><td>${d.kind === "half" ? "Half day" : "Full day"}</td><td class="n">${d.otHours ? `${d1(d.otHours)} h` : ""}</td></tr>`)
+    .map((d) => `<tr><td>${esc(dayLabel(d.date))}</td><td>${d.kind === "leave" ? "Leave" : d.kind === "half" ? "Half day" : "Full day"}</td><td class="n">${d.otHours ? `${d1(d.otHours)} h` : ""}</td></tr>`)
     .join("");
   const lines = entries
     .filter((e) => e.month === p.month)

@@ -15,6 +15,7 @@ import { currentMember, currentOutletId, logActivity } from "./live";
 import { attendanceId, todayIN, type Attendance, type PayEntry, type PayEntryType, type StaffPay } from "./payroll-math";
 
 export * from "./payroll-math";
+const KIND_TEXT: Record<Attendance["kind"], string> = { full: "full day", half: "half day", leave: "leave" };
 
 const attendanceStore = createStore<Attendance[]>([], "attendance", { kind: "collection", coll: "attendance" });
 const staffPayStore = createStore<StaffPay[]>([], "staffPay", { kind: "collection", coll: "staff_pay" });
@@ -31,7 +32,7 @@ const nameOf = (memberId: string, names: Record<string, string>) => names[member
 
 export const attendanceActions = {
   /** A staff member asks for a day (or changes their request while it is still waiting). */
-  request(input: { date: string; kind: "full" | "half"; otHours?: number; note?: string }) {
+  request(input: { date: string; kind: Attendance["kind"]; otHours?: number; note?: string }) {
     const me = currentMember();
     if (!me) return;
     const id = attendanceId(me.id, input.date);
@@ -58,22 +59,22 @@ export const attendanceActions = {
     attendanceStore.set(attendanceStore.get().filter((x) => x.id !== id));
   },
   /** Owner / manager: approve or reject, optionally changing full ↔ half or the overtime first. */
-  decide(id: string, status: "approved" | "rejected", names: Record<string, string>, patch?: { kind?: "full" | "half"; otHours?: number }) {
+  decide(id: string, status: "approved" | "rejected", names: Record<string, string>, patch?: { kind?: Attendance["kind"]; otHours?: number }) {
     const list = attendanceStore.get();
     const a = list.find((x) => x.id === id);
     if (!a) return;
     const next: Attendance = { ...a, ...(patch?.kind ? { kind: patch.kind } : {}), ...(patch?.otHours !== undefined ? { otHours: Math.min(16, Math.max(0, patch.otHours)) } : {}), status, decidedBy: byName(), decidedAt: new Date().toISOString() };
     attendanceStore.set(list.map((x) => (x.id === id ? next : x)));
-    logActivity("team", `${status === "approved" ? "Approved" : "Rejected"} attendance of ${nameOf(a.memberId, names)} for ${a.date}${status === "approved" ? ` (${next.kind === "half" ? "half day" : "full day"})` : ""}`, a.outletId);
+    logActivity("team", `${status === "approved" ? "Approved" : "Rejected"} attendance of ${nameOf(a.memberId, names)} for ${a.date}${status === "approved" ? ` (${KIND_TEXT[next.kind]})` : ""}`, a.outletId);
   },
   /** Owner / manager marks a day directly (already approved). Replaces that day if it exists. */
-  mark(memberId: string, date: string, kind: "full" | "half", otHours: number, names: Record<string, string>, note?: string) {
+  mark(memberId: string, date: string, kind: Attendance["kind"], otHours: number, names: Record<string, string>, note?: string) {
     const id = attendanceId(memberId, date);
     const now = new Date().toISOString();
     const row: Attendance = { id, memberId, date, kind, ...(otHours ? { otHours: Math.min(16, Math.max(0, otHours)) } : {}), ...(note?.trim() ? { note: note.trim().slice(0, 200) } : {}), status: "approved", requestedAt: now, decidedBy: byName(), decidedAt: now, byManager: true, outletId: currentOutletId() };
     const list = attendanceStore.get();
     attendanceStore.set(list.some((a) => a.id === id) ? list.map((a) => (a.id === id ? row : a)) : [row, ...list]);
-    logActivity("team", `Marked attendance of ${nameOf(memberId, names)} for ${date} (${kind === "half" ? "half day" : "full day"})`);
+    logActivity("team", `Marked attendance of ${nameOf(memberId, names)} for ${date} (${KIND_TEXT[kind]})`);
   },
   remove(id: string, names: Record<string, string>) {
     const a = attendanceStore.get().find((x) => x.id === id);
