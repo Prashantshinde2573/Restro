@@ -111,7 +111,15 @@ export default function AccessPage() {
   const applyPreset = (name: string, perms: Perm[]) => draft && setDraft({ ...draft, title: name, perms: perms.filter((p) => !permState(p).disabled) });
   const phoneDigits = draft?.phone.replace(/\D/g, "") ?? "";
   // staff sign in with mobile + PIN, so two people here can't share a number
-  const phoneTaken = !!draft && phoneDigits.length === 10 && members.some((m) => m.id !== draft.id && m.role !== "owner" && (m.phone ?? "").replace(/\D/g, "").slice(-10) === phoneDigits);
+  const takenBy = draft && phoneDigits.length === 10 ? members.find((m) => m.id !== draft.id && m.role !== "owner" && (m.phone ?? "").replace(/\D/g, "").slice(-10) === phoneDigits) : undefined;
+  const phoneTaken = !!takenBy;
+  // the number belongs to someone turned off: offer to bring that person back instead
+  const reopen = (m: Member) => {
+    setConfirmRemove(false);
+    setPin("");
+    setDraft({ ...m, active: true });
+    toast(`${m.name} is back on · set a PIN and save`);
+  };
   const phoneOk = phoneDigits.length === 10 && !phoneTaken;
   const pinOk = !cloud.rid || (draft?.isNew ? /^\d{4}$/.test(pin) : pin === "" || /^\d{4}$/.test(pin));
   const draftOk = !!draft && draft.name.trim().length > 1 && phoneOk && draft.outletIds.length > 0 && (draft.role === "subadmin" || draft.perms.length > 0) && pinOk;
@@ -291,7 +299,21 @@ export default function AccessPage() {
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Name"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Full name" /></Field>
-              <Field label="Mobile (WhatsApp)" hint={phoneTaken ? "Someone else here already has this number" : "They sign in with this number and their PIN"}><input className={inputCls} inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/[^\d ]/g, "").slice(0, 11) })} placeholder="98xxx xxxxx" /></Field>
+              <Field
+                label="Mobile (WhatsApp)"
+                hint={
+                  takenBy
+                    ? `${takenBy.name}${takenBy.active ? "" : " (turned off)"} already has this number${takenBy.outletIds.length ? ` · ${takenBy.outletIds.map(outletName).join(", ")}` : ""}`
+                    : "They sign in with this number and their PIN"
+                }
+              >
+                <input className={inputCls} inputMode="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value.replace(/[^\d ]/g, "").slice(0, 11) })} placeholder="98xxx xxxxx" />
+              </Field>
+              {takenBy && !takenBy.active && canManage(me, takenBy) && (
+                <button type="button" onClick={() => reopen(takenBy)} className="rounded-ctl bg-sky-soft/60 px-4 py-3 text-left text-[14px] font-semibold text-jade sm:col-span-2">
+                  Turn {takenBy.name.split(" ")[0]} back on instead →
+                </button>
+              )}
             </div>
 
             {cloud.rid && (
@@ -362,6 +384,15 @@ export default function AccessPage() {
                   (approve days, pay), outlet settings, stamp card, guests, campaigns and coupons, reports, insights and activity.
                 </p>
                 <p className="mt-2 text-muted">Can&apos;t: see or change other outlets, the plan and billing, or the shared menu (they can mark dishes sold out, or turn on their outlet&apos;s own menu).</p>
+                {owner && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
+                    <div>
+                      <div className="text-[15px] font-semibold text-ink">Attendance &amp; salary</div>
+                      <div className="text-[12.5px] text-muted">Keep their days and pay like staff (My attendance for them)</div>
+                    </div>
+                    <Toggle checked={!!draft.payrollOn} onChange={(payrollOn) => setDraft({ ...draft, payrollOn })} label="Attendance and salary" />
+                  </div>
+                )}
               </div>
             ) : (
             <div>

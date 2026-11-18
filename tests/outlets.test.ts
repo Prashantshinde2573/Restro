@@ -42,3 +42,15 @@ describe("coupons and stamp cards across outlets", () => {
     expect(stampProgramOf(outlets[2], outlets)).toBe(off);
   });
 });
+
+describe("attendance and salary: who is on it", () => {
+  const base = { id: "x", name: "X", phone: "", title: "", outletIds: ["a"], perms: [], active: true, hue: 0 };
+  it("staff always, owner never, sub admin only when turned on", async () => {
+    const { onPayroll } = await import("../lib/access");
+    expect(onPayroll({ ...base, role: "staff" })).toBe(true);
+    expect(onPayroll({ ...base, role: "owner" })).toBe(false);
+    expect(onPayroll({ ...base, role: "subadmin" })).toBe(false);
+    expect(onPayroll({ ...base, role: "subadmin", payrollOn: true })).toBe(true);
+    expect(onPayroll(null)).toBe(false);
+  });
+});

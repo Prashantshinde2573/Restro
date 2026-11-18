@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey } from "@/lib/i18n";
-import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, outletKinds, routeFor } from "@/lib/access";
+import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
 import { liveCalls, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { useReady } from "@/lib/store";
@@ -102,7 +102,7 @@ function useNav() {
   const state = (href: string): NavState | null => {
     const r = routeFor(href);
     if (!r) return "ok"; // home
-    if (href === "/app/attendance" && owner) return null; // the owner doesn't ask for days
+    if (href === "/app/attendance" && !onPayroll(me)) return null; // the owner, and sub admins the owner doesn't pay through the app
     if (r.feature) {
       const f = featureState(r.feature, plan, outletKinds(outlet));
       if (f === "type") return null; // not used in this kind of outlet — hidden
@@ -120,7 +120,7 @@ function useNav() {
   const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
   const tableAsks = tables.reduce((n, t) => n + t.parties.filter((p) => p.pendingApproval || p.status === "billing" || p.paymentPending).length, 0);
   const lowStock = useStock().filter((x) => here(x.outletId) && x.par > 0 && x.stock < x.par).length;
-  const outletPeople = new Set(useMembers().filter((m) => m.role !== "owner" && m.outletIds.includes(outlet.id)).map((m) => m.id));
+  const outletPeople = new Set(useMembers().filter((m) => onPayroll(m) && m.outletIds.includes(outlet.id)).map((m) => m.id));
   const asks = useAttendance().filter((a) => a.status === "pending" && a.memberId !== me?.id && outletPeople.has(a.memberId)).length;
   const counts: Record<string, number> = {
     "/app/orders": waiting,

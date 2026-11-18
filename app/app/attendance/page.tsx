@@ -10,6 +10,7 @@ import { StatusPill } from "@/components/attendance-bits";
 import { useToast } from "@/components/toast";
 import { useMe } from "@/lib/live";
 import { useReady } from "@/lib/store";
+import { onPayroll } from "@/lib/access";
 import { inr } from "@/lib/format";
 import {
   attendanceActions,
@@ -70,6 +71,15 @@ export default function MyAttendancePage() {
   const showForm = !current || (current.status === "pending" && editing);
 
   if (!me) return null;
+  if (!onPayroll(me))
+    return (
+      <>
+        <PageHeader title="My attendance" />
+        <Page>
+          <Empty icon={<CalendarCheck size={22} />} title="Attendance is off for you" body="The owner keeps attendance and salary for staff. They can turn it on for you in Members & access." />
+        </Page>
+      </>
+    );
   return (
     <>
       <PageHeader title="My attendance" subtitle={`${me.name} · ${monthLabel(month)}`} />

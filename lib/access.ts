@@ -172,9 +172,13 @@ export interface Member {
   hue: number;
   /** profile photo (public link), shown instead of the initials */
   photo?: string;
+  /** sub admin only: the owner tracks their attendance and salary too (staff always are) */
+  payrollOn?: boolean;
 }
 
 export const isOwner = (m?: Member | null) => m?.role === "owner";
+/** Whose days and salary are kept: every staff member, and a sub admin only when the owner turned it on. Never the owner. */
+export const onPayroll = (m?: Member | null) => !!m && (m.role === "staff" || (m.role === "subadmin" && !!m.payrollOn));
 /** The owner can do everything; a sub admin everything in their own outlets (screens check the outlet); staff what is ticked. */
 export const hasPerm = (m: Member | null | undefined, p: Perm) => !!m && m.active && (m.role === "owner" || m.role === "subadmin" || m.perms.includes(p));
 /** Owner, or staff the owner trusts to confirm payments. Everyone else's "paid" waits for them. */

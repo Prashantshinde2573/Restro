@@ -11,7 +11,7 @@ import { StatusPill } from "@/components/attendance-bits";
 import { AttendanceBoard } from "@/components/attendance-board";
 import { useToast } from "@/components/toast";
 import { openPayslipPdf } from "@/components/payslip";
-import { isOwner, type Member } from "@/lib/access";
+import { isOwner, onPayroll, type Member } from "@/lib/access";
 import { useAccount, useCurrentOutlet, useMe, useMembers } from "@/lib/live";
 import { useReady } from "@/lib/store";
 import { inr } from "@/lib/format";
@@ -49,7 +49,7 @@ export default function PayrollPage() {
   const members = useMembers();
   const outletNow = useCurrentOutlet();
   // only the people of the outlet on screen (a sub admin's own outlet; the owner switches outlets at the top)
-  const people = members.filter((m) => m.role !== "owner" && (!outletNow.id || m.outletIds.includes(outletNow.id)));
+  const people = members.filter((m) => onPayroll(m) && (!outletNow.id || m.outletIds.includes(outletNow.id)));
   const names = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
   const att = useAttendance();
   const pays = useStaffPay();
