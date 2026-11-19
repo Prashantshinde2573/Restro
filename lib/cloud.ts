@@ -1025,11 +1025,29 @@ export interface PlanEvent {
   id: number; rid: string; restaurant_name: string | null; at: string; kind: PlanEventKind; plan: string | null; prev_plan: string | null;
   renews_at: string | null; prev_renews_at: string | null; grace_until: string | null; months: number | null;
   list_price: number | null; coupon: string | null; off: number | null; amount: number | null; note: string | null;
+  /** how it was paid: "online" (Razorpay), "coupon" (free with a coupon), or empty (noted by the super admin) */
+  method?: string | null; ref?: string | null; gst?: number | null;
 }
 /** Super admin: start, extend or end a free trial. */
 export async function adminTrial(rid: string, action: "start" | "extend" | "end", days?: number): Promise<void> {
   const { error } = await sb().rpc("admin_trial", { p_rid: rid, p_action: action, p_days: days ?? null });
   if (error) throw new Error(error.message);
+}
+export interface PlanOrder { id: string; rid: string; plan: string; months: number; amount: number; coupon: string | null; status: "created" | "paid" | "failed"; created_at: string; error: string | null }
+/** Super admin: online plan payments started but not confirmed yet (last 7 days). */
+export async function adminOpenPlanOrders(): Promise<PlanOrder[]> {
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data, error } = await sb().from("plan_orders").select("id,rid,plan,months,amount,coupon,status,created_at,error").eq("status", "created").gte("created_at", since).order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as PlanOrder[]).map((o) => ({ ...o, amount: Number(o.amount) }));
+}
+/** Ask the server to check a plan payment with Razorpay now. */
+export async function checkPlanOrder(id: string): Promise<{ status: string; message?: string }> {
+  const { data } = await sb().auth.getSession();
+  const r = await fetch("/api/plan-pay/check", { method: "POST", headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) }, body: JSON.stringify({ id }) });
+  const d = (await r.json().catch(() => ({}))) as { status?: string; message?: string; error?: string };
+  if (!r.ok) throw new Error(d.error || "Could not check");
+  return { status: d.status ?? "pending", message: d.message };
 }
 /** Super admin: one restaurant's plan history (newest first). */
 export async function adminPlanEventsFor(rid: string): Promise<PlanEvent[]> {

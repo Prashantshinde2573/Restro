@@ -1,0 +1,3 @@
+-- Plan payments online (applied as migration plan_online_payments): table public.plan_orders,
+-- plan_events.gst/method/ref, and public.svc_apply_plan_order (service role only) which renews the
+-- plan once per paid order. See docs/SECURITY.md → "Plan payments online".

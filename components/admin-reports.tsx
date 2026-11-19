@@ -10,7 +10,7 @@ import clsx from "clsx";
 import { ChevronDown, Download, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Chips, Pill, Segmented, Sheet, inputCls } from "./ui";
-import { adminPlanEvents, type AdminRestaurant, type PlanEvent } from "@/lib/cloud";
+import { adminOpenPlanOrders, adminPlanEvents, checkPlanOrder, type AdminRestaurant, type PlanEvent, type PlanOrder } from "@/lib/cloud";
 import { STATE_LABEL, STATE_TONE, daysTo, monthlyRevenue, planState, stateText, type PlanState } from "@/lib/admin-plan";
 import { plans } from "@/lib/plans";
 import { inr } from "@/lib/format";
@@ -36,7 +36,7 @@ export function eventText(e: PlanEvent): string {
     case "grace": return `Grace period till ${dateText(e.grace_until)}`;
     case "grace_removed": return "Grace period removed";
     case "deleted": return "Restaurant deleted";
-    case "payment": return `Paid ${inr(e.amount ?? 0)}${e.months ? ` for ${monthsText(e.months)}` : ""}${e.coupon ? ` (coupon ${e.coupon}, ${inr(e.off ?? 0)} off)` : ""}`;
+    case "payment": return `Paid ${inr(e.amount ?? 0)}${e.method === "online" ? " online" : e.method === "coupon" ? " (free with coupon)" : ""}${e.months ? ` for ${monthsText(e.months)}` : ""}${e.coupon ? ` (coupon ${e.coupon}, ${inr(e.off ?? 0)} off)` : ""}`;
     case "trial": return e.note || "Free trial";
     default: return e.kind;
   }
@@ -102,7 +102,7 @@ export function AdminReportsSheet({ open, onClose, list, onOpen }: { open: boole
         ) : tab === "restaurants" ? (
           <Restaurants d={d} list={list} onOpen={onOpen} />
         ) : tab === "payments" ? (
-          <Payments pays={d.pays} />
+          <Payments pays={d.pays} list={list} onChanged={load} />
         ) : (
           <DownloadTab d={d} list={list} />
         )}
@@ -288,8 +288,28 @@ function Timeline({ ev }: { ev: PlanEvent[] }) {
 }
 
 /* ---------- Payments (month by month) ---------- */
-function Payments({ pays }: { pays: PlanEvent[] }) {
+function Payments({ pays, list, onChanged }: { pays: PlanEvent[]; list: AdminRestaurant[]; onChanged: () => void }) {
   const [p, setP] = useState<Period>("all");
+  // online payments started but not confirmed yet (the owner closed the page, the bank is slow…)
+  const [open, setOpen] = useState<PlanOrder[]>([]);
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+  const loadOpen = useCallback(() => { adminOpenPlanOrders().then(setOpen).catch(() => setOpen([])); }, []);
+  useEffect(() => { loadOpen(); }, [loadOpen]);
+  const checkNow = async (id: string) => {
+    setBusy(id);
+    setMsg("");
+    try {
+      const r = await checkPlanOrder(id);
+      setMsg(r.status === "paid" ? "Paid — the plan is renewed." : r.status === "failed" ? r.message || "Not paid." : "Not paid yet (the owner may not have finished).");
+      if (r.status === "paid") onChanged();
+      loadOpen();
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  };
   const range = periodRange(p);
   const shown = pays.filter((e) => inRange(e.at, range));
   const months = [...new Set(shown.map((e) => monthKey(e.at)))];
@@ -302,6 +322,22 @@ function Payments({ pays }: { pays: PlanEvent[] }) {
         <b>{inr(total)}</b> collected · {range[2]}
         <span className="block text-[13px]">{shown.length} payment{shown.length === 1 ? "" : "s"}{off ? ` · ${inr(off)} given as coupon discount` : ""}</span>
       </div>
+      {open.length > 0 && (
+        <section className="overflow-hidden rounded-group bg-saffron-soft/60">
+          <div className="px-4 pt-3 text-[14px] font-semibold">Online, waiting for confirmation ({open.length})</div>
+          <p className="px-4 text-[12.5px] text-muted">Started in the app but not confirmed by Razorpay yet. Checked again automatically every day.</p>
+          {open.map((o) => (
+            <div key={o.id} className="flex items-center gap-3 border-t border-line/60 px-4 py-2.5 first:border-0">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-medium">{list.find((r) => r.id === o.rid)?.name ?? o.rid}</span>
+                <span className="block text-[12.5px] text-muted">{dateText(o.created_at)} · {planName(o.plan)} · {monthsText(o.months)} · {inr(o.amount)}</span>
+              </span>
+              <Button size="sm" variant="plain" className="!bg-surface" disabled={busy === o.id} onClick={() => checkNow(o.id)}>{busy === o.id ? "Checking…" : "Check now"}</Button>
+            </div>
+          ))}
+          {msg && <p className="border-t border-line/60 px-4 py-2 text-[13px] font-medium">{msg}</p>}
+        </section>
+      )}
       {shown.length === 0 && <p className="rounded-group bg-surface px-4 py-8 text-center text-[14px] text-muted">No payments in this period.</p>}
       {months.map((k) => {
         const m = shown.filter((e) => monthKey(e.at) === k);
@@ -318,6 +354,7 @@ function Payments({ pays }: { pays: PlanEvent[] }) {
                   <span className="block truncate text-[14px] font-medium">{e.restaurant_name ?? e.rid}</span>
                   <span className="block text-[12.5px] text-muted">
                     {planName(e.plan)} · {monthsText(e.months) || "—"} · {e.note === "Renewal" ? "renewal" : e.note === "New restaurant" ? "new" : (e.note ?? "").toLowerCase()}
+                    {e.method === "online" && <span className="ml-1.5 rounded-md bg-jade-soft px-1.5 py-0.5 text-[11.5px] font-semibold text-jade-deep">Online</span>}
                     {e.coupon && <span className="ml-1.5 rounded-md bg-sunken px-1.5 py-0.5 font-mono text-[11.5px] font-semibold text-ink">{e.coupon} −{inr(e.off ?? 0)}</span>}
                   </span>
                 </span>
@@ -367,9 +404,9 @@ function DownloadTab({ d, list }: { d: D; list: AdminRestaurant[] }) {
       ],
     }];
     const add = (name: string, head: string[], rows: XCell[][], total?: XCell[]) => sheets.push({ name, rows: [[name], [p === "all" || name === "Free trials" || name === "Ending & ended" || name === "Restaurants" ? "As of today" : `Period: ${range[2]}`], [], head, ...rows, ...(total ? [total] : [])] });
-    if (pick.has("payments")) add("Payments", ["Date", "Restaurant", "Plan", "Months", "For", "Price (Rs)", "Coupon", "Discount (Rs)", "Paid (Rs)"],
-      pays.map((e) => [t(e.at), e.restaurant_name ?? e.rid, planName(e.plan), e.months ?? "", e.note ?? "", e.list_price ?? "", e.coupon ?? "", e.off || "", e.amount ?? 0]),
-      ["Total", "", "", "", "", pays.reduce((s, e) => s + (e.list_price ?? 0), 0), "", pays.reduce((s, e) => s + (e.off ?? 0), 0), pays.reduce((s, e) => s + (e.amount ?? 0), 0)]);
+    if (pick.has("payments")) add("Payments", ["Date", "Restaurant", "Plan", "Months", "For", "How", "Razorpay payment", "Price (Rs)", "Coupon", "Discount (Rs)", "Paid (Rs)"],
+      pays.map((e) => [t(e.at), e.restaurant_name ?? e.rid, planName(e.plan), e.months ?? "", e.note ?? "", e.method === "online" ? "Online (Razorpay)" : e.method === "coupon" ? "Free with coupon" : "Noted by super admin", e.method === "online" ? e.ref ?? "" : "", e.list_price ?? "", e.coupon ?? "", e.off || "", e.amount ?? 0]),
+      ["Total", "", "", "", "", "", "", pays.reduce((s, e) => s + (e.list_price ?? 0), 0), "", pays.reduce((s, e) => s + (e.off ?? 0), 0), pays.reduce((s, e) => s + (e.amount ?? 0), 0)]);
     if (pick.has("restaurants")) {
       const rows = [...list].sort((a, b) => a.name.localeCompare(b.name)).map((r) => {
         const ps = d.paidOf(r.id);

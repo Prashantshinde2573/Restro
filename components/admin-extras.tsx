@@ -57,7 +57,8 @@ export function PlatformSheet({ open, onClose }: { open: boolean; onClose: () =>
       footer={<Button size="lg" className="w-full" disabled={busy || !!err} onClick={save}>{err ?? (busy ? "Saving…" : "Save")}</Button>}
     >
       <div className="space-y-4">
-        <p className="text-[14px] text-muted">Owners see these when they renew or change their plan. They pay by UPI and send the request on WhatsApp to this number.</p>
+        <OnlinePlanPay open={open} />
+        <p className="text-[14px] text-muted">Owners also see these when they renew or change their plan: they can pay by UPI and send the request on WhatsApp to this number.</p>
         <Field label="WhatsApp number" hint="With country code, like 919876543210. A 10-digit number gets +91.">
           <input className={inputCls} inputMode="tel" value={p.whatsapp} onChange={(e) => setP({ ...p, whatsapp: e.target.value })} placeholder="919876543210" />
         </Field>
@@ -327,5 +328,45 @@ export function PlanCouponField({ plan, list, value, onChange, onDraft, label = 
       {err && <p className="mt-1 text-[13px] font-medium text-rose">{err}</p>}
       {!value && !err && list != null && <p className="mt-1 text-[12.5px] text-muted">Plan price {inr(list)}. The use is counted on the coupon and kept with this restaurant.</p>}
     </Field>
+  );
+}
+
+
+/* ---------- Restropi's own Razorpay for plan payments: is it on? ---------- */
+function OnlinePlanPay({ open }: { open: boolean }) {
+  const [c, setC] = useState<{ online: boolean; test: boolean; webhook: boolean } | null>(null);
+  const toast = useToast();
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/plan-pay", { cache: "no-store" }).then((r) => r.json()).then(setC).catch(() => setC({ online: false, test: false, webhook: false }));
+  }, [open]);
+  const hook = typeof window === "undefined" ? "" : `${window.location.origin}/api/plan-pay/webhook`;
+  if (!c) return null;
+  return (
+    <div className={clsx("space-y-2 rounded-group p-4", c.online ? "bg-jade-soft" : "bg-surface")}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[15px] font-semibold">Online plan payments (Razorpay)</div>
+        <span className={clsx("rounded-full px-2.5 py-1 text-[12px] font-bold", c.online ? (c.test ? "bg-saffron-soft text-saffron" : "bg-jade text-white") : "bg-sunken text-muted")}>
+          {c.online ? (c.test ? "Test mode" : "On") : "Off"}
+        </span>
+      </div>
+      {c.online ? (
+        <p className="text-[13.5px] text-ink/80">
+          Owners pay right in the app and the plan renews by itself. Payments show in Reports as <b>online</b>.
+          {c.test && " Test keys: no real money is taken. Put the live keys in Vercel when you're ready."}
+        </p>
+      ) : (
+        <p className="text-[13.5px] text-muted">Add <b>RAZORPAY_KEY_ID</b> and <b>RAZORPAY_KEY_SECRET</b> in Vercel → Settings → Environment Variables, then redeploy.</p>
+      )}
+      <div className="border-t border-line/70 pt-2 text-[13px]">
+        <div className="font-semibold">Webhook {c.webhook ? "· set ✓" : "· not set yet (recommended)"}</div>
+        <p className="text-muted">
+          In Razorpay → Webhooks, add this URL with the events <b>payment.captured</b> and <b>order.paid</b>, and put its secret in Vercel as <b>RAZORPAY_WEBHOOK_SECRET</b>. Without it, payments are still checked when the owner comes back and once a day.
+        </p>
+        <button type="button" className="mt-1.5 w-full truncate rounded-ctl bg-canvas px-3 py-2 text-left font-mono text-[12.5px]" onClick={() => { void navigator.clipboard?.writeText(hook); toast("Webhook URL copied"); }}>
+          {hook}
+        </button>
+      </div>
+    </div>
   );
 }
