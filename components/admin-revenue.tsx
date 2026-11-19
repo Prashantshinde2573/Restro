@@ -1,6 +1,6 @@
 "use client";
 
-// Super admin: Restropi's own subscription revenue (plans × outlets), with plan and status filters.
+// Super admin: Restropi's own subscription revenue (one plan price per restaurant), with plan and status filters.
 // Restaurants' own sales are theirs and are not shown here.
 import { useState } from "react";
 import { Chips, Segmented, Sheet } from "./ui";
@@ -18,7 +18,7 @@ export function RevenueSheet({ open, onClose, list }: { open: boolean; onClose: 
 
   const shown = list.filter((r) => (plan === "all" || r.plan === plan) && (status === "all" || r.status === status));
   const table = shown
-    .map((r) => ({ r, mrr: r.status === "active" && r.plan !== "chain" ? price(r.plan) * Math.max(1, r.outlets) : 0 }))
+    .map((r) => ({ r, mrr: r.status === "active" && r.plan !== "chain" ? price(r.plan) : 0 }))
     .sort((a, b) => (sort === "name" ? a.r.name.localeCompare(b.r.name) : sort === "renews" ? a.r.renewsAt.localeCompare(b.r.renewsAt) : b.mrr - a.mrr));
   const mrr = table.reduce((s, x) => s + x.mrr, 0);
   const now = Date.now();
@@ -51,7 +51,7 @@ export function RevenueSheet({ open, onClose, list }: { open: boolean; onClose: 
 
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
           {[
-            ["Per month", inr(mrr), "active plans × outlets"],
+            ["Per month", inr(mrr), "active plans (one price per restaurant)"],
             ["Per year", inr(mrr * 12), "if all renew"],
             ["Renewals in 30 days", String(due30.length), due30.length ? `${inr(dueAmt)}/mo to collect` : "none due"],
             ["Paying restaurants", String(table.filter((x) => x.mrr > 0).length), `of ${shown.length} shown`],
@@ -93,7 +93,7 @@ export function RevenueSheet({ open, onClose, list }: { open: boolean; onClose: 
             </div>
           ))}
         </div>
-        <p className="text-[12px] text-faint">Restropi revenue = plan price × outlets for active restaurants (Chain is priced by hand, so not counted). Restaurants&apos; own sales are not shown here.</p>
+        <p className="text-[12px] text-faint">Restropi revenue = plan price of each active restaurant (its outlets are included) (Chain is priced by hand, so not counted). Restaurants&apos; own sales are not shown here.</p>
       </div>
     </Sheet>
   );

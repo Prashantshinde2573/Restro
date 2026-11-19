@@ -104,7 +104,7 @@ export function PricingTable() {
         ))}
       </div>
       <p className="mt-8 text-center text-[13.5px] text-ink/65">No card needed for the trial. Cancel any time. Your data stays downloadable.</p>
-      <p className="mx-auto mt-2 max-w-2xl text-center text-[12px] leading-relaxed text-ink/65">* Prices are per outlet. Plans, features and offers are indicative and subject to change.</p>
+      <p className="mx-auto mt-2 max-w-2xl text-center text-[12px] leading-relaxed text-ink/65">* One price per restaurant, for every outlet the plan includes. Plans, features and offers are indicative and subject to change.</p>
     </div>
   );
 }

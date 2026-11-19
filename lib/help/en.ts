@@ -78,7 +78,7 @@ export const en: Manual = {
       title: "3. Plans: what is included",
       summary: "Prices, outlets, staff and features in each plan",
       blocks: [
-        { p: "Prices are **per outlet, per month**. A locked item in the menu (🔒) is part of a higher plan; the owner can tap it to see the upgrade." },
+        { p: "Prices are **per restaurant, per month**: one price covers every outlet the plan includes (Pro: up to 3 outlets). A locked item in the menu (🔒) is part of a higher plan; the owner can tap it to see the upgrade." },
         { table: {
           head: ["", "Starter", "Growth", "Pro", "Chain"],
           rows: [
@@ -109,9 +109,9 @@ export const en: Manual = {
         } },
         { h: "Paying for longer" },
         { list: [
-          `**Monthly** — Starter ${PRICE.starter}, Growth ${PRICE.growth}, Pro ${PRICE.pro} per outlet.`,
-          `**6 months, 1 month free** — you pay for 5 months: Starter ${PRICE.starter6}, Growth ${PRICE.growth6}, Pro ${PRICE.pro6} per outlet.`,
-          `**1 year, 2 months free** — you pay for 10 months: Starter ${PRICE.starterYear}, Growth ${PRICE.growthYear}, Pro ${PRICE.proYear} per outlet.`,
+          `**Monthly** — Starter ${PRICE.starter}, Growth ${PRICE.growth}, Pro ${PRICE.pro}.`,
+          `**6 months, 1 month free** — you pay for 5 months: Starter ${PRICE.starter6}, Growth ${PRICE.growth6}, Pro ${PRICE.pro6}.`,
+          `**1 year, 2 months free** — you pay for 10 months: Starter ${PRICE.starterYear}, Growth ${PRICE.growthYear}, Pro ${PRICE.proYear}.`,
         ] },
         { h: "Renew or change your plan" },
         { steps: [

@@ -120,7 +120,7 @@ export default function SettingsPage() {
               <div>
                 <div className="text-[13px] text-canvas/60">Your plan</div>
                 <div className="text-[24px] font-semibold tracking-tight">{plan.name}</div>
-                <div className="text-[14px] text-canvas/70">{plan.monthly ? `${inr(plan.monthly)} per outlet / month · ` : ""}{outlets.length} outlet{outlets.length === 1 ? "" : "s"}</div>
+                <div className="text-[14px] text-canvas/70">{plan.monthly ? `${inr(plan.monthly)} / month · ` : ""}{outlets.length} outlet{outlets.length === 1 ? "" : "s"}</div>
               </div>
               <Pill tone={pst.inGrace || days < 0 ? "rose" : days <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{pst.inGrace ? "Grace period" : days < 0 ? "Ended" : days <= RENEW_WARN_DAYS ? `${days} days left` : "Active"}</Pill>
             </div>
@@ -171,7 +171,7 @@ export default function SettingsPage() {
               <div key={p.id} className={clsx("rounded-group bg-surface p-4", cur && "ring-2 ring-jade")}>
                 <div className="flex items-baseline justify-between">
                   <span className="text-[17px] font-semibold">{p.name}</span>
-                  <span className="text-[15px] font-semibold tnum">{p.monthly ? `${inr(p.monthly)}/outlet` : "Custom"}</span>
+                  <span className="text-[15px] font-semibold tnum">{p.monthly ? `${inr(p.monthly)}/mo` : "Custom"}</span>
                 </div>
                 <div className="text-[13px] text-muted">{p.outlets}</div>
                 <ul className="mt-2 space-y-1 text-[13.5px]">

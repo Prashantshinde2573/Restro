@@ -269,12 +269,13 @@ function PlanCouponEdit({ draft, onClose, onSaved, taken }: { draft: Draft | nul
 }
 
 /* ---------- plan coupon when adding or renewing a restaurant ---------- */
-/** What the plan costs for these months and outlets, before any coupon (null: priced by hand, e.g. Chain). */
-export function planListPrice(planId: string, months: number, outlets = 1): number | null {
+/** What the plan costs for these months, before any coupon (null: priced by hand, e.g. Chain).
+ *  One price per restaurant: the outlets the plan allows are included. */
+export function planListPrice(planId: string, months: number): number | null {
   const p = plans.find((x) => x.id === planId);
   if (!p?.monthly) return null;
   const per = months === 6 || months === 12 ? cyclePrice(p, months === 6 ? "half" : "yearly") ?? p.monthly * months : p.monthly * months;
-  return per * Math.max(1, outlets);
+  return per;
 }
 export type CouponPick = { code: string; kind: "percent" | "flat"; value: number } | null;
 export const couponOffFor = (c: CouponPick, list: number) => (!c ? 0 : c.kind === "percent" ? Math.round((list * Math.min(100, c.value)) / 100) : Math.min(list, c.value));

@@ -39,7 +39,7 @@ import {
 } from "@/lib/cloud";
 import { plans } from "@/lib/plans";
 import { inr, timeAgo } from "@/lib/format";
-import { RENEW_WARN_DAYS } from "@/lib/access";
+import { OUTLET_LIMIT, RENEW_WARN_DAYS } from "@/lib/access";
 
 type PlanId = AdminRestaurant["plan"];
 type Filter = "all" | "active" | "due" | "expired" | "suspended";
@@ -130,7 +130,7 @@ export default function AdminPage() {
     [all, f, q],
   );
   const live = all.filter((r) => is(r, "active"));
-  const mrr = live.reduce((s, r) => s + planPrice(r.plan) * Math.max(1, r.outlets), 0);
+  const mrr = live.reduce((s, r) => s + planPrice(r.plan), 0);
   const open = all.find((r) => r.id === openId) ?? null;
 
   if (cloud.status === "off")
@@ -536,8 +536,8 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
   const day = (t: number) => Math.floor((t + 5.5 * 3600_000) / DAY);
   const left = day(new Date(r.renewsAt).getTime()) - day(Date.now());
   const ended = left < 0;
-  const full = p?.monthly ? p.monthly * months * outlets : null;
-  const list = planListPrice(r.plan, months, r.outlets);
+  const full = p?.monthly ? p.monthly * months : null;
+  const list = planListPrice(r.plan, months);
   const offer = full != null && list != null ? full - list : 0;
   const off = list != null ? couponOffFor(coupon, list) : 0;
   const pay = list != null ? list - off : null;
@@ -553,14 +553,14 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
       {/* where the plan stands now */}
       <div className="rounded-group bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-[15px] font-semibold">{planName(r.plan)} plan{p?.monthly ? ` · ${inr(p.monthly)} a month per outlet` : " · custom price"}</div>
+          <div className="text-[15px] font-semibold">{planName(r.plan)} plan{p?.monthly ? ` · ${inr(p.monthly)} a month` : " · custom price"}</div>
           <Pill tone={ended ? "rose" : left <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{ended ? `Ended ${-left} day${left === -1 ? "" : "s"} ago` : left === 0 ? "Ends today" : `${left} day${left === 1 ? "" : "s"} left`}</Pill>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-3 text-[14px]">
           <div><div className="text-[12.5px] text-muted">Customer since</div><b>{dateText(r.createdAt)}</b></div>
           <div><div className="text-[12.5px] text-muted">{ended ? "Was paid till" : "Paid till"}</div><b className={ended ? "text-rose" : ""}>{dateText(r.renewsAt)}</b></div>
         </div>
-        <p className="mt-2 text-[12.5px] text-muted">{outlets} outlet{outlets === 1 ? "" : "s"} · the price is per outlet.</p>
+        <p className="mt-2 text-[12.5px] text-muted">{outlets} outlet{outlets === 1 ? "" : "s"} of {OUTLET_LIMIT[r.plan] === Infinity ? "any number" : OUTLET_LIMIT[r.plan]} in this plan · one price for the restaurant.</p>
       </div>
 
       {/* 1. how long */}
@@ -580,7 +580,7 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
         <p className="text-[12.5px] text-muted">{ended ? "The old plan has ended, so the new one starts today." : `Starts after the paid days end (${dateText(r.renewsAt)}), so no day is lost.`}</p>
         {list != null && full != null && (
           <div className="mt-3 border-t border-line/70 pt-2">
-            <Row l={`${inr(p!.monthly!)} × ${outlets} outlet${outlets === 1 ? "" : "s"} × ${months} month${months === 1 ? "" : "s"}`} v={inr(full)} />
+            <Row l={`${planName(r.plan)} ${inr(p!.monthly!)} × ${months} month${months === 1 ? "" : "s"}`} v={inr(full)} />
             {offer > 0 && <Row l={months === 12 ? "1-year price (2 months free)" : "6-month price (1 month free)"} v={`−${inr(offer)}`} tone="text-jade-deep" />}
             {coupon && <Row l={`Coupon ${coupon.code} (${coupon.kind === "percent" ? `${coupon.value}% off` : `${inr(coupon.value)} off`})`} v={`−${inr(off)}`} tone="text-jade-deep" />}
             <Row l="Owner pays" v={inr(pay!)} strong />
@@ -675,7 +675,7 @@ function RestaurantSheet({
   };
   const extend = (months: number, c: CouponPick) => {
     const iso = renewTill(months);
-    const list = planListPrice(r.plan, months, r.outlets);
+    const list = planListPrice(r.plan, months);
     const use = c && list != null ? c : null;
     const pay = list == null ? null : list - couponOffFor(use, list);
     const msg = `Renew till ${dateText(iso)}${pay != null ? ` · owner pays ${inr(pay)}` : ""}${use ? ` (coupon ${use.code})` : ""}`;

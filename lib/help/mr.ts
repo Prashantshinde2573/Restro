@@ -79,7 +79,7 @@ export const mr: Manual = {
       title: "3. प्लॅन: कशात काय मिळतं",
       summary: "प्रत्येक प्लॅनची किंमत, आउटलेट, स्टाफ आणि फीचर्स",
       blocks: [
-        { p: "किंमती **प्रति आउटलेट, प्रति महिना** आहेत. मेनूमध्ये कुलूप (🔒) असलेलं फीचर वरच्या प्लॅनमध्ये आहे; मालक ते दाबून अपग्रेड पाहू शकतो." },
+        { p: "किंमती **प्रति रेस्टॉरंट, प्रति महिना** आहेत: प्लॅनमधले सगळे आउटलेट एकाच किंमतीत (Pro: 3 आउटलेटपर्यंत). मेनूमध्ये कुलूप (🔒) असलेलं फीचर वरच्या प्लॅनमध्ये आहे; मालक ते दाबून अपग्रेड पाहू शकतो." },
         { table: {
           head: ["", "Starter", "Growth", "Pro", "Chain"],
           rows: [
@@ -110,9 +110,9 @@ export const mr: Manual = {
         } },
         { h: "जास्त कालावधीसाठी भरल्यास" },
         { list: [
-          `**महिन्याला** — Starter ${PRICE.starter}, Growth ${PRICE.growth}, Pro ${PRICE.pro} प्रति आउटलेट.`,
-          `**6 महिने, 1 महिना मोफत** — 5 महिन्यांचे पैसे: Starter ${PRICE.starter6}, Growth ${PRICE.growth6}, Pro ${PRICE.pro6} प्रति आउटलेट.`,
-          `**1 वर्ष, 2 महिने मोफत** — 10 महिन्यांचे पैसे: Starter ${PRICE.starterYear}, Growth ${PRICE.growthYear}, Pro ${PRICE.proYear} प्रति आउटलेट.`,
+          `**महिन्याला** — Starter ${PRICE.starter}, Growth ${PRICE.growth}, Pro ${PRICE.pro}.`,
+          `**6 महिने, 1 महिना मोफत** — 5 महिन्यांचे पैसे: Starter ${PRICE.starter6}, Growth ${PRICE.growth6}, Pro ${PRICE.pro6}.`,
+          `**1 वर्ष, 2 महिने मोफत** — 10 महिन्यांचे पैसे: Starter ${PRICE.starterYear}, Growth ${PRICE.growthYear}, Pro ${PRICE.proYear}.`,
         ] },
         { h: "प्लॅन रिन्यू किंवा बदलणे" },
         { steps: [
