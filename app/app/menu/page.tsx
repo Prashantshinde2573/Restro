@@ -2,13 +2,13 @@
 
 import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
-import { DragGhost, DragHandle, useDishDrag } from "@/components/dish-drag";
+import { DragGhost, DragHandle, useDishDrag, type DishDrag } from "@/components/dish-drag";
 import { MenuFromPhoto } from "@/components/menu-import";
 import { OptionsEditor, PhotoUploader, SizesEditor } from "@/components/dish-editor";
 import { hasSizes, sizesOf } from "@/lib/sizes";
@@ -166,57 +166,22 @@ export default function MenuPage() {
           </div>
         )}
         {tab === "dishes" || !engineeringOn ? (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {cats.map((c) => (
-              <div
-                key={c.id}
-                data-drop-cat={c.id}
-                className={clsx("rounded-[24px] transition", drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft/60 ring-2 ring-jade ring-offset-4 ring-offset-canvas")}
-              >
-              <Group
-                title={`${c.icon ? c.icon + " " : ""}${c.name}`}
-                action={<button onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> Edit</button>}
-                flush
-              >
-                {canEditDishes && !items.some((m) => m.categoryId === c.id) && (
-                  <button onClick={() => setEdit("new", c.id)} className="flex w-full items-center gap-2 px-4 py-3.5 text-left text-[14px] font-semibold text-jade lg:px-5">
-                    <Plus size={16} /> Add the first dish to {c.name}
-                  </button>
-                )}
-                {items.filter((m) => m.categoryId === c.id).map((m) => {
-                  const margin = Math.round(((m.price - m.cost) / m.price) * 100);
-                  return (
-                    <div key={m.id} className={clsx("flex items-center gap-3 border-b border-line/80 px-4 py-3 last:border-0 lg:px-5", drag?.id === m.id && "opacity-40")}>
-                      <DragHandle name={m.name} onPointerDown={startDrag(m)} />
-                      <button onClick={() => (canEditDishes ? setEdit(m) : toast("Ask the owner or your manager to change this dish. You can mark it sold out here."))} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                        <PhotoSlide item={m} className="h-11 w-11 shrink-0 rounded-[12px]" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <DietMark diet={m.diet} />
-                            <span className={clsx("truncate text-[15px] font-medium", !m.available && "text-muted")}>{m.name}</span>
-                          </div>
-                          <div className="text-[13px] text-muted tnum">
-                            {hasSizes(m) ? `${sizesOf(m).map((z) => `${z.name} ${inr(z.price)}`).join(" · ")}` : inr(m.price)}{m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>} · {m.soldThisWeek} sold
-                            {m.photos?.length ? ` · ${m.photos.length} photos` : ""}
-                          </div>
-                        </div>
-                      </button>
-                      <Toggle
-                        label={`${m.name} available`}
-                        checked={m.available}
-                        onChange={(v) => {
-                          menuActions.setAvailable(m.id, v);
-                          toast(v ? `${m.name} is back on the menu` : `${m.name} marked sold out${many ? ` at ${outletNow.name}` : ""}`);
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </Group>
-              </div>
-            ))}
-            <DragGhost drag={drag} label={catName} />
-          </div>
+          <MenuList
+            cats={cats}
+            items={items}
+            canEdit={canEditDishes}
+            drag={drag}
+            startDrag={startDrag}
+            onOpen={(m) => (canEditDishes ? setEdit(m) : toast("Ask the owner or your manager to change this dish. You can mark it sold out here."))}
+            onAdd={(catId) => setEdit("new", catId)}
+            onEditCat={(c) => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })}
+            onNewCat={() => { setNewCat(null); setCatsOpen(true); }}
+            onAvailable={(m, v) => {
+              menuActions.setAvailable(m.id, v);
+              toast(v ? `${m.name} is back on the menu` : `${m.name} marked sold out${many ? ` at ${outletNow.name}` : ""}`);
+            }}
+            ghost={<DragGhost drag={drag} label={catName} />}
+          />
         ) : (
           <div className="space-y-6">
 {(() => {
@@ -649,5 +614,211 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
         </div>
       )}
     </Group>
+  );
+}
+
+/* ---------------- the dishes, by category ---------------- */
+type Cat = { id: string; name: string; icon?: string };
+type Item = MenuItem & { soldThisWeek: number };
+
+/** A category's picture: its emoji, or its first letter when it has none. */
+function CatIcon({ c, size = 36 }: { c: Cat; size?: number }) {
+  const icon = c.icon && c.icon !== "🍽️" ? c.icon : "";
+  return (
+    <span className="flex shrink-0 items-center justify-center rounded-[10px] bg-sunken font-semibold text-muted" style={{ width: size, height: size, fontSize: icon ? size * 0.5 : size * 0.42 }}>
+      {icon || c.name.trim().charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+/** A dish without a photo: its first letters on a soft colour, so every row looks finished. */
+function DishThumb({ m }: { m: Item }) {
+  if (m.photos?.length) return <PhotoSlide item={m} className="h-12 w-12 shrink-0 rounded-[12px]" />;
+  const words = m.name.trim().split(/\s+/);
+  const letters = (words.length > 1 ? words[0][0] + words[1][0] : m.name.trim().slice(0, 2)).toUpperCase();
+  return (
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] text-[15px] font-bold" style={{ background: `hsl(${m.hue} 55% 92%)`, color: `hsl(${m.hue} 45% 32%)` }}>
+      {letters}
+    </span>
+  );
+}
+
+function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEditCat, onNewCat, onAvailable, ghost }: {
+  cats: Cat[]; items: Item[]; canEdit: boolean; drag: DishDrag | null; startDrag: (m: MenuItem) => (e: RPointerEvent) => void;
+  onOpen: (m: Item) => void; onAdd: (catId: string) => void; onEditCat: (c: Cat) => void; onNewCat: () => void;
+  onAvailable: (m: Item, v: boolean) => void; ghost: ReactNode;
+}) {
+  const [q, setQ] = useState("");
+  const [show, setShow] = useState<"all" | "on" | "off">("all");
+  const [active, setActive] = useState(cats[0]?.id ?? "");
+  const off = items.filter((m) => !m.available).length;
+  const match = (m: Item) => (!q || m.name.toLowerCase().includes(q.trim().toLowerCase())) && (show === "all" || (show === "on" ? m.available : !m.available));
+  const filtering = !!q.trim() || show !== "all";
+  const groups = cats
+    .map((c) => ({ c, all: items.filter((m) => m.categoryId === c.id), list: items.filter((m) => m.categoryId === c.id && match(m)) }))
+    .filter((g) => !filtering || g.list.length > 0);
+  // dishes whose category was removed still show, at the end
+  const lost = items.filter((m) => !cats.some((c) => c.id === m.categoryId) && match(m));
+
+  // the category on screen is highlighted in the list / tabs
+  const sections = useRef(new Map<string, HTMLElement>());
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (es) => {
+        const top = es.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (top) setActive((top.target as HTMLElement).dataset.dropCat ?? "");
+      },
+      { rootMargin: "-120px 0px -60% 0px" },
+    );
+    sections.current.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [groups.length, q, show]);
+  const go = (id: string) => {
+    setActive(id);
+    sections.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(`cat-tab-${id}`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  };
+
+  return (
+    <div className="lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-8">
+      {/* desktop: the categories down the side (drop a dish on one to move it) */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-4 space-y-1">
+          <div className="px-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wide text-muted">Categories</div>
+          {cats.map((c) => {
+            const n = items.filter((m) => m.categoryId === c.id).length;
+            return (
+              <button
+                key={c.id}
+                data-drop-cat={c.id}
+                onClick={() => go(c.id)}
+                className={clsx(
+                  "flex w-full items-center gap-2.5 rounded-[12px] px-2.5 py-2 text-left text-[14.5px] transition",
+                  active === c.id ? "bg-surface font-semibold text-ink shadow-sm" : "text-muted hover:bg-surface/60 hover:text-ink",
+                  drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft ring-2 ring-jade",
+                )}
+              >
+                <CatIcon c={c} size={30} />
+                <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                <span className="text-[12.5px] tabular-nums text-faint">{n}</span>
+              </button>
+            );
+          })}
+          <button onClick={onNewCat} className="mt-2 flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-[14px] font-semibold text-jade hover:bg-surface/60">
+            <Plus size={16} /> Category
+          </button>
+        </div>
+      </aside>
+
+      <div className="min-w-0 space-y-5">
+        {/* search + filter, and on phones the category tabs */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+              <input className={clsx(inputCls, "h-11 pl-10 pr-9")} placeholder="Search dishes" value={q} onChange={(e) => setQ(e.target.value)} />
+              {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted hover:bg-sunken"><X size={15} /></button>}
+            </div>
+            <Segmented value={show} onChange={setShow} options={[{ value: "all", label: `All ${items.length}` }, { value: "on", label: "Available" }, { value: "off", label: `Sold out${off ? ` ${off}` : ""}` }]} />
+          </div>
+        </div>
+        {!filtering && cats.length > 1 && (
+          <div className="sticky z-20 -mx-4 flex gap-2 overflow-x-auto bg-canvas/95 px-4 py-2 backdrop-blur lg:hidden [scrollbar-width:none]" style={{ top: "calc(54px + env(safe-area-inset-top, 0px))" }}>
+            {cats.map((c) => (
+              <button key={c.id} id={`cat-tab-${c.id}`} data-drop-cat={c.id} onClick={() => go(c.id)}
+                className={clsx("flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[13.5px] font-semibold ring-1 transition",
+                  active === c.id ? "bg-ink text-canvas ring-ink" : "bg-surface text-muted ring-line",
+                  drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft text-jade-deep ring-2 ring-jade")}>
+                {c.icon && c.icon !== "🍽️" && <span>{c.icon}</span>}{c.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filtering && groups.length === 0 && lost.length === 0 && (
+          <p className="rounded-group bg-surface px-4 py-10 text-center text-[14.5px] text-muted">No dishes match{q ? ` “${q}”` : ""}.</p>
+        )}
+
+        {groups.map(({ c, all, list }) => {
+          const soldOut = all.filter((m) => !m.available).length;
+          return (
+            <section
+              key={c.id}
+              data-drop-cat={c.id}
+              ref={(el) => { if (el) sections.current.set(c.id, el); else sections.current.delete(c.id); }}
+              className={clsx("scroll-mt-[120px] rounded-[22px] transition lg:scroll-mt-6", drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft/60 ring-2 ring-jade ring-offset-4 ring-offset-canvas")}
+            >
+              <div className="mb-2 flex items-center gap-3 px-1">
+                <CatIcon c={c} />
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-[17px] font-semibold leading-tight">{c.name}</h2>
+                  <p className="text-[12.5px] text-muted">{all.length} dish{all.length === 1 ? "" : "es"}{soldOut ? ` · ${soldOut} sold out` : ""}</p>
+                </div>
+                <button onClick={() => onEditCat(c)} aria-label={`Edit category ${c.name}`} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> <span className="hidden sm:inline">Edit</span></button>
+                {canEdit && <button onClick={() => onAdd(c.id)} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-jade ring-1 ring-line hover:bg-jade-soft"><Plus size={14} /> Dish</button>}
+              </div>
+              <div className="overflow-hidden rounded-group bg-surface">
+                {list.length === 0 ? (
+                  canEdit ? (
+                    <button onClick={() => onAdd(c.id)} className="flex w-full items-center justify-center gap-2 px-4 py-6 text-[14px] font-semibold text-jade"><Plus size={16} /> Add the first dish to {c.name}</button>
+                  ) : (
+                    <p className="px-4 py-6 text-center text-[14px] text-muted">No dishes yet.</p>
+                  )
+                ) : (
+                  list.map((m) => <DishRow key={m.id} m={m} canEdit={canEdit} dragging={drag?.id === m.id} startDrag={startDrag} onOpen={onOpen} onAvailable={onAvailable} />)
+                )}
+              </div>
+            </section>
+          );
+        })}
+
+        {lost.length > 0 && (
+          <section>
+            <h2 className="mb-2 px-1 text-[17px] font-semibold">No category</h2>
+            <div className="overflow-hidden rounded-group bg-surface">
+              {lost.map((m) => <DishRow key={m.id} m={m} canEdit={canEdit} dragging={drag?.id === m.id} startDrag={startDrag} onOpen={onOpen} onAvailable={onAvailable} />)}
+            </div>
+          </section>
+        )}
+        {canEdit && !filtering && (
+          <button onClick={onNewCat} className="flex w-full items-center justify-center gap-2 rounded-group border border-dashed border-line px-4 py-4 text-[14px] font-semibold text-muted hover:text-ink lg:hidden">
+            <Plus size={16} /> New category
+          </button>
+        )}
+        {ghost}
+      </div>
+    </div>
+  );
+}
+
+function DishRow({ m, canEdit, dragging, startDrag, onOpen, onAvailable }: {
+  m: Item; canEdit: boolean; dragging: boolean; startDrag: (m: MenuItem) => (e: RPointerEvent) => void;
+  onOpen: (m: Item) => void; onAvailable: (m: Item, v: boolean) => void;
+}) {
+  const margin = m.price > 0 ? Math.round(((m.price - m.cost) / m.price) * 100) : 0;
+  const price = hasSizes(m) ? sizesOf(m).map((z) => `${z.name} ${inr(z.price)}`).join(" · ") : inr(m.price);
+  return (
+    <div className={clsx("group flex items-center gap-3 border-b border-line/70 px-3 py-3 last:border-0 sm:px-4", dragging && "opacity-40", !m.available && "bg-sunken/40")}>
+      {canEdit && <span className="hidden sm:block"><DragHandle name={m.name} onPointerDown={startDrag(m)} /></span>}
+      <button onClick={() => onOpen(m)} className={clsx("flex min-w-0 flex-1 items-center gap-3 text-left", !m.available && "opacity-60")}>
+        <DishThumb m={m} />
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5">
+            <DietMark diet={m.diet} />
+            <span className="truncate text-[15px] font-medium">{m.name}</span>
+            {m.isNew && <span className="shrink-0 rounded-full bg-saffron-soft px-1.5 py-0.5 text-[10.5px] font-bold uppercase text-saffron">New</span>}
+          </span>
+          <span className="mt-0.5 block truncate text-[13px] text-muted tnum">
+            <b className="font-semibold text-ink">{price}</b>
+            {m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>}
+            {m.soldThisWeek > 0 && <> · {m.soldThisWeek} sold this week</>}
+          </span>
+        </span>
+      </button>
+      <span className="flex shrink-0 items-center gap-2.5">
+        <span className={clsx("hidden text-[12.5px] font-semibold sm:inline", m.available ? "text-jade-deep" : "text-rose")}>{m.available ? "Available" : "Sold out"}</span>
+        <Toggle label={`${m.name} available`} checked={m.available} onChange={(v) => onAvailable(m, v)} />
+      </span>
+    </div>
   );
 }
