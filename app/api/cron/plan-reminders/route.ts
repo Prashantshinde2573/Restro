@@ -3,6 +3,7 @@
 import { emailReady, log, siteOrigin } from "@/lib/server/env";
 import { json } from "@/lib/server/http";
 import { runPlanReminders } from "@/lib/server/plans";
+import { settleOpenOrders } from "@/lib/server/razorpay";
 import { timingSafeEqual } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -22,9 +23,11 @@ export async function GET(req: Request) {
   if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
   if (!emailReady()) return json({ error: "not_configured" }, 503);
   try {
+    // first: online plan payments a phone didn't come back for (so a paid plan gets no reminder)
+    const pay = await settleOpenOrders(siteOrigin(req)).catch(() => ({ checked: 0, paid: 0 }));
     const r = await runPlanReminders(siteOrigin(req));
-    log("plan.cron", r);
-    return json({ ok: true, ...r });
+    log("plan.cron", { ...r, payChecked: pay.checked, payPaid: pay.paid });
+    return json({ ok: true, ...r, payments: pay });
   } catch (e) {
     log("plan.cron_failed", { reason: (e as Error).message.slice(0, 160) });
     return json({ error: "failed" }, 500);

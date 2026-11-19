@@ -84,3 +84,17 @@ Item 4 is switched on and item 2 is decided (items 1 and 3 are done).
 - `guest_add_on(r, order, lines)`: a guest of the order (or its group) adds dishes to an open order.
   Same dish and price checks as a new order; at most 60 dishes and 20 rounds; refused once the bill
   is asked for, paid or online payment started. Earlier dishes and payments can't be changed.
+
+## Plan payments online (Restropi's Razorpay, 19 Nov 2026)
+
+- Keys live only in Vercel environment variables: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and
+  optionally `RAZORPAY_WEBHOOK_SECRET`. Only the key id (public by design) reaches the browser.
+- `/api/plan-pay/start`: owner of that restaurant only (checked against `restaurants.owner_uid`),
+  same-site, 12 tries an hour. The price and coupon are worked out on the server from `lib/plans`
+  and `plan_coupons`; the phone's numbers are never used. A paused restaurant can't pay here.
+- The plan is renewed only by `svc_apply_plan_order` (service role only), after the server asks
+  Razorpay for the order's payments and finds a captured payment of the exact amount (an authorized
+  payment of the exact amount is captured first). Once per order, under a row lock.
+- `/api/plan-pay/check` (owner or super admin), the signed webhook (`/api/plan-pay/webhook`) and the
+  daily cron all lead to the same check; the webhook body itself is never trusted for amounts.
+- `plan_orders`: owner reads their own, super admin all; nobody writes from the browser.
