@@ -923,9 +923,10 @@ export async function adminPlanEmail(rid: string, event: "renewed" | "grace" | "
       headers: { "content-type": "application/json", ...(data.session ? { authorization: `Bearer ${data.session.access_token}` } : {}) },
       body: JSON.stringify({ rid, event }),
     });
-    return r.ok;
+    const b = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; later?: boolean };
+    return { ok: r.ok && b.ok !== false, error: b.error ?? (r.ok ? undefined : `server ${r.status}`), later: !!b.later };
   } catch {
-    return false;
+    return { ok: false, error: "no internet", later: false };
   }
 }
 export interface BackupList {

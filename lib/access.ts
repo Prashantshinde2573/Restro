@@ -114,7 +114,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
     perms: [
       { key: "pos", label: "Take orders", feature: "pos" },
       { key: "orders", label: "See and accept orders", feature: "orders" },
-      { key: "charge", label: "Charge bills", feature: "pos" },
+      { key: "charge", label: "Charge bills (collect the money · the bill closes without the owner's OK)", feature: "pos" },
       { key: "tables", label: "Tables", feature: "tables" },
       { key: "kitchen", label: "Kitchen orders (KOT)", feature: "kitchen" },
     ],

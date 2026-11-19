@@ -9,7 +9,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { CYCLES, cyclePrice, plans, PLAN_GST_RATE, type Cycle } from "@/lib/plans";
 import { emailReady, log } from "./env";
-import { sendPlanUpdate } from "./plans";
+import { noteEmailProblem, sendPlanUpdate } from "./plans";
 import { admin } from "./supabase-admin";
 
 export const rz = {
@@ -118,8 +118,9 @@ export function webhookOk(raw: string, signature: string) {
 
 /** After a plan is paid: the owner gets the "plan renewed" email (once per order). */
 export async function afterPaid(r: { status: string; rid?: string; already?: boolean }, origin: string) {
-  if (r.status !== "paid" || r.already || !r.rid || !emailReady()) return;
-  await sendPlanUpdate(r.rid, "renewed", origin).catch(() => {});
+  if (r.status !== "paid" || r.already || !r.rid) return;
+  if (!emailReady()) return void (await noteEmailProblem(r.rid, "renewed", "email isn't set up on the server (RESEND_API_KEY)"));
+  await sendPlanUpdate(r.rid, "renewed", origin).catch((e) => noteEmailProblem(r.rid!, "renewed", (e as Error).message));
 }
 
 /** Orders still waiting (a phone closed before it came back): check them with Razorpay. */

@@ -61,11 +61,22 @@ export async function runPlanReminders(origin: string, now = new Date()) {
   return { checked: rows?.length ?? 0, sent: sent.length, failed };
 }
 
+/** A plan email that didn't go: noted in Admin → App errors (with the reason, never the address). */
+export async function noteEmailProblem(rid: string, what: string, reason: string) {
+  log("plan.email_failed", { rid, what, reason: reason.slice(0, 120) });
+  try {
+    await admin().from("app_errors").insert({ rid: rid.slice(0, 80), role: "server", kind: "email", message: `Plan email (${what}) not sent: ${reason}`.slice(0, 1000), context: { what } });
+  } catch {}
+}
+
 /** Right after the super admin renews, changes the plan or gives a grace period. */
 export async function sendPlanUpdate(rid: string, event: "renewed" | "grace" | "plan", origin: string) {
   const { data: r } = await admin().from("restaurants").select("id, name, owner, owner_email, plan, renews_at, grace_until, status").eq("id", rid).maybeSingle();
   const row = r as Row | null;
-  if (!row?.owner_email) return { ok: false, error: "No owner email" };
+  if (!row?.owner_email) {
+    await noteEmailProblem(rid, event, "the restaurant has no owner email");
+    return { ok: false, error: "The restaurant has no owner email" };
+  }
   const info = { restaurant: row.name, owner: row.owner ?? "", plan: planName(row.plan), renewUrl: `${origin}/app/settings#plan` };
   const st = planStatus({ renewsAt: row.renews_at, graceUntil: row.grace_until, status: row.status });
   // grace: only once the plan has really ended and the grace period is running. While the plan
@@ -82,5 +93,6 @@ export async function sendPlanUpdate(rid: string, event: "renewed" | "grace" | "
   const res = await sendEmail({ from: FROM_SUPPORT, to: row.owner_email, replyTo: FROM_SUPPORT, tag: `plan_${event}`, ...mail });
   if (!res.ok && gk) await unclaim(row.id, gk);
   if (res.ok) log("plan.update_sent", { rid, event, to: mask(row.owner_email) });
+  else await noteEmailProblem(rid, event, res.error);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }

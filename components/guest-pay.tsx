@@ -232,7 +232,14 @@ export function ThankYou({
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
   const [when] = useState(() => new Date(at ?? Date.now()));
-  const total = payments.reduce((s, p) => s + p.amount, 0);
+  // the final bill only: one line per way of paying (a bill over several orders holds a share on each)
+  const merged = payments.reduce<Payment[]>((acc, p) => {
+    const hit = acc.find((x) => x.method === p.method);
+    if (hit) hit.amount = Math.round((hit.amount + p.amount) * 100) / 100;
+    else acc.push({ ...p });
+    return acc;
+  }, []);
+  const total = merged.reduce((s, p) => s + p.amount, 0);
   const label = (p: Payment) => (p.method === "upi" ? "UPI" : p.method === "cash" ? tx(lang, "Cash", "रोख") : tx(lang, "Card", "कार्ड"));
   const Icon = (p: Payment) => (p.method === "upi" ? QrCode : p.method === "cash" ? Banknote : CreditCard);
   const first = name?.trim().split(" ")[0];
@@ -303,13 +310,13 @@ export function ThankYou({
             )}
             <div className="text-[13px] font-medium text-muted">{pending ? tx(lang, "Payment sent", "पैसे पाठवले") : tx(lang, "Total paid", "एकूण भरले")}</div>
             <div className="mt-0.5 text-[40px] font-bold leading-none tracking-tight tnum">{inr(total)}</div>
-            {payments.length > 0 && (
+            {merged.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                {payments.map((p, i) => {
+                {merged.map((p, i) => {
                   const I = Icon(p);
                   return (
                     <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-[13px] font-semibold">
-                      <I size={14} className="text-muted" /> {label(p)} <span className="tnum text-muted">{inr(p.amount)}</span>
+                      <I size={14} className="text-muted" /> {tx(lang, `Paid by ${label(p)}`, `${label(p)} ने भरले`)}{merged.length > 1 && <span className="tnum text-muted">{inr(p.amount)}</span>}
                     </span>
                   );
                 })}

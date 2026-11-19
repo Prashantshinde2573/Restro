@@ -39,7 +39,8 @@ const longDay = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en
 
 /** What one box shows. */
 function cellOf(a: Attendance | undefined, date: string, today: string, pay?: StaffPay): Cell {
-  if (date > today) return "none";
+  // days ahead: only leave (set by the manager, or asked by the person) shows
+  if (date > today) return a?.kind === "leave" && a.status === "approved" ? "leave" : a?.kind === "leave" && a.status === "pending" ? "pending" : "none";
   if (pay?.joinedOn && date < pay.joinedOn) return "none";
   if (pay?.leftOn && date > pay.leftOn) return "none";
   if (a?.status === "approved") return a.kind;
@@ -104,8 +105,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
     return { p, h, a, l, ot };
   };
   const open = (m: Member, date: string) => {
-    if (date > today) return;
-    setEdit({ m, date });
+    setEdit({ m, date }); // a day ahead opens as "set leave"
   };
 
   return (
@@ -175,7 +175,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
                         return (
                           <td key={d} className="border-t border-line/70 px-[2px] py-1.5">
                             <button
-                              disabled={d > today || !canEdit(m)}
+                              disabled={!canEdit(m)}
                               onClick={() => open(m, d)}
                               aria-label={`${m.name} ${longDay(d)}: ${k}`}
                               className={clsx("relative flex h-[36px] w-[34px] items-center justify-center rounded-[9px] text-[13px] font-bold transition active:scale-95", CELL[k].cls, d === today && k === "none" && "ring-1 ring-inset ring-ink/30")}
@@ -195,7 +195,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
               </tbody>
             </table>
           </div>
-          <p className="border-t border-line/70 px-4 py-2.5 text-[12.5px] text-muted"><span className="lg:hidden">Swipe sideways for the whole month · </span>Tap a box to mark that day · tap a date to mark everyone · tap a name for their calendar. Orange dot = overtime.</p>
+          <p className="border-t border-line/70 px-4 py-2.5 text-[12.5px] text-muted"><span className="lg:hidden">Swipe sideways for the whole month · </span>Tap a box to mark that day (a day ahead: set leave) · tap a date to mark everyone · tap a name for their calendar. Orange dot = overtime.</p>
         </div>
       )}
 
@@ -391,9 +391,9 @@ function PersonView({
             return (
               <button
                 key={d}
-                disabled={d > today || !canEdit}
+                disabled={!canEdit}
                 onClick={() => onOpen(m, d)}
-                className={clsx("relative flex aspect-square flex-col items-center justify-center rounded-[12px] transition active:scale-95", CELL[k].cls, d === today && "ring-2 ring-ink/60", d > today && "opacity-40")}
+                className={clsx("relative flex aspect-square flex-col items-center justify-center rounded-[12px] transition active:scale-95", CELL[k].cls, d === today && "ring-2 ring-ink/60", d > today && k === "none" && "opacity-40")}
               >
                 <span className="text-[14px] font-semibold tnum">{dayNum(d)}</span>
                 <span className="text-[10.5px] font-bold leading-none opacity-80">{CELL[k].label || " "}</span>
@@ -402,7 +402,7 @@ function PersonView({
             );
           })}
         </div>
-        <p className="mt-3 text-[12.5px] text-muted">Tap a day to mark it.</p>
+        <p className="mt-3 text-[12.5px] text-muted">Tap a day to mark it · tap a day ahead to set leave.</p>
       </div>
     </div>
   );
@@ -422,6 +422,56 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
   const [ot, setOt] = useState(rec?.otHours ? String(rec.otHours) : "");
   const [note, setNote] = useState(rec?.note ?? "");
   const holiday = pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && weekday(date) === pay.weeklyOff;
+  const ahead = date > todayIN(); // a day still to come: it can only be set as leave
+  if (ahead) {
+    const onLeave = rec?.kind === "leave" && rec.status === "approved";
+    const asked = rec?.kind === "leave" && rec.status === "pending";
+    const setLeave = () => {
+      if (asked) attendanceActions.decide(rec!.id, "approved", names);
+      else attendanceActions.mark(m.id, date, "leave", 0, names, note);
+      toast(`${m.name.split(" ")[0]} · leave on ${longDay(date)}`);
+      onClose();
+    };
+    const drop = () => {
+      if (asked) attendanceActions.decide(rec!.id, "rejected", names);
+      else if (rec) attendanceActions.remove(rec.id, names);
+      toast(asked ? "Leave request turned down" : "Leave removed");
+      onClose();
+    };
+    return (
+      <Sheet open onClose={onClose} title={m.name}>
+        <div className="space-y-4">
+          <div className="text-[15px] text-muted">{longDay(date)}</div>
+          {asked && (
+            <div className="rounded-group bg-saffron-soft px-4 py-3 text-[14px]">
+              <b>{m.name.split(" ")[0]} asked for leave</b>{rec!.note ? ` · “${rec!.note}”` : ""}
+            </div>
+          )}
+          <div className="flex items-center gap-3 rounded-group bg-[#efedff] px-4 py-3 text-[#3f3294]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#5b4bc4] text-[18px] font-bold text-white">L</span>
+            <span className="text-[14px] leading-snug">
+              <b className="block text-[15px]">{onLeave ? "On leave this day" : "Set leave for this day"}</b>
+              {pay?.paidLeaves ? `${pay.paidLeaves} paid leave a month; more is unpaid.` : "Leave is unpaid (no paid leave set in Salary)."}
+            </span>
+          </div>
+          {!onLeave && !asked && (
+            <label className="block">
+              <span className="mb-1 block text-[13px] font-medium text-muted">Reason (optional)</span>
+              <input className="h-12 w-full rounded-ctl bg-surface px-3 text-[15px] outline-none ring-1 ring-line focus:ring-jade/40" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. family function" />
+            </label>
+          )}
+          <div className="flex gap-2">
+            {rec ? (
+              <Button variant="tinted" onClick={drop}><X size={16} /> {asked ? "Turn down" : "Remove leave"}</Button>
+            ) : (
+              <Button variant="tinted" onClick={onClose}><X size={16} /> Cancel</Button>
+            )}
+            {!onLeave && <Button className="flex-1" onClick={setLeave}><Check size={16} /> {asked ? "Approve leave" : "Set leave"}</Button>}
+          </div>
+        </div>
+      </Sheet>
+    );
+  }
   const save = () => {
     const h = Number(ot || 0);
     if (!Number.isFinite(h) || h < 0 || h > 16) return toast("Overtime: 0 to 16 hours");

@@ -84,6 +84,12 @@ function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
 type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean; online?: boolean; rejects?: number };
 type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
+/** One bill, one line per way of paying: the shares on each order added up (UPI ₹100 + UPI ₹58 → UPI ₹158). */
+const mergePayments = (ps: Payment[]) => {
+  const by = new Map<string, Payment>();
+  for (const p of ps) by.set(p.method, { ...p, amount: Math.round(((by.get(p.method)?.amount ?? 0) + p.amount) * 100) / 100 });
+  return [...by.values()];
+};
 /** How many times the restaurant has marked a payment on these orders "Not received". */
 const rejectCount = (os: Order[]) => os.reduce((n, o) => n + (o.paymentLog ?? []).filter((l) => /^Not received/.test(l.text ?? "")).length, 0);
 
@@ -396,6 +402,9 @@ export default function GuestOrder() {
     window.addEventListener("pointerdown", once, { once: true });
     return () => window.removeEventListener("pointerdown", once);
   }, []);
+  // self-service counter: guests collect their order themselves (no "Call a waiter"; a clear "ready" popup)
+  const selfServe = !!settings.selfService;
+  const [readyPop, setReadyPop] = useState<number[] | null>(null);
   const readyNow = useMemo(() => (counter || payNow ? myOrders.filter((o) => o.status === "ready") : []), [myOrders, counter, payNow]);
   useEffect(() => {
     if (!ordersReadyEarly) return;
@@ -407,6 +416,7 @@ export default function GuestOrder() {
     const fresh = readyNow.filter((o) => !readySeen.current!.has(o.id));
     readySeen.current = ids;
     if (!fresh.length) return;
+    if (selfServe) setReadyPop(readyNow.map((o) => o.number));
     try {
       navigator.vibrate?.([400, 150, 400, 150, 700]);
     } catch {
@@ -435,7 +445,7 @@ export default function GuestOrder() {
       localStorage.setItem(
         `restropi.thanks.${table}`,
         JSON.stringify({
-          place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: pays, orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now(),
+          place: settings.name, logo: settings.logo ?? "", name: guest?.name ?? "", payments: mergePayments(pays), orderNo: orderNo ?? 0, lang, rid: cloud.rid ?? "", at: Date.now(),
           ...(stampProg ? { stampProg, stampsHave: myStamps } : {}),
           outletId: t?.outletId ?? currentOutletId() ?? "",
         }),
@@ -514,10 +524,11 @@ export default function GuestOrder() {
     }
     // Pay at the end: say thank you only once the owner has confirmed the money (the bill is paid).
     if (os.every((o) => o.status === "paid" || o.status === "cancelled") && os.some((o) => o.status === "paid")) {
-      const paid = os.find((o) => o.status === "paid")!;
+      const paid = os.filter((o) => o.status === "paid");
+      const got = paid.flatMap((o) => o.payments ?? []); // the whole bill (each order holds its share)
       setWaiting(null);
       try { localStorage.removeItem(waitKey); } catch {}
-      finishVisit(paid.payments ?? payments, paid.number);
+      finishVisit(got.length ? got : payments, paid[0].number);
       return;
     }
     // remember how many "Not received" marks were there when we started waiting
@@ -709,6 +720,8 @@ export default function GuestOrder() {
   // opening hours apply to table QR only; the counter QR takes orders any time (pause still stops both)
   const hours = orderingOpen(counter ? { ordersPaused: settings.ordersPaused } : settings);
   const isOpen = hours.open;
+  // "Order more" on the bill: only while it is still open (not paid, no payment on its way)
+  const canOrderMore = !payNow && billState === "open" && !waiting && qrOn && isOpen;
   const closedText = hours.open
     ? ""
     : hours.why === "paused"
@@ -929,6 +942,26 @@ export default function GuestOrder() {
             <span className="block text-[17px] font-bold leading-tight">{tx(lang, "Your order is ready!", "तयार आहे!")}</span>
             <span className="block text-[14px] text-white/90">{tx(lang, "Collect it at the counter", "काउंटरवरून घ्या")}</span>
           </span>
+        </div>
+      )}
+      {/* ---------- self-service: "your order is ready" popup ---------- */}
+      {readyPop && readyNow.length > 0 && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-6 animate-fade-in" role="alertdialog" aria-modal="true" aria-label={tx(lang, "Your order is ready", "तुमची ऑर्डर तयार झाली आहे")} onClick={() => setReadyPop(null)}>
+          <div className="w-full max-w-sm animate-pop overflow-hidden rounded-[28px] bg-surface text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="relative bg-gradient-to-b from-jade to-jade-deep px-6 pb-7 pt-8 text-white">
+              <span className="relative mx-auto block h-20 w-20">
+                <span className="absolute inset-0 animate-ping rounded-full bg-white/25" aria-hidden />
+                <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white text-jade"><BellRing size={38} strokeWidth={2.2} /></span>
+              </span>
+              <div className="relative mt-4 text-[13px] font-semibold uppercase tracking-[.14em] text-white/80">{tx(lang, "Token", "टोकन")}</div>
+              <div className="relative text-[44px] font-extrabold leading-none tnum">{readyNow.map((o) => num(o.number)).join(", ")}</div>
+            </div>
+            <div className="px-6 pb-6 pt-5">
+              <div className="text-[22px] font-bold leading-tight">{tx(lang, "Your order is ready!", "तुमची ऑर्डर तयार झाली आहे!")}</div>
+              <p className="mt-1.5 text-[15.5px] leading-snug text-muted">{tx(lang, "Please collect it from the counter.", "कृपया काउंटरवरून घ्या.")}</p>
+              <Button size="lg" className="mt-5 w-full" onClick={() => setReadyPop(null)}>{tx(lang, "OK, coming", "ठीक आहे, येतो")}</Button>
+            </div>
+          </div>
         </div>
       )}
       {/* ---------- how many guests (table orders, before the menu) ---------- */}
@@ -1177,7 +1210,17 @@ export default function GuestOrder() {
             <span className="ml-auto text-[15px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
           </button>
         ) : view === "orders" && !payNow && billState !== "none" ? (
-          <div className="grid grid-cols-1 gap-2">
+          <div className={clsx("grid gap-2", canOrderMore ? "grid-cols-[auto_1fr]" : "grid-cols-1")}>
+            {/* add more dishes to the same bill (before it is paid) */}
+            {canOrderMore && (
+              <button
+                onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}
+                className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-4 text-jade-deep shadow-float ring-1 ring-jade/30"
+              >
+                <span className="flex items-center gap-1 text-[15px] font-semibold"><Plus size={17} strokeWidth={2.6} /> {tx(lang, "Order more", "आणखी ऑर्डर")}</span>
+                <span className="text-[11px] font-medium leading-tight text-muted">{tx(lang, "Same bill", "त्याच बिलात")}</span>
+              </button>
+            )}
             {/* where the bill stands: pay it / already paid, owner confirming / paid */}
             {!payNow && billState === "open" && awaitingServe && !waiting && (
               <div className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-3 text-center shadow-float ring-1 ring-line">
@@ -1218,7 +1261,7 @@ export default function GuestOrder() {
         cartCount={count}
         ordersBadge={openOrders.length}
         showCart={qrOn}
-        waiter={counter || !t ? null : myCall ? myCall.status as "open" | "taken" : "idle"}
+        waiter={counter || !t || selfServe ? null : myCall ? myCall.status as "open" | "taken" : "idle"}
         onWaiter={() => { setReason(null); setWaiterOpen(true); }}
         lang={lang}
       />
@@ -1286,7 +1329,7 @@ export default function GuestOrder() {
               </div>
             </div>
           </div>
-            {!counter && (
+            {!counter && !selfServe && (
               myCall?.status === "taken" ? (
                 <div className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-jade-soft py-3.5 text-[15px] font-semibold text-jade-deep">
                   <Check size={17} /> {tx(lang, `${myCall.toName ?? "A waiter"} is coming to your table`, `${myCall.toName ?? "वेटर"} तुमच्या टेबलवर येत आहे`)}
