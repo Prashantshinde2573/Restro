@@ -1,0 +1,7 @@
+-- Super admin reports (applied as migrations plan_events_history + plan_payment_fix_name).
+-- public.plan_events: every plan event of every restaurant, kept for good (super admin reads only).
+--   Trigger private.log_plan_events on restaurants writes: new, renewed, date_changed, plan_changed,
+--   paused, turned_on, grace, grace_removed, deleted.
+--   public.admin_plan_payment(rid, 'new'|'renew'|'trial', months, list, coupon, note) writes what was
+--   paid (and checks + counts a plan coupon), or a free trial. Super admin only.
+-- Backfilled on 19 Nov 2026: each restaurant's "new" at its created_at, and earlier plan coupon uses.
