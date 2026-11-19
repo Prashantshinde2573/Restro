@@ -5,7 +5,7 @@
 ## Pages
 
 - [Home](https://www.restropi.com/): what Restropi does, who it is for
-- [Pricing](https://www.restropi.com/pricing): Starter ₹699, Growth ₹1,999 and Pro ₹2,999 a month per outlet; Chain for 4+ outlets
+- [Pricing](https://www.restropi.com/pricing): Starter ₹699, Growth ₹1,999 and Pro ₹2,999 a month, one price per restaurant (Pro covers up to 3 outlets); Chain for 4+ outlets
 - [Privacy policy](https://www.restropi.com/privacy): personal data and cookies
 
 ## Contact

@@ -1,4 +1,5 @@
-// The plans Restropi sells. Prices in ₹ per outlet per month.
+// The plans Restropi sells. Prices in ₹ per restaurant per month: one price covers every outlet
+// the plan allows (Pro: up to 3 outlets at the same price).
 import type { Plan } from "./types";
 
 export const plans: Plan[] = [
@@ -27,7 +28,7 @@ export const plans: Plan[] = [
     monthly: 2999,
     yearly: 29990,
     blurb: "For owners who want the numbers to run themselves.",
-    outlets: "Up to 3 outlets",
+    outlets: "Up to 3 outlets, same price",
     features: ["Everything in Growth", "WhatsApp API: bills and offers sent from your own number", "Voice ordering", "Prep forecast", "Leak guard alerts", "Menu engineering"],
   },
   {
@@ -48,7 +49,7 @@ export const CYCLES: { id: Cycle; label: string; short: string; per: string; mon
   { id: "half", label: "6 months · 1 free", short: "6 months · 1 month free", per: "6 months", months: 6 },
   { id: "yearly", label: "Yearly · 2 free", short: "1 year · 2 months free", per: "year", months: 12 },
 ];
-/** Price of a plan for a cycle (per outlet), or null for "let's talk". */
+/** Price of a plan for a cycle (per restaurant, all its outlets), or null for "let's talk". */
 export function cyclePrice(p: Pick<Plan, "monthly" | "yearly">, c: Cycle): number | null {
   if (!p.monthly) return null;
   return c === "monthly" ? p.monthly : c === "half" ? p.monthly * 5 : p.yearly ?? p.monthly * 10;

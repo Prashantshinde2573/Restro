@@ -66,7 +66,7 @@ export function PlanSheet() {
   const p = plans.find((x) => x.id === plan)!;
   const count = Math.max(1, outlets.length);
   const each = cyclePrice(p, cycle);
-  const base = each ? each * count : 0;
+  const base = each ?? 0; // one price for the restaurant: its outlets are included
   const off = coupon ? Math.min(base, Math.round(coupon.kind === "percent" ? (base * coupon.value) / 100 : coupon.value)) : 0;
   const gst = Math.round((base - off) * PLAN_GST_RATE);
   const total = base - off + gst;
@@ -134,7 +134,7 @@ export function PlanSheet() {
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-[16px] font-semibold">{x.name}</span>
-                <span className="text-[13.5px] font-semibold tnum">{x.monthly ? `${inr(x.monthly)}/outlet/mo` : "Custom"}</span>
+                <span className="text-[13.5px] font-semibold tnum">{x.monthly ? `${inr(x.monthly)}/mo` : "Custom"}</span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-muted">
                 {x.outlets}
@@ -178,7 +178,7 @@ export function PlanSheet() {
 
             {/* 4. total */}
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14px]">
-              <div className="flex justify-between"><dt className="text-muted">{p.name} · {count} outlet{count === 1 ? "" : "s"} · {cyc.short}</dt><dd className="tnum">{inr(base)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">{p.name} · {cyc.short} · {p.outlets}</dt><dd className="tnum">{inr(base)}</dd></div>
               {off > 0 && <div className="flex justify-between text-jade"><dt>Coupon {coupon?.code}</dt><dd className="tnum">−{inr(off)}</dd></div>}
               {PLAN_GST_RATE > 0 && <div className="flex justify-between"><dt className="text-muted">GST {Math.round(PLAN_GST_RATE * 100)}%</dt><dd className="tnum">{inr(gst)}</dd></div>}
               <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>To pay</dt><dd className="tnum">{inr(total)}</dd></div>

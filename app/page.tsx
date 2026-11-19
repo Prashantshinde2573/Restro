@@ -27,7 +27,7 @@ export default function Landing() {
 
           <section id="pricing" className="relative isolate scroll-mt-20 overflow-hidden py-14 lg:py-28">
             <div className="relative mx-auto max-w-[1240px] px-5 lg:px-8">
-              <SectionHead eyebrow="Pricing" title="Simple pricing, *per outlet.*" sub="Every plan includes unlimited bills, free updates and WhatsApp support in Marathi, Hindi and English." />
+              <SectionHead eyebrow="Pricing" title="Simple pricing, *one price.*" sub="Every plan includes unlimited bills, free updates and WhatsApp support in Marathi, Hindi and English." />
               <div className="mt-6 lg:mt-8">
                 <PricingTable />
               </div>
