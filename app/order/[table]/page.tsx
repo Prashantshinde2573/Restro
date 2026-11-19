@@ -10,7 +10,7 @@ import { hasSizes, sizedName } from "@/lib/sizes";
 import clsx from "clsx";
 import { FullLoader } from "@/components/loader";
 import { useParams } from "next/navigation";
-import { Banknote, BellRing, Check, ChevronDown, ConciergeBell, CreditCard, Languages, Minus, Plus, QrCode, ReceiptText, Search, ShoppingBag, Users, UtensilsCrossed, X } from "lucide-react";
+import { Banknote, BellRing, Check, ChevronDown, CreditCard, Languages, Minus, Plus, QrCode, ReceiptText, ShoppingBag, Users, UtensilsCrossed } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DietMark, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -19,9 +19,9 @@ import { PhotoSlide } from "@/components/menu-bits";
 import { OtpSheet, type GuestProfile } from "@/components/otp-sheet";
 import {
   ActiveFilters,
-  MenuBar,
-  DishCard,
-  FilterButton,
+  MenuTop,
+  DishRow,
+  niceName,
   GuestTabs,
   FilterSheet,
   applyFilters,
@@ -183,7 +183,7 @@ export default function GuestOrder() {
     return () => window.removeEventListener("pageshow", onShow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doneKey]);
-  const [view, setView] = useState<"menu" | "browse" | "orders">("menu");
+  const [view, setView] = useState<"menu" | "orders">("menu");
   const [moreOpen, setMoreOpen] = useState(false);
   const [game, setGame] = useState<GameId | null>(null);
   const [q, setQ] = useState("");
@@ -565,16 +565,6 @@ export default function GuestOrder() {
       if (raf) cancelAnimationFrame(raf);
     };
   }, [grouped, view, barH, cloudLoading]);
-  /** Menu tab → a category: back to home, scrolled to it. */
-  const openCat = (id: string) => {
-    setQ("");
-    setFilters((f) => ({ ...f, cats: [] }));
-    setView("menu");
-    window.setTimeout(() => {
-      setActiveCat(id);
-      document.getElementById(`cat-${id}`)?.scrollIntoView({ block: "start" });
-    }, 60);
-  };
   const jumpTo = (id: string) => {
     setActiveCat(id);
     document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1013,10 +1003,12 @@ export default function GuestOrder() {
         /* ---------- home: diet ▾ · category ▾ · filters, then dish cards ---------- */
         <>
           <div ref={barRef} className="sticky top-0 z-20 bg-canvas/95 px-4 pb-2 pt-2.5 backdrop-blur">
-            <MenuBar
+            <MenuTop
+              q={q}
+              onQ={setQ}
               diet={filters.diet}
               onDiet={(d) => setFilters({ ...filters, diet: d })}
-              menu={menu}
+              mixed={menu.some((m) => m.diet !== "veg")}
               groups={grouped.map((g) => ({ c: g.c, n: g.items.length }))}
               active={activeCat}
               onPick={jumpTo}
@@ -1024,14 +1016,13 @@ export default function GuestOrder() {
               onFilters={() => setFilterOpen(true)}
               lang={lang}
             />
-            {(q.trim() || sheetFilterCount({ ...filters, diet: "all" }) > 0) && (
-              <div className="mt-2 flex items-center gap-2">
-                {q.trim() && (
-                  <button onClick={() => setQ("")} className="flex shrink-0 items-center gap-1 rounded-full bg-ink py-1 pl-3 pr-2 text-[13px] font-semibold text-canvas">
-                    “{q.trim()}” <X size={13} />
-                  </button>
-                )}
-                <div className="min-w-0 flex-1"><ActiveFilters f={{ ...filters, diet: "all" }} setF={(f) => setFilters({ ...f, diet: filters.diet })} cats={cats} lang={lang} /></div>
+            {sheetFilterCount({ ...filters, diet: "all" }) > 0 && (
+              <div className="mt-2"><ActiveFilters f={{ ...filters, diet: "all" }} setF={(f) => setFilters({ ...f, diet: filters.diet })} cats={cats} lang={lang} /></div>
+            )}
+            {filtering && (
+              <div className="mt-2 flex items-center justify-between px-1 text-[13px]">
+                <span className="font-semibold text-muted">{tx(lang, `${shownItems.length} dishes found`, `${shownItems.length} डिश सापडल्या`)}</span>
+                <button onClick={() => { setQ(""); setFilters(noFilters); }} className="font-semibold text-jade">{tx(lang, "Clear", "काढा")}</button>
               </div>
             )}
           </div>
@@ -1044,14 +1035,14 @@ export default function GuestOrder() {
             )}
             {grouped.map(({ c, items }) => (
               <section key={c.id} id={`cat-${c.id}`} style={{ scrollMarginTop: barH + 8 }}>
-                <h2 className="mb-2.5 flex items-center gap-2 px-0.5">
-                  {c.icon ? <span aria-hidden className="text-[18px] leading-none">{c.icon}</span> : <ConciergeBell size={20} strokeWidth={1.8} className="text-jade-deep" aria-hidden />}
-                  <span className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-tight">{c.name}</span>
-                  <span className="shrink-0 text-[12.5px] font-semibold text-ink/60 tnum">{items.length} {items.length === 1 ? tx(lang, "item", "डिश") : tx(lang, "items", "डिश")}</span>
+                <h2 className="mb-2 flex items-baseline gap-2 px-1">
+                  {c.icon && c.icon !== "🍽️" && <span aria-hidden className="text-[18px] leading-none">{c.icon}</span>}
+                  <span className="min-w-0 flex-1 truncate text-[18px] font-bold tracking-tight">{niceName(c.name)}</span>
+                  <span className="shrink-0 text-[12.5px] font-medium text-muted tnum">{items.length} {items.length === 1 ? tx(lang, "item", "डिश") : tx(lang, "items", "डिश")}</span>
                 </h2>
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                <div className="divide-y divide-line/70 rounded-[20px] bg-surface px-4 ring-1 ring-line/60">
                   {items.map((m) => (
-                    <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
+                    <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
                   ))}
                 </div>
               </section>
@@ -1059,61 +1050,6 @@ export default function GuestOrder() {
             <PoweredBy />
           </main>
         </>
-      ) : view === "browse" ? (
-        /* ---------- menu tab: search, filters, every category ---------- */
-        <main className="px-4 pt-2">
-          <div className="sticky top-0 z-20 -mx-4 flex gap-2 bg-canvas/95 px-4 pb-3 pt-2 backdrop-blur">
-            <div className="relative flex-1">
-              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                type="search"
-                enterKeyHint="search"
-                placeholder={tx(lang, "Search dishes", "डिश शोधा")}
-                className="h-11 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-1 focus:ring-jade/40 [&::-webkit-search-cancel-button]:hidden"
-              />
-              {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-faint"><X size={15} /></button>}
-            </div>
-            <FilterButton count={sheetFilterCount(filters)} onClick={() => setFilterOpen(true)} lang={lang} />
-          </div>
-          {filtering ? (
-            <>
-              <div className="mb-3 flex items-baseline justify-between px-0.5">
-                <span className="text-[15px] font-semibold">{tx(lang, `${shownItems.length} dishes`, `${shownItems.length} डिश`)}</span>
-                <button onClick={() => { setQ(""); setFilters(noFilters); }} className="text-[13.5px] font-semibold text-jade">{tx(lang, "Clear", "काढा")}</button>
-              </div>
-              <ActiveFilters f={filters} setF={setFilters} cats={cats} lang={lang} />
-              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {shownItems.map((m) => (
-                  <DishCard key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
-                ))}
-              </div>
-              {shownItems.length === 0 && <p className="py-12 text-center text-[15px] text-muted">{tx(lang, "No dishes match", "काही सापडलं नाही")}</p>}
-            </>
-          ) : (
-            <>
-              <h2 className="mb-2.5 px-0.5 text-[17px] font-bold tracking-tight">{tx(lang, "Categories", "प्रकार")}</h2>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {cats.map((c) => {
-                  const n = menu.filter((m) => m.categoryId === c.id).length;
-                  if (!n) return null;
-                  const cover = menu.find((m) => m.categoryId === c.id && m.photos?.length) ?? menu.find((m) => m.categoryId === c.id)!;
-                  return (
-                    <button key={c.id} onClick={() => openCat(c.id)} className="overflow-hidden rounded-[16px] bg-surface text-left ring-1 ring-line/70 active:scale-[.98]">
-                      <PhotoSlide item={cover} className="aspect-[16/10] w-full" />
-                      <span className="flex items-center gap-1.5 px-2.5 py-2">
-                        {c.icon && <span aria-hidden className="text-[18px]">{c.icon}</span>}
-                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{c.name}</span>
-                        <span className="text-[12.5px] font-semibold text-muted tnum">{n}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </main>
       ) : (
         /* ---------- my orders ---------- */
         <main className="space-y-3 px-4 pt-3">
@@ -1246,10 +1182,10 @@ export default function GuestOrder() {
 
       {/* ---------- bottom tabs ---------- */}
       <GuestTabs
-        tab={view === "menu" ? "home" : view === "browse" ? "menu" : "orders"}
+        tab={view === "orders" ? "orders" : "home"}
         onTab={(tb) => {
           if (tb === "cart") return count ? setCartOpen(true) : toast(tx(lang, "Your cart is empty · tap + on a dish", "कार्ट रिकामी आहे · डिशवर + दाबा"));
-          setView(tb === "home" ? "menu" : tb === "menu" ? "browse" : "orders");
+          setView(tb === "orders" ? "orders" : "menu");
           window.scrollTo({ top: 0 });
         }}
         cartCount={count}

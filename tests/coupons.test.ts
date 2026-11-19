@@ -66,3 +66,16 @@ describe("discounts report", () => {
     expect(r.coupons).toEqual([{ code: "WELCOME26", uses: 2, amount: 25 }]);
   });
 });
+
+import { niceName } from "@/components/guest-menu";
+describe("dish and category names typed in capitals read easier", () => {
+  it("title case, initials kept, mixed case left alone", () => {
+    expect(niceName("MILK SHAKES")).toBe("Milk Shakes");
+    expect(niceName("TEA")).toBe("Tea");
+    expect(niceName("DRY FRUITS")).toBe("Dry Fruits");
+    expect(niceName("TRC SPECIAL TEA")).toBe("TRC Special Tea");
+    expect(niceName("COOLERS / MOJITOS")).toBe("Coolers / Mojitos");
+    expect(niceName("veg pizza")).toBe("veg pizza");
+    expect(niceName("Paneer Tikka")).toBe("Paneer Tikka");
+  });
+});
