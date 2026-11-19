@@ -73,6 +73,8 @@ export default function GuestThanks() {
       closed
       name={saved.name || undefined}
       place={saved.place}
+      logo={saved.logo || undefined}
+      at={saved.at}
       payments={saved.payments ?? []}
       orderNo={saved.orderNo || undefined}
       lang={saved.lang ?? "en"}
