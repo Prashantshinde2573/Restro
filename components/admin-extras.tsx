@@ -280,8 +280,9 @@ export type CouponPick = { code: string; kind: "percent" | "flat"; value: number
 export const couponOffFor = (c: CouponPick, list: number) => (!c ? 0 : c.kind === "percent" ? Math.round((list * Math.min(100, c.value)) / 100) : Math.min(list, c.value));
 
 /** Type a plan coupon, check it for this plan, and see what the owner pays. */
-export function PlanCouponField({ plan, list, value, onChange, label = "Plan coupon (optional)" }: { plan: string; list: number | null; value: CouponPick; onChange: (c: CouponPick) => void; label?: string }) {
+export function PlanCouponField({ plan, list, value, onChange, onDraft, label = "Plan coupon (optional)" }: { plan: string; list: number | null; value: CouponPick; onChange: (c: CouponPick) => void; onDraft?: (typed: string) => void; label?: string }) {
   const [code, setCode] = useState(value?.code ?? "");
+  useEffect(() => onDraft?.(value ? "" : code.trim()), [code, value]); // eslint-disable-line react-hooks/exhaustive-deps
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   // a different plan may not take this coupon: check again
@@ -314,7 +315,7 @@ export function PlanCouponField({ plan, list, value, onChange, label = "Plan cou
             {value.kind === "percent" ? `${value.value}% off` : `${inr(value.value)} off`}
             {list != null && <> · {inr(list)} − {inr(off)} = <b>{inr(list - off)}</b></>}
           </span>
-          <button aria-label="Remove coupon" className="px-1 text-[13px] font-semibold underline" onClick={() => { onChange(null); setCode(""); }}>Remove</button>
+          <button type="button" aria-label="Remove coupon" className="px-1 text-[13px] font-semibold underline" onClick={() => { onChange(null); setCode(""); }}>Remove</button>
         </div>
       ) : (
         <div className="flex gap-2">

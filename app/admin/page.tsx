@@ -525,6 +525,77 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** Renewal, one step: how long → (coupon) → see the new dates and the price → renew. */
+function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, setTyped, busy, onRenew }: {
+  r: AdminRestaurant; months: number; setMonths: (m: number) => void; from: number; till: string;
+  coupon: CouponPick; setCoupon: (c: CouponPick) => void; typed: string; setTyped: (t: string) => void; busy: boolean; onRenew: () => void;
+}) {
+  const p = plans.find((x) => x.id === r.plan);
+  const outlets = Math.max(1, r.outlets);
+  // whole calendar days (India time) between today and the last paid day
+  const day = (t: number) => Math.floor((t + 5.5 * 3600_000) / DAY);
+  const left = day(new Date(r.renewsAt).getTime()) - day(Date.now());
+  const ended = left < 0;
+  const full = p?.monthly ? p.monthly * months * outlets : null;
+  const list = planListPrice(r.plan, months, r.outlets);
+  const offer = full != null && list != null ? full - list : 0;
+  const off = list != null ? couponOffFor(coupon, list) : 0;
+  const pay = list != null ? list - off : null;
+  const waiting = !!typed && !coupon;
+  const Row = ({ l, v, strong, tone }: { l: ReactNode; v: ReactNode; strong?: boolean; tone?: string }) => (
+    <div className={clsx("flex items-baseline justify-between gap-3 py-1.5", strong ? "text-[16px] font-semibold" : "text-[14px]", tone)}>
+      <span className={strong ? "" : "text-muted"}>{l}</span>
+      <span className="tnum">{v}</span>
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      {/* where the plan stands now */}
+      <div className="rounded-group bg-surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[15px] font-semibold">{planName(r.plan)} plan{p?.monthly ? ` · ${inr(p.monthly)} a month per outlet` : " · custom price"}</div>
+          <Pill tone={ended ? "rose" : left <= RENEW_WARN_DAYS ? "saffron" : "jade"}>{ended ? `Ended ${-left} day${left === -1 ? "" : "s"} ago` : left === 0 ? "Ends today" : `${left} day${left === 1 ? "" : "s"} left`}</Pill>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-3 text-[14px]">
+          <div><div className="text-[12.5px] text-muted">Customer since</div><b>{dateText(r.createdAt)}</b></div>
+          <div><div className="text-[12.5px] text-muted">{ended ? "Was paid till" : "Paid till"}</div><b className={ended ? "text-rose" : ""}>{dateText(r.renewsAt)}</b></div>
+        </div>
+        <p className="mt-2 text-[12.5px] text-muted">{outlets} outlet{outlets === 1 ? "" : "s"} · the price is per outlet.</p>
+      </div>
+
+      {/* 1. how long */}
+      <Field label="1 · Renew for">
+        <Segmented className="w-full" value={String(months)} onChange={(v) => setMonths(Number(v))} options={[1, 3, 6, 12].map((m) => ({ value: String(m), label: m === 12 ? "1 year" : `${m} month${m > 1 ? "s" : ""}` }))} />
+      </Field>
+
+      {/* 2. coupon */}
+      {list != null && <PlanCouponField plan={r.plan} list={null} value={coupon} onChange={setCoupon} onDraft={setTyped} label="2 · Coupon (optional)" />}
+
+      {/* 3. what happens */}
+      <div className="rounded-group bg-surface p-4">
+        <div className="text-[12.5px] font-semibold uppercase tracking-wide text-muted">{list != null ? "3 · " : ""}New plan period</div>
+        <div className="mt-1 text-[17px] font-semibold">
+          {dateText(new Date(from).toISOString())} → {dateText(till)}
+        </div>
+        <p className="text-[12.5px] text-muted">{ended ? "The old plan has ended, so the new one starts today." : `Starts after the paid days end (${dateText(r.renewsAt)}), so no day is lost.`}</p>
+        {list != null && full != null && (
+          <div className="mt-3 border-t border-line/70 pt-2">
+            <Row l={`${inr(p!.monthly!)} × ${outlets} outlet${outlets === 1 ? "" : "s"} × ${months} month${months === 1 ? "" : "s"}`} v={inr(full)} />
+            {offer > 0 && <Row l={months === 12 ? "1-year price (2 months free)" : "6-month price (1 month free)"} v={`−${inr(offer)}`} tone="text-jade-deep" />}
+            {coupon && <Row l={`Coupon ${coupon.code} (${coupon.kind === "percent" ? `${coupon.value}% off` : `${inr(coupon.value)} off`})`} v={`−${inr(off)}`} tone="text-jade-deep" />}
+            <Row l="Owner pays" v={inr(pay!)} strong />
+          </div>
+        )}
+      </div>
+      {waiting && <p className="-mt-2 text-[13px] font-medium text-saffron">Tap “Check” to apply the coupon “{typed.toUpperCase()}”, or clear it.</p>}
+      <Button size="lg" className="w-full" disabled={busy || waiting} onClick={onRenew}>
+        <RefreshCw size={16} /> Renew till {dateText(till)}{pay != null ? ` · ${inr(pay)}` : ""}
+      </Button>
+      <p className="-mt-2 text-center text-[12.5px] text-muted">The owner gets a “plan renewed” email.{coupon ? ` Coupon ${coupon.code} is counted once.` : ""}</p>
+    </div>
+  );
+}
+
 function PlanPicker({ value, onChange }: { value: PlanId; onChange: (v: PlanId) => void }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -595,18 +666,25 @@ function RestaurantSheet({
   const [uses, setUses] = useState<PlanCouponUse[]>([]);
   const loadUses = useCallback(() => { adminPlanCouponUses(r.id).then(setUses).catch(() => setUses([])); }, [r.id]);
   useEffect(() => { loadUses(); }, [loadUses]);
-  const extend = (months: number) => {
-    const from = Math.max(Date.now(), new Date(r.renewsAt).getTime());
-    const iso = new Date(from + months * 30 * DAY).toISOString();
+  // renew: the new period starts where the paid one ends (or today, if it has already ended)
+  const renewFrom = () => Math.max(Date.now(), new Date(r.renewsAt).getTime());
+  const renewTill = (months: number) => {
+    const d = new Date(renewFrom());
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString();
+  };
+  const extend = (months: number, c: CouponPick) => {
+    const iso = renewTill(months);
     const list = planListPrice(r.plan, months, r.outlets);
-    const c = coupon && list != null ? coupon : null;
-    const msg = `Renewed till ${dateText(iso)}${c ? ` · coupon ${c.code} −${inr(couponOffFor(c, list!))}, owner pays ${inr(list! - couponOffFor(c, list!))}` : ""}`;
+    const use = c && list != null ? c : null;
+    const pay = list == null ? null : list - couponOffFor(use, list);
+    const msg = `Renew till ${dateText(iso)}${pay != null ? ` · owner pays ${inr(pay)}` : ""}${use ? ` (coupon ${use.code})` : ""}`;
     return run(async () => {
       await adminUpdate(r.id, { renewsAt: iso });
       await adminPlanEmail(r.id, "renewed");
-      if (c) {
+      if (use) {
         try {
-          await adminUsePlanCoupon(c.code, r.id, r.plan, months, list!, "renew");
+          await adminUsePlanCoupon(use.code, r.id, r.plan, months, list!, "renew");
           setCoupon(null);
           loadUses();
         } catch (e) {
@@ -615,6 +693,9 @@ function RestaurantSheet({
       }
     }, msg);
   };
+  const [months, setMonths] = useState(1);
+  const [typed, setTyped] = useState("");
+  const [fixDate, setFixDate] = useState(false);
   // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
   const [graceDate, setGraceDate] = useState("");
   // logo: picked here, shrunk in the browser, stored by our server
@@ -682,29 +763,36 @@ function RestaurantSheet({
         </Section>
 
         <Section title="Renewal">
-          <div className="flex items-center gap-2 text-[14.5px]">
-            <CalendarClock size={18} className="text-muted" />
-            Runs until <b>{dateText(r.renewsAt)}</b>
-            <span className="text-muted">({daysLeft(r.renewsAt) >= 0 ? `${daysLeft(r.renewsAt)} days left` : "expired"})</span>
-          </div>
-          {planListPrice(r.plan, 1, r.outlets) != null && (
-            <PlanCouponField plan={r.plan} list={planListPrice(r.plan, 1, r.outlets)} value={coupon} onChange={setCoupon} label="Plan coupon for this renewal (optional)" />
+          <RenewBox
+            r={r}
+            months={months}
+            setMonths={setMonths}
+            from={renewFrom()}
+            till={renewTill(months)}
+            coupon={coupon}
+            setCoupon={setCoupon}
+            setTyped={setTyped}
+            typed={typed}
+            busy={busy}
+            onRenew={() => extend(months, coupon)}
+          />
+          <button type="button" className="text-[13.5px] font-semibold text-muted underline" onClick={() => setFixDate((v) => !v)}>
+            {fixDate ? "Hide" : "Correct the end date by hand"}
+          </button>
+          {fixDate && (
+            <div className="space-y-2 rounded-group bg-surface p-3">
+              <p className="text-[13px] text-muted">Only to fix a wrong date. No price and no coupon; the owner gets the &quot;plan renewed&quot; email.</p>
+              <div className="flex gap-2">
+                <input type="date" aria-label="Plan paid till" className={clsx(inputCls, "flex-1")} value={date} onChange={(e) => setDate(e.target.value)} />
+                <Button
+                  disabled={busy || !date || date === r.renewsAt.slice(0, 10)}
+                  onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "renewed")), `Plan paid till ${dateText(`${date}T23:59:00+05:30`)}`)}
+                >
+                  Save date
+                </Button>
+              </div>
+            </div>
           )}
-          {coupon && <p className="-mt-2 text-[12.5px] text-muted">Price above is for 1 month. Tap how long to renew: the coupon comes off that renewal and is counted once.</p>}
-          <div className="flex flex-wrap gap-2">
-            {[1, 3, 6, 12].map((m) => (
-              <Button key={m} variant="plain" className="!bg-surface" disabled={busy} onClick={() => extend(m)}>+{m === 12 ? "1 year" : `${m} month${m > 1 ? "s" : ""}`}</Button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input type="date" className={clsx(inputCls, "flex-1")} value={date} onChange={(e) => setDate(e.target.value)} />
-            <Button
-              disabled={busy || !date || date === r.renewsAt.slice(0, 10)}
-              onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "renewed")), "Renewal date saved")}
-            >
-              Set date
-            </Button>
-          </div>
           {uses.length > 0 && (
             <div className="rounded-group bg-surface px-4 py-2">
               <div className="py-1 text-[12.5px] font-semibold uppercase tracking-wide text-muted">Plan coupons used</div>
@@ -816,15 +904,17 @@ function RestaurantSheet({
 
         <Section title="Access">
           <div className="overflow-hidden rounded-group bg-surface">
-            <div className="flex items-center justify-between border-b border-line/80 px-4 py-3">
+            <div className="flex items-center justify-between gap-4 border-b border-line/80 px-4 py-3">
               <span>
-                <span className="block text-[15px] font-medium">{r.status === "suspended" ? "Suspended" : "Active"}</span>
-                <span className="block text-[13px] text-muted">Suspended: owner, staff and the QR menu stop working. Nothing is deleted.</span>
+                <span className="block text-[15px] font-medium">Restaurant is {r.status === "suspended" ? <b className="text-rose">paused</b> : <b className="text-jade-deep">on</b>}</span>
+                <span className="block text-[13px] text-muted">
+                  An on/off switch for the whole restaurant, separate from the plan dates. Turn it off to stop a restaurant at once (for example, it doesn&apos;t pay or asks to stop): the owner and staff can&apos;t use the app and guests can&apos;t order from the QR menu. Menu, orders and guests stay saved; turn it on again and everything is back.
+                </span>
               </span>
               <Toggle
                 checked={r.status === "active"}
-                label="Restaurant active"
-                onChange={(v) => run(() => adminUpdate(r.id, { status: v ? "active" : "suspended" }), v ? "Restaurant active again" : "Restaurant suspended")}
+                label="Restaurant on"
+                onChange={(v) => run(() => adminUpdate(r.id, { status: v ? "active" : "suspended" }), v ? "Turn the restaurant on again" : "Pause the restaurant (owner, staff and the QR menu stop)")}
               />
             </div>
             <button
