@@ -27,7 +27,14 @@ export default function KitchenPage() {
   const toast = useToast();
   const all = useOutletOrders();
   // The kitchen only sees orders a captain has accepted (QR/online orders start as "new").
-  const orders = useMemo(() => all.filter((o) => ["accepted", "preparing", "ready"].includes(o.status)), [all]);
+  // An order paid before its food was ready (counter, delivery) stays here at its kitchen stage.
+  const orders = useMemo(
+    () =>
+      all
+        .filter((o) => ["accepted", "preparing", "ready"].includes(o.status) || (o.status === "paid" && !!o.kitchenStatus))
+        .map((o) => (o.status === "paid" && o.kitchenStatus ? { ...o, status: o.kitchenStatus } : o)),
+    [all],
+  );
   const waiting = all.filter(toAccept).length;
   const [station, setStation] = useState<Station>("all");
   const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
@@ -71,7 +78,13 @@ export default function KitchenPage() {
     if (!fresh.length) return;
     chime("kitchen");
     if (!voice || !("speechSynthesis" in window)) return;
-    for (const o of fresh) speak(ticketText({ ...o, lines: o.lines.filter((l) => !l.done) }, lang), lang);
+    // wait for the chime to finish, then read each new ticket (or the new add-on dishes) in full
+    for (const o of fresh) {
+      const todo = o.lines.filter((l) => !l.done);
+      const added = todo.filter((l) => l.addOn);
+      const addOn = added.length > 0 && added.length < o.lines.length;
+      speak(ticketText({ ...o, lines: addOn ? added : todo }, lang, addOn), lang, 0.9, 900);
+    }
   }, [orders, voice, lang]);
 
   const visible = useMemo(

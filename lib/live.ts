@@ -362,6 +362,12 @@ export const orderActions = {
   },
   setStatus(id: string, status: OrderStatus) {
     const o = orderStore.get().find((x) => x.id === id);
+    // already paid, still in the kitchen: move it along there; the bill stays paid
+    if (o && o.status === "paid" && o.kitchenStatus) {
+      const k = status === "accepted" || status === "preparing" || status === "ready" ? status : undefined;
+      patchOrder(id, (x) => ({ ...x, kitchenStatus: k }));
+      return;
+    }
     // Paid in full from the guest's phone (café pay-first): closes itself once served
     // (or waits for the owner's OK when the person serving can't confirm payments).
     const pre = (o?.prepaid ?? []).reduce((a, p) => a + p.amount, 0);
@@ -418,7 +424,8 @@ export const orderActions = {
    */
   settle(ids: string[], payments: Payment[], by: string, opts: { source?: PayClaim["source"]; discount?: number; coupon?: string; reward?: PayClaim["reward"]; discounts?: BillDiscount[] } = {}): "paid" | "waiting" {
     const c = getCloud();
-    const trusted = c.role !== "guest" && opts.source !== "guest" && canConfirmPay(currentMember());
+    // staff the owner lets collect bills ("Charge bills") close them at once; only others' wait for the owner's OK
+    const trusted = c.role !== "guest" && opts.source !== "guest" && (canConfirmPay(currentMember()) || hasPerm(currentMember(), "charge"));
     const discounts = opts.discounts ?? discountsFrom(opts);
     if (trusted) {
       orderActions.pay(ids, payments, by, undefined, discounts);
@@ -513,6 +520,8 @@ export const orderActions = {
               ...o,
               discounts: o.id === firstId && off.length ? off : undefined,
               status: "paid",
+              // paid before the food was ready: it stays on the kitchen screen till it's ready and handed over
+              kitchenStatus: o.status === "accepted" || o.status === "preparing" || o.status === "ready" ? o.status : o.kitchenStatus,
               payments: share.get(o.id) ?? payments,
               payment: payments.length > 1 ? "split" : payments[0]?.method,
               payClaim: undefined,

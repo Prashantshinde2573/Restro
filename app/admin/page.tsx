@@ -691,6 +691,12 @@ function RestaurantSheet({
     setPwErr("");
     setPending({ what, go });
   };
+  const sheetToast = useToast();
+  // tell the owner by email; say so here when it didn't go (it is also listed in App errors)
+  const mailOwner = (event: "renewed" | "grace" | "plan") =>
+    adminPlanEmail(r.id, event).then((m) => {
+      if (!m.ok && !m.later) sheetToast(`Saved, but the email to the owner didn't go: ${m.error}`);
+    });
   const run = (fn: () => Promise<unknown>, msg: string) =>
     confirmThen(msg, async () => {
       setBusy(true);
@@ -734,7 +740,7 @@ function RestaurantSheet({
     const msg = `${onTrial ? "Start the paid plan" : "Renew"} till ${dateText(iso)}${pay != null ? ` · owner pays ${inr(pay)}` : ""}${use ? ` (coupon ${use.code})` : ""}`;
     return run(async () => {
       await adminUpdate(r.id, { renewsAt: iso });
-      await adminPlanEmail(r.id, "renewed");
+      await mailOwner("renewed");
       // what was paid goes in the plan history (and the coupon is counted)
       try {
         await adminPlanPayment(r.id, onTrial ? "new" : "renew", months, list ?? 0, use?.code, onTrial ? "Free trial → paid plan" : undefined);
@@ -778,7 +784,7 @@ function RestaurantSheet({
   const giveGrace = (days: number) => {
     const base = Math.max(Date.now(), new Date(r.renewsAt).getTime(), r.graceUntil ? new Date(r.graceUntil).getTime() : 0);
     const iso = new Date(base + days * DAY).toISOString();
-    return run(() => adminUpdate(r.id, { graceUntil: iso }).then(() => adminPlanEmail(r.id, "grace")), graceMsg(iso));
+    return run(() => adminUpdate(r.id, { graceUntil: iso }).then(() => mailOwner("grace")), graceMsg(iso));
   };
   // the owner hears about grace only when it starts (the plan has ended), not while the plan still runs
   const graceMsg = (iso: string) =>
@@ -814,7 +820,7 @@ function RestaurantSheet({
         {err && <p className="rounded-group bg-rose-soft p-3 text-[14px] text-rose">{err}</p>}
 
         <Section title="Plan">
-          <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }).then(() => adminPlanEmail(r.id, "plan")), `Plan changed to ${planName(v)}`)} />
+          <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }).then(() => mailOwner("plan")), `Plan changed to ${planName(v)}`)} />
         </Section>
 
         <Section title="Plan & renewal">
@@ -860,7 +866,7 @@ function RestaurantSheet({
                 <input type="date" aria-label="Plan paid till" className={clsx(inputCls, "flex-1")} value={date} onChange={(e) => setDate(e.target.value)} />
                 <Button
                   disabled={busy || !date || date === r.renewsAt.slice(0, 10)}
-                  onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "renewed")), `Plan paid till ${dateText(`${date}T23:59:00+05:30`)}`)}
+                  onClick={() => run(() => adminUpdate(r.id, { renewsAt: new Date(`${date}T23:59:00+05:30`).toISOString() }).then(() => mailOwner("renewed")), `Plan paid till ${dateText(`${date}T23:59:00+05:30`)}`)}
                 >
                   Save date
                 </Button>
@@ -920,7 +926,7 @@ function RestaurantSheet({
           </div>
           <div className="flex gap-2">
             <input type="date" className={clsx(inputCls, "flex-1")} value={graceDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setGraceDate(e.target.value)} aria-label="Grace period until" />
-            <Button disabled={busy || !graceDate} onClick={() => run(() => adminUpdate(r.id, { graceUntil: new Date(`${graceDate}T23:59:00+05:30`).toISOString() }).then(() => adminPlanEmail(r.id, "grace")), graceMsg(`${graceDate}T23:59:00+05:30`))}>
+            <Button disabled={busy || !graceDate} onClick={() => run(() => adminUpdate(r.id, { graceUntil: new Date(`${graceDate}T23:59:00+05:30`).toISOString() }).then(() => mailOwner("grace")), graceMsg(`${graceDate}T23:59:00+05:30`))}>
               Set grace
             </Button>
           </div>

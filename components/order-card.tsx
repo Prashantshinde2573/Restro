@@ -138,3 +138,103 @@ export function OrderCard({
     </article>
   );
 }
+
+type Step = { label: string; onClick: () => void; tone?: "primary" | "dark" } | null;
+
+/**
+ * Several orders of one table (the same group, the same bill) as one card: the guests ordered,
+ * then ordered again. Each order keeps its own kitchen step; the bill step (Charge / Money received)
+ * shows once, at the bottom.
+ */
+export function BillGroupCard({
+  orders,
+  where,
+  total,
+  onOpen,
+  actionOf,
+}: {
+  orders: Order[];
+  where: string;
+  total: number;
+  onOpen: (o: Order) => void;
+  actionOf: (o: Order) => Step;
+}) {
+  const first = [...orders].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const k = orderKind(first[0]);
+  const live = first.some((o) => !["paid", "cancelled"].includes(o.status));
+  const mins = minutesSince(first[0].createdAt);
+  const items = first.reduce((s, o) => s + o.lines.reduce((a, l) => a + l.qty, 0), 0);
+  const isBillStep = (a: Step) => !!a && (a.label.startsWith("Charge") || a.label === "Money received");
+  const billStep = first.map(actionOf).find(isBillStep) ?? null;
+  // the card's colour follows the order that needs the most attention
+  const rank = ["new", "accepted", "preparing", "ready", "served", "paid", "cancelled"];
+  const lead = first.reduce((a, o) => (o.payClaim && live ? a : rank.indexOf(o.status) < rank.indexOf(a.status) ? o : a), first[0]);
+  const claimed = live && first.some((o) => o.payClaim);
+  const tone = TONE[claimed ? "new" : lead.status] ?? TONE.served;
+  return (
+    <article className="group relative flex flex-col overflow-hidden rounded-[22px] bg-surface shadow-[0_1px_2px_rgb(16_24_20/.05),0_8px_24px_-18px_rgb(16_24_20/.35)] ring-1 ring-line/70">
+      <span className={clsx("absolute inset-y-0 left-0 w-1.5", tone.bar)} aria-hidden />
+      <button onClick={() => onOpen(lead)} className="flex items-start gap-3 p-4 pb-2 pl-5 text-left">
+        <span className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]", k.cls)}>
+          <k.icon size={19} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[16.5px] font-semibold leading-tight">{where}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-muted">
+            <span className="font-semibold text-ink">{first.length} orders · one bill</span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1 tnum"><Clock3 size={12} /> {live ? `${mins} min` : clock(first[0].createdAt)}</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[18px] font-semibold tracking-tight tnum">{inr(total)}</div>
+          <div className="text-[11.5px] text-faint">{items} item{items === 1 ? "" : "s"}</div>
+        </div>
+      </button>
+      <div className="space-y-2 px-4 pb-3 pl-5">
+        {first.map((o) => {
+          const t = TONE[o.payClaim && live ? "new" : o.status] ?? TONE.served;
+          const step = actionOf(o);
+          const own = step && !isBillStep(step) ? step : null;
+          return (
+            <div key={o.id} className="rounded-[14px] bg-sunken/50">
+              <button onClick={() => onOpen(o)} className="block w-full px-3 pb-2 pt-2.5 text-left">
+                <div className="flex items-center gap-2 text-[12.5px]">
+                  <span className="font-semibold tnum">#{o.number || "—"}</span>
+                  <span className="text-muted tnum">{clock(o.createdAt)}</span>
+                  <span className={clsx("ml-auto rounded-full px-2 py-0.5 text-[11.5px] font-semibold", t.chip)}>{o.payClaim && live ? "Paid? Confirm" : STAGE_LABEL[o.status]}</span>
+                </div>
+                <ul className="mt-1.5 space-y-0.5 text-[13.5px]">
+                  {o.lines.map((l, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="w-6 shrink-0 font-semibold tnum">{l.qty}×</span>
+                      <span className={clsx("min-w-0 flex-1 truncate", l.done && "text-muted line-through")}>{l.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </button>
+              {own && (
+                <div className="px-3 pb-2.5">
+                  <button
+                    onClick={own.onClick}
+                    className={clsx("flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] text-[13.5px] font-semibold active:scale-[.98]", own.tone === "dark" ? "bg-ink text-canvas" : "bg-jade text-white")}
+                  >
+                    {own.label.startsWith("Accept") ? <Check size={15} /> : own.label.startsWith("Mark cooking") ? <CookingPot size={15} /> : own.label.startsWith("Mark ready") ? <ChefHat size={15} /> : <HandPlatter size={15} />}
+                    {own.label}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {billStep && (
+        <div className="border-t border-line/70 p-3 pl-5">
+          <button onClick={billStep.onClick} className="flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-jade text-[15px] font-semibold text-white transition hover:bg-jade-deep active:scale-[.98]">
+            <Wallet size={17} /> {billStep.label}
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}

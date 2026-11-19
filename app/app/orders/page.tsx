@@ -6,7 +6,7 @@ import { Check, History, PenLine, Phone, Printer, RotateCcw, XCircle } from "luc
 import { useMemo, useState } from "react";
 import { Button, Chips, Page, PageHeader, Pill, Sheet, DietMark } from "@/components/ui";
 import { StatusPill, channelLabel } from "@/components/channel";
-import { OrderCard } from "@/components/order-card";
+import { BillGroupCard, OrderCard } from "@/components/order-card";
 import { startOfDay } from "@/lib/stats";
 import { billTotals } from "@/lib/bill-totals";
 import dynamic from "next/dynamic";
@@ -58,6 +58,23 @@ export default function OrdersPage() {
     [list, filter],
   );
   const count = (f: Filter) => list.filter((o) => match(o, f)).length;
+  // one card per table bill: a group that ordered, then ordered again, shows as one (not one card per order)
+  const paidAtOf = (o: Order) => [...(o.paymentLog ?? [])].reverse().find((e) => /^Paid/.test(e.text))?.at;
+  const billKey = (o: Order) => {
+    if (!o.tableId && !o.tableName) return o.id;
+    const party = o.partyId ?? "A";
+    if (!["paid", "cancelled"].includes(o.status)) return `open|${o.tableId ?? o.tableName}|${party}`;
+    const at = o.status === "paid" ? paidAtOf(o) : undefined;
+    return at ? `paid|${o.tableName}|${party}|${at}` : o.id;
+  };
+  const cards = useMemo(() => {
+    const groups = new Map<string, Order[]>();
+    for (const o of shown) {
+      const k = billKey(o);
+      groups.set(k, [...(groups.get(k) ?? []), o]);
+    }
+    return [...groups.values()];
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // self-service counter: a token without a table is collected by the guest ("Picked up")
   const selfService = !!outlet.selfService;
@@ -126,16 +143,27 @@ export default function OrdersPage() {
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            {shown.map((o) => (
-              <OrderCard
-                key={o.id}
-                o={o}
-                where={orderWhere(o, tables)}
-                total={o.status === "paid" ? paidSum(o.payments ?? []) : billOf(o)}
-                onOpen={() => setSelId(o.id)}
-                action={nextStep(o)}
-              />
-            ))}
+            {cards.map((g) =>
+              g.length === 1 ? (
+                <OrderCard
+                  key={g[0].id}
+                  o={g[0]}
+                  where={orderWhere(g[0], tables)}
+                  total={g[0].status === "paid" ? paidSum(g[0].payments ?? []) : billOf(g[0])}
+                  onOpen={() => setSelId(g[0].id)}
+                  action={nextStep(g[0])}
+                />
+              ) : (
+                <BillGroupCard
+                  key={g.map((o) => o.id).join("-")}
+                  orders={g}
+                  where={orderWhere(g[0], tables)}
+                  total={g.reduce((s, o) => s + (o.status === "paid" ? paidSum(o.payments ?? []) : billOf(o)), 0)}
+                  onOpen={(o) => setSelId(o.id)}
+                  actionOf={nextStep}
+                />
+              ),
+            )}
           </div>
         )}
       </Page>

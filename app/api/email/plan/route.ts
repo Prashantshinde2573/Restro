@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  if (!emailReady()) return json({ error: "not_configured" }, 503);
+  if (!emailReady()) return json({ ok: false, error: "Email isn't set up on the server (RESEND_API_KEY missing in Vercel)" }, 503);
   if (!sameSite(req)) return json({ error: "Forbidden" }, 403);
   const me = await caller(req);
   if (!me) return json({ error: "Sign in first" }, 401);
