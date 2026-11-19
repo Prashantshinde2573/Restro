@@ -191,10 +191,12 @@ export function PayPanel({
   );
 }
 
-/** Full-screen thank you, shown once the bill is settled. Rating is saved for the owner. */
+/** Full-screen thank you, shown once the bill is settled: a celebration, the receipt, a rating. */
 export function ThankYou({
   name,
   place,
+  logo,
+  at,
   payments,
   orderNo,
   token,
@@ -214,6 +216,10 @@ export function ThankYou({
   pending?: boolean;
   name?: string;
   place: string;
+  /** the restaurant's logo (shown on the receipt) */
+  logo?: string;
+  /** when the bill was settled (ms) */
+  at?: number;
   payments: Payment[];
   orderNo?: number;
   token?: number;
@@ -225,80 +231,181 @@ export function ThankYou({
   const [stars, setStars] = useState(0);
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
+  const [when] = useState(() => new Date(at ?? Date.now()));
   const total = payments.reduce((s, p) => s + p.amount, 0);
   const label = (p: Payment) => (p.method === "upi" ? "UPI" : p.method === "cash" ? tx(lang, "Cash", "रोख") : tx(lang, "Card", "कार्ड"));
+  const Icon = (p: Payment) => (p.method === "upi" ? QrCode : p.method === "cash" ? Banknote : CreditCard);
+  const first = name?.trim().split(" ")[0];
+  const mood = [
+    "",
+    tx(lang, "Not good", "चांगलं नाही"),
+    tx(lang, "Could be better", "अजून चांगलं हवं"),
+    tx(lang, "It was okay", "ठीक होतं"),
+    tx(lang, "Really good", "खूप छान"),
+    tx(lang, "Loved it!", "खूप आवडलं!"),
+  ];
+  const face = ["", "😞", "😕", "🙂", "😋", "🤩"];
+  const dateText = when.toLocaleString(lang === "en" ? "en-IN" : lang === "hi" ? "hi-IN" : "mr-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   return (
-    <div className="fixed inset-0 z-50 mx-auto flex max-w-md animate-fade-in flex-col overflow-y-auto bg-canvas px-5 pb-6 pt-12" role="dialog" aria-label="Thank you">
-      <div className="flex flex-1 flex-col items-center text-center">
-        <div className="flex h-20 w-20 animate-pop items-center justify-center rounded-full bg-jade text-white"><Check size={40} strokeWidth={2.5} /></div>
-        <h1 className="mt-5 text-[30px] font-semibold tracking-tight">{tx(lang, `Thank you${name ? `, ${name.split(" ")[0]}` : ""}!`, `धन्यवाद${name ? `, ${name.split(" ")[0]}` : ""}!`)}</h1>
-        <p className="mt-1 text-[15px] text-muted">{tx(lang, `Thanks for visiting ${place}. See you again soon 🙏`, `${place} ला भेट दिल्याबद्दल धन्यवाद. पुन्हा या 🙏`)}</p>
-
-        <div className="mt-6 w-full rounded-[22px] bg-surface p-4 text-left">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[14px] text-muted">{pending ? tx(lang, "Payment sent", "पैसे पाठवले") : tx(lang, "Paid", "भरले")}</span>
-            <span className="text-[26px] font-semibold tnum">{inr(total)}</span>
-          </div>
-          <div className={clsx("mt-2 flex items-center gap-2 rounded-[12px] px-3 py-2 text-[13.5px] font-semibold", pending ? "bg-saffron-soft text-saffron" : "bg-jade-soft text-jade-deep")}>
-            {pending ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-saffron" /> : <Check size={15} strokeWidth={2.6} />}
-            {pending ? tx(lang, "Confirming with the owner · nothing more to pay", "मालकाकडून खात्री होत आहे · आणखी काही भरायचं नाही") : tx(lang, "Confirmed by the restaurant", "रेस्टॉरंटने खात्री केली")}
-          </div>
-          {payments.length > 0 && (
-            <div className="mt-1 text-[13.5px] text-muted">{payments.map((p) => `${label(p)} ${inr(p.amount)}`).join(" + ")}</div>
-          )}
-          {(token || orderNo) && (
-            <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
-              <span className="text-[14px] text-muted">{token ? tx(lang, "Your token", "तुमचा टोकन") : tx(lang, "Order", "ऑर्डर")}</span>
-              <span className="text-[22px] font-semibold tnum">#{token ?? orderNo}</span>
-            </div>
-          )}
-          {children}
+    <div className="ty-root fixed inset-0 z-50 mx-auto flex max-w-md flex-col overflow-y-auto bg-canvas" role="dialog" aria-label="Thank you">
+      <style>{TY_CSS}</style>
+      {/* ---- celebration ---- */}
+      <div className="ty-hero relative overflow-hidden px-5 pb-24 pt-12 text-center text-white">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          {CONFETTI.map((c, i) => (
+            <span key={i} className="ty-bit absolute block" style={{ left: `${c[0]}%`, width: c[2], height: c[2] * (c[4] ? 2.4 : 1), background: c[3], borderRadius: c[4] ? 2 : 999, animationDelay: `${c[1]}ms` }} />
+          ))}
         </div>
+        <div className="relative mx-auto h-[92px] w-[92px]">
+          <span aria-hidden className="ty-ring absolute inset-0 rounded-full bg-white/20" />
+          <svg viewBox="0 0 92 92" className="relative h-full w-full" aria-hidden>
+            <circle cx="46" cy="46" r="40" fill="white" className="ty-disc" />
+            <path d="M29 47.5l11 11 23-24" fill="none" stroke="rgb(var(--jade))" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" className="ty-tick" />
+          </svg>
+        </div>
+        <h1 className="ty-up relative mt-5 text-[30px] font-bold leading-tight tracking-tight" style={{ animationDelay: "250ms" }}>
+          {tx(lang, `Thank you${first ? `, ${first}` : ""}!`, `धन्यवाद${first ? `, ${first}` : ""}!`)}
+        </h1>
+        <p className="ty-up relative mx-auto mt-1.5 max-w-[19rem] text-[15px] leading-snug text-white/85" style={{ animationDelay: "350ms" }}>
+          {pending
+            ? tx(lang, "Your payment is on its way to the restaurant.", "तुमचे पैसे रेस्टॉरंटकडे जात आहेत.")
+            : tx(lang, `It was a pleasure having you at ${place}. See you again soon!`, `${place} मध्ये तुम्ही आलात, खूप आनंद झाला. पुन्हा नक्की या!`)}
+        </p>
+      </div>
 
-        <div className="mt-6 text-[17px] font-semibold">{tx(lang, "How was everything?", "सगळं कसं होतं?")}</div>
-        {sent ? (
-          <p className="mt-2 text-[14px] text-jade">{tx(lang, "Thanks — we read every rating.", "धन्यवाद — आम्ही प्रत्येक रेटिंग वाचतो.")}</p>
-        ) : (
-          <>
-            <div className="mt-3 flex gap-2">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <button key={s} aria-label={`${s} stars`} onClick={() => setStars(s)}>
-                  <Star size={36} className={s <= stars ? "fill-saffron text-saffron" : "text-line"} />
-                </button>
-              ))}
+      <div className="relative -mt-16 flex-1 px-4 pb-6">
+        {/* ---- the receipt ---- */}
+        <div className="ty-up ty-ticket relative mx-auto w-full rounded-[22px] bg-surface shadow-[0_18px_40px_-18px_rgba(0,0,0,.35)]" style={{ animationDelay: "420ms" }}>
+          <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+            {logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logo} alt="" className="h-11 w-11 shrink-0 rounded-[12px] object-cover ring-1 ring-line" />
+            ) : (
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-jade-soft text-[18px] font-bold text-jade-deep">{place.trim().charAt(0).toUpperCase() || "R"}</span>
+            )}
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate text-[16px] font-semibold">{place}</div>
+              <div className="text-[12.5px] text-muted">{dateText}</div>
             </div>
-            {stars > 0 && (
-              <div className="mt-4 w-full animate-fade-in text-left">
-                <textarea
-                  rows={2}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={stars >= 4 ? tx(lang, "What did you like? (optional)", "काय आवडलं? (ऐच्छिक)") : tx(lang, "What went wrong? It goes straight to the owner.", "काय चुकलं? थेट मालकाला जाईल.")}
-                  className="w-full rounded-ctl bg-surface p-3 text-[15px] outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
-                />
-                <Button size="lg" variant="tinted" className="mt-2 w-full" onClick={() => { onRate(stars, text); setSent(true); }}>
-                  {tx(lang, "Send rating", "रेटिंग पाठवा")}
-                </Button>
+            {(token || orderNo) && (
+              <div className="shrink-0 rounded-[10px] bg-canvas px-2.5 py-1 text-right">
+                <div className="text-[10.5px] font-semibold uppercase tracking-wide text-faint">{token ? tx(lang, "Token", "टोकन") : tx(lang, "Order", "ऑर्डर")}</div>
+                <div className="text-[17px] font-bold leading-tight tnum">#{token ?? orderNo}</div>
               </div>
             )}
-          </>
-        )}
-      </div>
-      {stamp}
-      {closed ? (
-        <div className="mt-6 flex w-full items-center gap-3 rounded-[18px] bg-surface p-4 text-left">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><QrCode size={20} /></span>
-          <span className="text-[14px] leading-snug text-muted">
-            <b className="block text-[15px] text-ink">{tx(lang, "Your visit is complete", "तुमची भेट पूर्ण झाली")}</b>
-            {tx(lang, "Want to order again? Scan the QR on your table.", "पुन्हा ऑर्डर करायची आहे? टेबलवरचा QR पुन्हा स्कॅन करा.")}
-          </span>
+          </div>
+          <div aria-hidden className="ty-tear relative mx-4 border-t-2 border-dashed border-line" />
+          <div className="relative px-4 pb-4 pt-4 text-center">
+            {!pending && (
+              <span aria-hidden className="ty-stamp absolute right-3 top-3 rounded-[8px] border-[2.5px] border-jade px-2 py-0.5 text-[13px] font-extrabold tracking-[.14em] text-jade">
+                {tx(lang, "PAID", "भरले")}
+              </span>
+            )}
+            <div className="text-[13px] font-medium text-muted">{pending ? tx(lang, "Payment sent", "पैसे पाठवले") : tx(lang, "Total paid", "एकूण भरले")}</div>
+            <div className="mt-0.5 text-[40px] font-bold leading-none tracking-tight tnum">{inr(total)}</div>
+            {payments.length > 0 && (
+              <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                {payments.map((p, i) => {
+                  const I = Icon(p);
+                  return (
+                    <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-canvas px-3 py-1 text-[13px] font-semibold">
+                      <I size={14} className="text-muted" /> {label(p)} <span className="tnum text-muted">{inr(p.amount)}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <div className={clsx("mx-auto mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold", pending ? "bg-saffron-soft text-saffron" : "bg-jade-soft text-jade-deep")}>
+              {pending ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-saffron" /> : <Check size={14} strokeWidth={2.8} />}
+              {pending ? tx(lang, "Confirming with the owner · nothing more to pay", "मालकाकडून खात्री होत आहे · आणखी काही भरायचं नाही") : tx(lang, "Confirmed by the restaurant", "रेस्टॉरंटने खात्री केली")}
+            </div>
+            {children && <div className="text-left">{children}</div>}
+          </div>
         </div>
-      ) : (
-        <Button size="lg" className="mt-6 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
-      )}
+
+        {/* ---- rating ---- */}
+        <div className="ty-up mt-4 rounded-[22px] bg-surface p-4 text-center" style={{ animationDelay: "520ms" }}>
+          {sent ? (
+            <div className="flex flex-col items-center py-2">
+              <span className="text-[34px]" aria-hidden>{stars >= 4 ? "💚" : "🙏"}</span>
+              <div className="mt-1 text-[16px] font-semibold">{tx(lang, "Thanks for the rating!", "रेटिंगबद्दल धन्यवाद!")}</div>
+              <p className="mt-0.5 text-[13.5px] text-muted">{tx(lang, "The restaurant reads every one.", "रेस्टॉरंट प्रत्येक रेटिंग वाचतं.")}</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-[17px] font-semibold">{tx(lang, "How was your meal?", "जेवण कसं वाटलं?")}</div>
+              <div className="mt-0.5 h-5 text-[13.5px] text-muted">{stars ? <span className="font-semibold text-ink">{face[stars]} {mood[stars]}</span> : tx(lang, "Tap a star", "स्टार निवडा")}</div>
+              <div className="mt-2 flex justify-center gap-1.5">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button key={s} aria-label={`${s} stars`} onClick={() => setStars(s)} className="rounded-full p-1 active:scale-90">
+                    <Star size={38} strokeWidth={1.6} className={clsx("transition-all duration-200", s <= stars ? "scale-110 fill-saffron text-saffron" : "text-line")} />
+                  </button>
+                ))}
+              </div>
+              {stars > 0 && (
+                <div className="mt-3 w-full animate-fade-in text-left">
+                  <textarea
+                    rows={2}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={stars >= 4 ? tx(lang, "What did you like? (optional)", "काय आवडलं? (ऐच्छिक)") : tx(lang, "What went wrong? It goes straight to the owner.", "काय चुकलं? थेट मालकाला जाईल.")}
+                    className="w-full rounded-ctl bg-canvas p-3 text-[15px] outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
+                  />
+                  <Button size="lg" className="mt-2 w-full" onClick={() => { onRate(stars, text); setSent(true); }}>
+                    {tx(lang, "Send rating", "रेटिंग पाठवा")}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {stamp && <div className="ty-up" style={{ animationDelay: "600ms" }}>{stamp}</div>}
+
+        {closed ? (
+          <div className="ty-up mt-4 flex w-full items-center gap-3 rounded-[22px] bg-surface p-4 text-left" style={{ animationDelay: "650ms" }}>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><QrCode size={21} /></span>
+            <span className="text-[14px] leading-snug text-muted">
+              <b className="block text-[15px] text-ink">{tx(lang, "Your visit is complete", "तुमची भेट पूर्ण झाली")}</b>
+              {tx(lang, "Hungry again? Scan the QR on your table to order.", "पुन्हा भूक लागली? ऑर्डरसाठी टेबलवरचा QR स्कॅन करा.")}
+            </span>
+          </div>
+        ) : (
+          <Button size="lg" className="mt-5 w-full" onClick={onClose}>{tx(lang, "Done", "झालं")}</Button>
+        )}
+        <p className="mt-5 text-center text-[12px] text-faint">{tx(lang, "Made with ❤ by Restropi", "Restropi ❤")}</p>
+      </div>
     </div>
   );
 }
+
+// [left %, delay ms, size px, colour, strip?]
+const CONFETTI: [number, number, number, string, boolean][] = [
+  [6, 0, 7, "#ffd166", true], [14, 300, 6, "#ffffff", false], [22, 120, 8, "#ff8fab", true], [31, 520, 5, "#ffffff", false],
+  [40, 60, 7, "#9be7c4", true], [49, 380, 6, "#ffd166", false], [58, 200, 8, "#ffffff", true], [66, 600, 5, "#ff8fab", false],
+  [74, 40, 7, "#ffd166", true], [82, 440, 6, "#9be7c4", false], [90, 160, 8, "#ffffff", true], [96, 700, 5, "#ffd166", false],
+  [10, 900, 6, "#9be7c4", false], [36, 1000, 7, "#ffffff", true], [62, 950, 6, "#ffd166", true], [86, 1100, 7, "#ff8fab", true],
+];
+const TY_CSS = `
+.ty-hero{background:radial-gradient(120% 90% at 50% 0%,rgb(var(--jade)) 0%,rgb(var(--jade-deep)) 100%)}
+.ty-hero::after{content:"";position:absolute;inset:auto -10% -1px -10%;height:46px;background:rgb(var(--canvas));border-radius:50% 50% 0 0/100% 100% 0 0}
+@media (prefers-color-scheme: dark){.ty-hero{background:radial-gradient(120% 90% at 50% 0%,#0e7a5f 0%,#095442 100%)}}
+.ty-bit{top:-12px;opacity:0;animation:ty-fall 2.6s cubic-bezier(.2,.6,.4,1) forwards}
+@keyframes ty-fall{0%{opacity:0;transform:translateY(0) rotate(0)}10%{opacity:1}100%{opacity:0;transform:translateY(260px) rotate(540deg)}}
+.ty-disc{transform-origin:center;transform:scale(0);animation:ty-pop .45s cubic-bezier(.3,1.6,.5,1) forwards}
+.ty-tick{stroke-dasharray:60;stroke-dashoffset:60;animation:ty-draw .4s .35s ease-out forwards}
+.ty-ring{animation:ty-ring 1.6s .3s ease-out infinite}
+@keyframes ty-pop{to{transform:scale(1)}}
+@keyframes ty-draw{to{stroke-dashoffset:0}}
+@keyframes ty-ring{0%{transform:scale(.9);opacity:.6}100%{transform:scale(1.55);opacity:0}}
+.ty-up{opacity:0;transform:translateY(14px);animation:ty-up .5s ease-out forwards}
+@keyframes ty-up{to{opacity:1;transform:none}}
+.ty-stamp{transform:rotate(-12deg) scale(1.6);opacity:0;animation:ty-stamp .35s 1s cubic-bezier(.3,1.4,.5,1) forwards}
+@keyframes ty-stamp{to{transform:rotate(-12deg) scale(1);opacity:.9}}
+.ty-tear::before,.ty-tear::after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:999px;background:rgb(var(--canvas))}
+.ty-tear::before{left:-27px}.ty-tear::after{right:-27px}
+@media (prefers-reduced-motion: reduce){.ty-root *{animation-duration:1ms!important;animation-delay:0ms!important;animation-iteration-count:1!important}.ty-bit,.ty-ring{display:none}}
+`;
 
 /** Discount of a coupon on this many rupees of food (0 when the bill is too small). */
 export function guestCouponOff(c: GuestCoupon | null, subtotal: number) {

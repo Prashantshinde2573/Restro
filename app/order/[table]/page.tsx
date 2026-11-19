@@ -82,8 +82,10 @@ function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) 
 
 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
-type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean; online?: boolean };
+type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean; online?: boolean; rejects?: number };
 type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
+/** How many times the restaurant has marked a payment on these orders "Not received". */
+const rejectCount = (os: Order[]) => os.reduce((n, o) => n + (o.paymentLog ?? []).filter((l) => /^Not received/.test(l.text ?? "")).length, 0);
 
 export default function GuestOrder() {
   const params = useParams<{ table: string }>();
@@ -458,6 +460,17 @@ export default function GuestOrder() {
   useEffect(() => {
     if (openOrders.length) lastOpen.current = openOrders.map((o) => o.id); // the bill that's being settled
   }, [openOrders]);
+  // The same, but without needing this phone's group: when the owner confirms, the table is freed
+  // (a new visit starts) and the group is gone, so look the bill's orders up directly.
+  useEffect(() => {
+    if (payNow || counter || !lastOpen.current.length) return;
+    const os = allOrders.filter((o) => lastOpen.current.includes(o.id));
+    if (!os.length || os.length < lastOpen.current.length) return;
+    if (!os.every((o) => o.status === "paid" || o.status === "cancelled") || !os.some((o) => o.status === "paid")) return;
+    const paid = os.filter((o) => o.status === "paid");
+    finishVisit(paid.flatMap((o) => o.payments ?? []), paid[0].number);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allOrders]);
 
   // ---- settling: show the thank-you once the money is confirmed ----
   // Remember a payment we are waiting on, so a reload keeps the "being confirmed" screen.
@@ -507,15 +520,29 @@ export default function GuestOrder() {
       finishVisit(paid.payments ?? payments, paid.number);
       return;
     }
+    // remember how many "Not received" marks were there when we started waiting
+    if (waiting.rejects === undefined) return setWaiting({ ...waiting, rejects: rejectCount(os) });
     const claimed = os.some((o) => !!o.payClaim);
     if (claimed && !waiting.claimSeen) setWaiting({ ...waiting, claimSeen: true });
-    else if (!claimed && waiting.claimSeen) {
+    // only a real "Not received" from the restaurant opens the bill again: a claim missing for a moment
+    // (this phone's own two saves coming back one by one) is not a rejection
+    else if (!claimed && waiting.claimSeen && rejectCount(os) > waiting.rejects) {
       // the owner tapped "Not received": the bill is open again
       setWaiting(null);
       setBillOpen(true);
       toast(tx(lang, "The restaurant hasn't received this payment yet. Please check and pay again, or ask our staff.", "रेस्टॉरंटला अजून हे पैसे मिळालेले नाहीत. तपासून पुन्हा भरा, किंवा स्टाफला विचारा."));
     }
   }, [waiting, allOrders, ordersReady]);
+  // While the restaurant is confirming a payment, check every few seconds (not only every 20 s),
+  // so the thank-you opens right after the owner taps "Received".
+  const settling = (!!waiting && !waiting.payFirst) || billState === "sent";
+  useEffect(() => {
+    if (!settling) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void reloadLists(["orders"]).catch(() => {});
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [settling]);
 
 
 
@@ -1464,6 +1491,7 @@ export default function GuestOrder() {
         <ThankYou
           name={guest?.name}
           place={settings.name}
+          logo={settings.logo || undefined}
           payments={thanks.payments}
           orderNo={thanksOrder?.number || thanks.orderNo || undefined}
           token={thanks.token ? thanksOrder?.number || thanks.orderNo || undefined : undefined}
