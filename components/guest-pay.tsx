@@ -257,7 +257,7 @@ export function ThankYou({
     <div className="ty-root fixed inset-0 z-50 mx-auto flex max-w-md flex-col overflow-y-auto bg-canvas" role="dialog" aria-label="Thank you">
       <style>{TY_CSS}</style>
       {/* ---- celebration ---- */}
-      <div className="ty-hero relative overflow-hidden px-5 pb-24 pt-12 text-center text-white">
+      <div className="ty-hero relative shrink-0 overflow-hidden px-5 pb-24 pt-[max(3rem,env(safe-area-inset-top))] text-center text-white">
         <div aria-hidden className="pointer-events-none absolute inset-0">
           {CONFETTI.map((c, i) => (
             <span key={i} className="ty-bit absolute block" style={{ left: `${c[0]}%`, width: c[2], height: c[2] * (c[4] ? 2.4 : 1), background: c[3], borderRadius: c[4] ? 2 : 999, animationDelay: `${c[1]}ms` }} />
@@ -280,7 +280,7 @@ export function ThankYou({
         </p>
       </div>
 
-      <div className="relative -mt-16 flex-1 px-4 pb-6">
+      <div className="relative z-10 -mt-16 shrink-0 grow px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {/* ---- the receipt ---- */}
         <div className="ty-up ty-ticket relative mx-auto w-full rounded-[22px] bg-surface shadow-[0_18px_40px_-18px_rgba(0,0,0,.35)]" style={{ animationDelay: "420ms" }}>
           <div className="flex items-center gap-3 px-4 pb-3 pt-4">
