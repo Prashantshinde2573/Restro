@@ -1011,6 +1011,37 @@ export async function adminUsePlanCoupon(code: string, rid: string, plan: string
   const d = data as { code: string; off: number; pay: number };
   return { code: d.code, off: Number(d.off), pay: Number(d.pay) };
 }
+/** Super admin: record what a restaurant paid (new or renewal; a plan coupon is checked and counted), or a free trial. */
+export async function adminPlanPayment(rid: string, kind: "new" | "renew" | "trial", months: number, list: number, coupon?: string | null, note?: string): Promise<{ code: string | null; off: number; pay: number }> {
+  const { data, error } = await sb().rpc("admin_plan_payment", { p_rid: rid, p_for: kind, p_months: months, p_list: list, p_coupon: coupon ?? null, p_note: note ?? null });
+  if (error) throw new Error(error.message);
+  const d = data as { code: string | null; off: number; pay: number };
+  return { code: d.code, off: Number(d.off), pay: Number(d.pay) };
+}
+export type PlanEventKind = "new" | "renewed" | "date_changed" | "plan_changed" | "paused" | "turned_on" | "grace" | "grace_removed" | "deleted" | "payment" | "trial";
+export interface PlanEvent {
+  id: number; rid: string; restaurant_name: string | null; at: string; kind: PlanEventKind; plan: string | null; prev_plan: string | null;
+  renews_at: string | null; prev_renews_at: string | null; grace_until: string | null; months: number | null;
+  list_price: number | null; coupon: string | null; off: number | null; amount: number | null; note: string | null;
+}
+/** Super admin: one restaurant's plan history (newest first). */
+export async function adminPlanEventsFor(rid: string): Promise<PlanEvent[]> {
+  const { data, error } = await sb().from("plan_events").select("*").eq("rid", rid).order("at", { ascending: false }).limit(200);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as PlanEvent[]).map((e) => ({ ...e, list_price: e.list_price == null ? null : Number(e.list_price), off: e.off == null ? null : Number(e.off), amount: e.amount == null ? null : Number(e.amount) }));
+}
+/** Super admin: the plan history of every restaurant (newest first). */
+export async function adminPlanEvents(): Promise<PlanEvent[]> {
+  const out: PlanEvent[] = [];
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await sb().from("plan_events").select("*").order("at", { ascending: false }).range(from, from + 999);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as PlanEvent[];
+    out.push(...rows.map((e) => ({ ...e, list_price: e.list_price == null ? null : Number(e.list_price), off: e.off == null ? null : Number(e.off), amount: e.amount == null ? null : Number(e.amount) })));
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
 export interface PlanCouponUse { code: string; plan: string; months: number; list_price: number; off: number; event: "new" | "renew"; at: string }
 export async function adminPlanCouponUses(rid: string): Promise<PlanCouponUse[]> {
   const { data, error } = await sb().from("plan_coupon_uses").select("code,plan,months,list_price,off,event,at").eq("rid", rid).order("at", { ascending: false }).limit(20);

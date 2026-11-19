@@ -4,7 +4,7 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, BarChart3, FileSpreadsheet, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
@@ -15,6 +15,7 @@ import { PlanCouponField, PlanCouponsSheet, PlatformSheet, couponOffFor, planLis
 import { planStatus } from "@/lib/plan-status";
 import { fitLogo } from "@/lib/fit-logo";
 import { RevenueSheet } from "@/components/admin-revenue";
+import { AdminReportsSheet, eventText } from "@/components/admin-reports";
 import { ErrorsSheet } from "@/components/admin-errors";
 import { BackupsSheet } from "@/components/admin-backups";
 import {
@@ -32,7 +33,9 @@ import {
   adminPlanEmail,
   verifyMyPassword,
   adminErrors,
-  adminUsePlanCoupon,
+  adminPlanPayment,
+  adminPlanEventsFor,
+  type PlanEvent,
   adminPlanCouponUses,
   type AdminRestaurant,
   type PlanCouponUse,
@@ -75,6 +78,7 @@ export default function AdminPage() {
   const [platformOpen, setPlatformOpen] = useState(false);
   const [couponsOpen, setCouponsOpen] = useState(false);
   const [revenueOpen, setRevenueOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
   // errors that came in since the super admin last opened the list (a red count on the button)
   const [newErrors, setNewErrors] = useState(0);
@@ -180,6 +184,7 @@ export default function AdminPage() {
             <p className="mt-1 text-[15px] text-muted">Everyone using Restropi. Add a restaurant to give its owner a login.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="tinted" onClick={() => setReportsOpen(true)}><FileSpreadsheet size={17} /> Reports</Button>
             <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
             <Button variant="tinted" onClick={() => { setErrorsOpen(true); markErrorsSeen(); }}>
               <AlertTriangle size={17} /> App errors
@@ -308,6 +313,7 @@ export default function AdminPage() {
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
       <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
       <RevenueSheet open={revenueOpen} onClose={() => setRevenueOpen(false)} list={list ?? []} />
+      <AdminReportsSheet open={reportsOpen} onClose={() => setReportsOpen(false)} list={list ?? []} />
       <BackupsSheet open={backupsOpen} onClose={() => setBackupsOpen(false)} />
       <ErrorsSheet open={errorsOpen} onClose={() => setErrorsOpen(false)} names={Object.fromEntries((list ?? []).map((r) => [r.id, r.name]))} />
 
@@ -425,11 +431,12 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
         tables: d.type === "cafe" ? Math.min(d.tables, 50) : d.tables,
         outlet: { name: d.outletName.trim() || d.city.trim() || "Main", address: d.address.trim(), businessType: d.type, upi: d.upi.trim(), payFirst: d.payFirst },
       });
-      if (coupon && list != null) {
-        // the restaurant is made: count the coupon on it (a problem here doesn't undo the restaurant)
-        await adminUsePlanCoupon(coupon.code, res.rid, d.plan, d.months, list, "new")
-          .then((u) => toast(`Coupon ${u.code} · ${inr(u.off)} off · owner pays ${inr(u.pay)}`))
-          .catch((e) => toast(`Restaurant made, but the coupon wasn't counted: ${(e as Error).message}`));
+      // the restaurant is made: keep its trial and what it paid in the plan history (a problem here doesn't undo the restaurant)
+      if (d.trialDays > 0) await adminPlanPayment(res.rid, "trial", 0, 0, null, `${d.trialDays}-day free trial`).catch(() => {});
+      if (d.months > 0 && list != null) {
+        await adminPlanPayment(res.rid, "new", d.months, list, coupon?.code)
+          .then((u) => toast(u.code ? `Coupon ${u.code} · ${inr(u.off)} off · owner pays ${inr(u.pay)}` : `Payment noted · ${inr(u.pay)}`))
+          .catch((e) => toast(`Restaurant made, but the payment wasn't noted: ${(e as Error).message}`));
       }
       onCreated(res, d.name.trim());
     } catch (e) {
@@ -526,9 +533,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Renewal, one step: how long → (coupon) → see the new dates and the price → renew. */
-function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, setTyped, busy, onRenew }: {
+function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, setTyped, busy, onRenew, customPrice, setCustomPrice }: {
   r: AdminRestaurant; months: number; setMonths: (m: number) => void; from: number; till: string;
   coupon: CouponPick; setCoupon: (c: CouponPick) => void; typed: string; setTyped: (t: string) => void; busy: boolean; onRenew: () => void;
+  customPrice: number; setCustomPrice: (n: number) => void;
 }) {
   const p = plans.find((x) => x.id === r.plan);
   const outlets = Math.max(1, r.outlets);
@@ -570,6 +578,11 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
 
       {/* 2. coupon */}
       {list != null && <PlanCouponField plan={r.plan} list={null} value={coupon} onChange={setCoupon} onDraft={setTyped} label="2 · Coupon (optional)" />}
+      {list == null && (
+        <Field label="2 · Price agreed for this renewal (₹)" hint="Chain is priced by hand. It goes in the reports as what was paid.">
+          <input className={inputCls} inputMode="numeric" value={customPrice || ""} placeholder="e.g. 9000" onChange={(e) => setCustomPrice(Math.min(10000000, Number(e.target.value.replace(/\D/g, "")) || 0))} />
+        </Field>
+      )}
 
       {/* 3. what happens */}
       <div className="rounded-group bg-surface p-4">
@@ -589,7 +602,7 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
       </div>
       {waiting && <p className="-mt-2 text-[13px] font-medium text-saffron">Tap “Check” to apply the coupon “{typed.toUpperCase()}”, or clear it.</p>}
       <Button size="lg" className="w-full" disabled={busy || waiting} onClick={onRenew}>
-        <RefreshCw size={16} /> Renew till {dateText(till)}{pay != null ? ` · ${inr(pay)}` : ""}
+        <RefreshCw size={16} /> Renew till {dateText(till)}{pay != null ? ` · ${inr(pay)}` : customPrice > 0 ? ` · ${inr(customPrice)}` : ""}
       </Button>
       <p className="-mt-2 text-center text-[12.5px] text-muted">The owner gets a “plan renewed” email.{coupon ? ` Coupon ${coupon.code} is counted once.` : ""}</p>
     </div>
@@ -664,8 +677,13 @@ function RestaurantSheet({
   // a plan coupon for this renewal (counted when a +months button is used)
   const [coupon, setCoupon] = useState<CouponPick>(null);
   const [uses, setUses] = useState<PlanCouponUse[]>([]);
-  const loadUses = useCallback(() => { adminPlanCouponUses(r.id).then(setUses).catch(() => setUses([])); }, [r.id]);
-  useEffect(() => { loadUses(); }, [loadUses]);
+  const [history, setHistory] = useState<PlanEvent[]>([]);
+  const [allHistory, setAllHistory] = useState(false);
+  const loadUses = useCallback(() => {
+    adminPlanCouponUses(r.id).then(setUses).catch(() => setUses([]));
+    adminPlanEventsFor(r.id).then(setHistory).catch(() => setHistory([]));
+  }, [r.id]);
+  useEffect(() => { loadUses(); }, [loadUses, r.renewsAt, r.plan, r.status, r.graceUntil]);
   // renew: the new period starts where the paid one ends (or today, if it has already ended)
   const renewFrom = () => Math.max(Date.now(), new Date(r.renewsAt).getTime());
   const renewTill = (months: number) => {
@@ -675,25 +693,26 @@ function RestaurantSheet({
   };
   const extend = (months: number, c: CouponPick) => {
     const iso = renewTill(months);
-    const list = planListPrice(r.plan, months);
+    const list = planListPrice(r.plan, months) ?? (customPrice > 0 ? customPrice : null);
     const use = c && list != null ? c : null;
     const pay = list == null ? null : list - couponOffFor(use, list);
     const msg = `Renew till ${dateText(iso)}${pay != null ? ` · owner pays ${inr(pay)}` : ""}${use ? ` (coupon ${use.code})` : ""}`;
     return run(async () => {
       await adminUpdate(r.id, { renewsAt: iso });
       await adminPlanEmail(r.id, "renewed");
-      if (use) {
-        try {
-          await adminUsePlanCoupon(use.code, r.id, r.plan, months, list!, "renew");
-          setCoupon(null);
-          loadUses();
-        } catch (e) {
-          throw new Error(`Renewed till ${dateText(iso)}, but the coupon wasn't counted: ${(e as Error).message}`);
-        }
+      // what was paid goes in the plan history (and the coupon is counted)
+      try {
+        await adminPlanPayment(r.id, "renew", months, list ?? 0, use?.code);
+        setCoupon(null);
+        setCustomPrice(0);
+        loadUses();
+      } catch (e) {
+        throw new Error(`Renewed till ${dateText(iso)}, but the payment wasn't noted: ${(e as Error).message}`);
       }
     }, msg);
   };
   const [months, setMonths] = useState(1);
+  const [customPrice, setCustomPrice] = useState(0); // Chain: the price agreed for this renewal
   const [typed, setTyped] = useState("");
   const [fixDate, setFixDate] = useState(false);
   // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
@@ -774,6 +793,8 @@ function RestaurantSheet({
             setTyped={setTyped}
             typed={typed}
             busy={busy}
+            customPrice={customPrice}
+            setCustomPrice={setCustomPrice}
             onRenew={() => extend(months, coupon)}
           />
           <button type="button" className="text-[13.5px] font-semibold text-muted underline" onClick={() => setFixDate((v) => !v)}>
@@ -805,6 +826,26 @@ function RestaurantSheet({
               ))}
             </div>
           )}
+        </Section>
+
+        <Section title="Plan history">
+          {history.length === 0 ? (
+            <p className="text-[13.5px] text-muted">Nothing yet.</p>
+          ) : (
+            <div className="rounded-group bg-surface px-4 py-1">
+              {(allHistory ? history : history.slice(0, 8)).map((e) => (
+                <div key={e.id} className="flex gap-3 border-t border-line/70 py-2.5 text-[13.5px] first:border-0">
+                  <span className="w-[92px] shrink-0 text-muted tnum">{dateText(e.at)}</span>
+                  <span className={clsx("flex-1", e.kind === "payment" && "font-semibold text-jade-deep")}>{eventText(e)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {history.length > 8 && <button type="button" className="text-[13px] font-semibold text-jade underline" onClick={() => setAllHistory((v) => !v)}>{allHistory ? "Show fewer" : `Show all ${history.length}`}</button>}
+          <p className="text-[12.5px] text-muted">
+            Total paid: <b className="text-ink">{inr(history.filter((e) => e.kind === "payment").reduce((t, e) => t + (e.amount ?? 0), 0))}</b>
+            {" · "}{history.filter((e) => e.kind === "payment").length} payment{history.filter((e) => e.kind === "payment").length === 1 ? "" : "s"}. History is kept from 19 Nov 2026.
+          </p>
         </Section>
 
         <Section title="Grace period">
