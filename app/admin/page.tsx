@@ -4,7 +4,7 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BarChart3, FileSpreadsheet, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
@@ -14,8 +14,8 @@ import { ChangePassword, PasswordInput } from "@/components/owner-auth";
 import { PlanCouponField, PlanCouponsSheet, PlatformSheet, couponOffFor, planListPrice, type CouponPick } from "@/components/admin-extras";
 import { planStatus } from "@/lib/plan-status";
 import { fitLogo } from "@/lib/fit-logo";
-import { RevenueSheet } from "@/components/admin-revenue";
 import { AdminReportsSheet, eventText } from "@/components/admin-reports";
+import { STATE_TONE, daysTo, monthlyRevenue, planState, stateText, type PlanState } from "@/lib/admin-plan";
 import { ErrorsSheet } from "@/components/admin-errors";
 import { BackupsSheet } from "@/components/admin-backups";
 import {
@@ -35,6 +35,7 @@ import {
   adminErrors,
   adminPlanPayment,
   adminPlanEventsFor,
+  adminTrial,
   type PlanEvent,
   adminPlanCouponUses,
   type AdminRestaurant,
@@ -45,23 +46,16 @@ import { inr, timeAgo } from "@/lib/format";
 import { OUTLET_LIMIT, RENEW_WARN_DAYS } from "@/lib/access";
 
 type PlanId = AdminRestaurant["plan"];
-type Filter = "all" | "active" | "due" | "expired" | "suspended";
+type Filter = "all" | "paying" | "trial" | "due" | "ended" | "paused";
 
 const DAY = 86_400_000;
 const ERRORS_SEEN = "restropi.admin.errorsSeen";
 const daysLeft = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / DAY);
 const dateText = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const planName = (id: string) => plans.find((p) => p.id === id)?.name ?? id;
-const planPrice = (id: string) => plans.find((p) => p.id === id)?.monthly ?? 0;
 
-function renewState(r: AdminRestaurant): { tone: "jade" | "saffron" | "rose" | "neutral"; text: string } {
-  if (r.status === "suspended") return { tone: "neutral", text: "Suspended" };
-  const g = planStatus(r);
-  if (g.inGrace) return { tone: "saffron", text: `Grace · ${g.daysLeft <= 0 ? "ends today" : `${g.daysLeft}d left`}` };
-  const d = daysLeft(r.renewsAt);
-  if (d < 0) return { tone: "rose", text: `Expired ${-d}d ago` };
-  if (d <= RENEW_WARN_DAYS) return { tone: "saffron", text: d === 0 ? "Ends today" : `${d}d left` };
-  return { tone: "jade", text: "Active" };
+function renewState(r: AdminRestaurant): { tone: "jade" | "saffron" | "rose" | "neutral" | "sky"; text: string } {
+  return { tone: STATE_TONE[planState(r)], text: stateText(r) };
 }
 
 export default function AdminPage() {
@@ -77,7 +71,6 @@ export default function AdminPage() {
   const [creds, setCreds] = useState<{ title: string; email: string; password: string; welcome?: "sending" | "sent" | "off" | "failed" } | null>(null);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [couponsOpen, setCouponsOpen] = useState(false);
-  const [revenueOpen, setRevenueOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
   // errors that came in since the super admin last opened the list (a red count on the button)
@@ -119,22 +112,24 @@ export default function AdminPage() {
   }, [cloud.status, cloud.role, cloud.mustChangePassword, load]);
 
   const all = list ?? [];
+  const groups: Record<Filter, PlanState[]> = {
+    all: [], paying: ["paying", "ending", "grace"], trial: ["trial"], due: ["ending", "grace", "trial"], ended: ["ended", "trial_ended"], paused: ["paused"],
+  };
   const is = (r: AdminRestaurant, k: Filter) => {
-    const d = daysLeft(r.renewsAt);
     if (k === "all") return true;
-    if (k === "suspended") return r.status === "suspended";
-    if (r.status === "suspended") return false;
-    if (k === "expired") return d < 0;
-    if (k === "due") return d >= 0 && d <= RENEW_WARN_DAYS;
-    return d >= 0;
+    const st = planState(r);
+    // "Renew soon": paid plans ending, or a trial in its last days
+    if (k === "due") return st === "ending" || st === "grace" || (st === "trial" && daysTo(r.renewsAt) <= RENEW_WARN_DAYS);
+    return groups[k].includes(st);
   };
   const shown = useMemo(
     () => all.filter((r) => is(r, f) && (!q || `${r.name} ${r.city} ${r.owner} ${r.ownerEmail} ${r.phone}`.toLowerCase().includes(q.toLowerCase()))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [all, f, q],
   );
-  const live = all.filter((r) => is(r, "active"));
-  const mrr = live.reduce((s, r) => s + planPrice(r.plan), 0);
+  const paying = all.filter((r) => is(r, "paying"));
+  const trials = all.filter((r) => is(r, "trial"));
+  const mrr = all.reduce((t, r) => t + monthlyRevenue(r), 0);
   const open = all.find((r) => r.id === openId) ?? null;
 
   if (cloud.status === "off")
@@ -184,8 +179,7 @@ export default function AdminPage() {
             <p className="mt-1 text-[15px] text-muted">Everyone using Restropi. Add a restaurant to give its owner a login.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="tinted" onClick={() => setReportsOpen(true)}><FileSpreadsheet size={17} /> Reports</Button>
-            <Button variant="tinted" onClick={() => setRevenueOpen(true)}><BarChart3 size={17} /> Revenue</Button>
+            <Button variant="tinted" onClick={() => setReportsOpen(true)}><BarChart3 size={17} /> Reports & revenue</Button>
             <Button variant="tinted" onClick={() => { setErrorsOpen(true); markErrorsSeen(); }}>
               <AlertTriangle size={17} /> App errors
               {newErrors > 0 && <span className="ml-1 rounded-full bg-[#D92D20] px-1.5 py-0.5 text-[11.5px] font-bold leading-none text-white tnum">{newErrors > 99 ? "99+" : newErrors}</span>}
@@ -199,9 +193,9 @@ export default function AdminPage() {
 
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
           {[
-            ["Restaurants", String(all.length), `${live.length} active`],
-            ["Monthly revenue", inr(mrr), "from active plans"],
-            ["Renewals due", String(all.filter((r) => is(r, "due")).length), `in the next ${RENEW_WARN_DAYS} days`],
+            ["Restaurants", String(all.length), `${paying.length} paying · ${trials.length} on free trial`],
+            ["Monthly revenue", inr(mrr), "paying plans only · free trials not counted"],
+            ["Renew soon", String(all.filter((r) => is(r, "due")).length), `plans and trials ending in ${RENEW_WARN_DAYS} days`],
             ["Orders", all.reduce((s, r) => s + r.orders30, 0).toLocaleString("en-IN"), "last 30 days"],
           ].map(([l, v, n]) => (
             <div key={l} className="bg-surface p-4">
@@ -223,10 +217,11 @@ export default function AdminPage() {
             options={(
               [
                 ["all", "All"],
-                ["active", "Active"],
+                ["paying", "Paying"],
+                ["trial", "Free trial"],
                 ["due", "Renew soon"],
-                ["expired", "Expired"],
-                ["suspended", "Suspended"],
+                ["ended", "Ended"],
+                ["paused", "Paused"],
               ] as [Filter, string][]
             ).map(([value, label]) => ({ value, label, count: all.filter((r) => is(r, value)).length }))}
           />
@@ -312,8 +307,7 @@ export default function AdminPage() {
 
       <PlatformSheet open={platformOpen} onClose={() => setPlatformOpen(false)} />
       <PlanCouponsSheet open={couponsOpen} onClose={() => setCouponsOpen(false)} />
-      <RevenueSheet open={revenueOpen} onClose={() => setRevenueOpen(false)} list={list ?? []} />
-      <AdminReportsSheet open={reportsOpen} onClose={() => setReportsOpen(false)} list={list ?? []} />
+      <AdminReportsSheet open={reportsOpen} onClose={() => setReportsOpen(false)} list={list ?? []} onOpen={(id) => { setReportsOpen(false); setOpenId(id); }} />
       <BackupsSheet open={backupsOpen} onClose={() => setBackupsOpen(false)} />
       <ErrorsSheet open={errorsOpen} onClose={() => setErrorsOpen(false)} names={Object.fromEntries((list ?? []).map((r) => [r.id, r.name]))} />
 
@@ -387,6 +381,7 @@ const blank = {
   payFirst: false,
   tables: 10,
   plan: "growth" as PlanId,
+  start: "trial" as "trial" | "paid",
   months: 1,
   trialDays: 14,
   notes: "",
@@ -401,7 +396,8 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
   useEffect(() => {
     if (open) { setD(blank); setErr(""); setCoupon(null); }
   }, [open]);
-  const list = d.months > 0 ? planListPrice(d.plan, d.months) : null;
+  const paid = d.start === "paid";
+  const list = paid ? planListPrice(d.plan, d.months) : null;
   const set = <K extends keyof typeof blank>(k: K, v: (typeof blank)[K]) => setD((x) => ({ ...x, [k]: v }));
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.ownerEmail.trim());
@@ -411,7 +407,7 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
     d.ownerName.trim().length < 2 ? "Add the owner's name" :
     !emailOk ? "Add the owner's email" :
     !upiOk ? "UPI ID looks wrong" : "";
-  const ends = new Date(Date.now() + (d.months * 30 + d.trialDays) * DAY).toISOString();
+  const ends = new Date(Date.now() + (paid ? d.months * 30 : d.trialDays) * DAY).toISOString();
 
   const save = async () => {
     if (problem || busy) return;
@@ -426,14 +422,14 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
         city: d.city.trim(),
         notes: d.notes.trim(),
         plan: d.plan,
-        months: d.months,
-        trialDays: d.trialDays,
+        months: paid ? d.months : 0,
+        trialDays: paid ? 0 : d.trialDays,
         tables: d.type === "cafe" ? Math.min(d.tables, 50) : d.tables,
         outlet: { name: d.outletName.trim() || d.city.trim() || "Main", address: d.address.trim(), businessType: d.type, upi: d.upi.trim(), payFirst: d.payFirst },
       });
       // the restaurant is made: keep its trial and what it paid in the plan history (a problem here doesn't undo the restaurant)
-      if (d.trialDays > 0) await adminPlanPayment(res.rid, "trial", 0, 0, null, `${d.trialDays}-day free trial`).catch(() => {});
-      if (d.months > 0 && list != null) {
+      if (!paid) await adminTrial(res.rid, "start", d.trialDays).catch((e) => toast(`Restaurant made, but the trial wasn't marked: ${(e as Error).message}`));
+      if (paid && list != null) {
         await adminPlanPayment(res.rid, "new", d.months, list, coupon?.code)
           .then((u) => toast(u.code ? `Coupon ${u.code} · ${inr(u.off)} off · owner pays ${inr(u.pay)}` : `Payment noted · ${inr(u.pay)}`))
           .catch((e) => toast(`Restaurant made, but the payment wasn't noted: ${(e as Error).message}`));
@@ -506,16 +502,30 @@ function AddRestaurant({ open, onClose, onCreated }: { open: boolean; onClose: (
 
         <Section title="Plan">
           <PlanPicker value={d.plan} onChange={(v) => set("plan", v)} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Free trial">
-              <Segmented className="w-full" value={String(d.trialDays)} onChange={(v) => set("trialDays", Number(v))} options={["0", "7", "14", "30"].map((v) => ({ value: v, label: v === "0" ? "None" : `${v} days` }))} />
-            </Field>
-            <Field label="Paid for">
-              <Segmented className="w-full" value={String(d.months)} onChange={(v) => set("months", Number(v))} options={["0", "1", "3", "12"].map((v) => ({ value: v, label: v === "0" ? "—" : v === "12" ? "1 yr" : `${v} mo` }))} />
-            </Field>
-          </div>
-          <p className="text-[13.5px] text-muted">Plan runs until <b className="text-ink">{dateText(ends)}</b>. The owner sees a reminder {RENEW_WARN_DAYS} days before.</p>
-          {list != null && <PlanCouponField plan={d.plan} list={list} value={coupon} onChange={setCoupon} />}
+          <Field label="How does it start?">
+            <Segmented className="w-full" value={d.start} onChange={(v) => set("start", v)} options={[{ value: "trial", label: "Free trial" }, { value: "paid", label: "Paid plan" }]} />
+          </Field>
+          {paid ? (
+            <>
+              <Field label="Paid for">
+                <Segmented className="w-full" value={String(d.months)} onChange={(v) => set("months", Number(v))} options={[1, 3, 6, 12].map((m) => ({ value: String(m), label: m === 12 ? "1 year" : `${m} month${m > 1 ? "s" : ""}` }))} />
+              </Field>
+              {list != null && <PlanCouponField plan={d.plan} list={list} value={coupon} onChange={setCoupon} />}
+              <div className="rounded-group bg-surface p-4 text-[14px]">
+                Paid plan till <b>{dateText(ends)}</b>.
+                {list != null ? <> Owner pays <b>{inr(list - couponOffFor(coupon, list))}</b>. It goes in Reports as collected.</> : " Chain is priced by hand: note the price when you renew."}
+              </div>
+            </>
+          ) : (
+            <>
+              <Field label="Trial length">
+                <Segmented className="w-full" value={String(d.trialDays)} onChange={(v) => set("trialDays", Number(v))} options={[7, 14, 30].map((n) => ({ value: String(n), label: `${n} days` }))} />
+              </Field>
+              <div className="rounded-group bg-sky-soft p-4 text-[14px] text-ink">
+                Free till <b>{dateText(ends)}</b>. Shown as <b>Free trial</b> and not counted as revenue. When they pay, open the restaurant → <b>Start paid plan</b>.
+              </div>
+            </>
+          )}
           <Field label="Notes" hint="Only you see these."><input className={inputCls} value={d.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
         </Section>
       </div>
@@ -533,10 +543,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Renewal, one step: how long → (coupon) → see the new dates and the price → renew. */
-function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, setTyped, busy, onRenew, customPrice, setCustomPrice }: {
+function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, setTyped, busy, onRenew, customPrice, setCustomPrice, onTrial, onTrialAct }: {
   r: AdminRestaurant; months: number; setMonths: (m: number) => void; from: number; till: string;
   coupon: CouponPick; setCoupon: (c: CouponPick) => void; typed: string; setTyped: (t: string) => void; busy: boolean; onRenew: () => void;
   customPrice: number; setCustomPrice: (n: number) => void;
+  onTrial: boolean; onTrialAct: (a: "extend" | "end", days?: number) => void;
 }) {
   const p = plans.find((x) => x.id === r.plan);
   const outlets = Math.max(1, r.outlets);
@@ -559,6 +570,23 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
   return (
     <div className="space-y-4">
       {/* where the plan stands now */}
+      {onTrial ? (
+        <div className="rounded-group bg-sky-soft p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[15px] font-semibold">Free trial · {planName(r.plan)}</div>
+            <Pill tone={ended ? "rose" : "sky"}>{ended ? `Ended ${-left} day${left === -1 ? "" : "s"} ago` : left === 0 ? "Ends today" : `${left} day${left === 1 ? "" : "s"} left`}</Pill>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-3 text-[14px]">
+            <div><div className="text-[12.5px] text-muted">Customer since</div><b>{dateText(r.createdAt)}</b></div>
+            <div><div className="text-[12.5px] text-muted">{ended ? "Was free till" : "Free till"}</div><b className={ended ? "text-rose" : ""}>{dateText(r.renewsAt)}</b></div>
+          </div>
+          <p className="mt-2 text-[12.5px] text-muted">Not paying yet, so not counted as revenue.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[7, 14].map((n) => <Button key={n} variant="plain" className="!bg-surface" disabled={busy} onClick={() => onTrialAct("extend", n)}>+{n} days free</Button>)}
+            <Button variant="plain" className="!bg-surface !text-rose" disabled={busy} onClick={() => onTrialAct("end")}>End trial now</Button>
+          </div>
+        </div>
+      ) : (
       <div className="rounded-group bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-[15px] font-semibold">{planName(r.plan)} plan{p?.monthly ? ` · ${inr(p.monthly)} a month` : " · custom price"}</div>
@@ -570,9 +598,11 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
         </div>
         <p className="mt-2 text-[12.5px] text-muted">{outlets} outlet{outlets === 1 ? "" : "s"} of {OUTLET_LIMIT[r.plan] === Infinity ? "any number" : OUTLET_LIMIT[r.plan]} in this plan · one price for the restaurant.</p>
       </div>
+      )}
+      {onTrial && <h4 className="pt-1 text-[16px] font-semibold">Start the paid plan</h4>}
 
       {/* 1. how long */}
-      <Field label="1 · Renew for">
+      <Field label={onTrial ? "1 · Paid for" : "1 · Renew for"}>
         <Segmented className="w-full" value={String(months)} onChange={(v) => setMonths(Number(v))} options={[1, 3, 6, 12].map((m) => ({ value: String(m), label: m === 12 ? "1 year" : `${m} month${m > 1 ? "s" : ""}` }))} />
       </Field>
 
@@ -586,11 +616,11 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
 
       {/* 3. what happens */}
       <div className="rounded-group bg-surface p-4">
-        <div className="text-[12.5px] font-semibold uppercase tracking-wide text-muted">{list != null ? "3 · " : ""}New plan period</div>
+        <div className="text-[12.5px] font-semibold uppercase tracking-wide text-muted">{list != null ? "3 · " : ""}{onTrial ? "Paid plan" : "New plan period"}</div>
         <div className="mt-1 text-[17px] font-semibold">
           {dateText(new Date(from).toISOString())} → {dateText(till)}
         </div>
-        <p className="text-[12.5px] text-muted">{ended ? "The old plan has ended, so the new one starts today." : `Starts after the paid days end (${dateText(r.renewsAt)}), so no day is lost.`}</p>
+        <p className="text-[12.5px] text-muted">{onTrial ? "The free trial ends now and the paid plan starts today." : ended ? "The old plan has ended, so the new one starts today." : `Starts after the paid days end (${dateText(r.renewsAt)}), so no day is lost.`}</p>
         {list != null && full != null && (
           <div className="mt-3 border-t border-line/70 pt-2">
             <Row l={`${planName(r.plan)} ${inr(p!.monthly!)} × ${months} month${months === 1 ? "" : "s"}`} v={inr(full)} />
@@ -602,7 +632,7 @@ function RenewBox({ r, months, setMonths, from, till, coupon, setCoupon, typed, 
       </div>
       {waiting && <p className="-mt-2 text-[13px] font-medium text-saffron">Tap “Check” to apply the coupon “{typed.toUpperCase()}”, or clear it.</p>}
       <Button size="lg" className="w-full" disabled={busy || waiting} onClick={onRenew}>
-        <RefreshCw size={16} /> Renew till {dateText(till)}{pay != null ? ` · ${inr(pay)}` : customPrice > 0 ? ` · ${inr(customPrice)}` : ""}
+        <RefreshCw size={16} /> {onTrial ? "Start paid plan" : "Renew"} till {dateText(till)}{pay != null ? ` · ${inr(pay)}` : customPrice > 0 ? ` · ${inr(customPrice)}` : ""}
       </Button>
       <p className="-mt-2 text-center text-[12.5px] text-muted">The owner gets a “plan renewed” email.{coupon ? ` Coupon ${coupon.code} is counted once.` : ""}</p>
     </div>
@@ -685,7 +715,12 @@ function RestaurantSheet({
   }, [r.id]);
   useEffect(() => { loadUses(); }, [loadUses, r.renewsAt, r.plan, r.status, r.graceUntil]);
   // renew: the new period starts where the paid one ends (or today, if it has already ended)
-  const renewFrom = () => Math.max(Date.now(), new Date(r.renewsAt).getTime());
+  // on a free trial the paid plan starts today (the trial ends); otherwise after the paid days
+  const trialState = planState(r);
+  const onTrial = trialState === "trial" || trialState === "trial_ended";
+  const renewFrom = () => (onTrial ? Date.now() : Math.max(Date.now(), new Date(r.renewsAt).getTime()));
+  const trialAct = (action: "extend" | "end" | "start", days?: number) =>
+    run(() => adminTrial(r.id, action, days), action === "end" ? "End the free trial now (the restaurant stops until it pays)" : action === "extend" ? `Extend the free trial by ${days} days` : `Start a ${days}-day free trial (not counted as revenue)`);
   const renewTill = (months: number) => {
     const d = new Date(renewFrom());
     d.setMonth(d.getMonth() + months);
@@ -696,13 +731,13 @@ function RestaurantSheet({
     const list = planListPrice(r.plan, months) ?? (customPrice > 0 ? customPrice : null);
     const use = c && list != null ? c : null;
     const pay = list == null ? null : list - couponOffFor(use, list);
-    const msg = `Renew till ${dateText(iso)}${pay != null ? ` · owner pays ${inr(pay)}` : ""}${use ? ` (coupon ${use.code})` : ""}`;
+    const msg = `${onTrial ? "Start the paid plan" : "Renew"} till ${dateText(iso)}${pay != null ? ` · owner pays ${inr(pay)}` : ""}${use ? ` (coupon ${use.code})` : ""}`;
     return run(async () => {
       await adminUpdate(r.id, { renewsAt: iso });
       await adminPlanEmail(r.id, "renewed");
       // what was paid goes in the plan history (and the coupon is counted)
       try {
-        await adminPlanPayment(r.id, "renew", months, list ?? 0, use?.code);
+        await adminPlanPayment(r.id, onTrial ? "new" : "renew", months, list ?? 0, use?.code, onTrial ? "Free trial → paid plan" : undefined);
         setCoupon(null);
         setCustomPrice(0);
         loadUses();
@@ -715,6 +750,7 @@ function RestaurantSheet({
   const [customPrice, setCustomPrice] = useState(0); // Chain: the price agreed for this renewal
   const [typed, setTyped] = useState("");
   const [fixDate, setFixDate] = useState(false);
+  const [giveTrial, setGiveTrial] = useState(false);
   // grace counts from the plan's end (or from today if that has already passed), or adds to a running grace
   const [graceDate, setGraceDate] = useState("");
   // logo: picked here, shrunk in the browser, stored by our server
@@ -781,7 +817,7 @@ function RestaurantSheet({
           <PlanPicker value={r.plan} onChange={(v) => v !== r.plan && run(() => adminUpdate(r.id, { plan: v }).then(() => adminPlanEmail(r.id, "plan")), `Plan changed to ${planName(v)}`)} />
         </Section>
 
-        <Section title="Renewal">
+        <Section title="Plan & renewal">
           <RenewBox
             r={r}
             months={months}
@@ -795,11 +831,28 @@ function RestaurantSheet({
             busy={busy}
             customPrice={customPrice}
             setCustomPrice={setCustomPrice}
+            onTrial={onTrial}
+            onTrialAct={trialAct}
             onRenew={() => extend(months, coupon)}
           />
-          <button type="button" className="text-[13.5px] font-semibold text-muted underline" onClick={() => setFixDate((v) => !v)}>
-            {fixDate ? "Hide" : "Correct the end date by hand"}
-          </button>
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            <button type="button" className="text-[13.5px] font-semibold text-muted underline" onClick={() => setFixDate((v) => !v)}>
+              {fixDate ? "Hide" : "Correct the end date by hand"}
+            </button>
+            {!onTrial && (
+              <button type="button" className="text-[13.5px] font-semibold text-muted underline" onClick={() => setGiveTrial((v) => !v)}>
+                {giveTrial ? "Hide" : "Put on a free trial"}
+              </button>
+            )}
+          </div>
+          {giveTrial && !onTrial && (
+            <div className="space-y-2 rounded-group bg-surface p-3">
+              <p className="text-[13px] text-muted">Free from today. It shows as Free trial and is not counted as revenue. The current end date is replaced.</p>
+              <div className="flex flex-wrap gap-2">
+                {[7, 14, 30].map((n) => <Button key={n} variant="plain" className="!bg-canvas" disabled={busy} onClick={() => trialAct("start", n)}>{n} days free</Button>)}
+              </div>
+            </div>
+          )}
           {fixDate && (
             <div className="space-y-2 rounded-group bg-surface p-3">
               <p className="text-[13px] text-muted">Only to fix a wrong date. No price and no coupon; the owner gets the &quot;plan renewed&quot; email.</p>

@@ -320,7 +320,7 @@ export function PlanCouponField({ plan, list, value, onChange, onDraft, label = 
         </div>
       ) : (
         <div className="flex gap-2">
-          <input className={clsx(inputCls, "flex-1 font-mono uppercase")} placeholder="e.g. LAUNCH20" value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && check()} />
+          <input className={clsx(inputCls, "flex-1 font-mono uppercase placeholder:font-sans placeholder:normal-case")} placeholder="e.g. LAUNCH20" value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && check()} />
           <Button variant="tinted" disabled={!code.trim() || busy} onClick={check}>{busy ? "Checking…" : "Check"}</Button>
         </div>
       )}
