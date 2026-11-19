@@ -298,6 +298,8 @@ const HI: Record<string, string> = {
   "Please collect it from the counter.": "कृपया काउंटर से ले लें।",
   "OK, coming": "ठीक है, आ रहे हैं",
   "Your order is ready!": "आपका ऑर्डर तैयार है!",
+  "Your food is being prepared": "आपका खाना तैयार हो रहा है",
+  "Pay after your food is served": "खाना टेबल पर आने के बाद भुगतान करें",
   "Thanks for the rating!": "रेटिंग के लिए धन्यवाद!",
   "The restaurant reads every one.": "रेस्टोरेंट हर रेटिंग पढ़ता है।",
   "How was your meal?": "खाना कैसा लगा?",

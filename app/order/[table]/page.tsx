@@ -1210,30 +1210,45 @@ export default function GuestOrder() {
             <span className="ml-auto text-[15px] font-semibold">{tx(lang, "View cart", "कार्ट पहा")}</span>
           </button>
         ) : view === "orders" && !payNow && billState !== "none" ? (
-          <div className={clsx("grid gap-2", canOrderMore ? "grid-cols-[auto_1fr]" : "grid-cols-1")}>
-            {/* add more dishes to the same bill (before it is paid) */}
-            {canOrderMore && (
-              <button
-                onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}
-                className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-4 text-jade-deep shadow-float ring-1 ring-jade/30"
-              >
-                <span className="flex items-center gap-1 text-[15px] font-semibold"><Plus size={17} strokeWidth={2.6} /> {tx(lang, "Order more", "आणखी ऑर्डर")}</span>
-                <span className="text-[11px] font-medium leading-tight text-muted">{tx(lang, "Same bill", "त्याच बिलात")}</span>
-              </button>
-            )}
-            {/* where the bill stands: pay it / already paid, owner confirming / paid */}
+          <div className="grid gap-2">
+            {/* food still coming: where it stands (information, not a button) + "Order more" as the one action */}
             {!payNow && billState === "open" && awaitingServe && !waiting && (
-              <div className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-surface px-3 text-center shadow-float ring-1 ring-line">
-                <span className="text-[14.5px] font-semibold">
-                  {awaitingKitchen ? tx(lang, "Waiting for the kitchen to accept", "किचनकडून ऑर्डर स्वीकारली जाण्याची वाट") : tx(lang, "Your food is on the way", "तुमचं जेवण तयार होत आहे")}
+              <div className="flex items-center gap-3 rounded-[20px] bg-surface py-2 pl-4 pr-2 shadow-float ring-1 ring-line" role="status">
+                <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+                  <span className={clsx("absolute inset-0 animate-ping rounded-full opacity-60", awaitingKitchen ? "bg-saffron" : "bg-jade")} />
+                  <span className={clsx("relative h-2.5 w-2.5 rounded-full", awaitingKitchen ? "bg-saffron" : "bg-jade")} />
                 </span>
-                <span className="text-[11.5px] font-medium leading-tight text-muted">{tx(lang, "You can pay once your food is served", "जेवण टेबलवर आलं की पैसे भरता येतील")}</span>
+                <span className="min-w-0 flex-1 py-1.5">
+                  <span className="block text-[14px] font-semibold leading-snug">
+                    {awaitingKitchen ? tx(lang, "Waiting for the kitchen to accept", "किचन ऑर्डर स्वीकारत आहे") : tx(lang, "Your food is being prepared", "तुमचं जेवण तयार होत आहे")}
+                  </span>
+                  <span className="block text-[12px] leading-snug text-muted">{tx(lang, "Pay after your food is served", "जेवण टेबलवर आल्यावर पैसे भरा")}</span>
+                </span>
+                {canOrderMore && (
+                  <button
+                    onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}
+                    className="flex h-11 shrink-0 items-center gap-1 rounded-[14px] bg-jade px-3.5 text-[14px] font-semibold text-white active:scale-[.97]"
+                  >
+                    <Plus size={16} strokeWidth={2.6} /> {tx(lang, "Order more", "आणखी ऑर्डर")}
+                  </button>
+                )}
               </div>
             )}
+            {/* food served: pay the bill (main action), or add more to the same bill (second action) */}
             {!payNow && billState === "open" && (!awaitingServe || waiting) && (
-              <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setUseReward(true); setBillOpen(true); }}>
-                {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
-              </Button>
+              <div className={clsx("grid gap-2", canOrderMore ? "grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : "grid-cols-1")}>
+                {canOrderMore && (
+                  <button
+                    onClick={() => { setView("menu"); window.scrollTo({ top: 0 }); }}
+                    className="flex h-14 items-center justify-center gap-1.5 rounded-[18px] bg-surface px-3 text-[15px] font-semibold text-jade-deep shadow-float ring-1 ring-jade/35 active:scale-[.98]"
+                  >
+                    <Plus size={17} strokeWidth={2.6} /> {tx(lang, "Order more", "आणखी ऑर्डर")}
+                  </button>
+                )}
+                <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setUseReward(true); setBillOpen(true); }}>
+                  {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
+                </Button>
+              </div>
             )}
             {!payNow && billState === "sent" && (
               <button onClick={() => setBillOpen(true)} className="flex h-14 flex-col items-center justify-center rounded-[18px] bg-saffron-soft px-3 text-saffron shadow-float ring-1 ring-saffron/25">
