@@ -1,0 +1,5 @@
+-- Free trial as its own state (applied as migration free_trial_status).
+-- restaurants.trial_until: on a free trial until then; never counted as revenue.
+-- public.admin_trial(rid, 'start'|'extend'|'end', days): super admin only; writes its own history line.
+-- admin_plan_payment for a new/renewal payment clears trial_until (the restaurant is now paying).
+-- admin_restaurants() returns trialUntil. History: leaving a trial for a paid plan is "paid_started".

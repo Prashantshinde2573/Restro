@@ -871,6 +871,8 @@ export interface AdminRestaurant {
   logo?: string | null;
   renewsAt: string;
   graceUntil: string | null;
+  /** on a free trial until this time (null: not on a trial) */
+  trialUntil?: string | null;
   status: "active" | "suspended";
   createdAt: string;
   outlets: number;
@@ -1018,11 +1020,16 @@ export async function adminPlanPayment(rid: string, kind: "new" | "renew" | "tri
   const d = data as { code: string | null; off: number; pay: number };
   return { code: d.code, off: Number(d.off), pay: Number(d.pay) };
 }
-export type PlanEventKind = "new" | "renewed" | "date_changed" | "plan_changed" | "paused" | "turned_on" | "grace" | "grace_removed" | "deleted" | "payment" | "trial";
+export type PlanEventKind = "new" | "paid_started" | "renewed" | "date_changed" | "plan_changed" | "paused" | "turned_on" | "grace" | "grace_removed" | "deleted" | "payment" | "trial";
 export interface PlanEvent {
   id: number; rid: string; restaurant_name: string | null; at: string; kind: PlanEventKind; plan: string | null; prev_plan: string | null;
   renews_at: string | null; prev_renews_at: string | null; grace_until: string | null; months: number | null;
   list_price: number | null; coupon: string | null; off: number | null; amount: number | null; note: string | null;
+}
+/** Super admin: start, extend or end a free trial. */
+export async function adminTrial(rid: string, action: "start" | "extend" | "end", days?: number): Promise<void> {
+  const { error } = await sb().rpc("admin_trial", { p_rid: rid, p_action: action, p_days: days ?? null });
+  if (error) throw new Error(error.message);
 }
 /** Super admin: one restaurant's plan history (newest first). */
 export async function adminPlanEventsFor(rid: string): Promise<PlanEvent[]> {
