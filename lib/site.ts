@@ -26,7 +26,14 @@ export const SITE_KEYWORDS = [
 export const PUBLIC_PAGES: { path: string; priority: number; changeFrequency: "weekly" | "monthly" | "yearly" }[] = [
   { path: "/", priority: 1, changeFrequency: "weekly" },
   { path: "/pricing", priority: 0.9, changeFrequency: "monthly" },
-  { path: "/privacy", priority: 0.3, changeFrequency: "yearly" },
+  { path: "/about", priority: 0.7, changeFrequency: "monthly" },
+  { path: "/restaurant-billing-software", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/qr-code-ordering", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/kot-software", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/cafe-billing-software", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/restaurant-inventory-software", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/restaurant-pos-pune", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/privacy", priority: 0.2, changeFrequency: "yearly" },
 ];
 /** Not for search engines: the app, guest QR pages, sign-in, admin and print pages.
  *  "/app$" + "/app/" rather than "/app", which would also block /apple-icon.png. */

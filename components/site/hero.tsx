@@ -147,11 +147,13 @@ export function Hero() {
 
       <div className="mx-auto mt-auto grid w-full max-w-[1400px] gap-8 px-5 pb-8 pt-32 sm:px-8 sm:pb-12 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-12 lg:px-14 lg:pb-16">
         <div data-hero-copy className="max-w-[680px]">
-          <div data-hero-fade className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 text-[13px] font-medium text-white/90 backdrop-blur-md">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#7be0c0]" />
-            For cafés, restaurants and cloud kitchens
-          </div>
+          {/* the page's h1 carries the brand + what it is, for search; the big line below stays the visual headline */}
+          <h1 data-hero-fade className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 text-[13px] font-medium text-white/90 backdrop-blur-md">
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#7be0c0]" />
+            <span><b className="font-semibold text-white">Restropi</b> · restaurant billing &amp; QR ordering app</span>
+          </h1>
           <RiseText
+            as="h2"
             text="Run the whole restaurant from one calm screen."
             className="text-balance mt-5 text-[36px] font-medium leading-[1.04] tracking-[-0.04em] sm:text-[48px] lg:text-[56px] xl:text-[62px]"
           />
