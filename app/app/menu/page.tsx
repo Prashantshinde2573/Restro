@@ -4,16 +4,17 @@ import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { RecipeEditor, RecipeHint } from "@/components/recipe-editor";
 import { Button, DietMark, Field, Group, Hint, Page, PageHeader, Pill, Segmented, SelectMenu, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
+import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets, useStock } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
 import { DragGhost, DragHandle, useDishDrag, type DishDrag } from "@/components/dish-drag";
 import { MenuFromPhoto } from "@/components/menu-import";
 import { OptionsEditor, PhotoUploader, SizesEditor } from "@/components/dish-editor";
 import { hasSizes, sizesOf } from "@/lib/sizes";
 import { inr } from "@/lib/format";
-import type { Diet, MenuItem, OptionGroup, Size } from "@/lib/types";
+import type { Diet, MenuItem, OptionGroup, RecipeLine, Size } from "@/lib/types";
 
 // Emoji the owner can give a category — shown in the guest menu side bar.
 const CAT_ICONS = ["🍢", "🍛", "🫓", "🍚", "🍨", "🥤", "☕", "🍕", "🍔", "🥪", "🍜", "🥗", "🍰", "🍦", "🥘", "🍳", "🥟", "🍹", "🧁", "🍽️"];
@@ -32,6 +33,7 @@ type Draft = {
   options: OptionGroup[];
   sizes: Size[];
   cost: string; // ₹ per plate (ingredients)
+  recipe: RecipeLine[]; // what one plate takes from stock
 };
 
 type Quadrant = "star" | "plowhorse" | "puzzle" | "dog";
@@ -80,7 +82,9 @@ export default function MenuPage() {
   };
   const cafe = !hasTables(outletNow); // counter-only café: no tandoor
   const engineeringOn = useFeature("menuEngineering") === "ok";
-  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], sizes: [], cost: "" });
+  const stockOn = useFeature("stock") === "ok";
+  const stockHere = useStock().filter((x) => !x.outletId || x.outletId === outletNow.id);
+  const blank = (catId?: string): Draft => ({ name: "", price: "", categoryId: catId ?? cats[0]?.id ?? "", diet: "veg", station: "kitchen", sweet: false, photos: [], spice: 0, isNew: false, tags: [], options: [], sizes: [], cost: "", recipe: [] });
   const [draft, setDraft] = useState<Draft>(blank());
   const setEdit = (m: MenuItem | "new" | null, catId?: string) => {
     setEditRaw(m);
@@ -88,7 +92,7 @@ export default function MenuPage() {
     const it = m && m !== "new" ? m : null;
     setDraft(
       it
-        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], sizes: it.sizes ?? [], cost: it.cost ? String(it.cost) : "" }
+        ? { name: it.name, price: String(it.price), categoryId: it.categoryId, diet: it.diet, station: it.station, sweet: !!it.sweet, photos: it.photos ?? [], spice: it.spice ?? 0, isNew: !!it.isNew, tags: it.tags ?? [], options: it.options ?? [], sizes: it.sizes ?? [], cost: it.cost ? String(it.cost) : "", recipe: it.recipe ?? [] }
         : blank(catId),
     );
     setNewCat(null);
@@ -286,6 +290,7 @@ export default function MenuPage() {
                 cost: Math.max(0, Math.round(Number(draft.cost) || 0)),
                 options: draft.options.filter((g) => g.name && g.choices.some((c) => c.name)).map((g) => ({ ...g, choices: g.choices.filter((c) => c.name) })),
                 sizes: sized ? sizes : [],
+                recipe: draft.recipe.filter((r) => r.stockId && r.qty > 0),
               };
               if (editing) menuActions.update(editing.id, patch);
               else
@@ -384,6 +389,12 @@ export default function MenuPage() {
           <Field label="Choices for guests (spice, add-ons)">
             <OptionsEditor groups={draft.options} onChange={(options) => setDraft({ ...draft, options })} />
           </Field>
+          {stockOn && (
+            <div>
+              <div className="mb-1.5 flex items-center gap-1 text-[13px] font-medium text-muted">Uses from stock (per plate) <RecipeHint /></div>
+              <RecipeEditor value={draft.recipe} onChange={(recipe) => setDraft({ ...draft, recipe })} stock={stockHere} onUseCost={(rs) => setDraft({ ...draft, recipe: draft.recipe, cost: String(rs) })} />
+            </div>
+          )}
           <Field label="Cost per plate (₹)" hint="What the ingredients cost you. Used for margins in “What's working”. Optional.">
             <input className={inputCls} inputMode="decimal" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
           </Field>
