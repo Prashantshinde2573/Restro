@@ -452,7 +452,10 @@ export default function GuestOrder() {
   // pay at the end: Pay shows only once every order on the bill is served at the table
   const awaitingKitchen = !payNow && unbilled.some((o) => o.status === "new");
   const awaitingServe = !payNow && unbilled.some((o) => o.status !== "served");
-  const paidOrders = myOrders.filter((o) => o.status === "paid");
+  // paid orders of THIS visit only: the group letter ("A") comes back on every visit, and an earlier
+  // visit's paid bill must never count as "this bill is paid" (it opened an old thank-you)
+  const visitFrom = party ? Date.parse(party.since) - 2 * 60_000 : null;
+  const paidOrders = myOrders.filter((o) => o.status === "paid" && (counter || (visitFrom != null && Date.parse(o.createdAt) >= visitFrom)));
   const billState: "open" | "sent" | "paid" | "none" = unbilled.length ? "open" : sentClaim ? "sent" : paidOrders.length && !openOrders.length ? "paid" : "none";
   const paidTotal = paidOrders.reduce((s, o) => s + (o.payments?.reduce((a, p) => a + p.amount, 0) ?? 0), 0);
   // Bill settled (pay at the end): close this visit on the phone and go to the thank-you page.
@@ -511,7 +514,7 @@ export default function GuestOrder() {
       const w = localStorage.getItem(waitKey);
       const saved = w ? (JSON.parse(w) as Waiting & { at?: number }) : null;
       // only a recent one (a few hours): old leftovers are dropped
-      if (saved && saved.at && Date.now() - saved.at < 6 * 3600_000) setWaiting(saved);
+      if (saved && saved.at && Date.now() - saved.at < 30 * 60_000) setWaiting(saved);
       else if (w) localStorage.removeItem(waitKey);
     } catch {}
   }, [waitKey]);
@@ -551,13 +554,12 @@ export default function GuestOrder() {
       finishVisit(got.length ? got : payments, paid[0].number);
       return;
     }
-    // remember how many "Not received" marks were there when we started waiting
+    // (a wait saved by an older version: take the count now)
     if (waiting.rejects === undefined) return setWaiting({ ...waiting, rejects: rejectCount(os) });
     const claimed = os.some((o) => !!o.payClaim);
-    if (claimed && !waiting.claimSeen) setWaiting({ ...waiting, claimSeen: true });
-    // only a real "Not received" from the restaurant opens the bill again: a claim missing for a moment
-    // (this phone's own two saves coming back one by one) is not a rejection
-    else if (!claimed && waiting.claimSeen && rejectCount(os) > waiting.rejects) {
+    // only a new "Not received" from the restaurant opens the bill again (counted against the marks there
+    // were when the guest said "I've paid"), however fast it comes; a claim missing for a moment is not one
+    if (!claimed && rejectCount(os) > waiting.rejects) {
       // the owner tapped "Not received": the bill is open again
       setWaiting(null);
       setBillOpen(true);
@@ -868,7 +870,7 @@ export default function GuestOrder() {
     });
     if (t && party) tableActions.update(t.id, party.id, { status: "billing", paymentPending: true });
     // stay on the bill: it says "being confirmed" until the owner confirms, then thank you
-    setWaiting({ ids: billIds, kind: "upi", amount: billTotal, payFirst: false, claimSeen: true });
+    setWaiting({ ids: billIds, kind: "upi", amount: billTotal, payFirst: false, claimSeen: true, rejects: rejectCount(unbilled) });
   };
   const billLater = (kind: "cash" | "card" | "mixed", upiPart?: number) => {
     if (rewardReady) orderActions.askReward(billIds, rewardAmt > 0); // staff see "use the reward" already on at checkout
@@ -876,7 +878,7 @@ export default function GuestOrder() {
     if (kind === "mixed" && upiPart) orderActions.prepay(billIds, { method: "upi", amount: upiPart }, who);
     else orderActions.setPreference(billIds, kind === "card" ? "card" : "cash");
     if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
-    setWaiting({ ids: billIds, kind, amount: billTotal, upiPart, payFirst: false });
+    setWaiting({ ids: billIds, kind, amount: billTotal, upiPart, payFirst: false, rejects: rejectCount(unbilled) });
   };
 
   /** Pay the bill online: the server works out the same bill (stamp card, coupon, GST) and closes it once the gateway confirms. */
@@ -890,7 +892,7 @@ export default function GuestOrder() {
     setOnlineBusy(false);
     if (r.status === "paid" || r.status === "pending") {
       if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
-      setWaiting({ ids, kind: "upi", amount: r.amount || billTotal - tip, payFirst: false, online: true });
+      setWaiting({ ids, kind: "upi", amount: r.amount || billTotal - tip, payFirst: false, online: true, rejects: rejectCount(allOrders.filter((o) => ids.includes(o.id))) });
       return;
     }
     if (/off here/i.test(r.message ?? "")) setGw(null); // the owner turned it off meanwhile
