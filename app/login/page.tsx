@@ -14,6 +14,7 @@ import { ChangePassword, OwnerAuth } from "@/components/owner-auth";
 import { cloudSignOut, publicInfo, signInStaff, useCloud, type StaffChoice } from "@/lib/cloud";
 import { sessionActions } from "@/lib/live";
 import { CookingLoader } from "@/components/loader";
+import { TwoStepGate } from "@/components/two-step";
 
 const RID_KEY = "restropi.rid"; // the restaurant this device last signed in to (shows its name)
 const PHONE_KEY = "restropi.staffPhone"; // last staff mobile used here, so they only type the PIN
@@ -96,6 +97,9 @@ export default function LoginPage() {
   const mustSet = cloud.status === "ready" && cloud.role !== "guest" && cloud.role !== "staff" && cloud.mustChangePassword;
   // signed in: show a loader until the app opens (it loads the restaurant first)
   const entering = (cloud.status === "ready" && cloud.role !== "guest" && !cloud.mustChangePassword) || (busy && mode === "staff");
+
+  // password was right: now the code from the authenticator app (or set it up, super admin)
+  if (cloud.status === "needsMfa") return <TwoStepGate mode={cloud.mfa ?? "verify"} email={cloud.email} who={cloud.role === "superadmin" ? "superadmin" : "owner"} />;
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas lg:flex-row">

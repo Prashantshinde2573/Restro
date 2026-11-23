@@ -4,7 +4,7 @@
 // login), change plan and renewal, suspend, reset the owner's password, delete.
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Archive, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, Store, Ticket, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, BarChart3, CalendarClock, Check, Copy, KeyRound, LogOut, Mail, MessageCircle, Plus, RefreshCw, Search, ShieldCheck, ShieldOff, Store, Ticket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Spinner, Wordmark } from "@/components/shell";
 import { Button, Chips, Field, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
@@ -18,11 +18,13 @@ import { AdminReportsSheet, eventText } from "@/components/admin-reports";
 import { STATE_TONE, daysTo, monthlyRevenue, planState, stateText, type PlanState } from "@/lib/admin-plan";
 import { ErrorsSheet } from "@/components/admin-errors";
 import { BackupsSheet } from "@/components/admin-backups";
+import { TwoStepCard, TwoStepGate } from "@/components/two-step";
 import {
   adminCreate,
   adminDelete,
   adminList,
   adminResetOwnerPassword,
+  adminResetTwoStep,
   adminUpdate,
   cloudSignOut,
   useCloud,
@@ -92,6 +94,7 @@ export default function AdminPage() {
   };
   const [backupsOpen, setBackupsOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [twoOpen, setTwoOpen] = useState(false);
 
   useEffect(() => {
     if (cloud.status === "signedOut") router.replace("/login");
@@ -139,6 +142,7 @@ export default function AdminPage() {
         <p className="mt-2 text-[15px] text-muted">The app isn&apos;t connected to Supabase.</p>
       </div>
     );
+  if (cloud.status === "needsMfa") return <TwoStepGate mode={cloud.mfa ?? "verify"} email={cloud.email} who={cloud.role === "superadmin" ? "superadmin" : "owner"} />;
   if (cloud.status !== "ready" || cloud.role !== "superadmin" || cloud.mustChangePassword) {
     if (cloud.status === "needsOnboarding")
       return (
@@ -161,6 +165,9 @@ export default function AdminPage() {
             <span className="mr-2 hidden text-[13.5px] text-muted sm:inline">{cloud.email}</span>
             <button onClick={() => setPwOpen(true)} className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium hover:bg-sunken" aria-label="Change password">
               <KeyRound size={16} /> <span className="hidden sm:inline">Password</span>
+            </button>
+            <button onClick={() => setTwoOpen(true)} className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium hover:bg-sunken" aria-label="Two-step login">
+              <ShieldCheck size={16} /> <span className="hidden sm:inline">Two-step</span>
             </button>
             <button
               onClick={async () => { await cloudSignOut(); window.location.href = "/login"; }}
@@ -311,6 +318,10 @@ export default function AdminPage() {
       <BackupsSheet open={backupsOpen} onClose={() => setBackupsOpen(false)} />
       <ErrorsSheet open={errorsOpen} onClose={() => setErrorsOpen(false)} names={Object.fromEntries((list ?? []).map((r) => [r.id, r.name]))} />
 
+      <Sheet open={twoOpen} onClose={() => setTwoOpen(false)} title="Two-step login">
+        <TwoStepCard required onToast={toast} />
+        <p className="mt-3 text-[13px] text-muted">Needed for the super admin. Add a second phone too, so a lost phone never locks you out.</p>
+      </Sheet>
       <Sheet open={pwOpen} onClose={() => setPwOpen(false)} title="Change password">
         <ChangePassword title="" onDone={() => { setPwOpen(false); toast("Password changed"); }} />
       </Sheet>
@@ -1036,6 +1047,26 @@ function RestaurantSheet({
               className="flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] font-medium"
             >
               <KeyRound size={18} className="text-jade" /> Reset owner password
+            </button>
+            <button
+              disabled={busy}
+              onClick={() =>
+                confirmThen(`Turn off ${r.name}'s two-step login (lost phone)`, async () => {
+                  setBusy(true);
+                  setErr("");
+                  try {
+                    const res = await adminResetTwoStep(r.id);
+                    onChanged(res.removed ? "Two-step login removed · the owner signs in with the password and can set it up again" : "This owner hasn't turned on two-step login");
+                  } catch (e) {
+                    setErr((e as Error).message);
+                  } finally {
+                    setBusy(false);
+                  }
+                })
+              }
+              className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left text-[15px] font-medium"
+            >
+              <ShieldOff size={18} className="text-jade" /> Reset two-step login
             </button>
             <button
               disabled={busy}

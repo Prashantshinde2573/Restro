@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const { data: o } = await db.from("plan_orders").select("rid").eq("id", id).maybeSingle();
   if (!o) return json({ error: "Payment not found" }, 404);
   const { data: r } = await db.from("restaurants").select("owner_uid").eq("id", o.rid).maybeSingle();
-  if (r?.owner_uid !== me.id && !(await isPlatformAdmin(me.id))) return json({ error: "Forbidden" }, 403);
+  if ((r?.owner_uid !== me.id || !me.mfaOk) && !(await isPlatformAdmin(me))) return json({ error: "Forbidden" }, 403);
   try {
     const res = await settlePlanOrder(id);
     await afterPaid(res, siteOrigin(req));

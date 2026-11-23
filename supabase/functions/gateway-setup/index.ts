@@ -1,7 +1,7 @@
 // The owner connects their own Razorpay or Cashfree account to an outlet (or turns it off).
 // Only the restaurant's owner. The keys are checked with the gateway first, then stored in
 // Supabase Vault; nothing secret is ever sent back.
-import { admin, cors, json } from "../_shared/common.ts";
+import { admin, cors, json, mfaOk } from "../_shared/common.ts";
 import { anyCaller, testKeys, type Gateway } from "../_shared/gateways.ts";
 
 Deno.serve(async (req) => {
@@ -10,6 +10,7 @@ Deno.serve(async (req) => {
   try {
     const user = await anyCaller(req);
     if (!user || user.is_anonymous) return json({ error: "Sign in again" }, 401);
+    if (!mfaOk(req, user)) return json({ error: "Sign in again with your two-step code" }, 401);
     const b = await req.json();
     const rid = String(b?.rid ?? "");
     const outletId = String(b?.outletId ?? "");

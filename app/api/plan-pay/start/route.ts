@@ -20,6 +20,7 @@ export async function POST(req: Request) {
   const db = admin();
   const { data: r } = await db.from("restaurants").select("id, name, owner, owner_email, phone, owner_uid, status").eq("id", rid).maybeSingle();
   if (!r || r.owner_uid !== me.id) return json({ error: "Only the owner can pay for the plan" }, 403);
+  if (!me.mfaOk) return json({ error: "Sign in again with your two-step code" }, 401);
   if (r.status === "suspended") return json({ error: "This restaurant is paused by the Restropi team. Please contact them." }, 403);
   if (!(await allow("planpay", me.id, 12, 60))) return json({ error: "Too many tries. Please wait a bit." }, 429);
   let q;

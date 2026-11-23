@@ -1,6 +1,6 @@
 // Owner (or a sub admin with "team" access) sets a staff member's 4-digit PIN.
 // Creates the staff member's sign-in account the first time.
-import { admin, cors, hashPin, json, randomPassword, staffEmail, type MemberData } from "../_shared/common.ts";
+import { admin, cors, hashPin, json, mfaOk, randomPassword, staffEmail, type MemberData } from "../_shared/common.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
     const { data: who, error: whoErr } = await db.auth.getUser(token);
     if (whoErr || !who.user || who.user.is_anonymous) return json({ error: "Sign in first" }, 401);
     const caller = who.user;
+    if (!mfaOk(req, caller)) return json({ error: "Sign in again with your two-step code" }, 401);
 
     const { data: rest } = await db.from("restaurants").select("id, owner_uid").eq("id", rid).maybeSingle();
     if (!rest) return json({ error: "Restaurant not found" }, 404);
