@@ -331,8 +331,13 @@ export async function verifyMyPassword(password: string) {
   const { data } = await sb().auth.getUser();
   const email = data.user?.email;
   if (!email) throw new Error("Sign in again");
-  const { error } = await sb().auth.signInWithPassword({ email, password });
+  // Check it on a separate, throwaway connection: signing in on the main one would replace this
+  // session (and its two-step code) with a password-only one, and the server would refuse the change.
+  const probe = createClient(URL_, KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "restropi.pwcheck" } });
+  const { error } = await probe.auth.signInWithPassword({ email, password });
   if (error) throw new Error("Wrong password");
+  // end only that check's own session; this one stays as it is
+  await probe.auth.signOut({ scope: "local" }).catch(() => undefined);
 }
 /** "Continue with Google" (needs the Google provider switched on in Supabase → Authentication → Providers). */
 export async function signInWithGoogle() {
