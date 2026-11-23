@@ -2,9 +2,9 @@
 
 import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, SelectMenu, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Button, DietMark, Field, Group, Hint, Page, PageHeader, Pill, Segmented, SelectMenu, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
@@ -157,12 +157,14 @@ export default function MenuPage() {
       <MenuFromPhoto open={fromPhoto} onClose={() => setFromPhoto(false)} />
 
       <Page>
-        {many && canEditDishes && otherOutlets.length > 0 && (
+        {/* a new outlet starts empty: offer to copy another outlet's menu (only then) */}
+        {many && canEditDishes && otherOutlets.length > 0 && items.length === 0 && (
           <div className="mb-5 flex flex-wrap items-center gap-3 rounded-group bg-surface px-4 py-3">
-            <div className="min-w-0 flex-1 text-[13.5px] text-muted">
-              <b className="font-semibold text-ink">Menu of {outletNow.name}.</b> Dishes and prices here are only for this outlet.
+            <div className="min-w-0 flex-1 text-[14px] font-semibold">
+              {outletNow.name} has no dishes yet
+              <Hint className="ml-1">Each outlet has its own menu and prices. Copy one to start, then change what you need.</Hint>
             </div>
-            <Button size="sm" variant="tinted" onClick={() => setCopyOpen(true)}>Copy from another outlet</Button>
+            <Button size="sm" variant="tinted" onClick={() => setCopyOpen(true)}>Copy a menu</Button>
           </div>
         )}
         {tab === "dishes" || !engineeringOn ? (
@@ -189,15 +191,28 @@ export default function MenuPage() {
               const star = [...byQ.star].sort((x, y) => y.soldThisWeek - x.soldThisWeek)[0];
               if (!gem && !star) return null;
               return (
-                <Group>
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={18} className="mt-0.5 shrink-0 text-saffron" />
-                    <p className="text-[15px] leading-relaxed">
-                      {gem && <><b>{gem.name}</b> earns {inr(gem.price - gem.cost)} a plate but sold only {gem.soldThisWeek} this week. Ask captains to suggest it. </>}
-                      {star && <><b>{star.name}</b> is your star: {star.soldThisWeek} sold with a good margin. Keep it consistent and easy to find.</>}
-                    </p>
-                  </div>
-                </Group>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {star && (
+                    <button onClick={() => setEdit(star)} className="flex items-center gap-3 rounded-group bg-surface px-4 py-3 text-left">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jade-soft text-[17px]">⭐</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-semibold uppercase tracking-wide text-jade-deep">Your star</span>
+                        <span className="block truncate text-[15px] font-semibold">{star.name}</span>
+                      </span>
+                      <span className="shrink-0 text-[13px] text-muted tnum">{star.soldThisWeek} sold</span>
+                    </button>
+                  )}
+                  {gem && (
+                    <button onClick={() => setEdit(gem)} className="flex items-center gap-3 rounded-group bg-surface px-4 py-3 text-left" title="Earns well but few people order it: ask captains to suggest it">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-[17px]">💎</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-semibold uppercase tracking-wide text-saffron">Push this</span>
+                        <span className="block truncate text-[15px] font-semibold">{gem.name}</span>
+                      </span>
+                      <span className="shrink-0 text-[13px] text-muted tnum">{inr(gem.price - gem.cost)}/plate</span>
+                    </button>
+                  )}
+                </div>
               );
             })()}
 
@@ -205,13 +220,11 @@ export default function MenuPage() {
               <EarnedChart items={items} quadrant={quadrant} onOpen={setEdit} />
 
               <div className="space-y-4">
-                {(["star", "puzzle", "plowhorse", "dog"] as Quadrant[]).map((q) => (
+                {(["star", "puzzle", "plowhorse", "dog"] as Quadrant[]).filter((q) => byQ[q].length > 0).map((q) => (
                   <Group key={q} flush>
-                    <div className="px-4 pt-3.5 lg:px-5">
-                      <div className="flex items-center justify-between">
-                        <Pill tone={qMeta[q].tone}>{qMeta[q].name} · {byQ[q].length}</Pill>
-                      </div>
-                      <p className="mt-1.5 text-[13px] text-muted">{qMeta[q].hint}</p>
+                    <div className="flex items-center gap-1 px-4 pt-3.5 lg:px-5">
+                      <Pill tone={qMeta[q].tone}>{qMeta[q].name} · {byQ[q].length}</Pill>
+                      <Hint align="left">{qMeta[q].hint}</Hint>
                     </div>
                     <div className="flex flex-wrap gap-1.5 px-4 pb-4 pt-2.5 lg:px-5">
                       {byQ[q].map((m) => (
@@ -566,20 +579,21 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
   const noCost = items.some((m) => !m.cost);
   const shown = all ? sold : sold.slice(0, 10);
   return (
-    <Group title="What each dish earned you this week">
-      <p className="text-[13px] leading-relaxed text-muted">
-        Each bar = <b className="text-ink">plates sold × profit per plate</b>. Longer bar, more money. The colour tells you what to do with the dish (see the boxes).
-        {noCost && " Dishes without a cost per plate count the full price as profit, so add costs for true numbers."}
-      </p>
+    <Group title="Profit by dish · this week">
+      <div className="-mt-1 flex items-center gap-1.5 text-[12.5px] text-muted">
+        Plates sold × profit per plate
+        <Hint align="left">Longer bar, more money. The colour says what to do with the dish (see the boxes).{noCost ? " Dishes without a cost per plate count the full price as profit." : ""}</Hint>
+        {noCost && <span className="ml-1 rounded-full bg-saffron-soft px-2 py-0.5 text-[11.5px] font-semibold text-saffron">Add costs for exact profit</span>}
+      </div>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-muted">
         {(["star", "plowhorse", "puzzle", "dog"] as Quadrant[]).map((q) => (
           <span key={q} className="inline-flex items-center gap-1.5"><span className={clsx("h-2.5 w-2.5 rounded-full", qBar[q])} />{qShort[q]}</span>
         ))}
       </div>
       {sold.length === 0 ? (
-        <p className="mt-4 rounded-[14px] bg-sunken/60 p-4 text-[14px] text-muted">No dish was ordered in the last 7 days yet. Bars show up as orders come in.</p>
+        <p className="mt-4 rounded-[14px] bg-sunken/60 p-4 text-[14px] text-muted">No orders in the last 7 days yet.</p>
       ) : (
-        <ul className="mt-4 space-y-3">
+        <ul className="mt-4 space-y-2.5">
           {shown.map(({ m, per, q, earned }) => (
             <li key={m.id}>
               <button onClick={() => onOpen(m)} title={`${m.name}: ${m.soldThisWeek} sold × ${inr(per)} = ${inr(earned)}`} className="group block w-full text-left">
@@ -590,9 +604,7 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
                 <div className="mt-1 h-2.5 w-full rounded-full bg-sunken">
                   <div className={clsx("h-full rounded-full", qBar[q])} style={{ width: `${Math.max(2, (earned / max) * 100)}%` }} />
                 </div>
-                <div className="mt-1 text-[12.5px] text-muted tnum">
-                  {qShort[q]} · {m.soldThisWeek} sold × {inr(per)} profit
-                </div>
+                <div className="mt-0.5 text-[12px] text-faint tnum">{m.soldThisWeek} × {inr(per)}</div>
               </button>
             </li>
           ))}
@@ -601,7 +613,7 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
       {sold.length > 10 && (
         <button onClick={() => setAll((v) => !v)} className="mt-3 text-[13.5px] font-semibold text-jade">{all ? "Show top 10" : `Show all ${sold.length} dishes`}</button>
       )}
-      {sold.length > 0 && <div className="mt-4 flex justify-between border-t border-line/80 pt-3 text-[14px]"><span className="text-muted">Total profit from all dishes this week</span><b className="tnum">{inr(total)}</b></div>}
+      {sold.length > 0 && <div className="mt-4 flex justify-between border-t border-line/80 pt-3 text-[14px]"><span className="text-muted">Total this week</span><b className="tnum">{inr(total)}</b></div>}
       {none.length > 0 && (
         <div className="mt-4">
           <div className="text-[12.5px] font-semibold text-muted">Not ordered this week ({none.length})</div>

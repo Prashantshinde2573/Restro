@@ -10,7 +10,7 @@ import { Chips } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { orderActions, toAccept, useCurrentOutlet, useOutletOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
-import { orderWhere, useTables } from "@/lib/tables";
+import { orderWhere, tableActions, useTables } from "@/lib/tables";
 import { useT } from "@/lib/i18n";
 import { speak, ticketText, voiceOnText } from "@/lib/speak";
 import type { MenuItem, Order } from "@/lib/types";
@@ -29,17 +29,25 @@ export default function KitchenPage() {
   const all = useOutletOrders();
   // The kitchen only sees orders a captain has accepted (QR/online orders start as "new").
   // An order paid before its food was ready (counter, delivery) stays here at its kitchen stage.
+  // Self-service (no captains): the kitchen accepts new QR orders itself, in the New column.
+  const outlet = useCurrentOutlet();
+  const selfService = !!outlet.selfService;
   const orders = useMemo(
     () =>
       all
-        .filter((o) => ["accepted", "preparing", "ready"].includes(o.status) || (o.status === "paid" && !!o.kitchenStatus))
+        .filter((o) => ["accepted", "preparing", "ready"].includes(o.status) || (o.status === "paid" && !!o.kitchenStatus) || (selfService && toAccept(o)))
         .map((o) => (o.status === "paid" && o.kitchenStatus ? { ...o, status: o.kitchenStatus } : o)),
-    [all],
+    [all, selfService],
   );
-  const waiting = all.filter(toAccept).length;
+  const waiting = selfService ? 0 : all.filter(toAccept).length;
+  const accept = (o: Order) => {
+    orderActions.setStatus(o.id, "accepted");
+    if (o.tableId && o.partyId) tableActions.update(o.tableId, o.partyId, { pendingApproval: false });
+    toast(`Accepted #${o.number}`);
+  };
   const [station, setStation] = useState<Station>("all");
-  const cafe = !hasTables(useCurrentOutlet()); // counter-only café: no tandoor
-  const [col, setCol] = useState<"new" | "preparing" | "ready">("preparing");
+  const cafe = !hasTables(outlet); // counter-only café: no tandoor
+  const [col, setCol] = useState<"new" | "preparing" | "ready" | null>(null);
   const [, tick] = useState(0);
   const tables = useTables();
 
@@ -67,7 +75,7 @@ export default function KitchenPage() {
     });
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
-    const live = orders.filter((o) => o.status === "accepted" || o.status === "preparing");
+    const live = orders.filter((o) => o.status === "new" || o.status === "accepted" || o.status === "preparing");
     // a ticket, and again for each add-on round put into it
     const key = (o: (typeof live)[number]) => `${o.id}:${o.lines.filter((l) => l.addOn).length}`;
     if (!seen.current) {
@@ -108,94 +116,123 @@ export default function KitchenPage() {
   };
   const toggleLine = (id: string, idx: number) => orderActions.toggleLine(id, idx);
 
-  const columns: { key: "new" | "preparing" | "ready"; title: string }[] = [
-    { key: "new", title: "New" },
-    { key: "preparing", title: "Cooking" },
-    { key: "ready", title: "Ready to serve" },
+  const columns: { key: "new" | "preparing" | "ready"; title: string; dot: string; bar: string }[] = [
+    { key: "new", title: "New", dot: "bg-sky", bar: "border-t-sky" },
+    { key: "preparing", title: "Cooking", dot: "bg-saffron", bar: "border-t-saffron" },
+    { key: "ready", title: "Ready", dot: "bg-jade", bar: "border-t-jade" },
   ];
+  const listOf = (k: "new" | "preparing" | "ready") =>
+    visible
+      .filter((o) => (k === "new" ? o.status === "accepted" || o.status === "new" : o.status === k))
+      .sort((a, b) => Number(!!b.priority) - Number(!!a.priority) || a.createdAt.localeCompare(b.createdAt));
+  // phones: open the column that needs the cook (new tickets first), not always "Cooking";
+  // a tab picked by hand stays until it runs empty
+  const firstBusy = columns.find((c) => listOf(c.key).length)?.key ?? "new";
+  const shown = col && listOf(col).length ? col : firstBusy;
 
   return (
     <div className="dark min-h-dvh bg-canvas text-ink lg:min-h-[calc(100dvh-24px)] lg:rounded-[28px]">
-      <div className="sticky top-[60px] z-20 space-y-3 bg-canvas/90 lg:top-0 px-4 pb-3 pt-3 backdrop-blur-xl lg:rounded-t-[28px] lg:px-8 lg:pt-8">
-        <div className="flex items-center justify-between">
-          <h1 className="large-title">Kitchen</h1>
+      <div className="sticky top-[60px] z-20 space-y-2.5 bg-canvas/90 px-4 pb-3 pt-3 backdrop-blur-xl lg:top-0 lg:rounded-t-[28px] lg:px-8 lg:pt-7">
+        <div className="flex items-center gap-2">
+          <h1 className="large-title flex-1">Kitchen</h1>
+          {waiting > 0 && (
+            <span title="QR / online orders a captain still has to accept. They come here once accepted." className="flex h-9 items-center gap-1.5 rounded-full bg-saffron/15 px-3 text-[12.5px] font-semibold text-saffron">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-saffron" /> {waiting} to accept
+            </span>
+          )}
           <button
             onClick={() => setVoice((v) => !v)}
             aria-pressed={voice}
-            className={clsx("flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold", voice ? "bg-jade text-white" : "bg-surface text-muted")}
+            aria-label={voice ? "Stop reading orders aloud" : "Read new orders aloud"}
+            title={voice ? "Reading new orders aloud · tap to stop" : "Read new orders aloud"}
+            className={clsx("flex h-9 w-9 items-center justify-center rounded-full", voice ? "bg-jade text-white" : "bg-surface text-muted")}
           >
-            {voice ? <Volume2 size={16} /> : <VolumeX size={16} />} {voice ? "Reading orders aloud" : "Read orders aloud"}
+            {voice ? <Volume2 size={17} /> : <VolumeX size={17} />}
           </button>
         </div>
-        <Chips label="Station" value={station} onChange={setStation} options={stations.filter((s) => !(cafe && s.v === "tandoor")).map((s) => ({ value: s.v, label: s.label }))} />
-        {waiting > 0 && (
-          <p className="text-[13px] text-saffron">{waiting} new {waiting > 1 ? "orders are" : "order is"} waiting for a captain to accept — they appear here once accepted.</p>
-        )}
-        {allDay.length > 0 && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13.5px]">
-            <span className="shrink-0 text-muted">To cook</span>
-            {allDay.map(([n, q]) => (
-              <span key={n} className="shrink-0"><b className="text-jade tnum">{q}</b> {n}</span>
-            ))}
-          </div>
-        )}
-        <div className="flex rounded-ctl bg-sunken p-[3px] lg:hidden">
-          {columns.map((c) => (
-            <button key={c.key} onClick={() => setCol(c.key)} className={clsx("flex-1 rounded-[9px] py-1.5 text-[13px] font-semibold", col === c.key ? "bg-surface" : "text-muted")}>
-              {c.title} <span className="tnum opacity-60">{visible.filter((o) => o.status === (c.key === "new" ? "accepted" : c.key)).length}</span>
-            </button>
-          ))}
+        <div className="flex flex-col gap-2">
+          <div><Chips label="Station" value={station} onChange={setStation} options={stations.filter((s) => !(cafe && s.v === "tandoor")).map((s) => ({ value: s.v, label: s.label }))} /></div>
+          {allDay.length > 0 && (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12.5px]" title="Everything still to cook, added up">
+              <span className="text-muted">To cook:</span>
+              {allDay.slice(0, 6).map(([n, q]) => (
+                <span key={n} className="rounded-full bg-surface px-2 py-0.5"><b className="text-jade tnum">{q}</b> {n}</span>
+              ))}
+              {allDay.length > 6 && <span className="text-muted">+{allDay.length - 6}</span>}
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-1 rounded-ctl bg-sunken p-[3px] lg:hidden" role="tablist">
+          {columns.map((c) => {
+            const n = listOf(c.key).length;
+            return (
+              <button key={c.key} role="tab" aria-selected={shown === c.key} onClick={() => setCol(c.key)} className={clsx("flex items-center justify-center gap-1.5 rounded-[9px] py-2 text-[13.5px] font-semibold", shown === c.key ? "bg-surface" : "text-muted")}>
+                <span className={clsx("h-2 w-2 rounded-full", c.dot)} /> {c.title}
+                <span className={clsx("min-w-5 rounded-full px-1.5 text-[11.5px] tnum", n ? "bg-ink/10 text-ink" : "opacity-50")}>{n}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="grid gap-4 px-4 pb-28 lg:grid-cols-3 lg:px-8 lg:pb-8">
         {columns.map((c) => {
-          const list = visible.filter((o) => o.status === (c.key === "new" ? "accepted" : c.key)).sort((a, b) => Number(!!b.priority) - Number(!!a.priority) || a.createdAt.localeCompare(b.createdAt));
+          const list = listOf(c.key);
           return (
-            <section key={c.key} className={clsx("space-y-3", col !== c.key && "hidden lg:block")}>
-              <h2 className="hidden px-1 text-[15px] font-semibold text-muted lg:block">
-                {c.title} <span className="tnum">{list.length}</span>
+            <section key={c.key} className={clsx("space-y-2.5", shown !== c.key && "hidden lg:block")}>
+              <h2 className="hidden items-center gap-2 px-1 text-[14px] font-semibold text-muted lg:flex">
+                <span className={clsx("h-2 w-2 rounded-full", c.dot)} /> {c.title} <span className="tnum">{list.length}</span>
               </h2>
-              {list.length === 0 && <div className="rounded-group border border-dashed border-line px-4 py-10 text-center text-[14px] text-muted">No tickets</div>}
+              {list.length === 0 && <div className="rounded-group border border-dashed border-line px-4 py-8 text-center text-[13.5px] text-muted">No tickets</div>}
               {list.map((o) => {
                 const mins = minutesSince(o.createdAt);
-                const tone = mins >= 20 ? "text-rose" : mins >= 12 ? "text-saffron" : "text-jade";
+                const tone = mins >= 20 ? "bg-rose/20 text-rose" : mins >= 12 ? "bg-saffron/20 text-saffron" : "bg-jade/20 text-jade";
+                const fresh = c.key === "new" && mins < 2;
+                const left = o.lines.filter((l) => !l.done).length;
                 return (
-                  <article key={o.id} className={clsx("overflow-hidden rounded-group bg-surface", o.priority && "ring-2 ring-saffron")}>
-                    <header className="flex items-center gap-3 border-b border-line px-4 py-3">
-                      <ChannelIcon channel={o.channel} size={32} />
+                  <article key={o.id} className={clsx("overflow-hidden rounded-[18px] border-t-4 bg-surface", c.bar, o.priority && "ring-2 ring-saffron", fresh && "animate-pop ring-2 ring-sky")}>
+                    <header className="flex items-center gap-2.5 px-3.5 pb-1.5 pt-3">
+                      <ChannelIcon channel={o.channel} size={26} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[17px] font-semibold">{orderWhere(o.tableName ? o : { type: o.type }, tables)}</div>
-                        <div className="text-[12px] text-muted tnum">#{o.number} · {o.staff}</div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="truncate text-[17px] font-bold leading-tight">{orderWhere(o.tableName ? o : { type: o.type }, tables)}</span>
+                          <span className="shrink-0 text-[12px] text-muted tnum">#{o.number}</span>
+                        </div>
                       </div>
-                      {o.priority && <Flame size={18} className="text-saffron" aria-label="Priority" />}
-                      <span className={clsx("text-[22px] font-semibold tnum", tone)}>{mins}′</span>
+                      {fresh && <span className="rounded-full bg-sky px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-canvas">New</span>}
+                      {o.priority && <Flame size={17} className="text-saffron" aria-label="Priority" />}
+                      <span className={clsx("rounded-full px-2 py-0.5 text-[13px] font-bold tnum", tone)} title="Minutes since the order came in">{mins}′</span>
                     </header>
-                    <ul className="px-2 py-1">
+                    <ul className="px-1.5 pb-1">
                       {o.lines.map((l, i) => (
                         <li key={i}>
-                          <button onClick={() => toggleLine(o.id, l.idx)} className="flex w-full items-start gap-3 rounded-ctl px-2 py-2 text-left hover:bg-sunken/50">
-                            <span className={clsx("mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2", l.done ? "border-jade bg-jade text-canvas" : "border-line")}>
-                              {l.done && <Check size={14} strokeWidth={3} />}
+                          <button onClick={() => toggleLine(o.id, l.idx)} title={l.done ? "Mark not done" : "Tick when this dish is done"} className="flex w-full items-start gap-2.5 rounded-[10px] px-2 py-1.5 text-left hover:bg-sunken/50">
+                            <span className={clsx("mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2", l.done ? "border-jade bg-jade text-canvas" : "border-line")}>
+                              {l.done && <Check size={12} strokeWidth={3} />}
                             </span>
-                            <span className={clsx("flex-1 text-[16px] leading-snug", l.done && "text-muted line-through decoration-2")}>
-                              {l.addOn && !l.done && <span className="mr-1.5 inline-block rounded-full bg-saffron px-2 py-0.5 align-[2px] text-[11px] font-bold uppercase tracking-wide text-white no-underline">Add-on</span>}
-                              <b className="tnum">{l.qty}</b> {l.name}
-                              {l.note && <span className="mt-0.5 block text-[13px] font-semibold text-saffron no-underline">{l.note}</span>}
+                            <span className={clsx("flex-1 text-[15px] leading-snug", l.done && "text-muted line-through decoration-2")}>
+                              <b className="tnum">{l.qty}×</b> {l.name}
+                              {l.addOn && !l.done && <span className="ml-1.5 inline-block rounded-full bg-saffron px-1.5 py-px align-[2px] text-[10px] font-bold uppercase text-white no-underline">Add-on</span>}
+                              {l.note && <span className="block text-[12.5px] font-semibold text-saffron no-underline">{l.note}</span>}
                             </span>
                           </button>
                         </li>
                       ))}
                     </ul>
-                    <div className="p-3 pt-1">
+                    <div className="px-3 pb-3">
+                      {o.status === "new" && (
+                        <button onClick={() => accept(o)} className="h-10 w-full rounded-[12px] bg-saffron text-[14.5px] font-semibold text-canvas">Accept order</button>
+                      )}
                       {o.status === "accepted" && (
-                        <button onClick={() => move(o.id, "preparing", `Started #${o.number}`)} className="h-12 w-full rounded-ctl bg-sky text-[15px] font-semibold text-canvas">Start cooking</button>
+                        <button onClick={() => move(o.id, "preparing", `Started #${o.number}`)} className="h-10 w-full rounded-[12px] bg-sky text-[14.5px] font-semibold text-canvas">Start cooking</button>
                       )}
                       {o.status === "preparing" && (
-                        <button onClick={() => move(o.id, "ready", `#${o.number} ready · captain notified`)} className="h-12 w-full rounded-ctl bg-jade text-[15px] font-semibold text-canvas">Mark ready</button>
+                        <button onClick={() => move(o.id, "ready", `#${o.number} ready · captain notified`)} className="h-10 w-full rounded-[12px] bg-jade text-[14.5px] font-semibold text-canvas">
+                          Mark ready{left > 0 && left < o.lines.length ? ` · ${left} left` : ""}
+                        </button>
                       )}
                       {o.status === "ready" && (
-                        <button onClick={() => move(o.id, "served", `#${o.number} served`)} className="h-12 w-full rounded-ctl bg-sunken text-[15px] font-semibold">Served · clear ticket</button>
+                        <button onClick={() => move(o.id, "served", `#${o.number} served`)} className="h-10 w-full rounded-[12px] bg-sunken text-[14.5px] font-semibold">Served · clear</button>
                       )}
                     </div>
                   </article>

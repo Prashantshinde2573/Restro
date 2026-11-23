@@ -6,7 +6,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import { Check, Clock, LayoutGrid, Link2, LogOut, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Unlink, Users, UserPlus } from "lucide-react";
 import { useState } from "react";
-import { Button, Empty, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
+import { Button, Empty, Hint, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
 import dynamic from "next/dynamic";
 // the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
@@ -207,36 +207,29 @@ export default function TablesPage() {
       <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel ? `Table ${joinedName(sel, tables)}` : ""} wide>
         {sel && (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2 text-[14px] text-muted">
+            <div className="flex flex-wrap items-center gap-2 text-[13.5px] text-muted">
               <Pill tone={statusStyle[tableState(sel)].tone}>{statusStyle[tableState(sel)].label}</Pill>
-              <span>{sel.zone} · {seatsTaken(sel)} of {capacity(sel, tables)} seats taken</span>
-              {isShared(sel) && <Pill tone="neutral">Shared · {sel.parties.length} separate bills</Pill>}
+              <span className="inline-flex items-center gap-1 tnum"><Users size={14} /> {seatsTaken(sel)}/{capacity(sel, tables)}</span>
+              {sel.zone && <span>· {sel.zone}</span>}
+              {isShared(sel) && <Pill tone="neutral">{sel.parties.length} bills</Pill>}
             </div>
 
             {sel.parties.length === 0 && (
               <Button size="lg" className="w-full" onClick={() => openSeat(sel)}><Users size={18} /> Seat guests</Button>
             )}
 
-            {/* big group: push tables together (staff only; guests see the extra seats) */}
-            <div className="rounded-group bg-surface p-4">
+            {/* tables joined to this one (big group) */}
+            {joinedOf(sel, tables).length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                <Link2 size={17} className="text-jade" />
-                <span className="flex-1 text-[15px] font-semibold">Join tables</span>
-                {joinable.length > 0 && <Button size="sm" variant="tinted" onClick={() => setJoining(true)}><Plus size={15} /> Join a table</Button>}
+                <Link2 size={16} className="text-jade" />
+                {joinedOf(sel, tables).map((x) => (
+                  <span key={x.id} className="flex items-center gap-2 rounded-full bg-jade-soft py-1 pl-3 pr-1 text-[13.5px] font-semibold text-jade-deep">
+                    + {x.name} · {x.seats}
+                    <button onClick={() => { tableActions.separate(x.id); toast(`${x.name} is a separate table again`); }} title="Make it a separate table again" className="flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[12px]" aria-label={`Separate ${x.name}`}><Unlink size={12} /> Separate</button>
+                  </span>
+                ))}
               </div>
-              {joinedOf(sel, tables).length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {joinedOf(sel, tables).map((x) => (
-                    <span key={x.id} className="flex items-center gap-2 rounded-full bg-jade-soft py-1 pl-3 pr-1 text-[14px] font-semibold text-jade-deep">
-                      {x.name} · {x.seats} seats
-                      <button onClick={() => { tableActions.separate(x.id); toast(`${x.name} is a separate table again`); }} className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12.5px]" aria-label={`Separate ${x.name}`}><Unlink size={13} /> Separate</button>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-1 text-[13px] text-muted">For a big group, join a free table to {sel.name}. Its seats add to {sel.name}, so guests can pick up to {sel.seats}+ seats on the QR. It separates by itself when they leave.</p>
-              )}
-            </div>
+            )}
 
             {sel.parties.map((p) => {
               const label = isShared(sel) ? `Party ${p.id}` : "Guests";
@@ -257,20 +250,23 @@ export default function TablesPage() {
                         })()}
                         {partyOrders(sel.id, p.id).some((o) => o.wantsReward) && <Pill tone="jade">Stamp reward</Pill>}
                       </div>
-                      <div className="mt-0.5 text-[13px] text-muted">
-                        {minutesSince(p.since)} min · {p.server ?? "No captain yet"} · {p.source === "qr" ? "opened from QR" : "seated by captain"}
-                        {p.phoneClaimed && <> · <Smartphone size={12} className="inline -translate-y-px" /> phone linked</>}
+                      <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-muted">
+                        <span className="tnum">{minutesSince(p.since)}m</span>
+                        {p.server && <span>· {p.server}</span>}
+                        {p.source === "qr" && <span title="Opened from the table QR"><QrCode size={12} /></span>}
+                        {p.phoneClaimed && <span title="Guest's phone is linked"><Smartphone size={12} /></span>}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[18px] font-semibold tnum">{p.total ? inr(Math.round(p.total * (1 + gstRate()))) : "—"}</div>
-                      <div className="text-[12px] text-muted">{p.total ? "incl. GST" : "no order yet"}</div>
+                      <div className="text-[18px] font-semibold tnum" title={p.total ? "Including GST" : "No order yet"}>{p.total ? inr(Math.round(p.total * (1 + gstRate()))) : "—"}</div>
                     </div>
                   </div>
                   {claim && (
                     <div className="border-t border-line/80 bg-saffron-soft/60 px-4 py-3 text-[13.5px]">
-                      <b>{claim.by}</b> marked this paid · {paymentsText(claim.payments)} · {minutesSince(claim.at)} min ago.
-                      {canConfirm ? " Check the money came in, then confirm." : " Waiting for the owner to confirm."}
+                      <div className="flex items-center gap-1">
+                        <span><b>{claim.by}</b> paid · {paymentsText(claim.payments)} · {minutesSince(claim.at)}m</span>
+                        <Hint align="right">{canConfirm ? "Check the money reached your account, then confirm." : "Waiting for the owner to confirm."}</Hint>
+                      </div>
                       <ClaimCheck claimId={claim.id} />
                       {canConfirm && (
                         <div className="mt-2 flex gap-2">
@@ -304,19 +300,20 @@ export default function TablesPage() {
               );
             })}
 
-            {sel.parties.length > 0 && (
-              <button onClick={() => openSeat(sel)} className="flex w-full items-center gap-3 rounded-group border-2 border-dashed border-line px-4 py-3.5 text-left hover:border-jade">
-                <UserPlus size={20} className="text-jade" />
-                <span className="flex-1">
-                  <span className="block text-[15px] font-semibold">Share table · seat another party</span>
-                  <span className="block text-[13px] text-muted">
-                    {seatsFree(sel, tables) > 0 ? `${seatsFree(sel, tables)} seat${seatsFree(sel, tables) > 1 ? "s" : ""} free. They get their own order and bill.` : "Table is full — join a table, or add only if guests agree to squeeze in."}
-                  </span>
-                </span>
-              </button>
-            )}
-
-            <Button variant="plain" className="w-full" onClick={() => setQr(true)}><QrCode size={16} /> Show table QR</Button>
+            {/* more: seat another party · join a table · QR — small, out of the way */}
+            <div className="flex flex-wrap gap-2">
+              {sel.parties.length > 0 && (
+                <Button size="sm" variant="plain" onClick={() => openSeat(sel)} title={seatsFree(sel, tables) > 0 ? `${seatsFree(sel, tables)} seats free · they get their own bill` : "Table is full"}>
+                  <UserPlus size={15} /> Seat another party
+                </Button>
+              )}
+              {joinable.length > 0 && (
+                <Button size="sm" variant="plain" onClick={() => setJoining(true)} title={`Big group: join a free table to ${sel.name}. It separates by itself when they leave.`}>
+                  <Link2 size={15} /> Join a table
+                </Button>
+              )}
+              <Button size="sm" variant="plain" onClick={() => setQr(true)}><QrCode size={15} /> Table QR</Button>
+            </div>
           </div>
         )}
       </Sheet>

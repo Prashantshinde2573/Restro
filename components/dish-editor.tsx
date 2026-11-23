@@ -5,6 +5,7 @@ import { ImagePlus, Plus, Star, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import type { OptionGroup, Size } from "@/lib/types";
 import { uploadMenuPhoto } from "@/lib/cloud";
+import { Hint } from "@/components/ui";
 
 /** Shrink a photo on the phone before uploading: max 1200 px, JPEG. */
 async function shrink(file: File, maxSide = 1200): Promise<Blob> {
@@ -110,7 +111,7 @@ export function SizesEditor({ sizes, onChange }: { sizes: Size[]; onChange: (s: 
   return (
     <div className="rounded-group bg-surface p-3">
       {sizes.length === 0 ? (
-        <p className="px-1 pb-2 text-[13px] text-muted">One price for this dish. Sold in sizes (pizza, shakes, half / full)? Add them here — each size has its own price.</p>
+        <p className="flex items-center gap-1 px-1 pb-2 text-[13px] text-muted">One price · or add sizes <Hint align="left">Sold in sizes (pizza, shakes, half / full)? Add them here; each size has its own price.</Hint></p>
       ) : (
         <div className="space-y-1.5">
           {sizes.map((z, i) => (

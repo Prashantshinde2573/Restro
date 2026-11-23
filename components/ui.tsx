@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { X } from "lucide-react";
+import { Info as InfoIcon, X } from "lucide-react";
 import { useEffect, useRef, useState as useLocalState, type ReactNode, type ButtonHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import type { Diet } from "@/lib/types";
@@ -251,6 +251,38 @@ export function Chips<T extends string>({
   );
 }
 
+/**
+ * A small (i) that explains something on hover (desktop) or tap (phone), so screens stay light on text.
+ * Use it next to a label instead of a paragraph of help.
+ */
+export function Hint({ children, label = "What is this?", align = "center", className }: { children: ReactNode; label?: string; align?: "center" | "left" | "right"; className?: string }) {
+  const [open, setOpen] = useLocalState(false);
+  return (
+    <span className={clsx("group/hint relative inline-flex align-middle", className)}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); }}
+        onBlur={() => setOpen(false)}
+        className="flex h-5 w-5 items-center justify-center rounded-full text-faint transition hover:text-ink focus-visible:text-ink focus-visible:outline-none"
+      >
+        <InfoIcon size={14} strokeWidth={2.2} />
+      </button>
+      <span
+        role="tooltip"
+        className={clsx(
+          "pointer-events-none absolute top-full z-50 mt-1.5 w-max max-w-[240px] rounded-[10px] bg-ink px-2.5 py-1.5 text-left text-[12px] font-medium normal-case leading-snug tracking-normal text-canvas shadow-[0_10px_24px_-10px_rgb(0_0_0/.45)] transition-opacity duration-150",
+          align === "center" ? "left-1/2 -translate-x-1/2" : align === "left" ? "left-0" : "right-0",
+          open ? "opacity-100" : "opacity-0 group-hover/hint:opacity-100",
+        )}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
 /* ---------- Pills / status ---------- */
 export function Pill({
   tone = "neutral",
@@ -439,11 +471,16 @@ export function Sheet({
 
 /* ---------- Form bits ---------- */
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  // a short hint stays under the field; a long explanation moves into an (i) next to the label
+  const long = !!hint && hint.length > 60;
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[13px] font-medium text-muted">{label}</span>
+      <span className="mb-1.5 flex items-center gap-1 text-[13px] font-medium text-muted">
+        {label}
+        {long && <Hint align="left">{hint}</Hint>}
+      </span>
       {children}
-      {hint && <span className="mt-1 block text-[12px] text-faint">{hint}</span>}
+      {hint && !long && <span className="mt-1 block text-[12px] text-faint">{hint}</span>}
     </label>
   );
 }

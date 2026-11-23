@@ -1,0 +1,5 @@
+-- Applied as migration gateway_paid_frees_table_and_method (23 Nov 2026).
+-- public.svc_gateway_paid(): the order's `gateway` info now carries `method` (upi | card), the
+-- payment log says UPI / CARD, `payPreference` is cleared on a paid bill, and the table's group is
+-- removed from dining_tables once none of its orders is still open (no more "Wants bill" after
+-- paying online). See the live function for the full body.

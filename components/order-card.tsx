@@ -63,7 +63,7 @@ function Flags({ o, action }: { o: Order; action?: Step }) {
       {o.status === "new" && o.channel === "qr" && !action && !payingOnline(o) && <span className={clsx(pill, "bg-saffron-soft text-saffron")}>Waiting to be accepted</span>}
       {o.payPreference && o.payPreference !== "online" && live && !o.payClaim && <span className={clsx(pill, "bg-sky-soft text-sky")}><Wallet size={11} /> Bill · {methodLabel[o.payPreference]}</span>}
       {o.payPreference === "online" && o.status === "new" && !payingOnline(o) && live && <span className={clsx(pill, "bg-rose-soft text-rose")}>Online pay not finished</span>}
-      {o.gateway && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><Check size={11} /> Paid online</span>}
+      {o.gateway && <span className={clsx(pill, "bg-jade-soft text-jade-deep")} title={`Paid on your ${o.gateway.provider} gateway · ${o.gateway.paymentId}`}><Check size={11} /> Online{o.gateway.method ? ` · ${o.gateway.method === "card" ? "Card" : "UPI"}` : ""}</span>}
       {o.wantsCoupon && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><Ticket size={11} /> {o.wantsCoupon}</span>}
       {o.wantsReward && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><Gift size={11} /> Reward</span>}
       {o.status === "paid" && (o.discounts?.length ?? 0) > 0 && (
