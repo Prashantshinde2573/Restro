@@ -33,7 +33,7 @@ import { CouponBox, PayPanel, ThankYou, guestCouponOff } from "@/components/gues
 import { GuestCountScreen } from "@/components/guest-count";
 import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
-import { callActions, cloudConfigured, currentOutletId, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
+import { callActions, cloudConfigured, currentOutletId, guestCanCancel, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
 import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, reloadLists, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
 import { payOnline } from "@/lib/gateway-checkout";
@@ -279,6 +279,17 @@ export default function GuestOrder() {
   const [waiterOpen, setWaiterOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  // cancelling an order before the kitchen starts it: which order asks "sure?", and the one being cancelled
+  const [cancelAsk, setCancelAsk] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const cancelOrder = async (id: string) => {
+    setCancelling(id);
+    const problem = await orderActions.guestCancel(id);
+    setCancelling(null);
+    setCancelAsk(null);
+    if (problem) toast(/kitchen has started/i.test(problem) ? tx(lang, "The kitchen has already started it · please ask our staff", "किचनने बनवायला सुरुवात केली आहे · स्टाफला विचारा") : /payment/i.test(problem) ? tx(lang, "A payment is on this order · please ask our staff", "या ऑर्डरवर पेमेंट सुरू आहे · स्टाफला विचारा") : tx(lang, "Couldn't cancel · try again", "रद्द झाली नाही · पुन्हा प्रयत्न करा"));
+    else toast(tx(lang, "Order cancelled", "ऑर्डर रद्द केली"));
+  };
   useEffect(() => {
     if (!cooldown) return;
     const t = window.setTimeout(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
@@ -1158,7 +1169,11 @@ export default function GuestOrder() {
               </ul>
               <div className="mt-3">
                 {o.status === "cancelled" ? (
-                  <span className="inline-flex rounded-full bg-rose-soft px-2.5 py-1 text-[12.5px] font-semibold text-rose">{tx(lang, "Not accepted by the restaurant · please ask our staff", "रेस्टॉरंटने स्वीकारली नाही · स्टाफला विचारा")}</span>
+                  o.cancelledBy === "guest" ? (
+                    <span className="inline-flex rounded-full bg-sunken px-2.5 py-1 text-[12.5px] font-semibold text-muted">{tx(lang, "You cancelled this order", "तुम्ही ही ऑर्डर रद्द केली")}</span>
+                  ) : (
+                    <span className="inline-flex rounded-full bg-rose-soft px-2.5 py-1 text-[12.5px] font-semibold text-rose">{tx(lang, "Not accepted by the restaurant · please ask our staff", "रेस्टॉरंटने स्वीकारली नाही · स्टाफला विचारा")}</span>
+                  )
                 ) : o.status === "paid" ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-1 text-[12.5px] font-semibold text-jade-deep"><Check size={13} /> {tx(lang, "Paid", "पैसे भरले")}</span>
                 ) : o.payClaim ? (
@@ -1168,6 +1183,22 @@ export default function GuestOrder() {
                     {(o.prepaid ?? []).length > 0 && <div className="mb-2 text-[12.5px] font-semibold text-jade">{tx(lang, `UPI ${inr(sumOf(o.prepaid!))} paid`, `UPI ${inr(sumOf(o.prepaid!))} भरले`)}</div>}
                     <div className="mb-2 text-[13px] font-medium text-muted">{statusLine(o.status)}</div>
                     <StatusTrack status={o.status} lang={lang} />
+                    {/* until the kitchen starts: the guest can still cancel */}
+                    {guestCanCancel(o) && (
+                      cancelAsk === o.id ? (
+                        <div className="mt-3 flex items-center gap-2 rounded-[14px] bg-rose-soft/60 p-2 pl-3" role="alertdialog" aria-label={tx(lang, "Cancel this order?", "ही ऑर्डर रद्द करायची?")}>
+                          <span className="flex-1 text-[13.5px] font-semibold text-rose">{tx(lang, "Cancel this order?", "ही ऑर्डर रद्द करायची?")}</span>
+                          <button onClick={() => setCancelAsk(null)} disabled={cancelling === o.id} className="h-9 rounded-full bg-surface px-3.5 text-[13px] font-semibold text-ink">{tx(lang, "Keep", "ठेवा")}</button>
+                          <button onClick={() => cancelOrder(o.id)} disabled={cancelling === o.id} className="h-9 rounded-full bg-rose px-3.5 text-[13px] font-semibold text-white disabled:opacity-60">
+                            {cancelling === o.id ? tx(lang, "Cancelling…", "रद्द करत आहे…") : tx(lang, "Yes, cancel", "हो, रद्द करा")}
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setCancelAsk(o.id)} className="mt-2.5 text-[13px] font-semibold text-rose underline-offset-4 hover:underline">
+                          {tx(lang, "Cancel order", "ऑर्डर रद्द करा")}
+                        </button>
+                      )
+                    )}
                   </>
                 )}
               </div>
@@ -1203,7 +1234,7 @@ export default function GuestOrder() {
                       </div>
                       <div className="mt-0.5 text-[13px] text-muted">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(", ")}</div>
                       <div className="mt-1 flex items-center justify-between text-[13px]">
-                        <span className={clsx("font-semibold", o.status === "cancelled" ? "text-rose" : "text-jade-deep")}>{o.status === "cancelled" ? tx(lang, "Not accepted", "स्वीकारली नाही") : tx(lang, "Paid", "पैसे भरले")}</span>
+                        <span className={clsx("font-semibold", o.status === "cancelled" ? "text-rose" : "text-jade-deep")}>{o.status === "cancelled" ? (o.cancelledBy === "guest" ? tx(lang, "Cancelled", "रद्द केली") : tx(lang, "Not accepted", "स्वीकारली नाही")) : tx(lang, "Paid", "पैसे भरले")}</span>
                         <span className="font-semibold tnum">{inr(o.lines.reduce((a, l) => a + l.qty * l.price, 0))}</span>
                       </div>
                     </li>

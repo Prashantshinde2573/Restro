@@ -7,7 +7,7 @@
 import { useMemo } from "react";
 import { gstRate, setGstRate } from "./format";
 import { cloudConfigured, createStore, hydrateStores } from "./store";
-import { getCloud, guestAddOn, guestUpsert, isConnected } from "./cloud";
+import { getCloud, guestAddOn, guestCancelOrder, guestUpsert, isConnected } from "./cloud";
 export { cloudConfigured };
 import { liveStamps, mayAct, programOf, stampProblem } from "./stamps";
 import { canConfirmPay, featureState, hasPerm, inOutlet, isMixed, outletKinds, type Feature, type FeatureState, type Member, type Perm } from "./access";
@@ -359,6 +359,24 @@ export const orderActions = {
       lines: [...x.lines.map((l) => (out ? { ...l, done: true } : l)), ...lines.map((l) => ({ ...l, round, addOn: true, addedAt: at }))],
     }));
     return true;
+  },
+  /**
+   * The guest cancels their order from the QR page, only until the kitchen starts it
+   * (the server checks again, under a lock). Returns why not, or null when it's cancelled.
+   */
+  async guestCancel(id: string): Promise<string | null> {
+    const o = orderStore.get().find((x) => x.id === id);
+    if (!o || !guestCanCancel(o)) return "The kitchen has started this order";
+    if (isConnected()) {
+      if (!o.number) return "Please wait a moment and try again";
+      const r = await guestCancelOrder(id);
+      if (!r.order) return r.problem ?? "Couldn't cancel. Try again.";
+      patchOrder(id, (x) => ({ ...x, ...(r.order as Partial<Order>), id: x.id, number: x.number }));
+    } else {
+      patchOrder(id, (x) => ({ ...x, status: "cancelled", cancelledBy: "guest", cancelledAt: new Date().toISOString() }));
+    }
+    logActivity("order", `Guest cancelled order #${o.number || "new"} · ${where(o)}`, o.outletId);
+    return null;
   },
   setStatus(id: string, status: OrderStatus) {
     const o = orderStore.get().find((x) => x.id === id);
@@ -1102,3 +1120,13 @@ export const callActions = {
     patchCall(id, (c) => ({ ...c, status: "done", doneAt: new Date().toISOString() }));
   },
 };
+
+/** A guest may cancel an order until the kitchen starts it and before any payment. */
+export function guestCanCancel(o: Order) {
+  return (
+    (o.status === "new" || o.status === "accepted") &&
+    !o.kitchenStatus && !o.payClaim && !o.payPreference && !o.gateway &&
+    !(o.prepaid?.length) && !(o.payments?.length) &&
+    !o.lines.some((l) => l.done)
+  );
+}
