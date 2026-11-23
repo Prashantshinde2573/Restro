@@ -25,3 +25,20 @@ describe("tables after cancelled orders", () => {
     expect(withOrders([t0], [])[0]).toBe(t0);
   });
 });
+
+describe("group seated from the QR (picked the number of guests)", () => {
+  it("no order yet → Seated, not 'accept?'", () => {
+    const [t] = withOrders([table({ status: "seated", total: undefined, pendingApproval: true })], []);
+    expect(t.parties[0].status).toBe("seated");
+    expect(t.parties[0].pendingApproval).toBe(false);
+  });
+  it("first QR order waiting → 'accept?'", () => {
+    const [t] = withOrders([table({ status: "seated", total: undefined, pendingApproval: true })], [order("new")]);
+    expect(t.parties[0].pendingApproval).toBe(true);
+    expect(t.parties[0].status).toBe("ordered");
+  });
+  it("accepted order → no longer waiting", () => {
+    const [t] = withOrders([table({ pendingApproval: true })], [order("accepted")]);
+    expect(t.parties[0].pendingApproval).toBe(false);
+  });
+});

@@ -26,7 +26,7 @@ import { PlanSheet, openPlanSheet } from "./plan-sheet";
 import { PlanNotice, RenewBanner, usePlanStatus, useRenewBadge } from "./plan-reminder";
 import { dateIN } from "@/lib/plan-status";
 import { useAttendance } from "@/lib/payroll";
-import { useTables } from "@/lib/tables";
+import { useTables, withOrders } from "@/lib/tables";
 
 type NavItem = { href: string; key: TKey; icon: typeof Activity; badge?: number };
 
@@ -119,7 +119,7 @@ function useNav() {
   const orders = useOrders().filter((o) => here(o.outletId));
   const waiting = orders.filter(toAccept).length; // to accept
   const cooking = orders.filter((o) => o.status === "accepted" || o.status === "preparing").length; // in the kitchen
-  const tables = useTables().filter((t) => here(t.outletId));
+  const tables = withOrders(useTables(), orders).filter((t) => here(t.outletId));
   const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
   const tableAsks = tables.reduce((n, t) => n + t.parties.filter((p) => p.pendingApproval || p.status === "billing" || p.paymentPending).length, 0);
   const lowStock = useStock().filter((x) => here(x.outletId) && x.par > 0 && x.stock < x.par).length;

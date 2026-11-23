@@ -59,13 +59,19 @@ export function withOrders(tables: Table[], orders: Order[]): Table[] {
   return tables.map((t) => {
     if (!t.parties.length) return t;
     let changed = false;
-    const parties = t.parties.map((p) => {
-      const from = Date.parse(p.since) - 2 * 60_000; // orders of this sitting only
-      const sitting = orders.filter((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id && Date.parse(o.createdAt) >= from);
+    const parties = t.parties.map((p0) => {
+      const from = Date.parse(p0.since) - 2 * 60_000; // orders of this sitting only
+      const sitting = orders.filter((o) => o.tableId === t.id && (o.partyId ?? "A") === p0.id && Date.parse(o.createdAt) >= from);
       const mine = sitting.filter((o) => o.status !== "cancelled");
+      // "accept?" only while a QR order from them actually waits (a group that just sat down is only Seated)
+      let p = p0;
+      if (p0.pendingApproval && !mine.some((o) => o.status === "new")) {
+        p = { ...p0, pendingApproval: false };
+        changed = true;
+      }
       if (!mine.length) {
         // every order of this group was cancelled (by the guest or the team): they are just seated again
-        if (!sitting.length || (p.status === "seated" && !p.total && !p.pendingApproval)) return p;
+        if (!sitting.length || (p.status === "seated" && !p.total)) return p;
         changed = true;
         return { ...p, status: "seated" as const, total: undefined, pendingApproval: false };
       }
