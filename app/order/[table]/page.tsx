@@ -260,6 +260,13 @@ export default function GuestOrder() {
     // already seated: update the party so staff see the right number
     const pp = t?.parties.find((x) => x.id === myParty);
     if (t && pp && pp.guests !== n) tableActions.update(t.id, pp.id, { guests: n });
+    // not seated yet: sit the group down now, so the team sees the table taken (blue "Seated").
+    // It's marked "first QR order waits for the team" from the start (the server lets a guest set that
+    // only when the group is created); staff screens show "accept?" only once an order is actually waiting.
+    if (t && !pp && !counter && (t.parties.length === 0 || ownBill)) {
+      const np = tableActions.seat(t.id, n, { source: "qr", phoneClaimed: true, pendingApproval: true, server: undefined });
+      remember(np.id);
+    }
   };
   const addMine = (id: string) =>
     setMine((m) => {
@@ -708,7 +715,8 @@ export default function GuestOrder() {
       guestPhone: g.phone,
       staff: "QR",
       createdAt: new Date().toISOString(),
-      status: p?.pendingApproval ? "new" : "accepted",
+      // the group's first QR order waits for the team, unless it's already paid from the phone
+      status: p?.pendingApproval && !extra.prepaid ? "new" : "accepted",
       lines: cartLines(),
       ...extra,
     });
