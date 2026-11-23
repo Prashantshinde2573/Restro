@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   poweredByHeader: false,
+  // search pages that were removed (23 Nov 2026): send old links to the homepage
+  async redirects() {
+    return ["restaurant-billing-software", "qr-code-ordering", "kot-software", "cafe-billing-software", "restaurant-inventory-software", "restaurant-pos-pune"].map((s) => ({ source: `/${s}`, destination: "/", permanent: true }));
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
