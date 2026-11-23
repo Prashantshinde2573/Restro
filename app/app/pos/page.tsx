@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Chips, DietMark, Segmented, Sheet } from "@/components/ui";
 import { PhotoSlide } from "@/components/menu-bits";
+import { niceName } from "@/components/guest-menu";
 import { billTotals } from "@/lib/bill-totals";
 import dynamic from "next/dynamic";
 // the payment sheet (UPI QR, receipts) loads when it is first opened, so this page opens faster
@@ -92,6 +93,18 @@ function PosScreen() {
   const count = lines.reduce((s, l) => s + l.qty, 0);
   const subtotal = lines.reduce((s, l) => s + l.qty * priceOf(l), 0);
   const qtyOf = (id: string) => lines.filter((l) => l.item.id === id).reduce((s, l) => s + l.qty, 0);
+  // "−" on a dish row: one less of the last line of that dish
+  const lessOf = (id: string) => {
+    const idx = lines.map((l) => l.item.id).lastIndexOf(id);
+    if (idx >= 0) change(idx, -1);
+  };
+  // rows grouped by category when showing everything; one block when a category or a search is picked
+  const sections = useMemo(() => {
+    if (cat !== "all" || q) return [{ id: "all", name: "", list: items }];
+    const out = cats.map((c) => ({ id: c.id, name: niceName(c.name), list: items.filter((m) => m.categoryId === c.id) })).filter((g) => g.list.length);
+    const rest = items.filter((m) => !cats.some((c) => c.id === m.categoryId));
+    return rest.length ? [...out, { id: "other", name: "Other", list: rest }] : out;
+  }, [items, cats, cat, q]);
   const tb = getTable(table);
   const tbShared = tb ? isShared(tb) : false;
   const pty = tb?.parties.find((p) => p.id === party);
@@ -282,52 +295,62 @@ function PosScreen() {
           <Chips
             value={cat}
             onChange={setCat}
-            options={[{ value: "all", label: "All" }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
+            options={[{ value: "all", label: "All" }, ...cats.map((c) => ({ value: c.id, label: niceName(c.name) }))]}
           />
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-36 pt-1 lg:px-8 lg:pb-8">
-          {/* compact dish tiles: photo, name and price on one block; the count shows on the photo */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-            {items.map((m) => {
-              const n = qtyOf(m.id);
-              const hint = !m.available ? null : hasSizes(m) ? sizesOf(m).map((z) => z.name).join(" / ") : m.options?.some((g) => g.required) ? "Choices" : null;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => (needsChoice(m) ? setCustomize(m) : add(m))}
-                  disabled={!m.available}
-                  className={clsx(
-                    "relative flex min-h-[64px] items-center gap-2.5 rounded-[14px] bg-surface p-2 pr-2.5 text-left ring-1 transition active:scale-[.97]",
-                    n > 0 ? "ring-2 ring-jade" : "ring-line/60 hover:ring-line",
-                    !m.available && "opacity-50",
-                  )}
-                >
-                  <span className="relative shrink-0">
-                    <PhotoSlide item={m} className="h-11 w-11 rounded-[10px]" />
-                    {n > 0 && (
-                      <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 animate-pop items-center justify-center rounded-full bg-jade px-1 text-[11.5px] font-bold text-white ring-2 ring-surface tnum">{n}</span>
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-start gap-1.5">
-                      <span className="mt-[3px] shrink-0"><DietMark diet={m.diet} /></span>
-                      <span className="line-clamp-2 text-[13.5px] font-semibold leading-[1.2]">{m.name}</span>
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1.5 pl-5 text-[12.5px]">
-                      <span className="font-medium text-muted tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
-                      {!m.available ? <span className="font-semibold text-rose">· Sold out</span> : hint ? <span className="truncate font-medium text-jade">· {hint}</span> : m.tags?.[0] ? <span className="truncate font-medium text-saffron">· {m.tags[0]}</span> : null}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+          {/* the menu as rows, like the guest menu: name and price on the left, ADD / − n + on the right;
+              grouped by category (when showing all), never squeezed (one column on narrow screens) */}
+          {items.length === 0 && <p className="rounded-group bg-surface px-4 py-10 text-center text-[14.5px] text-muted">No dishes match{q ? ` “${q}”` : ""}.</p>}
+          <div className="space-y-4">
+            {sections.map(({ id, name, list }) => (
+              <section key={id}>
+                {name && <h2 className="mb-1.5 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">{name} <span className="font-medium text-faint">· {list.length}</span></h2>}
+                <div className="grid gap-x-6 overflow-hidden rounded-group bg-surface px-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))]">
+                  {list.map((m) => {
+                    const n = qtyOf(m.id);
+                    const hint = !m.available ? null : hasSizes(m) ? sizesOf(m).map((z) => z.name).join(" / ") : m.options?.some((g) => g.required) ? "Choices" : m.tags?.[0] ?? null;
+                    const tap = () => (needsChoice(m) ? setCustomize(m) : add(m));
+                    return (
+                      <div key={m.id} className={clsx("flex min-h-[60px] items-center gap-3 border-b border-line/70 py-2", !m.available && "opacity-50")}>
+                        <button onClick={tap} disabled={!m.available} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                          <PhotoSlide item={m} className="h-10 w-10 shrink-0 rounded-[10px]" />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-start gap-1.5">
+                              <span className="mt-[3px] flex shrink-0"><DietMark diet={m.diet} /></span>
+                              <span className="line-clamp-2 text-[14px] font-semibold leading-snug">{niceName(m.name)}</span>
+                            </span>
+                            <span className="mt-0.5 flex items-center gap-1.5 pl-5 text-[12.5px]">
+                              <span className="font-semibold tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
+                              {!m.available ? <span className="font-semibold text-rose">· Sold out</span> : hint ? <span className="truncate text-muted">· {hint}</span> : null}
+                            </span>
+                          </span>
+                        </button>
+                        {m.available &&
+                          (n === 0 ? (
+                            <button onClick={tap} aria-label={`Add ${m.name}`} className="flex h-8 w-[76px] shrink-0 items-center justify-center gap-1 rounded-[10px] text-[13px] font-extrabold tracking-wide text-jade-deep ring-1 ring-jade/35 active:scale-95">
+                              ADD<Plus size={13} strokeWidth={3} />
+                            </button>
+                          ) : (
+                            <div className="flex h-8 w-[76px] shrink-0 items-center justify-between rounded-[10px] bg-jade-deep text-white">
+                              <button aria-label={`One less ${m.name}`} onClick={() => lessOf(m.id)} className="flex h-8 w-7 items-center justify-center"><Minus size={14} strokeWidth={2.6} /></button>
+                              <span className="text-[14px] font-bold tnum">{n}</span>
+                              <button aria-label={`One more ${m.name}`} onClick={tap} className="flex h-8 w-7 items-center justify-center"><Plus size={14} strokeWidth={2.6} /></button>
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Cart: side panel on desktop */}
-      <aside className="hidden w-[400px] shrink-0 bg-surface lg:block lg:rounded-r-[28px] lg:border-l lg:border-line">{Cart}</aside>
+      <aside className="hidden w-[360px] shrink-0 bg-surface lg:block xl:w-[400px] lg:rounded-r-[28px] lg:border-l lg:border-line">{Cart}</aside>
 
       {/* Cart bar on phones */}
       {(count > 0 || running > 0) && (

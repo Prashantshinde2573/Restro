@@ -76,9 +76,9 @@ export default function OrdersPage() {
     return [...groups.values()];
   }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // self-service counter: a token without a table is collected by the guest ("Picked up")
+  // self-service: the guest collects the order at the counter ("Picked up"), table QR orders too
   const selfService = !!outlet.selfService;
-  const pickup = (o: Order) => selfService && !o.tableId && !o.tableName;
+  const pickup = (o: Order) => selfService && o.type !== "delivery";
   const setStatus = (o: Order, status: OrderStatus, msg: string) => {
     orderActions.setStatus(o.id, status);
     if (status === "accepted" && o.tableId && o.partyId) tableActions.update(o.tableId, o.partyId, { pendingApproval: false });
@@ -286,7 +286,17 @@ export default function OrdersPage() {
             {(sel.status === "paid" || (sel.paymentLog?.length ?? 0) > 0) && (
               <div className="rounded-group bg-surface p-4">
                 {sel.status === "paid" && <div className="text-[13px] text-muted">Paid by</div>}
-                {sel.status === "paid" && <div className="mt-0.5 text-[17px] font-semibold">{paymentsText(sel.payments)}</div>}
+                {sel.status === "paid" && (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <span className="text-[17px] font-semibold">{paymentsText(sel.payments)}</span>
+                    {/* paid on the restaurant's own gateway (not a direct UPI to the owner) */}
+                    {sel.gateway && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-0.5 text-[12.5px] font-semibold text-jade-deep" title={`${sel.gateway.provider} payment ${sel.gateway.paymentId}`}>
+                        Online · {sel.gateway.provider === "razorpay" ? "Razorpay" : "Cashfree"}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {sel.paymentLog && sel.paymentLog.length > 0 && (
                   <div className="mt-3 space-y-1.5 border-t border-line pt-3">
                     <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-muted"><History size={13} /> Payment history</div>
@@ -518,7 +528,7 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14.5px] font-medium">{where(o)}{o.customer && !where(o).includes(o.customer) ? <span className="text-muted"> · {o.customer}</span> : null}</span>
                       <span className="block truncate text-[12.5px] text-muted">
-                        {clock(o.createdAt)} · {o.lines.reduce((s, l) => s + l.qty, 0)} items · {o.status === "paid" && o.payments?.length ? paymentsText(o.payments) : channelLabel(o.channel)}
+                        {clock(o.createdAt)} · {o.lines.reduce((s, l) => s + l.qty, 0)} items · {o.status === "paid" && o.payments?.length ? `${o.gateway ? "Online · " : ""}${paymentsText(o.payments)}` : channelLabel(o.channel)}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1">

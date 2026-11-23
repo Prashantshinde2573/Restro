@@ -4,7 +4,7 @@ import { Camera, Check, ChevronRight, CreditCard, Database, Download, KeyRound, 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { Avatar, Button, Field, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Avatar, Button, Field, Hint, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { UpiPayCard, isValidUpi } from "@/components/upi";
 import { openPlanSheet, teamWhatsApp, usePlatform } from "@/components/plan-sheet";
 import { dateIN, planStatus } from "@/lib/plan-status";
@@ -287,7 +287,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
               <div>
                 <div className="text-[15px]">Guests pay before the kitchen starts</div>
-                <div className="text-[12.5px] text-muted">Order → pay (UPI, cash, or both) → token. Usual for cafés. Off: guests pay at the end.</div>
+                <div className="text-[12.5px] text-muted">{draft.payFirst ? "On · pay first, then the kitchen starts" : "Off · guests pay at the end"}</div>
               </div>
               <Toggle checked={!!draft.payFirst} onChange={(v) => saveNow({ payFirst: v }, v ? "Guests now pay before the kitchen starts" : "Guests now pay at the end")} label="Guests pay first" />
             </div>
@@ -295,10 +295,13 @@ export default function SettingsPage() {
               <div className="overflow-hidden rounded-group bg-surface">
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                   <div>
-                    <div className="text-[15px]">Self-service counter</div>
-                    <div className="text-[12.5px] text-muted">Guest orders and pays by the counter QR, gets a token on the phone, and hears “ready, collect at the counter”. Staff tap Picked up.</div>
+                    <div className="flex items-center gap-1 text-[15px]">
+                      Self-service
+                      <Hint align="left">Guests order from the QR and collect at the counter when it&apos;s ready (they get a “ready” message). No waiter calls. With “pay before the kitchen starts” on, they pay first; off, they pay at the end.</Hint>
+                    </div>
+                    <div className="text-[12.5px] text-muted">{draft.payFirst ? "Order → pay → collect" : "Order → collect → pay"}</div>
                   </div>
-                  <Toggle checked={!!draft.selfService} onChange={(v) => saveNow({ selfService: v, ...(v ? { payFirst: true } : {}) }, v ? "Self-service on" : "Self-service off")} label="Self-service counter" />
+                  <Toggle checked={!!draft.selfService} onChange={(v) => saveNow({ selfService: v }, v ? "Self-service on" : "Self-service off")} label="Self-service" />
                 </div>
               </div>
             )}

@@ -405,7 +405,9 @@ export default function GuestOrder() {
   // self-service counter: guests collect their order themselves (no "Call a waiter"; a clear "ready" popup)
   const selfServe = !!settings.selfService;
   const [readyPop, setReadyPop] = useState<number[] | null>(null);
-  const readyNow = useMemo(() => (counter || payNow ? myOrders.filter((o) => o.status === "ready") : []), [myOrders, counter, payNow]);
+  // "ready" for the guest to collect: counter / pay-first tokens, and every order in self-service
+  // (also at a table when guests pay at the end: order → kitchen → ready → collect at the counter)
+  const readyNow = useMemo(() => (counter || payNow || selfServe ? myOrders.filter((o) => o.status === "ready") : []), [myOrders, counter, payNow, selfServe]);
   useEffect(() => {
     if (!ordersReadyEarly) return;
     const ids = new Set(readyNow.map((o) => o.id));

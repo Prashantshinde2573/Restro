@@ -272,7 +272,7 @@ export interface Order {
   /** the bill's discounts, with their reasons (on the first order of the bill) */
   discounts?: BillDiscount[];
   /** paid on the restaurant's own gateway (written by the server only) */
-  gateway?: { intent: string; provider: "razorpay" | "cashfree"; paymentId: string };
+  gateway?: { intent: string; provider: "razorpay" | "cashfree"; paymentId: string; method?: "upi" | "card" };
 }
 
 /** A raw material the kitchen keeps (paneer, oil, milk…). */

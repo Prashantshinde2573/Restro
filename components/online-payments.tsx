@@ -6,7 +6,7 @@
 // encrypted (Supabase Vault). They are never shown again, not even to the owner.
 import { AlertTriangle, Copy, Lock, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Field, Segmented, inputCls } from "./ui";
+import { Button, Field, Hint, Segmented, inputCls } from "./ui";
 import { useToast } from "./toast";
 import { gatewayList, gatewayOff, gatewayProblems, gatewaySetup, gatewayWebhookUrl, type GatewayRow } from "@/lib/cloud";
 import { inr } from "@/lib/format";
@@ -115,8 +115,9 @@ export function OnlinePayments({ outletId, outletName }: { outletId: string; out
           ) : (
             <>
               <div className="text-[15px] font-semibold">Let guests pay online</div>
-              <p className="mt-1 text-[13px] text-muted">
-                Connect your own Razorpay or Cashfree account. Money goes straight to your account; Restropi never holds it. The guest pays from the bill on their phone and it closes by itself.
+              <p className="mt-1 flex items-center gap-1 text-[13px] text-muted">
+                Your Razorpay or Cashfree · money comes straight to you
+                <Hint align="left">The guest pays from the bill on their phone and it closes by itself. Restropi never holds the money.</Hint>
               </p>
               <Button size="sm" className="mt-3" onClick={startEdit}>{g ? "Turn on again" : "Connect a gateway"}</Button>
             </>

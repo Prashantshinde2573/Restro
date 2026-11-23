@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Store, Trash2, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Avatar, Button, Chips, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Avatar, Button, Chips, Field, Hint, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import {
@@ -381,12 +381,11 @@ export default function AccessPage() {
 
             {draft.role === "subadmin" ? (
               <div className="rounded-group bg-sky-soft/60 p-4 text-[14px] leading-relaxed">
-                <div className="font-semibold">Admin of {draft.outletIds.length ? draft.outletIds.map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") : "their outlet"}</div>
-                <p className="mt-1 text-muted">
-                  Can do everything the owner does in this outlet: orders, bills and payments, tables, kitchen, stock, staff and their access, attendance and salary
-                  (approve days, pay), outlet settings, stamp card, guests, campaigns and coupons, reports, insights and activity.
-                </p>
-                <p className="mt-2 text-muted">Can&apos;t: see or change other outlets, or the plan and billing.</p>
+                <div className="flex items-center gap-1 font-semibold">
+                  Admin of {draft.outletIds.length ? draft.outletIds.map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") : "their outlet"}
+                  <Hint align="left">Everything the owner does in this outlet: orders, bills and payments, tables, kitchen, stock, staff and access, attendance and salary, outlet settings, stamp card, guests, campaigns, coupons, reports and activity.</Hint>
+                </div>
+                <p className="mt-1 text-[13px] text-muted">Full access to this outlet · not other outlets, plan or billing.</p>
                 {owner && (
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
                     <div>
