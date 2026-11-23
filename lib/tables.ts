@@ -61,8 +61,14 @@ export function withOrders(tables: Table[], orders: Order[]): Table[] {
     let changed = false;
     const parties = t.parties.map((p) => {
       const from = Date.parse(p.since) - 2 * 60_000; // orders of this sitting only
-      const mine = orders.filter((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id && o.status !== "cancelled" && Date.parse(o.createdAt) >= from);
-      if (!mine.length) return p;
+      const sitting = orders.filter((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id && Date.parse(o.createdAt) >= from);
+      const mine = sitting.filter((o) => o.status !== "cancelled");
+      if (!mine.length) {
+        // every order of this group was cancelled (by the guest or the team): they are just seated again
+        if (!sitting.length || (p.status === "seated" && !p.total && !p.pendingApproval)) return p;
+        changed = true;
+        return { ...p, status: "seated" as const, total: undefined, pendingApproval: false };
+      }
       const total = mine.reduce((s, o) => s + orderTotal(o.lines), 0);
       const status: Party["status"] = p.status === "billing" || mine.every((o) => o.status === "paid") ? "billing" : "ordered";
       if (status === p.status && total === p.total) return p;

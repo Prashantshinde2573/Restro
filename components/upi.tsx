@@ -1,6 +1,7 @@
 "use client";
 
-import { Copy, Smartphone } from "lucide-react";
+import { Copy, Download, Smartphone } from "lucide-react";
+import QRCode from "qrcode";
 import { ScanQr } from "./qr";
 import { inr } from "@/lib/format";
 
@@ -21,6 +22,30 @@ export function upiUri({ upi, payee, amount, note }: { upi: string; payee: strin
   const parts = [`pa=${upi.trim()}`, `pn=${enc(payee.slice(0, 40))}`, `am=${amount.toFixed(2)}`, "cu=INR"];
   if (note) parts.push(`tn=${enc(note.slice(0, 50))}`);
   return `upi://pay?${parts.join("&")}`;
+}
+
+/** The payment QR as a picture on the phone (share sheet, or a download), to scan from the gallery. */
+async function saveQr(uri: string, amount: number) {
+  try {
+    const url = await QRCode.toDataURL(uri, { margin: 3, width: 720, errorCorrectionLevel: "M" });
+    const name = `upi-pay-${Math.round(amount)}.png`;
+    const blob = await (await fetch(url)).blob();
+    const file = new File([blob], name, { type: "image/png" });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return;
+      } catch {
+        /* closed the share sheet: fall back to a download */
+      }
+    }
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+  } catch {
+    /* nothing to do: the QR on screen still works from another phone */
+  }
 }
 
 /** QR for one exact amount + "open UPI app" for guests paying on the same phone. */
@@ -77,6 +102,14 @@ export function UpiPayCard({
       >
         <Smartphone size={17} /> Pay {inr(amount)} with a UPI app
       </a>
+      {/* UPI apps often refuse "tap to pay" links to a personal UPI ID; scanning the same QR from the
+          gallery is allowed, so the guest can save it and scan it in their app */}
+      <div className="mt-3 w-full rounded-[14px] bg-sunken/70 px-3 py-2.5 text-left text-[12.5px] leading-snug text-muted md:hidden">
+        App says <b className="text-ink">declined</b> or nothing happens? Save the QR, open your UPI app → Scan → pick the photo.
+        <button onClick={() => void saveQr(uri, amount)} className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-surface text-[13px] font-semibold text-ink ring-1 ring-line">
+          <Download size={15} /> Save QR
+        </button>
+      </div>
     </div>
   );
 }
