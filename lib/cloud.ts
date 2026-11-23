@@ -371,7 +371,7 @@ export async function sendPasswordReset(email: string) {
   if (error) throw new Error(friendly(error.message));
 }
 
-/** Owner sign-in with a 6-digit code sent to their email. */
+/** Owner sign-in with a code sent to their email (its length is set in Supabase: 6–10 digits). */
 export async function sendSignInCode(email: string) {
   const done = await emailApi<{ ok: boolean }>("/api/auth/code", { email: email.trim() });
   if (!done) throw new Error("Email sign-in isn't available right now. Use your password.");

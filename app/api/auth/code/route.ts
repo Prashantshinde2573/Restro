@@ -1,4 +1,4 @@
-// Email sign-in code (OTP) for owners: Supabase makes a one-time 6-digit code; Resend delivers it.
+// Email sign-in code (OTP) for owners: Supabase makes a one-time code (length set in Supabase); Resend delivers it.
 // The browser checks the code with Supabase directly (verifyOtp) — the code never passes back through here.
 import { emailReady, FROM_SUPPORT, log, mask } from "@/lib/server/env";
 import { cleanEmail, json, sameSite } from "@/lib/server/http";

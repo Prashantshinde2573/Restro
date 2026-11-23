@@ -277,7 +277,7 @@ export default function TablesPage() {
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2 border-t border-line/80 bg-sunken/30 p-3">
-                    {p.pendingApproval ? (
+                    {p.pendingApproval && partyOrders(sel.id, p.id).length ? (
                       <Button size="sm" onClick={() => { acceptParty(sel.id, sel.name, p.id); toast(`Party ${p.id} accepted · their order went to the kitchen`); }}><Check size={15} /> Accept order</Button>
                     ) : (
                       <Link href={`/app/pos?table=${sel.name}&party=${p.id}`}><Button size="sm"><Plus size={15} /> Add to order</Button></Link>
@@ -285,7 +285,7 @@ export default function TablesPage() {
                     {p.total && !claim && canCharge ? (
                       <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> Charge {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
-                    {!p.total && !partyOrders(sel.id, p.id).length && !p.pendingApproval && (
+                    {!partyOrders(sel.id, p.id).length && !claim && (
                       <Button size="sm" variant="plain" onClick={() => { tableActions.close(sel.id, p.id, "freed, no order"); toast(isShared(sel) ? `Party ${p.id} removed · no order` : `${sel.name} is free`); if (sel.parties.length <= 1) setSelId(null); }}>
                         <LogOut size={15} /> Free table
                       </Button>

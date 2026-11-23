@@ -1,8 +1,8 @@
 "use client";
 
 // Frees a table on its own when a group sat down (scanned the QR and picked
-// "how many guests", or a captain seated them) but nobody ordered within 30
-// minutes. Runs on the owner's and captains' devices; doing it twice is harmless.
+// "how many guests", or a captain seated them) but has no open order 30 minutes
+// later (never ordered, or every order was cancelled). Runs on the owner's and captains' devices; doing it twice is harmless.
 import { useEffect } from "react";
 import { useReady } from "@/lib/store";
 import { hasPerm, inOutlet } from "@/lib/access";
@@ -26,8 +26,9 @@ export function TableJanitor() {
         if (t.outletId && !inOutlet(me, t.outletId)) continue;
         for (const p of t.parties) {
           const idle = (Date.now() - Date.parse(p.since)) / 60_000 >= EMPTY_TABLE_MINUTES;
-          const ordered = !!p.total || open.some((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id);
-          if (idle && !ordered && !p.pendingApproval && p.status === "seated") tableActions.close(t.id, p.id, `no order in ${EMPTY_TABLE_MINUTES} min`);
+          // the orders decide: a group whose orders were all cancelled has nothing open either
+          const ordered = open.some((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id);
+          if (idle && !ordered && p.status !== "billing" && !p.paymentPending) tableActions.close(t.id, p.id, `no order in ${EMPTY_TABLE_MINUTES} min`);
         }
       }
     };

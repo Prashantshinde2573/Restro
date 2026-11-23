@@ -243,7 +243,7 @@ export default function SettingsPage() {
         )}
         {panel === "payments" && (
           <div className="space-y-4">
-            <Field label="UPI ID for QR payments" hint="Each bill gets a QR for its exact amount.">
+            <Field label="UPI ID for QR payments" hint="Each bill gets a QR for its exact amount. Use a business UPI ID (GPay for Business, PhonePe Business, Paytm Business): UPI apps often decline “Pay with a UPI app” to a personal UPI ID.">
               <input className={inputCls} autoCapitalize="none" placeholder="name@okaxis" value={draft.upi} onChange={(e) => setDraft({ ...draft, upi: e.target.value.replace(/\s/g, "") })} />
             </Field>
             {!!draft.upi && !upiOk && <p className="-mt-2 text-[13.5px] font-medium text-rose">{/@[^@]*\./.test(draft.upi) ? "This looks like an email address, not a UPI ID. Open your UPI app (GPay, PhonePe, Paytm…) → Profile to see your UPI ID, like name@okaxis or 98xxxxxx@ybl." : "Enter a UPI ID like name@okaxis."}</p>}

@@ -57,7 +57,7 @@ export function OwnerAuth() {
       await sendSignInCode(email);
       setCodeMode("sent");
       setCode("");
-      setNote(`If ${email.trim()} has a Restropi login, a 6-digit code is on its way. It expires in 1 hour.`);
+      setNote(`If ${email.trim()} has a Restropi login, a sign-in code is on its way. It expires in 1 hour.`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -84,27 +84,27 @@ export function OwnerAuth() {
           e.preventDefault();
           if (busy) return;
           if (codeMode === "ask") void askCode();
-          else if (code.replace(/\D/g, "").length === 6) void useCode();
+          else if (code.replace(/\D/g, "").length >= 6) void useCode();
         }}
       >
         <Field label="Email">
           <input className={inputCls} type="email" autoComplete="username" inputMode="email" placeholder="you@example.com" value={email} onChange={(e) => { setEmail(e.target.value); setCodeMode("ask"); }} />
         </Field>
         {codeMode === "sent" && (
-          <Field label="6-digit code from the email">
+          <Field label="Code from the email">
             <input
               className={clsx(inputCls, "text-center text-[22px] tracking-[0.4em] tnum")}
               autoComplete="one-time-code"
               inputMode="numeric"
-              maxLength={7}
-              placeholder="••••••"
+              maxLength={10}
+              placeholder="••••••••"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
               autoFocus
             />
           </Field>
         )}
-        <Button size="lg" type="submit" className="w-full" disabled={busy || !okEmail || (codeMode === "sent" && code.length !== 6)}>
+        <Button size="lg" type="submit" className="w-full" disabled={busy || !okEmail || (codeMode === "sent" && code.length < 6)}>
           {busy ? "Please wait…" : codeMode === "ask" ? "Email me a code" : "Sign in"}
         </Button>
         <div className="flex justify-between text-[13.5px] font-medium">
