@@ -10,6 +10,10 @@ const org = {
   url: SITE_URL,
   logo: `${SITE_URL}/brand/icon-512.png`,
   email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL,
+  description: SITE_DESCRIPTION,
+  slogan: "Run the whole restaurant from one calm screen.",
+  foundingLocation: { "@type": "Place", name: "Pune, Maharashtra, India" },
+  address: { "@type": "PostalAddress", addressLocality: "Pune", addressRegion: "Maharashtra", addressCountry: "IN" },
   areaServed: "IN",
   sameAs: [INSTAGRAM_URL],
 };
@@ -43,6 +47,8 @@ const site = {
   "@id": `${SITE_URL}/#website`,
   url: SITE_URL,
   name: SITE_NAME,
+  alternateName: ["Restropi", "restropi.com", "Restropi app", "Restropi restaurant software"],
+  description: SITE_DESCRIPTION,
   inLanguage: "en-IN",
   publisher: { "@id": `${SITE_URL}/#organization` },
 };
