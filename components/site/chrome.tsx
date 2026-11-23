@@ -258,9 +258,9 @@ function Socials({ className }: { className?: string }) {
 }
 
 const footerCols: { t: string; links: { href: string; label: string }[] }[] = [
-  { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/restaurant-billing-software", label: "Billing & GST" }, { href: "/qr-code-ordering", label: "QR ordering" }, { href: "/kot-software", label: "Kitchen (KOT)" }, { href: "/restaurant-inventory-software", label: "Stock" }, { href: "/pricing", label: "Pricing" }] },
-  { t: "Made for", links: [{ href: "/cafe-billing-software", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/restaurant-pos-pune", label: "Pune · Satara · Kolhapur" }] },
-  { t: "Restropi", links: [{ href: "/about", label: "About us" }, { href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/privacy", label: "Privacy policy" }] },
+  { t: "Product", links: [{ href: "/#features", label: "Features" }, { href: "/#story", label: "How it works" }, { href: "/pricing", label: "Pricing" }, { href: "/pricing#compare", label: "Compare plans" }] },
+  { t: "Made for", links: [{ href: "/#kinds", label: "Cafés" }, { href: "/#kinds", label: "Restaurants" }, { href: "/#kinds", label: "Cloud kitchens" }, { href: "/#kinds", label: "Bakeries" }] },
+  { t: "Restropi", links: [{ href: "/about", label: "About us" }, { href: "/#contact", label: "Book a demo" }, { href: "/login", label: "Sign in" }, { href: "/privacy", label: "Privacy policy" }, { href: "/#contact", label: "Contact us" }] },
 ];
 
 export function SiteFooter() {
@@ -304,6 +304,7 @@ export function SiteFooter() {
                     {c.links.map((l) => (
                       <li key={l.label}><Link href={l.href} className="inline-block py-1 transition hover:text-jade">{l.label}</Link></li>
                     ))}
+                    {c.t === "Restropi" && <li className="text-ink/65">Pune · Satara · Kolhapur</li>}
                     {c.t === "Restropi" && CONTACT_EMAIL && <li><a href={`mailto:${CONTACT_EMAIL}`} className="transition hover:text-jade">{CONTACT_EMAIL}</a></li>}
                   </ul>
                 </div>

@@ -1,4 +1,4 @@
-// Small pictures for the search pages (lib/seo-pages.ts), drawn in HTML/CSS so they stay
+// Small pictures for the About page (lib/seo-pages.ts), drawn in HTML/CSS so they stay
 // sharp and cost almost nothing to load. Real app screenshots are the only images.
 import clsx from "clsx";
 import Image from "next/image";

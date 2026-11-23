@@ -7,12 +7,6 @@
 - [Home](https://www.restropi.com/): what Restropi does, who it is for
 - [Pricing](https://www.restropi.com/pricing): Starter ₹699, Growth ₹1,999 and Pro ₹2,999 a month, one price per restaurant (Pro covers up to 3 outlets); Chain for 4+ outlets
 - [About](https://www.restropi.com/about): who makes Restropi (Pune, Maharashtra) and what it does
-- [Restaurant billing software](https://www.restropi.com/restaurant-billing-software): GST bills, UPI QR with the exact amount, discounts, coupons
-- [QR code ordering](https://www.restropi.com/qr-code-ordering): table QR menu, order to the kitchen, pay from the table
-- [KOT software](https://www.restropi.com/kot-software): kitchen screen on any phone or tablet, stations, read-aloud
-- [Café billing app](https://www.restropi.com/cafe-billing-software): counter orders with tokens, self-service QR, stamp cards
-- [Restaurant inventory software](https://www.restropi.com/restaurant-inventory-software): recipe-based stock, counts, forecast, buy list
-- [Restaurant POS in Pune](https://www.restropi.com/restaurant-pos-pune): Marathi/Hindi/English, setup help in Pune, Satara, Kolhapur
 - [Privacy policy](https://www.restropi.com/privacy): personal data and cookies
 
 ## Contact

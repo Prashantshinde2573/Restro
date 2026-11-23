@@ -1,4 +1,4 @@
-// The layout of every search page (lib/seo-pages.ts) and of /about: dark hero with the real app,
+// The layout of /about: dark hero with the real app,
 // a bento of small pictures, three steps, short FAQ.
 import clsx from "clsx";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import { Mesh } from "@/components/site/hero";
 import { IconArrow } from "@/components/site/icons";
 import { RiseText, SiteMotion } from "@/components/site/motion";
 import { HeroVisual, VizArt } from "@/components/site/seo-viz";
-import { SEO_PAGES, type SeoPage } from "@/lib/seo-pages";
+import type { SeoPage } from "@/lib/seo-pages";
 import { INSTAGRAM_URL, SITE_NAME, SITE_URL } from "@/lib/site";
 
 // big + small on the first row, three small on the second
@@ -27,7 +27,7 @@ export function SeoLanding({ p, kind = "WebPage" }: { p: SeoPage; kind?: "WebPag
       { "@type": "FAQPage", mainEntity: p.faqs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })) },
     ],
   };
-  const others = [...SEO_PAGES.filter((x) => x.slug !== p.slug).map((o) => ({ href: `/${o.slug}`, label: o.label })), ...(kind === "AboutPage" ? [{ href: "/pricing", label: "Pricing" }] : [{ href: "/about", label: "About Restropi" }])];
+  const others = [{ href: "/pricing", label: "Pricing" }, { href: "/#features", label: "Features" }];
   return (
     <SiteMotion>
       <div className="min-h-dvh overflow-x-clip bg-canvas">
