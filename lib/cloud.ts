@@ -840,6 +840,14 @@ export async function guestAddOn(orderId: string, lines: unknown[]): Promise<Rec
   if (error || !data) return null;
   return data as Record<string, unknown>;
 }
+/** Guest QR page: cancel an order before the kitchen starts it. Returns the saved order, or why not. */
+export async function guestCancelOrder(orderId: string): Promise<{ order?: Record<string, unknown>; problem?: string }> {
+  const rid = stateStore.get().rid;
+  if (!rid || !cloudConfigured) return { problem: "Not connected" };
+  const { data, error } = await sb().rpc("guest_cancel_order", { r: rid, p_order: orderId });
+  if (error || !data) return { problem: error?.message || "Couldn't cancel. Try again." };
+  return { order: data as Record<string, unknown> };
+}
 export type GuestCoupon = { code: string; kind: "percent" | "flat"; value: number; maxOff?: number; minBill?: number };
 /** Guest QR page: check one coupon code. Returns the coupon, or why it can't be used. */
 export async function guestCoupon(code: string, outletId?: string, phone?: string): Promise<{ coupon?: GuestCoupon; problem?: string }> {

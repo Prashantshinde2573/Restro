@@ -52,6 +52,7 @@ export function OrderAlerts() {
   const seenReady = useRef<Set<string> | null>(null);
   const seenReview = useRef<Set<string> | null>(null);
   const seenAddOns = useRef<Map<string, number> | null>(null);
+  const seenGuestCancel = useRef<Set<string> | null>(null);
   const [ask, setAsk] = useState(false);
   const watching = canSee || canKitchen;
 
@@ -67,7 +68,9 @@ export function OrderAlerts() {
     const claims = pendingClaims(orders);
     const readyNow = open.filter((o) => o.status === "ready");
     const addOns = (o: { lines: { addOn?: boolean }[] }) => o.lines.filter((l) => l.addOn).length;
-    if (!seenNew.current || !seenBill.current || !seenClaim.current || !seenReady.current || !seenReview.current || !seenAddOns.current) {
+    const guestCancelled = orders.filter((o) => o.status === "cancelled" && o.cancelledBy === "guest");
+    if (!seenNew.current || !seenBill.current || !seenClaim.current || !seenReady.current || !seenReview.current || !seenAddOns.current || !seenGuestCancel.current) {
+      seenGuestCancel.current = new Set(guestCancelled.map((o) => o.id));
       seenAddOns.current = new Map(open.map((o) => [o.id, addOns(o)]));
       // first load: remember what's already there, ping only for what comes after
       seenNew.current = new Set(orders.map((o) => o.id));
@@ -122,6 +125,15 @@ export function OrderAlerts() {
       const what = fresh.map((l) => `${l.qty} ${l.name}`).join(", ");
       if (canSee) say("order", `Add-on · ${orderWhere(o, tables)}`, `${what} · order #${o.number || "—"}${outletTag(o.outletId)}`, "/app/orders", `Add-on · ${orderWhere(o, tables)}`);
       else if (canKitchen && !path.startsWith("/app/kitchen")) say("kitchen", "Add-on for the kitchen", `${orderWhere(o, tables)} · ${what}`, "/app/kitchen", `Add-on · ${orderWhere(o, tables)}`);
+    }
+    // a guest cancelled their order from the phone (before the kitchen started it)
+    for (const o of guestCancelled) {
+      if (seenGuestCancel.current!.has(o.id)) continue;
+      seenGuestCancel.current!.add(o.id);
+      if (!here(o.outletId)) continue;
+      const body = `${orderWhere(o, tables)} · ${o.lines.map((l) => `${l.qty} ${l.name}`).join(", ")}${outletTag(o.outletId)}`;
+      if (canSee) say("order", `Guest cancelled order #${o.number || "—"}`, body, "/app/orders", `Cancelled by guest · ${orderWhere(o, tables)}`);
+      else if (canKitchen) say("kitchen", "Order cancelled by the guest", body, "/app/kitchen", `Cancelled · ${orderWhere(o, tables)}`);
     }
     // back in the kitchen after an add-on: "ready" alerts again when it's ready again
     for (const id of [...seenReady.current!]) if (!readyNow.some((o) => o.id === id)) seenReady.current!.delete(id);

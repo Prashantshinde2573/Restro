@@ -268,6 +268,9 @@ export interface Order {
   payClaim?: PayClaim; // marked paid by staff or the guest, not confirmed yet
   /** paid before the food was ready (counter / delivery): the kitchen keeps showing it at this stage until it's served */
   kitchenStatus?: "accepted" | "preparing" | "ready";
+  /** "guest": the guest cancelled it from their phone before the kitchen started */
+  cancelledBy?: "guest";
+  cancelledAt?: string;
   confirmedBy?: string; // who confirmed the payment
   priority?: boolean;
   outletId?: string; // which outlet took the order

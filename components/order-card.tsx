@@ -61,6 +61,7 @@ function Flags({ o, action }: { o: Order; action?: Step }) {
       {payingOnline(o) && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jade" /> Paying online…</span>}
       {live && o.lines.some((l) => l.addOn && !l.done) && <span className={clsx(pill, "bg-saffron text-white")}>+ Add-on</span>}
       {o.status === "new" && o.channel === "qr" && !action && !payingOnline(o) && <span className={clsx(pill, "bg-saffron-soft text-saffron")}>Waiting to be accepted</span>}
+      {o.status === "cancelled" && o.cancelledBy === "guest" && <span className={clsx(pill, "bg-rose-soft text-rose")}>Cancelled by guest</span>}
       {o.payPreference && o.payPreference !== "online" && live && !o.payClaim && <span className={clsx(pill, "bg-sky-soft text-sky")}><Wallet size={11} /> Bill · {methodLabel[o.payPreference]}</span>}
       {o.payPreference === "online" && o.status === "new" && !payingOnline(o) && live && <span className={clsx(pill, "bg-rose-soft text-rose")}>Online pay not finished</span>}
       {o.gateway && <span className={clsx(pill, "bg-jade-soft text-jade-deep")} title={`Paid on your ${o.gateway.provider} gateway · ${o.gateway.paymentId}`}><Check size={11} /> Online{o.gateway.method ? ` · ${o.gateway.method === "card" ? "Card" : "UPI"}` : ""}</span>}
