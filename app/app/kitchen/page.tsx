@@ -6,6 +6,7 @@ import { Check, Flame, Volume2, VolumeX } from "lucide-react";
 import { chime } from "@/components/order-alerts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChannelIcon } from "@/components/channel";
+import { Chips } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { orderActions, toAccept, useCurrentOutlet, useOutletOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
@@ -126,22 +127,12 @@ export default function KitchenPage() {
             {voice ? <Volume2 size={16} /> : <VolumeX size={16} />} {voice ? "Reading orders aloud" : "Read orders aloud"}
           </button>
         </div>
-        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
-          {stations.filter((s) => !(cafe && s.v === "tandoor")).map((s) => (
-            <button
-              key={s.v}
-              onClick={() => setStation(s.v)}
-              className={clsx("shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium", station === s.v ? "bg-ink text-canvas" : "bg-surface text-ink")}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        <Chips label="Station" value={station} onChange={setStation} options={stations.filter((s) => !(cafe && s.v === "tandoor")).map((s) => ({ value: s.v, label: s.label }))} />
         {waiting > 0 && (
           <p className="text-[13px] text-saffron">{waiting} new {waiting > 1 ? "orders are" : "order is"} waiting for a captain to accept — they appear here once accepted.</p>
         )}
         {allDay.length > 0 && (
-          <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 text-[13.5px] lg:mx-0 lg:px-0">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13.5px]">
             <span className="shrink-0 text-muted">To cook</span>
             {allDay.map(([n, q]) => (
               <span key={n} className="shrink-0"><b className="text-jade tnum">{q}</b> {n}</span>

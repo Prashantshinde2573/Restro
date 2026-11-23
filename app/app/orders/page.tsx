@@ -142,7 +142,7 @@ export default function OrdersPage() {
             <p className="mt-1 text-[14px] text-muted">{filter === "paid" ? "Paid bills from today show here." : "New orders from New order, captains and the QR show up here live."}</p>
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid items-start gap-2.5 md:grid-cols-2 xl:grid-cols-3">
             {cards.map((g) =>
               g.length === 1 ? (
                 <OrderCard

@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { Building2, Check, Coffee, Copy, Link2, Lock, MessageCircle, Store, Trash2, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Avatar, Button, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Avatar, Button, Chips, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isValidUpi } from "@/components/upi";
 import {
@@ -251,13 +251,7 @@ export default function AccessPage() {
           <div className="mb-2 flex flex-col gap-2 px-1 lg:flex-row lg:items-center lg:justify-between">
             <h2 className="text-[17px] font-semibold">People</h2>
             {myOutlets.length > 1 && (
-              <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
-                {[{ id: "all", name: owner ? "All outlets" : "All my outlets" }, ...myOutlets].map((o) => (
-                  <button key={o.id} onClick={() => setFilter(o.id)} className={clsx("shrink-0 rounded-full px-3.5 py-1.5 text-[13.5px] font-medium", filter === o.id ? "bg-ink text-canvas" : "bg-surface")}>
-                    {o.name}
-                  </button>
-                ))}
-              </div>
+              <Chips label="Outlet" value={filter} onChange={setFilter} options={[{ id: "all", name: owner ? "All outlets" : "All my outlets" }, ...myOutlets].map((o) => ({ value: o.id, label: o.name }))} />
             )}
           </div>
           <Group flush>

@@ -14,11 +14,11 @@ import { guestMatch, waLink, type GuestSeg } from "@/lib/wa";
 type Seg = GuestSeg;
 const daysSince = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86_400_000;
 
-function Stars({ n }: { n: number }) {
+function Stars({ n, size = 13 }: { n: number; size?: number }) {
   return (
     <span className="inline-flex gap-0.5" aria-label={`${n} stars`}>
       {Array.from({ length: 5 }).map((_, i) => (
-        <Star key={i} size={13} className={i < n ? "fill-saffron text-saffron" : "text-line"} />
+        <Star key={i} size={size} className={i < n ? "fill-saffron text-saffron" : "text-line"} />
       ))}
     </span>
   );
@@ -48,6 +48,8 @@ export default function GuestsPage() {
   );
   const back = all.filter((c) => c.visits > 1 && daysSince(c.lastVisit) <= 30).length;
   const avg = fb.length ? fb.reduce((s, f) => s + f.stars, 0) / fb.length : 0;
+  const [fbSeg, setFbSeg] = useState<"all" | "look" | "happy" | "notes">("all");
+  const fbShown = fb.filter((f) => fbSeg === "all" || (fbSeg === "look" ? f.stars <= 3 : fbSeg === "happy" ? f.stars >= 4 : !!f.text?.trim()));
 
   return (
     <>
@@ -108,33 +110,73 @@ export default function GuestsPage() {
             </div>
           )
         ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-group bg-line/70">
-              {[
-                ["Average rating", fb.length ? avg.toFixed(1) : "—"],
-                ["Happy (4–5★)", String(fb.filter((f) => f.stars >= 4).length)],
-                ["Unhappy (1–3★)", String(fb.filter((f) => f.stars <= 3).length)],
-              ].map(([l, v]) => (
-                <div key={l} className="bg-surface p-4">
-                  <div className="text-[13px] text-muted">{l}</div>
-                  <div className="mt-1 text-[26px] font-semibold tracking-tight tnum">{v}</div>
+          <div className="space-y-4 lg:max-w-3xl">
+            {/* summary: the average on the left, how the stars spread on the right */}
+            <div className="grid gap-4 rounded-group bg-surface p-4 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-8 lg:p-5">
+              <div className="flex items-center gap-4 sm:flex-col sm:items-start sm:gap-1">
+                <div className="text-[44px] font-semibold leading-none tracking-tight tnum">{fb.length ? avg.toFixed(1) : "—"}</div>
+                <div>
+                  <Stars n={Math.round(avg)} size={16} />
+                  <div className="mt-1 text-[13px] text-muted">{fb.length} rating{fb.length === 1 ? "" : "s"}</div>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {[5, 4, 3, 2, 1].map((n) => {
+                  const c = fb.filter((f) => f.stars === n).length;
+                  return (
+                    <div key={n} className="flex items-center gap-2.5 text-[13px]">
+                      <span className="flex w-7 shrink-0 items-center gap-0.5 font-medium tnum">{n}<Star size={11} className="fill-saffron text-saffron" /></span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-sunken">
+                        <span className={clsx("block h-full rounded-full", n >= 4 ? "bg-jade" : n === 3 ? "bg-saffron" : "bg-rose")} style={{ width: `${fb.length ? (c / fb.length) * 100 : 0}%` }} />
+                      </span>
+                      <span className="w-6 shrink-0 text-right text-muted tnum">{c}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {fb.length > 0 && (
+              <Chips
+                label="Show feedback"
+                value={fbSeg}
+                onChange={setFbSeg}
+                options={[
+                  { value: "all", label: "All", count: fb.length },
+                  { value: "look", label: "Needs a look (1–3★)", count: fb.filter((f) => f.stars <= 3).length },
+                  { value: "happy", label: "Happy (4–5★)", count: fb.filter((f) => f.stars >= 4).length },
+                  { value: "notes", label: "With a note", count: fb.filter((f) => f.text?.trim()).length },
+                ]}
+              />
+            )}
+
+            <div className="overflow-hidden rounded-group bg-surface">
+              {fb.length === 0 && (
+                <div className="flex flex-col items-center px-6 py-12 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-saffron-soft text-saffron"><Star size={22} /></span>
+                  <p className="mt-3 max-w-sm text-[14.5px] text-muted">Guests rate their visit on the thank-you screen after paying. Their ratings show here.</p>
+                </div>
+              )}
+              {fb.length > 0 && fbShown.length === 0 && <p className="px-4 py-8 text-center text-[14px] text-muted">Nothing here.</p>}
+              {fbShown.map((f) => (
+                <div key={f.id} className="flex gap-3 border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
+                  <Avatar name={f.customer || "Guest"} hue={((f.customer || "G").charCodeAt(0) * 37) % 360} size={38} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-[15px] font-medium leading-tight">{f.customer || "Guest"}</div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <Stars n={f.stars} />
+                          {f.stars <= 3 && <Pill tone="rose">Needs a look</Pill>}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-[12.5px] text-muted">{timeAgo(f.at)}</span>
+                    </div>
+                    {f.text?.trim() && <p className="mt-2 rounded-[12px] bg-sunken/60 px-3 py-2 text-[14px] leading-snug">{f.text}</p>}
+                  </div>
                 </div>
               ))}
             </div>
-            <Group title="Latest feedback" flush>
-              {fb.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">Guests rate their visit on the thank-you screen after paying. Their ratings show here.</p>}
-              {fb.map((f) => (
-                <div key={f.id} className="border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-medium">{f.customer || "Guest"}</span>
-                    <Stars n={f.stars} />
-                    <span className="ml-auto text-[12.5px] text-muted">{timeAgo(f.at)}</span>
-                  </div>
-                  {f.text && <p className="mt-1 text-[14px]">{f.text}</p>}
-                  {f.stars <= 3 && <Pill tone="rose" className="mt-2">Needs a look</Pill>}
-                </div>
-              ))}
-            </Group>
           </div>
         )}
       </Page>

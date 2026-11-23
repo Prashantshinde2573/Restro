@@ -416,7 +416,14 @@ function TabBar() {
   const [more, setMore] = useState(false);
   const { navGroups, state, badgeOf } = useNav();
   const renew = useRenewDays();
-  const myTabs = tabs.filter((tb) => state(tb.href) === "ok");
+  // The bottom bar shows what this person actually uses: the usual four first (Pulse, Orders,
+  // New order, Tables); places they can't open make room for the next important one they can
+  // (a chef with only the kitchen gets Kitchen here, not hidden under More).
+  const allItems = groups.flatMap((g) => g.items);
+  const backups = ["/app/kitchen", "/app/attendance", "/app/menu", "/app/inventory", "/app/guests", "/app/payroll", "/app/reports"]
+    .map((h) => allItems.find((i) => i.href === h))
+    .filter((i): i is NavItem => !!i);
+  const myTabs = [...tabs, ...backups].filter((tb) => state(tb.href) === "ok").slice(0, 4);
   const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }, { href: "/app/help", key: "help" as TKey, icon: CircleHelp, state: "ok" as NavState }].filter(
     (i) => !myTabs.some((tb) => tb.href === i.href),
   );
