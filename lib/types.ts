@@ -94,6 +94,8 @@ export interface MenuItem {
   categoryId: string;
   price: number; // ₹, tax-exclusive
   cost: number; // recipe cost ₹
+  /** what one plate takes from stock (each paid plate takes it off automatically) */
+  recipe?: RecipeLine[];
   diet: Diet;
   available: boolean;
   soldThisWeek: number;
@@ -311,6 +313,16 @@ export interface StockItem {
   supplier: string;
   outletId?: string;
   log?: StockLog[]; // newest first, last 50
+  /** used by recipes per day {"2026-11-23": 2.4} (written by the server when bills are paid, last 120 days) */
+  usage?: Record<string, number>;
+  /** real use ÷ recipe use, learned from stock counts (1 = exactly the recipe; 1.1 = 10% more) */
+  adjust?: number;
+  lastCount?: { at: string; day: string; expected: number; counted: number; recipeUse: number };
+}
+export interface RecipeLine {
+  stockId: string;
+  /** per plate, in the stock item's unit (0.15 = 150 g when the unit is kg) */
+  qty: number;
 }
 export interface StockLog {
   at: string; // ISO

@@ -1,0 +1,9 @@
+-- Applied as migration stock_auto_from_recipes (23 Nov 2026).
+-- private.stock_from_orders (AFTER INSERT/UPDATE OF data ON orders): a paid bill takes each dish's recipe
+--   (menu_items.data.recipe = [{stockId, qty per plate}]) off stock_items.data.stock and adds it to
+--   data.usage {"YYYY-MM-DD": qty} (IST, last 120 days); a paid bill opened again gives it back.
+-- private.guard_stock_items (BEFORE UPDATE ON stock_items, signed-in users): usage / adjust / lastCount are
+--   server-owned; the level changes only by the newest log movement (in / used / waste / count), worked out
+--   from the stored level. A count learns data.adjust = smoothed (recipe use + manual use + shortfall) / recipe use.
+-- Tested in a rolled-back DO block: 4+2 plates of 0.15 kg → 9.1 kg; a stale write kept 9.1; a count of 8.9
+-- → adjust 1.111; reopening the 2-plate bill → 9.2.
