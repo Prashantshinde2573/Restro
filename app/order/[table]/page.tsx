@@ -722,6 +722,10 @@ export default function GuestOrder() {
   const isOpen = hours.open;
   // "Order more" on the bill: only while it is still open (not paid, no payment on its way)
   const canOrderMore = !payNow && billState === "open" && !waiting && qrOn && isOpen;
+  // the bill is paid and the restaurant is confirming it: no new orders until that's done
+  // (they would land on a bill that's closing). After it's confirmed, the visit ends (thank-you).
+  const payLock = !payNow && (billState === "sent" || (!!waiting && !waiting.payFirst));
+  const canAdd = qrOn && isOpen && !payLock;
   const closedText = hours.open
     ? ""
     : hours.why === "paused"
@@ -736,6 +740,7 @@ export default function GuestOrder() {
   };
   const placeOrder = () => {
     if (!isOpen) return toast(closedText);
+    if (payLock) return toast(tx(lang, "Your payment is being confirmed. You can order again after that.", "तुमचं पेमेंट तपासलं जात आहे. त्यानंतर पुन्हा ऑर्डर करता येईल."));
     if (payNow) {
       if (!guest) {
         afterOtp.current = "pay";
@@ -1059,6 +1064,13 @@ export default function GuestOrder() {
         </div>
       )}
 
+      {qrOn && isOpen && payLock && (
+        <div className="mx-4 mb-3 flex items-center gap-3 rounded-[18px] bg-saffron-soft px-4 py-3 text-[14px]" role="status">
+          <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden><span className="absolute inset-0 animate-ping rounded-full bg-saffron opacity-60" /><span className="relative h-2.5 w-2.5 rounded-full bg-saffron" /></span>
+          <span><b>{tx(lang, "Payment being confirmed", "पेमेंट तपासलं जात आहे")}</b> · {tx(lang, "you can order again after the restaurant confirms it.", "रेस्टॉरंटने खात्री केल्यावर पुन्हा ऑर्डर करता येईल.")}</span>
+        </div>
+      )}
+
       {view === "menu" ? (
         /* ---------- home: diet ▾ · category ▾ · filters, then dish cards ---------- */
         <>
@@ -1102,7 +1114,7 @@ export default function GuestOrder() {
                 </h2>
                 <div className="divide-y divide-line/70 rounded-[20px] bg-surface px-4 ring-1 ring-line/60">
                   {items.map((m) => (
-                    <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!qrOn || !isOpen} />
+                    <DishRow key={m.id} m={m} qty={qtyOf(m.id)} onOpen={() => setDetail(m)} onAdd={() => tapAdd(m)} onLess={() => tapLess(m)} lang={lang} readOnly={!canAdd} />
                   ))}
                 </div>
               </section>
@@ -1375,7 +1387,7 @@ export default function GuestOrder() {
       </Sheet>
 
       {/* ---------- dish detail / photos ---------- */}
-      <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={qrOn && isOpen ? addLine : undefined} photosOnly={!qrOn || !isOpen} />
+      <ItemSheet item={detail} onClose={() => setDetail(null)} onAdd={canAdd ? addLine : undefined} photosOnly={!canAdd} />
       <ItemSheet item={photosOf} onClose={() => setPhotosOf(null)} photosOnly />
 
       {/* ---------- filters ---------- */}
@@ -1387,7 +1399,7 @@ export default function GuestOrder() {
         onClose={() => setCartOpen(false)}
         title={tx(lang, "Your order", "तुमची ऑर्डर")}
         footer={
-          <Button size="lg" className="w-full" disabled={!count || !isOpen || adding} onClick={placeOrder}>
+          <Button size="lg" className="w-full" disabled={!count || !isOpen || adding || payLock} onClick={placeOrder}>
             {payNow
               ? tx(lang, `Continue to pay · ${inr(payable)}`, `पैसे भरा · ${inr(payable)}`)
               : `${tx(lang, myOrders.length ? "Send to kitchen" : "Place order", "ऑर्डर पाठवा")} · ${inr(payable)}`}

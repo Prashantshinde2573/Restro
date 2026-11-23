@@ -287,46 +287,38 @@ function PosScreen() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-36 pt-1 lg:px-8 lg:pb-8">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          {/* compact dish tiles: photo, name and price on one block; the count shows on the photo */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
             {items.map((m) => {
               const n = qtyOf(m.id);
+              const hint = !m.available ? null : hasSizes(m) ? sizesOf(m).map((z) => z.name).join(" / ") : m.options?.some((g) => g.required) ? "Choices" : null;
               return (
                 <button
                   key={m.id}
                   onClick={() => (needsChoice(m) ? setCustomize(m) : add(m))}
                   disabled={!m.available}
                   className={clsx(
-                    "group relative flex flex-col overflow-hidden rounded-[18px] bg-surface text-left transition active:scale-[.97]",
-                    n > 0 && "ring-2 ring-jade",
+                    "relative flex min-h-[64px] items-center gap-2.5 rounded-[14px] bg-surface p-2 pr-2.5 text-left ring-1 transition active:scale-[.97]",
+                    n > 0 ? "ring-2 ring-jade" : "ring-line/60 hover:ring-line",
                     !m.available && "opacity-50",
                   )}
                 >
-                  <div className="flex items-start justify-between p-3 pb-0">
-                    <PhotoSlide item={m} className="h-11 w-11 rounded-full lg:h-12 lg:w-12" />
+                  <span className="relative shrink-0">
+                    <PhotoSlide item={m} className="h-11 w-11 rounded-[10px]" />
                     {n > 0 && (
-                      <span className="flex h-7 min-w-7 animate-pop items-center justify-center rounded-full bg-jade px-2 text-[13px] font-bold text-white tnum">
-                        {n}
-                      </span>
+                      <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 animate-pop items-center justify-center rounded-full bg-jade px-1 text-[11.5px] font-bold text-white ring-2 ring-surface tnum">{n}</span>
                     )}
-                  </div>
-                  <div className="flex flex-1 flex-col p-3">
-                    <div className="flex items-start gap-1.5">
-                      <span className="mt-[3px]"><DietMark diet={m.diet} /></span>
-                      <span className="text-[14.5px] font-semibold leading-tight">{m.name}</span>
-                    </div>
-                    <div className="mt-auto flex items-center justify-between pt-2">
-                      <span className="text-[14px] font-medium text-muted tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
-                      {!m.available ? (
-                        <span className="text-[11.5px] font-semibold text-rose">Sold out</span>
-                      ) : hasSizes(m) ? (
-                        <span className="text-[11.5px] font-medium text-jade">{sizesOf(m).map((z) => z.name).join(" / ")}</span>
-                      ) : m.options?.some((g) => g.required) ? (
-                        <span className="text-[11.5px] font-medium text-jade">Choices</span>
-                      ) : m.tags?.[0] ? (
-                        <span className="text-[11.5px] font-medium text-saffron">{m.tags[0]}</span>
-                      ) : null}
-                    </div>
-                  </div>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-start gap-1.5">
+                      <span className="mt-[3px] shrink-0"><DietMark diet={m.diet} /></span>
+                      <span className="line-clamp-2 text-[13.5px] font-semibold leading-[1.2]">{m.name}</span>
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1.5 pl-5 text-[12.5px]">
+                      <span className="font-medium text-muted tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
+                      {!m.available ? <span className="font-semibold text-rose">· Sold out</span> : hint ? <span className="truncate font-medium text-jade">· {hint}</span> : m.tags?.[0] ? <span className="truncate font-medium text-saffron">· {m.tags[0]}</span> : null}
+                    </span>
+                  </span>
                 </button>
               );
             })}

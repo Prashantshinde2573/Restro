@@ -232,7 +232,7 @@ export function FilterButton({ count, onClick, lang }: { count: number; onClick:
 
 /* ---------------- one row: diet ▾ · category ▾ · filters ---------------- */
 // Our own dropdown (the phone's picker is a big dark sheet).
-type DropOption = { value: string; label: string; dot?: "veg" | "nonveg" };
+type DropOption = { value: string; label: string; dot?: "veg" | "nonveg" | "both" };
 function Drop({ label, value, options, onChange }: { label: string; value: string; options: DropOption[]; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -250,7 +250,12 @@ function Drop({ label, value, options, onChange }: { label: string; value: strin
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
-  const dot = (d?: DropOption["dot"]) => d && <span className={clsx("h-2 w-2 shrink-0 rounded-full", d === "veg" ? "bg-jade" : "bg-rose")} />;
+  const dot = (d?: DropOption["dot"]) =>
+    d === "both" ? (
+      <span className="flex shrink-0 -space-x-0.5"><span className="h-2 w-2 rounded-full bg-jade ring-1 ring-surface" /><span className="h-2 w-2 rounded-full bg-rose ring-1 ring-surface" /></span>
+    ) : (
+      d && <span className={clsx("h-2 w-2 shrink-0 rounded-full", d === "veg" ? "bg-jade" : "bg-rose")} />
+    );
   return (
     <div ref={box} className="relative min-w-0">
       <button
@@ -491,77 +496,63 @@ export function MenuTop({
   onFilters: () => void;
   lang: Lang;
 }) {
-  const chips = useRef<HTMLDivElement>(null);
-  // keep the category on screen visible in the chip row
-  useEffect(() => {
-    const el = chips.current?.querySelector<HTMLElement>(`[data-chip="${active}"]`);
-    const row = chips.current;
-    if (!el || !row) return;
-    const left = el.offsetLeft - row.clientWidth / 2 + el.clientWidth / 2;
-    row.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
-  }, [active]);
-  const vegOnly = diet === "veg";
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-          <input
-            value={q}
-            onChange={(e) => onQ(e.target.value)}
-            type="search"
-            enterKeyHint="search"
-            aria-label={tx(lang, "Search the menu", "मेनूमध्ये शोधा")}
-            placeholder={tx(lang, "Search the menu", "मेनूमध्ये शोधा")}
-            className="h-11 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade/40 [&::-webkit-search-cancel-button]:hidden"
-          />
-          {q && (
-            <button aria-label={tx(lang, "Clear search", "शोध काढा")} onClick={() => onQ("")} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted active:bg-sunken">
-              <X size={15} />
-            </button>
-          )}
-        </div>
-        {mixed && (
-          <button
-            onClick={() => onDiet(vegOnly ? "all" : "veg")}
-            aria-pressed={vegOnly}
-            className={clsx("flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-semibold ring-1 transition", vegOnly ? "bg-jade-soft text-jade-deep ring-jade/40" : "bg-surface text-ink ring-line")}
-          >
-            <span className={clsx("flex h-4 w-4 items-center justify-center rounded-[4px] border-[1.5px]", vegOnly ? "border-jade" : "border-jade/60")}>
-              <span className="h-2 w-2 rounded-full bg-jade" />
-            </span>
-            {tx(lang, "Veg", "व्हेज")}
+    <div className="space-y-2">
+      {/* row 1: search */}
+      <div className="relative">
+        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+        <input
+          value={q}
+          onChange={(e) => onQ(e.target.value)}
+          type="search"
+          enterKeyHint="search"
+          aria-label={tx(lang, "Search the menu", "मेनूमध्ये शोधा")}
+          placeholder={tx(lang, "Search the menu", "मेनूमध्ये शोधा")}
+          className="h-11 w-full rounded-full bg-surface pl-10 pr-9 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-2 focus:ring-jade/40 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {q && (
+          <button aria-label={tx(lang, "Clear search", "शोध काढा")} onClick={() => onQ("")} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted active:bg-sunken">
+            <X size={15} />
           </button>
         )}
+      </div>
+      {/* row 2: category ▾ · veg / non-veg ▾ · filters */}
+      <div className="flex items-center gap-2">
+        {groups.length > 1 && (
+          <div className="min-w-0 flex-1">
+            <Drop
+              label={tx(lang, "Menu categories", "मेनू प्रकार")}
+              value={active && groups.some((g) => g.c.id === active) ? active : groups[0]?.c.id ?? ""}
+              onChange={onPick}
+              options={groups.map(({ c, n }) => ({ value: c.id, label: `${c.icon && c.icon !== "🍽️" ? `${c.icon} ` : ""}${niceName(c.name)} (${n})` }))}
+            />
+          </div>
+        )}
+        {mixed && (
+          <div className={clsx("shrink-0", groups.length > 1 ? "w-[124px]" : "flex-1")}>
+            <Drop
+              label={tx(lang, "Veg or non-veg", "व्हेज / नॉन-व्हेज")}
+              value={diet === "egg" ? "nonveg" : diet}
+              onChange={(v) => onDiet(v as MenuFilters["diet"])}
+              options={[
+                { value: "all", label: tx(lang, "All", "सर्व"), dot: "both" },
+                { value: "veg", label: tx(lang, "Veg", "व्हेज"), dot: "veg" },
+                { value: "nonveg", label: tx(lang, "Non-veg", "नॉन-व्हेज"), dot: "nonveg" },
+              ]}
+            />
+          </div>
+        )}
+        {groups.length <= 1 && !mixed && <div className="flex-1" />}
         <button
           onClick={onFilters}
           aria-label={tx(lang, "Filters", "फिल्टर")}
-          className={clsx("relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-1", filterCount ? "bg-jade-soft text-jade-deep ring-jade/40" : "bg-surface text-ink ring-line")}
+          className={clsx("relative flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold", filterCount ? "border-jade/40 bg-jade-soft text-jade-deep" : "border-line bg-surface text-ink")}
         >
-          <SlidersHorizontal size={17} />
-          {filterCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-jade px-1 text-[10px] font-bold text-white tnum">{filterCount}</span>}
+          <SlidersHorizontal size={16} />
+          {tx(lang, "Filter", "फिल्टर")}
+          {filterCount > 0 && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-jade px-1 text-[10px] font-bold text-white tnum">{filterCount}</span>}
         </button>
       </div>
-      {groups.length > 1 && (
-        <div ref={chips} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {groups.map(({ c, n }) => {
-            const on = active === c.id;
-            return (
-              <button
-                key={c.id}
-                data-chip={c.id}
-                onClick={() => onPick(c.id)}
-                aria-current={on ? "true" : undefined}
-                className={clsx("flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold transition", on ? "bg-ink text-canvas" : "bg-surface text-ink/80 ring-1 ring-line")}
-              >
-                {c.icon && c.icon !== "🍽️" && <span aria-hidden>{c.icon}</span>}
-                <span className="whitespace-nowrap">{niceName(c.name)}</span>
-                <span className={clsx("text-[12px] tnum", on ? "text-canvas/60" : "text-faint")}>{n}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -601,39 +592,42 @@ export function DishRow({
       <button
         onClick={onAdd}
         aria-label={tx(lang, `Add ${m.name}`, `${m.name} जोडा`)}
-        className="flex h-9 w-[92px] items-center justify-center gap-1 rounded-[12px] bg-surface text-[14px] font-extrabold tracking-wide text-jade-deep shadow-[0_4px_14px_-6px_rgb(16_24_20/.35)] ring-1 ring-jade/30 transition active:scale-95"
+        className="flex h-8 w-[84px] items-center justify-center gap-1 rounded-[10px] bg-surface text-[13.5px] font-extrabold tracking-wide text-jade-deep shadow-[0_4px_14px_-6px_rgb(16_24_20/.35)] ring-1 ring-jade/30 transition active:scale-95"
       >
         {tx(lang, "ADD", "जोडा")}<Plus size={14} strokeWidth={3} />
       </button>
     ) : (
-      <div className="flex h-9 w-[92px] items-center justify-between rounded-[12px] bg-jade-deep text-white shadow-[0_4px_14px_-6px_rgb(16_24_20/.45)]">
-        <button aria-label={`One less ${m.name}`} onClick={onLess} className="flex h-9 w-8 items-center justify-center"><Minus size={15} strokeWidth={2.6} /></button>
+      <div className="flex h-8 w-[84px] items-center justify-between rounded-[10px] bg-jade-deep text-white shadow-[0_4px_14px_-6px_rgb(16_24_20/.45)]">
+        <button aria-label={`One less ${m.name}`} onClick={onLess} className="flex h-8 w-7 items-center justify-center"><Minus size={15} strokeWidth={2.6} /></button>
         <span className="text-[15px] font-bold tnum">{qty}</span>
-        <button aria-label={`One more ${m.name}`} onClick={onAdd} className="flex h-9 w-8 items-center justify-center"><Plus size={15} strokeWidth={2.6} /></button>
+        <button aria-label={`One more ${m.name}`} onClick={onAdd} className="flex h-8 w-7 items-center justify-center"><Plus size={15} strokeWidth={2.6} /></button>
       </div>
     )
   );
   return (
-    <div className="flex gap-3 py-4">
+    <div className="flex gap-3 py-3">
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <span className="flex items-center gap-1.5">
-          <DietMark diet={m.diet} />
-          {badge && <span className="text-[11.5px] font-bold text-saffron">★ {badge}</span>}
-          {isSpicy(m) && <span className="text-[11px]" aria-label="Spicy">🌶</span>}
+        {badge && <span className="mb-0.5 block text-[11.5px] font-bold text-saffron">★ {badge}</span>}
+        {/* the veg / non-veg mark sits right before the name (one line less per dish) */}
+        <span className="flex items-start gap-1.5">
+          <span className="mt-[4px] flex shrink-0"><DietMark diet={m.diet} /></span>
+          <span className="text-[15px] font-semibold leading-snug tracking-tight">
+            {niceName(m.name)}
+            {isSpicy(m) && <span className="ml-1 text-[11px]" aria-label="Spicy">🌶</span>}
+          </span>
         </span>
-        <span className="mt-1 block text-[15.5px] font-semibold leading-snug tracking-tight">{niceName(m.name)}</span>
-        <span className="mt-0.5 block text-[14.5px] font-semibold tnum">
+        <span className="block pl-5 text-[14px] font-semibold tnum">
           {sizes ? <span className="mr-1 text-[12.5px] font-medium text-muted">{tx(lang, "from", "पासून")}</span> : null}
           {inr(fromPrice(m))}
           {sizes ? <span className="ml-1.5 text-[12.5px] font-medium text-muted">· {tx(lang, `${sizes} sizes`, `${sizes} साइज`)}</span> : null}
+          {!readOnly && !sizes && m.options?.length ? <span className="ml-1.5 text-[11.5px] font-medium text-faint">· {tx(lang, "Customisable", "बदल करता येतात")}</span> : null}
         </span>
-        {m.desc && <span className="mt-1 line-clamp-2 block text-[13px] leading-snug text-muted">{m.desc}</span>}
-        {!readOnly && (m.options?.length || sizes) ? <span className="mt-1 block text-[11.5px] text-faint">{tx(lang, "Customisable", "बदल करता येतात")}</span> : null}
+        {m.desc && <span className="mt-0.5 line-clamp-1 block pl-5 text-[12.5px] leading-snug text-muted">{m.desc}</span>}
       </button>
       {photo ? (
-        <div className="relative w-[112px] shrink-0 pb-4">
-          <button onClick={onOpen} aria-label={`Open ${m.name}`} className="block overflow-hidden rounded-[16px]">
-            <PhotoSlide item={m} className="h-[104px] w-[112px]" />
+        <div className="relative w-[92px] shrink-0 pb-3.5">
+          <button onClick={onOpen} aria-label={`Open ${m.name}`} className="block overflow-hidden rounded-[14px]">
+            <PhotoSlide item={m} className="h-[80px] w-[92px]" />
           </button>
           {add && <div className="absolute inset-x-0 bottom-0 flex justify-center">{add}</div>}
         </div>

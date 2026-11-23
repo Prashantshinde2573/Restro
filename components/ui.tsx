@@ -182,31 +182,71 @@ export function Segmented<T extends string>({
 }
 
 /* ---------- Chips (horizontal filter) ---------- */
-export function Chips<T extends string>({
+/** A dropdown that looks like the rest of the app (native list on phones: big, easy to tap). */
+export function SelectMenu<T extends string>({
   value,
   onChange,
   options,
+  label,
+  className,
 }: {
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string; count?: number }[];
+  label?: string;
+  className?: string;
 }) {
   return (
-    // phones: one row that scrolls, fading at the edge so it's clear there is more; wide screens: wrap
-    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pr-8 [mask-image:linear-gradient(to_right,#000_86%,transparent)] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:[mask-image:none]">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={clsx(
-            "min-h-[38px] shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition",
-            value === o.value ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
-          )}
-        >
-          {o.label}
-          {o.count !== undefined && <span className={clsx("ml-1.5 tnum", value === o.value ? "opacity-60" : "text-muted")}>{o.count}</span>}
-        </button>
-      ))}
+    <label className={clsx("relative block", className)}>
+      {label && <span className="sr-only">{label}</span>}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="h-11 w-full appearance-none truncate rounded-ctl bg-surface pl-3.5 pr-10 text-[15px] font-medium text-ink outline-none ring-1 ring-line focus:ring-jade/40"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+            {o.count !== undefined ? ` (${o.count})` : ""}
+          </option>
+        ))}
+      </select>
+      <svg aria-hidden viewBox="0 0 24 24" className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+    </label>
+  );
+}
+
+export function Chips<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; count?: number }[];
+  /** what the choice is about (read out by screen readers on the phone dropdown) */
+  label?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      {/* phones: one dropdown (no sideways scrolling); wide screens: the chips, wrapping */}
+      <SelectMenu value={value} onChange={onChange} options={options} label={label ?? "Show"} className="lg:hidden" />
+      <div className="hidden flex-wrap gap-2 lg:flex">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={clsx(
+              "min-h-[38px] shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition",
+              value === o.value ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
+            )}
+          >
+            {o.label}
+            {o.count !== undefined && <span className={clsx("ml-1.5 tnum", value === o.value ? "opacity-60" : "text-muted")}>{o.count}</span>}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

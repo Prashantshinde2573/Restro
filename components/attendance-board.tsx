@@ -11,7 +11,7 @@
 import clsx from "clsx";
 import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Avatar, Button, Segmented, Sheet } from "@/components/ui";
+import { Avatar, Button, Segmented, SelectMenu, Sheet } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { isOwner, type Member } from "@/lib/access";
 import { useMe } from "@/lib/live";
@@ -364,7 +364,8 @@ function PersonView({
   const lead = weekday(days[0]);
   return (
     <div className="space-y-3">
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:px-0">
+      <SelectMenu label="Person" className="lg:hidden" value={m.id} onChange={setPerson} options={people.map((p) => ({ value: p.id, label: p.name }))} />
+      <div className="hidden flex-wrap gap-2 lg:flex">
         {people.map((p) => (
           <button key={p.id} onClick={() => setPerson(p.id)} className={clsx("flex shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[13.5px] font-semibold ring-1", p.id === m.id ? "bg-ink text-canvas ring-ink" : "bg-surface ring-line")}>
             <Avatar name={p.name} hue={p.hue} photo={p.photo} size={26} /> {p.name.split(" ")[0]}

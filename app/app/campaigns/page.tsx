@@ -127,7 +127,7 @@ export default function CampaignsPage() {
                 ))}
               </div>
             </div>
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
+            <div className="flex flex-wrap gap-2">
               {TEMPLATES.map((t) => (
                 <button
                   key={t.id}

@@ -4,7 +4,7 @@ import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, Sheet, Toggle, inputCls } from "@/components/ui";
+import { Button, DietMark, Field, Group, Page, PageHeader, Pill, Segmented, SelectMenu, Sheet, Toggle, inputCls } from "@/components/ui";
 import { useToast } from "@/components/toast";
 import { categoryActions, isStampReward, mainOutletId, menuActions, menuFor, useAllMenu, useCategories, useCurrentOutlet, useFeature, useMe, useMenu, useOutletOrders, useOutlets } from "@/lib/live";
 import { PhotoSlide } from "@/components/menu-bits";
@@ -538,7 +538,7 @@ function NewCategory({
           onKeyDown={(e) => e.key === "Enter" && onAdd()}
         />
       </div>
-      <div className="no-scrollbar -mx-1 -my-1 flex gap-1 overflow-x-auto px-1 py-1">
+      <div className="flex flex-wrap gap-1">
         {CAT_ICONS.map((x) => (
           <button key={x} aria-pressed={value.icon === x} onClick={() => onChange({ ...value, icon: x })} className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[20px]", value.icon === x ? "bg-jade-soft ring-2 ring-jade" : "bg-sunken")}>
             {x}
@@ -723,15 +723,9 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
           </div>
         </div>
         {!filtering && cats.length > 1 && (
-          <div className="sticky z-20 -mx-4 flex gap-2 overflow-x-auto bg-canvas/95 px-4 py-2 backdrop-blur lg:hidden [scrollbar-width:none]" style={{ top: "calc(54px + env(safe-area-inset-top, 0px))" }}>
-            {cats.map((c) => (
-              <button key={c.id} id={`cat-tab-${c.id}`} data-drop-cat={c.id} onClick={() => go(c.id)}
-                className={clsx("flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[13.5px] font-semibold ring-1 transition",
-                  active === c.id ? "bg-ink text-canvas ring-ink" : "bg-surface text-muted ring-line",
-                  drag && drag.over === c.id && drag.from !== c.id && "bg-jade-soft text-jade-deep ring-2 ring-jade")}>
-                {c.icon && c.icon !== "🍽️" && <span>{c.icon}</span>}{c.name}
-              </button>
-            ))}
+          // phones: jump to a category from one dropdown (no sideways scrolling); dishes still drop onto a category's section
+          <div className="sticky z-20 -mx-4 bg-canvas/95 px-4 py-2 backdrop-blur lg:hidden" style={{ top: "calc(54px + env(safe-area-inset-top, 0px))" }}>
+            <SelectMenu label="Category" value={active ?? cats[0].id} onChange={(id) => go(id)} options={cats.map((c) => ({ value: c.id, label: `${c.icon && c.icon !== "🍽️" ? `${c.icon} ` : ""}${c.name}`, count: items.filter((m) => m.categoryId === c.id).length }))} />
           </div>
         )}
 
