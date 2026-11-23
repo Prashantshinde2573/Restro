@@ -7,6 +7,7 @@
 //  campaign  { outletId, template, lang, extra[], phones[] }   approved template to chosen guests
 import { admin, cors, json } from "../_shared/common.ts";
 import { anyCaller, callerIn, can, cleanParam, inOutlet, listTemplates, loadWa, logOnce, logResult, phone10, planOk, sendTemplate } from "../_shared/whatsapp.ts";
+import { mfaOk } from "../_shared/common.ts";
 
 const DAILY_OFFERS = 1000; // per restaurant
 const PER_CALL = 300;
@@ -20,6 +21,7 @@ Deno.serve(async (req) => {
   try {
     const user = await anyCaller(req);
     if (!user || user.is_anonymous) return json({ error: "Sign in again" }, 401);
+    if (!mfaOk(req, user)) return json({ error: "Sign in again with your two-step code" }, 401);
     const b = await req.json();
     const rid = String(b?.rid ?? "");
     const kind = String(b?.kind ?? "");

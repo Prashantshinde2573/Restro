@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   if (!sameSite(req)) return json({ error: "Forbidden" }, 403);
   const me = await caller(req);
   if (!me) return json({ error: "Sign in first" }, 401);
-  if (!(await isPlatformAdmin(me.id))) return json({ error: "Only the super admin can do this" }, 403);
+  if (!(await isPlatformAdmin(me))) return json({ error: "Only the super admin can do this" }, 403);
 
   const b = (await req.json().catch(() => ({}))) as { rid?: unknown; action?: unknown; png?: unknown };
   const rid = String(b.rid ?? "").slice(0, 80);

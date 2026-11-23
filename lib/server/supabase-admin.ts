@@ -16,10 +16,19 @@ export async function caller(req: Request) {
   if (!token) return null;
   const anon = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await anon.auth.getUser(token);
-  return error ? null : data.user;
+  if (error || !data.user) return null;
+  // two-step login: did this session pass the authenticator code? (the token was just checked above)
+  let aal = "aal1";
+  try {
+    aal = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).aal ?? "aal1";
+  } catch {}
+  const hasFactor = (data.user.factors ?? []).some((f) => f.status === "verified");
+  return Object.assign(data.user, { mfaOk: aal === "aal2" || !hasFactor });
 }
 
-export async function isPlatformAdmin(uid: string) {
-  const { data } = await admin().from("platform_admins").select("user_id").eq("user_id", uid).maybeSingle();
+/** Super admin, signed in with the two-step code when it's on. */
+export async function isPlatformAdmin(me: { id: string; mfaOk: boolean }) {
+  if (!me.mfaOk) return false;
+  const { data } = await admin().from("platform_admins").select("user_id").eq("user_id", me.id).maybeSingle();
   return !!data;
 }

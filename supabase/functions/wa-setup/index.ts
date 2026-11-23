@@ -7,6 +7,7 @@
 // Nothing secret is ever sent back.
 import { admin, cors, json } from "../_shared/common.ts";
 import { anyCaller, callerIn, can, checkCreds, listTemplates, loadWa, logResult, phone10, planOk, sendTemplate, type WaSettings } from "../_shared/whatsapp.ts";
+import { mfaOk } from "../_shared/common.ts";
 
 const ID = /^\d{6,25}$/;
 
@@ -16,6 +17,7 @@ Deno.serve(async (req) => {
   try {
     const user = await anyCaller(req);
     if (!user || user.is_anonymous) return json({ error: "Sign in again" }, 401);
+    if (!mfaOk(req, user)) return json({ error: "Sign in again with your two-step code" }, 401);
     const b = await req.json();
     const rid = String(b?.rid ?? "");
     const action = String(b?.action ?? "");

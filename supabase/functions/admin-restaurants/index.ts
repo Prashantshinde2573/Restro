@@ -1,6 +1,6 @@
 // Super admin only: add a restaurant with its owner login, reset an owner's
 // password, or delete a restaurant with everything in it.
-import { admin, caller, cors, json, tempPassword } from "../_shared/common.ts";
+import { admin, caller, cors, json, mfaOk, tempPassword } from "../_shared/common.ts";
 
 const PLANS = ["starter", "growth", "pro", "chain"];
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "restro";
@@ -15,6 +15,7 @@ Deno.serve(async (req) => {
     const db = admin();
     const { data: isAdmin } = await db.from("platform_admins").select("user_id").eq("user_id", me.id).maybeSingle();
     if (!isAdmin) return json({ error: "Only the super admin can do this" }, 403);
+    if (!mfaOk(req, me)) return json({ error: "Sign in again with your two-step code" }, 401);
 
     const body = await req.json();
     const action = String(body.action ?? "");
@@ -91,6 +92,19 @@ Deno.serve(async (req) => {
       });
       if (error) return json({ error: error.message }, 500);
       return json({ tempPassword: password, ownerEmail: u?.user?.email ?? "" });
+    }
+
+    // the owner lost their phone: remove their authenticator apps (they sign in with the password)
+    if (action === "reset_two_step") {
+      const { data: f, error } = await db.auth.admin.mfa.listFactors({ userId: rest.owner_uid });
+      if (error) return json({ error: error.message }, 500);
+      let removed = 0;
+      for (const x of f?.factors ?? []) {
+        const { error: e } = await db.auth.admin.mfa.deleteFactor({ id: x.id, userId: rest.owner_uid });
+        if (e) return json({ error: e.message }, 500);
+        removed++;
+      }
+      return json({ removed });
     }
 
     if (action === "delete") {

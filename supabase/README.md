@@ -40,3 +40,10 @@ There is no public sign-up.
 
 Download the exact SQL any time with the Supabase CLI:
 `supabase link --project-ref gguwfynlyihsigpcztdp && supabase db pull`
+
+## Two-step login (Google Authenticator)
+- `two_step_login.sql` (applied): `private.mfa_ok()`; owner and super admin checks need the code once a phone is set up.
+- The app makes the super admin set it up right after the password. Owners turn it on from their profile.
+- Edge functions check it too (`mfaOk` in `_shared/common.ts`). Deployed: admin-restaurants, set-pin, gateway-setup.
+  `wa-setup` and `wa-send` have the check in this repo but are not redeployed yet (no WhatsApp accounts connected) — deploy them with the next WhatsApp change.
+- Lost phone: super admin → restaurant → Access → "Reset two-step login".

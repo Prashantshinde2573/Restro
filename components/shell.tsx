@@ -12,6 +12,7 @@ import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { useReady } from "@/lib/store";
 import { ChangePassword } from "./owner-auth";
 import { Avatar, Button, Pill, Sheet } from "./ui";
+import { TwoStepCard, TwoStepGate } from "./two-step";
 import { ClientOnly } from "./client-only";
 import { FullLoader } from "./loader";
 import { OrderAlerts } from "./order-alerts";
@@ -285,6 +286,7 @@ function MeButton({ compact }: { compact?: boolean }) {
                 <KeyRound size={17} className="text-jade" /> Change password
               </button>
             )}
+            {cloud.role === "owner" && <div className="mt-3"><TwoStepCard /></div>}
             <button
               onClick={async () => {
                 setOpen(false);
@@ -588,6 +590,7 @@ function AuthGate({ children }: { children: ReactNode }) {
       </Centered>
     );
   }
+  if (cloud.status === "needsMfa") return <TwoStepGate mode={cloud.mfa ?? "verify"} email={cloud.email} who={cloud.role === "superadmin" ? "superadmin" : "owner"} />;
   if (cloud.status === "needsOnboarding") {
     return (
       <Centered>

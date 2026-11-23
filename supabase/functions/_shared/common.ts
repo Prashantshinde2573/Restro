@@ -66,3 +66,17 @@ export async function caller(req: Request) {
   const { data, error } = await admin().auth.getUser(token);
   return error || !data.user || data.user.is_anonymous ? null : data.user;
 }
+
+/**
+ * Two-step login: true when this request's session passed the authenticator code, or the person
+ * never turned two-step login on (staff, guests and most owners). Call after the token was checked.
+ */
+export function mfaOk(req: Request, user: { factors?: { status: string }[] | null }) {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  let aal = "aal1";
+  try {
+    const b = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    aal = JSON.parse(atob(b + "=".repeat((4 - (b.length % 4)) % 4))).aal ?? "aal1";
+  } catch { /* no token: aal1 */ }
+  return aal === "aal2" || !(user.factors ?? []).some((f) => f.status === "verified");
+}

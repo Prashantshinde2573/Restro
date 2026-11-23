@@ -11,7 +11,7 @@ export const maxDuration = 60;
 async function allowed(req: Request) {
   const me = await caller(req);
   if (!me) return json({ error: "Sign in first" }, 401);
-  if (!(await isPlatformAdmin(me.id))) return json({ error: "Only the super admin can do this" }, 403);
+  if (!(await isPlatformAdmin(me))) return json({ error: "Only the super admin can do this" }, 403);
   return null;
 }
 

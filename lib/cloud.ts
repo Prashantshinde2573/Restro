@@ -73,7 +73,8 @@ const TABLE: Record<string, string> = {
 /* ---------------- who is signed in on this device ---------------- */
 export type Role = "owner" | "staff" | "guest" | "superadmin";
 /** needsOnboarding = signed in, but this login isn't linked to any restaurant. */
-export type CloudStatus = "off" | "loading" | "signedOut" | "needsOnboarding" | "ready";
+/** needsMfa = signed in with the password, the 6-digit code from the authenticator app is still to come. */
+export type CloudStatus = "off" | "loading" | "signedOut" | "needsOnboarding" | "needsMfa" | "ready";
 export interface CloudState {
   status: CloudStatus;
   role?: Role;
@@ -84,6 +85,8 @@ export interface CloudState {
   displayName?: string | null;
   /** First sign-in with a temporary password: must set their own. */
   mustChangePassword?: boolean;
+  /** needsMfa: "verify" = enter the code; "enroll" = super admin must set up the app first */
+  mfa?: "enroll" | "verify";
 }
 const stateStore = createStore<CloudState>({ status: cloudConfigured ? "loading" : "off" });
 export const useCloud = () => stateStore.use();
@@ -92,6 +95,11 @@ export const getCloud = () => stateStore.get();
 /** Start listening to sign-in changes (called once from <Providers>). */
 let started = false;
 let lastUid: string | null = null;
+let recheck: (() => Promise<void>) | null = null;
+/** After the two-step code: look at the sign-in again (now with the code) and open the app. */
+export async function recheckSignIn() {
+  await recheck?.();
+}
 const RECOVERY = "restropi.recovery";
 const recovering = () => {
   try {
@@ -164,6 +172,8 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
       return;
     }
     saveWho(session.user.id, s);
+    // the cached login opened the restaurant, but this session still needs the two-step code
+    if (known && s.status !== "ready") disconnect();
     if (known && known.rid === s.rid && known.role === s.role && known.status === s.status && known.memberId === s.memberId && !s.mustChangePassword) {
       stateStore.set({ ...known, ...s });
       return;
@@ -178,6 +188,11 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
       connect(s.rid, s.role!, session.user.id);
       onSignedIn(s);
     }
+  };
+  recheck = async () => {
+    lastUid = null;
+    const { data } = await sb().auth.getSession();
+    await handle(data.session);
   };
   sb().auth.onAuthStateChange((event, session) => {
     // don't await inside the auth callback (supabase-js deadlocks on nested calls)
@@ -219,9 +234,64 @@ async function resolveUser(session: Session): Promise<CloudState> {
   const { data, error } = await sb().rpc("whoami");
   if (error) throw error;
   const w = data as { superAdmin: boolean; restaurant: { id: string; status: string } | null };
-  if (w.superAdmin) return { ...base, status: "ready", role: "superadmin" };
+  if (w.superAdmin) {
+    // the super admin always needs the authenticator code (set it up first if it isn't yet)
+    const a = await assurance();
+    if (a.current !== "aal2") return { ...base, status: "needsMfa", role: "superadmin", mfa: a.next === "aal2" ? "verify" : "enroll" };
+    return { ...base, status: "ready", role: "superadmin" };
+  }
   if (!w.restaurant) return { ...base, status: "needsOnboarding" };
+  // owners: only when they turned two-step login on
+  const a = await assurance();
+  if (a.next === "aal2" && a.current !== "aal2") return { ...base, status: "needsMfa", role: "owner", rid: w.restaurant.id, memberId: "owner", mfa: "verify" };
   return { ...base, status: "ready", role: "owner", rid: w.restaurant.id, memberId: "owner" };
+}
+
+/* ---------------- two-step login (Google Authenticator or any TOTP app) ---------------- */
+async function assurance(): Promise<{ current: string | null; next: string | null }> {
+  const { data, error } = await sb().auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error) throw error;
+  return { current: data.currentLevel, next: data.nextLevel };
+}
+export type TwoStepDevice = { id: string; name: string; createdAt: string };
+/** The authenticator apps set up on this login. */
+export async function twoStepDevices(): Promise<TwoStepDevice[]> {
+  const { data, error } = await sb().auth.mfa.listFactors();
+  if (error) throw new Error(error.message);
+  return (data.totp ?? []).filter((f) => f.status === "verified").map((f) => ({ id: f.id, name: f.friendly_name || "Authenticator app", createdAt: f.created_at }));
+}
+/** Start adding an authenticator app: a QR code to scan and the same key as text. */
+export async function twoStepStart(): Promise<{ id: string; qr: string; secret: string }> {
+  // a setup that was started and never finished is cleared first
+  const { data: l } = await sb().auth.mfa.listFactors();
+  for (const f of (l?.all ?? []).filter((f) => f.status !== "verified")) await sb().auth.mfa.unenroll({ factorId: f.id });
+  const stamp = new Date().toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const { data, error } = await sb().auth.mfa.enroll({ factorType: "totp", issuer: "Restropi", friendlyName: `Phone · ${stamp}` });
+  if (error) throw new Error(error.message);
+  return { id: data.id, qr: data.totp.qr_code, secret: data.totp.secret };
+}
+const codeProblem = (m: string) => (/invalid|expired|incorrect/i.test(m) ? "That code didn't work. Use the newest code (it changes every 30 seconds)." : m);
+/** Finish adding an app with its first code. The session now counts as "with the code". */
+export async function twoStepConfirm(factorId: string, code: string) {
+  const { error } = await sb().auth.mfa.challengeAndVerify({ factorId, code: code.replace(/\D/g, "") });
+  if (error) throw new Error(codeProblem(error.message));
+}
+/** Sign-in step 2: the code from any of the person's apps. */
+export async function twoStepCheck(code: string) {
+  const list = await twoStepDevices();
+  if (!list.length) throw new Error("No authenticator app on this login");
+  let last = "";
+  for (const f of list) {
+    const { error } = await sb().auth.mfa.challengeAndVerify({ factorId: f.id, code: code.replace(/\D/g, "") });
+    if (!error) return;
+    last = error.message;
+  }
+  throw new Error(codeProblem(last));
+}
+export async function twoStepRemove(factorId: string) {
+  const { error } = await sb().auth.mfa.unenroll({ factorId });
+  if (error) throw new Error(/aal2|assurance/i.test(error.message) ? "Sign in again with your code, then remove it." : error.message);
+  await sb().auth.refreshSession().catch(() => undefined);
 }
 
 /** Set a new password (first sign-in, or from the profile). */
@@ -979,6 +1049,9 @@ export const adminRemoveLogo = (rid: string) => brandApi({ rid, action: "removeL
 export const adminSyncOwner = (rid: string) => brandApi({ rid, action: "syncOwner" }).catch(() => undefined);
 export const adminResetOwnerPassword = (rid: string) =>
   callFn<{ ownerEmail: string; tempPassword: string }>("admin-restaurants", { action: "reset_owner_password", rid }, true);
+/** Owner lost their phone: remove their two-step login, so they sign in with the password only. */
+export const adminResetTwoStep = (rid: string) =>
+  callFn<{ removed: number }>("admin-restaurants", { action: "reset_two_step", rid }, true);
 export const adminDelete = (rid: string, confirmName: string) =>
   callFn<{ ok: true }>("admin-restaurants", { action: "delete", rid, confirmName }, true);
 
