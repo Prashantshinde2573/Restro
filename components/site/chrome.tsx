@@ -37,8 +37,9 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
       if (scrollLocked()) return;
       const y = pageScrollY();
       setScrolled(y > 24);
-      setHidden(y > 400 && y > last + 2);
-      if (y < last - 2) setHidden(false);
+      // hide on a real move down, show on a real move up; the slow end of a smooth scroll changes nothing
+      if (y <= 120 || y < last - 2) setHidden(false);
+      else if (y > last + 2) setHidden(true);
       last = y;
     };
     on();
@@ -63,32 +64,27 @@ export function SiteNav({ onVideo = false }: { onVideo?: boolean }) {
     <>
       <header
         className={clsx(
-          "fixed inset-x-0 top-0 z-50 transition-[transform,padding] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]",
-          hidden && !open && "-translate-y-[130%]",
-          light && "text-white",
+          // a full-width bar stuck to the top: see-through on the home video, solid white everywhere else
+          "fixed inset-x-0 top-0 z-50 transition-[transform,background-color,box-shadow] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]",
+          hidden && !open && "-translate-y-full",
+          light ? "bg-transparent text-white" : "bg-surface shadow-[0_1px_0_rgb(var(--line)),0_10px_30px_-24px_rgb(16_24_20/.35)]",
         )}
       >
         {/* same width and side space as the page content below it (hero: 1400px, sections: 1240px) */}
-        <div className={clsx("mx-auto mt-3 transition-[max-width,padding] duration-500", light ? "max-w-[1400px] px-3 sm:px-8 lg:px-14" : "max-w-[1240px] px-3 sm:px-5 lg:px-8")}>
-        <div
-          className={clsx(
-            "flex items-center gap-2 rounded-full px-3 py-2 transition-all duration-500 sm:px-4",
-            light ? "border border-transparent sm:px-2 lg:px-0" : "",
-            !light && (scrolled || open ? "nav-solid" : "glass"),
-          )}
-        >
+        <div className={clsx("mx-auto transition-[max-width,padding] duration-500", light ? "max-w-[1400px] px-3 sm:px-8 lg:px-14" : "max-w-[1240px] px-3 sm:px-5 lg:px-8")}>
+        <div className={clsx("flex items-center gap-2 py-2.5 transition-all duration-500", light ? "pt-4" : "")}>
           <Link href="/" className="rounded-full px-2 py-1" aria-label="Restropi home">
             <Brand light={light} className={clsx("transition-all duration-500", light ? "h-[34px]" : "h-[28px]")} />
           </Link>
           <nav className={clsx("hidden items-center gap-1 whitespace-nowrap lg:flex", light ? "mx-auto" : "ml-6")} aria-label="Main">
             {links.map((l) => (
-              <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : path === l.href ? "bg-white/70 font-semibold text-ink" : "text-ink/65 hover:bg-white/60 hover:text-ink")}>
+              <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined} className={clsx("group relative rounded-full px-3.5 py-2 text-[14.5px] transition", light ? "text-white/85 hover:bg-white/15 hover:text-white" : path === l.href ? "bg-sunken font-semibold text-ink" : "text-ink/65 hover:bg-sunken hover:text-ink")}>
                 {l.label}
               </Link>
             ))}
           </nav>
           <div className={clsx("flex items-center gap-1.5", !light && "ml-auto", light && "max-lg:ml-auto")}>
-            <Link href="/login" className={clsx("hidden whitespace-nowrap rounded-full px-4 py-2 text-[14.5px] font-semibold transition sm:block", light ? "hover:bg-white/15" : "hover:bg-white/60")}>Sign in</Link>
+            <Link href="/login" className={clsx("hidden whitespace-nowrap rounded-full px-4 py-2 text-[14.5px] font-semibold transition sm:block", light ? "hover:bg-white/15" : "hover:bg-sunken")}>Sign in</Link>
             <Magnetic>
               <Link href="/#contact" className={clsx(
                   "group hidden items-center gap-2 whitespace-nowrap rounded-full py-2 pl-4 pr-3 text-[14.5px] font-semibold text-white transition sm:flex",
