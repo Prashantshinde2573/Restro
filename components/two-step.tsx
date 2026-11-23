@@ -154,7 +154,7 @@ export function TwoStepCard({ required = false, onToast }: { required?: boolean;
   if (adding)
     return (
       <div className="rounded-group bg-sunken/50 p-4">
-        <TwoStepSetup onDone={() => { setAdding(false); void load(); onToast?.(on ? "Phone added" : "Two-step login is on"); }} />
+        <TwoStepSetup onDone={() => { setAdding(false); void load(); onToast?.(on ? "Phone added" : "Two-step login is on"); void recheckSignIn(); }} />
         <button onClick={() => setAdding(false)} className="mt-3 block w-full text-center text-[14px] font-semibold text-muted">Cancel</button>
       </div>
     );
