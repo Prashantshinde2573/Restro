@@ -192,6 +192,10 @@ export function startCloud(onSignedIn: (s: CloudState) => void) {
   recheck = async () => {
     lastUid = null;
     const { data } = await sb().auth.getSession();
+    // supabase-js doesn't pass the new token to the live connection after the code: do it here,
+    // or the live lists keep the old pass and the server refuses them
+    if (data.session) await sb().realtime.setAuth(data.session.access_token);
+    disconnect();
     await handle(data.session);
   };
   sb().auth.onAuthStateChange((event, session) => {
@@ -233,25 +237,30 @@ async function resolveUser(session: Session): Promise<CloudState> {
   if (meta.rid) return { ...base, status: "ready", role: "staff", rid: meta.rid, memberId: meta.member_id ?? "", mustChangePassword: false };
   const { data, error } = await sb().rpc("whoami");
   if (error) throw error;
-  const w = data as { superAdmin: boolean; restaurant: { id: string; status: string } | null };
+  const w = data as { superAdmin: boolean; restaurant: { id: string; status: string } | null; aal?: string; hasFactor?: boolean };
+  // Two-step login: the server's answer (the token it just checked, and the phones it knows) decides,
+  // never this browser's copy of the account, which can be out of date.
+  const a = await twoStepState(w);
   if (w.superAdmin) {
     // the super admin always needs the authenticator code (set it up first if it isn't yet)
-    const a = await assurance();
-    if (a.current !== "aal2") return { ...base, status: "needsMfa", role: "superadmin", mfa: a.next === "aal2" ? "verify" : "enroll" };
+    if (!a.passed) return { ...base, status: "needsMfa", role: "superadmin", mfa: a.hasFactor ? "verify" : "enroll" };
     return { ...base, status: "ready", role: "superadmin" };
   }
   if (!w.restaurant) return { ...base, status: "needsOnboarding" };
   // owners: only when they turned two-step login on
-  const a = await assurance();
-  if (a.next === "aal2" && a.current !== "aal2") return { ...base, status: "needsMfa", role: "owner", rid: w.restaurant.id, memberId: "owner", mfa: "verify" };
+  if (a.hasFactor && !a.passed) return { ...base, status: "needsMfa", role: "owner", rid: w.restaurant.id, memberId: "owner", mfa: "verify" };
   return { ...base, status: "ready", role: "owner", rid: w.restaurant.id, memberId: "owner" };
 }
 
 /* ---------------- two-step login (Google Authenticator or any TOTP app) ---------------- */
-async function assurance(): Promise<{ current: string | null; next: string | null }> {
-  const { data, error } = await sb().auth.mfa.getAuthenticatorAssuranceLevel();
+/** Did this session pass the code, and does the person have a phone set up? (server first) */
+async function twoStepState(w: { aal?: string; hasFactor?: boolean }): Promise<{ passed: boolean; hasFactor: boolean }> {
+  if (typeof w.aal === "string" && typeof w.hasFactor === "boolean") return { passed: w.aal === "aal2", hasFactor: w.hasFactor };
+  // older server: ask Supabase with a fresh copy of the account (its phones), not the stored one
+  const { data: s } = await sb().auth.getSession();
+  const { data, error } = await sb().auth.mfa.getAuthenticatorAssuranceLevel(s.session?.access_token);
   if (error) throw error;
-  return { current: data.currentLevel, next: data.nextLevel };
+  return { passed: data.currentLevel === "aal2", hasFactor: data.nextLevel === "aal2" };
 }
 export type TwoStepDevice = { id: string; name: string; createdAt: string };
 /** The authenticator apps set up on this login. */
@@ -263,9 +272,11 @@ export async function twoStepDevices(): Promise<TwoStepDevice[]> {
 /** Start adding an authenticator app: a QR code to scan and the same key as text. */
 export async function twoStepStart(): Promise<{ id: string; qr: string; secret: string }> {
   // a setup that was started and never finished is cleared first
+  // a setup left unfinished more than 10 minutes ago is cleared (a fresh one may be another device's)
   const { data: l } = await sb().auth.mfa.listFactors();
-  for (const f of (l?.all ?? []).filter((f) => f.status !== "verified")) await sb().auth.mfa.unenroll({ factorId: f.id });
-  const stamp = new Date().toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const old = Date.now() - 10 * 60_000;
+  for (const f of (l?.all ?? []).filter((f) => f.status !== "verified" && Date.parse(f.created_at) < old)) await sb().auth.mfa.unenroll({ factorId: f.id });
+  const stamp = `${new Date().toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · ${Math.random().toString(36).slice(2, 5)}`;
   const { data, error } = await sb().auth.mfa.enroll({ factorType: "totp", issuer: "Restropi", friendlyName: `Phone · ${stamp}` });
   if (error) throw new Error(error.message);
   return { id: data.id, qr: data.totp.qr_code, secret: data.totp.secret };

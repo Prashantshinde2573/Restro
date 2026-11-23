@@ -25,6 +25,7 @@ import {
   adminList,
   adminResetOwnerPassword,
   adminResetTwoStep,
+  recheckSignIn,
   adminUpdate,
   cloudSignOut,
   useCloud,
@@ -107,6 +108,8 @@ export default function AdminPage() {
     try {
       setList(await adminList());
     } catch (e) {
+      // the server says this session hasn't passed the two-step code: show the code screen
+      if (/not allowed/i.test((e as Error).message)) return void recheckSignIn();
       setLoadErr((e as Error).message);
     }
   }, []);
@@ -716,6 +719,7 @@ function RestaurantSheet({
         await fn();
         onChanged(msg);
       } catch (e) {
+        if (/not allowed/i.test((e as Error).message)) return void recheckSignIn();
         setErr((e as Error).message);
       } finally {
         setBusy(false);
