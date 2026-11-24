@@ -59,7 +59,12 @@ async function confirm(intentId: string, rzp?: { orderId: string; paymentId: str
  *  cancelled the guest closed the checkout
  *  failed    the gateway said no, or it couldn't start
  */
-export async function payOnline(orderIds: string[], info: { name: string; phone?: string; guestName?: string }): Promise<OnlineResult> {
+export async function payOnline(
+  orderIds: string[],
+  info: { name: string; phone?: string; guestName?: string },
+  /** called once the payment exists on the gateway: the page saves it, so a reload (or coming back from the UPI app) can still pick it up */
+  onStart?: (s: { intentId: string; amount: number }) => void,
+): Promise<OnlineResult> {
   let start: PayStart;
   try {
     start = await payCreate(orderIds);
@@ -67,6 +72,8 @@ export async function payOnline(orderIds: string[], info: { name: string; phone?
     return { status: "failed", amount: 0, message: (e as Error).message };
   }
   const amount = start.amount;
+  if (start.alreadyPaid) return { status: "paid", amount, intentId: start.intentId };
+  onStart?.({ intentId: start.intentId, amount });
   try {
     await loadScript(SDK[start.provider]);
   } catch (e) {
@@ -99,8 +106,8 @@ export async function payOnline(orderIds: string[], info: { name: string; phone?
       const s = await confirm(start.intentId, { orderId: outcome.ok.razorpay_order_id, paymentId: outcome.ok.razorpay_payment_id, signature: outcome.ok.razorpay_signature });
       return { status: s === "paid" ? "paid" : s === "failed" ? "failed" : "pending", amount, intentId: start.intentId };
     }
-    // closed the window: a UPI payment may still have gone through, so ask once
-    const s = await confirm(start.intentId, undefined, 1);
+    // closed the window: a UPI payment may still be settling, so ask a few times (the page keeps watching after this)
+    const s = await confirm(start.intentId, undefined, 3);
     return { status: s === "paid" ? "paid" : "cancelled", amount, intentId: start.intentId };
   }
 
@@ -108,7 +115,7 @@ export async function payOnline(orderIds: string[], info: { name: string; phone?
   if (!Cf || !start.sessionId) return { status: "failed", amount, intentId: start.intentId, message: "Couldn't open the payment page" };
   const cf = Cf({ mode: start.mode === "live" ? "production" : "sandbox" });
   const r: { error?: { message?: string }; paymentDetails?: unknown } = await cf.checkout({ paymentSessionId: start.sessionId, redirectTarget: "_modal" }).catch(() => ({ error: { message: "closed" } }));
-  const s = await confirm(start.intentId, undefined, r.paymentDetails ? 8 : 1);
+  const s = await confirm(start.intentId, undefined, r.paymentDetails ? 8 : 3);
   if (s === "paid") return { status: "paid", amount, intentId: start.intentId };
   if (r.paymentDetails) return { status: "pending", amount, intentId: start.intentId };
   return { status: s === "failed" ? "failed" : "cancelled", amount, intentId: start.intentId };

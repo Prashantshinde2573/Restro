@@ -35,7 +35,7 @@ import { gstRate, halfGstLabel, inr, minutesSince } from "@/lib/format";
 import { capacity, isShared, joinedName, tableActions, useAllTables } from "@/lib/tables";
 import { callActions, cloudConfigured, currentOutletId, guestCanCancel, feedbackActions, liveCalls, useCalls, guestActions, orderActions, orderingOpen, sessionActions, useAccount, useAllMenu, useCategories, useFeature, useMenu, useOrders, useSettings } from "@/lib/live";
 import { useReady } from "@/lib/store";
-import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, reloadLists, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
+import { cloudSignOut, ensureGuest, gatewayFor, guestCoupon, guestCouponsOn, guestStamps, payStatus, reloadLists, useCloud, type GatewayInfo, type GuestCoupon } from "@/lib/cloud";
 import { payOnline } from "@/lib/gateway-checkout";
 import type { MenuItem, Order, Payment, Stamp } from "@/lib/types";
 
@@ -84,6 +84,8 @@ function StatusTrack({ status, lang }: { status: Order["status"]; lang: Lang }) 
 // While the bill is being settled by staff (cash, card, or the cash half of "Cash + UPI").
 type Waiting = { ids: string[]; kind: "upi" | "cash" | "card" | "mixed"; amount: number; upiPart?: number; payFirst: boolean; claimSeen?: boolean; online?: boolean; rejects?: number };
 type Thanks = { payments: Payment[]; orderNo?: number; orderId?: string; token?: boolean };
+/** An online payment that was opened on the gateway and isn't settled on this phone yet. */
+type InFlight = { intentId: string; ids: string[]; amount: number; payFirst: boolean; at: number };
 /** One bill, one line per way of paying: the shares on each order added up (UPI ₹100 + UPI ₹58 → UPI ₹158). */
 const mergePayments = (ps: Payment[]) => {
   const by = new Map<string, Payment>();
@@ -485,9 +487,11 @@ export default function GuestOrder() {
     lastBill.current = billState;
     const openIds = lastOpen.current;
     if (payNow || counter || billState !== "paid" || (was !== "open" && was !== "sent")) return;
+    // Only the orders that were on the bill here. An order that was cancelled / rejected (or missing
+    // for a moment) also empties the bill: that must never open an earlier bill's thank-you.
     const settled = paidOrders.filter((o) => openIds.includes(o.id));
-    const pays = (settled.length ? settled : paidOrders).flatMap((o) => o.payments ?? []);
-    finishVisit(pays, (settled[0] ?? paidOrders[0])?.number);
+    if (!settled.length) return;
+    finishVisit(settled.flatMap((o) => o.payments ?? []), settled[0].number);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billState]);
   useEffect(() => {
@@ -566,6 +570,69 @@ export default function GuestOrder() {
       toast(tx(lang, "The restaurant hasn't received this payment yet. Please check and pay again, or ask our staff.", "रेस्टॉरंटला अजून हे पैसे मिळालेले नाहीत. तपासून पुन्हा भरा, किंवा स्टाफला विचारा."));
     }
   }, [waiting, allOrders, ordersReady]);
+  // ---- an online payment still open on the gateway: keep asking the server until it's paid ----
+  // Covers: the browser reloaded while the guest was in the UPI app, the checkout was closed before
+  // the bank answered, or the bank took longer than the checkout waited.
+  const flightKey = `restropi.payintent.${table}`;
+  const [inFlight, setInFlightState] = useState<InFlight | null>(null);
+  const setInFlight = useCallback(
+    (f: InFlight | null) => {
+      setInFlightState(f);
+      try {
+        if (f) localStorage.setItem(flightKey, JSON.stringify(f));
+        else localStorage.removeItem(flightKey);
+      } catch {}
+    },
+    [flightKey],
+  );
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(flightKey);
+      const f = raw ? (JSON.parse(raw) as InFlight) : null;
+      if (f?.intentId && Date.now() - f.at < 20 * 60_000) setInFlightState(f);
+      else if (raw) localStorage.removeItem(flightKey);
+    } catch {}
+  }, [flightKey]);
+  useEffect(() => {
+    if (!inFlight || onlineBusy || cloud.status !== "ready") return; // the checkout itself is asking right now
+    let live = true;
+    let timer = 0;
+    const tick = async () => {
+      if (!live) return;
+      const age = Date.now() - inFlight.at;
+      if (age > 20 * 60_000) return setInFlight(null);
+      try {
+        const r = await payStatus(inFlight.intentId);
+        if (!live) return;
+        if (r.status === "failed") return setInFlight(null);
+        if (r.status === "paid") {
+          setInFlight(null);
+          if (r.note) {
+            // the money came in after this bill was settled or cancelled: the owner sees it in "refund" payments
+            toast(tx(lang, "Your online payment came in after the bill was closed. The restaurant will refund it.", "बिल बंद झाल्यावर ऑनलाइन पैसे आले. रेस्टॉरंट ते परत करेल."));
+            return;
+          }
+          if (inFlight.payFirst) {
+            setWaiting((w) => w ?? { ids: inFlight.ids, kind: "upi", amount: inFlight.amount, payFirst: true, online: true });
+            setConfirmed((c) => c ?? inFlight.ids[0]);
+          } else {
+            setWaiting((w) => w ?? { ids: inFlight.ids, kind: "upi", amount: inFlight.amount, payFirst: false, online: true });
+          }
+          void reloadLists(["orders"]).catch(() => {});
+          return;
+        }
+      } catch {
+        /* no network for a moment: ask again */
+      }
+      timer = window.setTimeout(tick, age < 3 * 60_000 ? 5000 : 15000);
+    };
+    void tick();
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [inFlight, onlineBusy, cloud.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // While the restaurant is confirming a payment, check every few seconds (not only every 20 s),
   // so the thank-you opens right after the owner taps "Received".
   const settling = (!!waiting && !waiting.payFirst) || billState === "sent";
@@ -809,8 +876,12 @@ export default function GuestOrder() {
     const lines = cart;
     const usedCoupon = cartOff > 0 ? coupon : null;
     const o = sendOrder(guest, { status: "new", payPreference: "online", ...(usedCoupon ? { wantsCoupon: usedCoupon.code } : {}) });
-    const r = await payOnline([o.id], { name: settings.name, phone: guest.phone, guestName: guest.name });
+    const r = await payOnline([o.id], { name: settings.name, phone: guest.phone, guestName: guest.name }, (s) =>
+      setInFlight({ intentId: s.intentId, ids: [o.id], amount: s.amount, payFirst: true, at: Date.now() }),
+    );
     setOnlineBusy(false);
+    // paid: done. pending: the watcher keeps asking. not paid: the order is taken back, nothing to watch.
+    if (r.status !== "pending") setInFlight(null);
     if (r.status === "paid" || r.status === "pending") {
       if (usedCoupon) setCoupon(null);
       setPayOpen(false);
@@ -888,8 +959,12 @@ export default function GuestOrder() {
     orderActions.askReward(billIds, rewardAmt > 0);
     orderActions.askCoupon(billIds, couponAmt > 0 ? coupon!.code : undefined);
     const ids = [...billIds];
-    const r = await payOnline(ids, { name: settings.name, phone: guest?.phone, guestName: guest?.name });
+    const r = await payOnline(ids, { name: settings.name, phone: guest?.phone, guestName: guest?.name }, (s) =>
+      setInFlight({ intentId: s.intentId, ids, amount: s.amount, payFirst: false, at: Date.now() }),
+    );
     setOnlineBusy(false);
+    // paid / failed: nothing more to watch. pending or closed early: the bank may still send it, keep asking.
+    if (r.status === "paid" || r.status === "failed") setInFlight(null);
     if (r.status === "paid" || r.status === "pending") {
       if (t && party) tableActions.update(t.id, party.id, { status: "billing" });
       setWaiting({ ids, kind: "upi", amount: r.amount || billTotal - tip, payFirst: false, online: true, rejects: rejectCount(allOrders.filter((o) => ids.includes(o.id))) });

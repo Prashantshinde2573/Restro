@@ -1,0 +1,6 @@
+-- Applied 24 Nov 2026 on the live database.
+-- public.svc_gateway_paid(): the order's payment log and payments show the amount rounded to paise
+-- ("Paid online ₹210" instead of "₹210.0000000000000000"). Only these two expressions changed:
+--   'Paid online ₹' || trim_scale(round(each_share, 2))
+--   jsonb_build_object('method', meth, 'amount', round(each_share, 2))
+-- See the live function for the full body.

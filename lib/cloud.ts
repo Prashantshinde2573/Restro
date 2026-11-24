@@ -1219,7 +1219,7 @@ export const gatewayOff = (outletId: string) => callFn<{ ok: true }>("gateway-se
 /** The address the owner pastes into the gateway's webhook settings. */
 export const gatewayWebhookUrl = (provider: "razorpay" | "cashfree", outletId: string) =>
   `${URL_}/functions/v1/pay-webhook?p=${provider}&r=${encodeURIComponent(stateStore.get().rid ?? "")}&o=${encodeURIComponent(outletId)}`;
-export type PayStart = { intentId: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; keyId: string; orderId: string; sessionId?: string; amount: number };
+export type PayStart = { intentId: string; provider: "razorpay" | "cashfree"; mode: "test" | "live"; keyId: string; orderId: string; sessionId?: string; amount: number; /** an earlier try on this bill went through after all: nothing more to pay */ alreadyPaid?: boolean };
 /** Guest: open a payment for these orders. The amount comes from the server. */
 export async function payCreate(orderIds: string[]): Promise<PayStart> {
   await flushWrites(); // the server reads the orders (coupon, stamp card) from the database
