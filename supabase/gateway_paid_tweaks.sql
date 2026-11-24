@@ -4,3 +4,8 @@
 --   'Paid online ₹' || trim_scale(round(each_share, 2))
 --   jsonb_build_object('method', meth, 'amount', round(each_share, 2))
 -- See the live function for the full body.
+
+-- Applied 24 Nov 2026: a table bill paid online that frees the group also marks the table to clean
+-- (the same as a bill closed in the app):
+--   set data = t.data || jsonb_build_object('parties', left_parties)
+--                     || jsonb_build_object('cleaning', coalesce(t.data->'cleaning', jsonb_build_object('since', ts)))

@@ -6,7 +6,7 @@ import { createStore } from "./store";
 import { useMemo } from "react";
 import { logActivity, useCurrentOutlet, useOrders } from "./live";
 import { orderTotal } from "./format";
-import type { Order, Party, Table, TableStatus } from "./types";
+import type { Order, Party, Table, TableCleaning, TableStatus } from "./types";
 
 const rank: Record<Party["status"], number> = { seated: 1, ordered: 2, billing: 3 };
 
@@ -173,15 +173,39 @@ export const tableActions = {
     const t = all().find((x) => x.id === tableId);
     return t?.parties.find((p) => p.code === code && (!p.codeExpiresAt || new Date(p.codeExpiresAt).getTime() > Date.now()));
   },
-  /** Party paid and left. When the last party leaves, the next guests start a new visit. */
-  close(tableId: string, partyId: string, why = "") {
+  /** Party paid and left. When the last party leaves, the next guests start a new visit. `paid`: they ate here, so the table needs cleaning. */
+  close(tableId: string, partyId: string, why = "", opts: { paid?: boolean } = {}) {
     const t = all().find((x) => x.id === tableId);
-    if (t?.parties.some((p) => p.id === partyId))
-      logActivity("table", `${t.name}${t.parties.length > 1 ? ` · party ${partyId}` : ""} is free${t.parties.length > 1 ? "d" : ""}${why ? ` · ${why}` : ""}`, t.outletId);
+    const left = !!t?.parties.some((p) => p.id === partyId);
+    if (left)
+      logActivity("table", `${t!.name}${t!.parties.length > 1 ? ` · party ${partyId}` : ""} is free${t!.parties.length > 1 ? "d" : ""}${why ? ` · ${why}` : ""}`, t!.outletId);
     patch(tableId, (x) => {
       const parties = x.parties.filter((p) => p.id !== partyId);
-      return { ...x, parties, visitId: parties.length ? x.visitId : `${x.id}-${Date.now().toString(36)}` };
+      const cleaning = left && opts.paid ? (x.cleaning ?? { since: new Date().toISOString() }) : x.cleaning;
+      return { ...x, parties, cleaning, visitId: parties.length ? x.visitId : `${x.id}-${Date.now().toString(36)}` };
     });
+  },
+  /** Staff: this table needs cleaning (anyone free can do it). */
+  needsCleaning(tableId: string) {
+    const t = all().find((x) => x.id === tableId);
+    if (!t || t.cleaning) return;
+    patch(tableId, (x) => ({ ...x, cleaning: { since: new Date().toISOString() } }));
+    logActivity("table", `${t.name} needs cleaning`, t.outletId);
+  },
+  /** Send one team member to clean it (they get a notification). */
+  assignCleaning(tableId: string, member: { id: string; name: string }, by: string) {
+    const t = all().find((x) => x.id === tableId);
+    if (!t) return;
+    const cleaning: TableCleaning = { since: t.cleaning?.since ?? new Date().toISOString(), to: member.id, toName: member.name, by };
+    patch(tableId, (x) => ({ ...x, cleaning }));
+    logActivity("table", `${member.name} will clean ${t.name}${by && by !== member.name ? ` · sent by ${by}` : ""}`, t.outletId);
+  },
+  /** The table is clean again. */
+  cleaned(tableId: string, by: string) {
+    const t = all().find((x) => x.id === tableId);
+    if (!t?.cleaning) return;
+    patch(tableId, (x) => ({ ...x, cleaning: undefined }));
+    logActivity("table", `${t.name} cleaned${by ? ` · ${by}` : ""}`, t.outletId);
   },
   /** A big group: push a free table up against this one. Its seats count here until they leave. */
   join(mainId: string, otherId: string) {
