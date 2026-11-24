@@ -4,7 +4,7 @@
 // (new order, waiter call, kitchen, bill, payment, ready, review). Kept on this device.
 import { createStore } from "@/lib/store";
 
-export type SoundEvent = "order" | "waiter" | "kitchen" | "bill" | "payment" | "ready" | "review";
+export type SoundEvent = "order" | "waiter" | "kitchen" | "bill" | "payment" | "ready" | "review" | "clean";
 export type SoundId = "chime" | "ding" | "bell" | "pop" | "cash" | "alert" | "soft" | "none";
 
 export const SOUND_EVENTS: { id: SoundEvent; label: string; hint: string }[] = [
@@ -15,6 +15,7 @@ export const SOUND_EVENTS: { id: SoundEvent; label: string; hint: string }[] = [
   { id: "payment", label: "Payment", hint: "A payment to confirm, or one not received" },
   { id: "ready", label: "Ready to serve", hint: "The kitchen marked an order ready" },
   { id: "review", label: "Low rating", hint: "A guest gave 3 stars or less" },
+  { id: "clean", label: "Table to clean", hint: "Guests left a table, or you were sent to clean one" },
 ];
 export const SOUNDS: { id: SoundId; label: string }[] = [
   { id: "chime", label: "Chime" },
@@ -26,7 +27,7 @@ export const SOUNDS: { id: SoundId; label: string }[] = [
   { id: "soft", label: "Soft" },
   { id: "none", label: "No sound" },
 ];
-const DEFAULTS: Record<SoundEvent, SoundId> = { order: "chime", waiter: "alert", kitchen: "bell", bill: "ding", payment: "cash", ready: "pop", review: "soft" };
+const DEFAULTS: Record<SoundEvent, SoundId> = { order: "chime", waiter: "alert", kitchen: "bell", bill: "ding", payment: "cash", ready: "pop", review: "soft", clean: "ding" };
 
 /* ---- saved choices ---- */
 const SOUND_KEY = "restropi.sound";

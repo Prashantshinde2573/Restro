@@ -174,6 +174,15 @@ export interface Table {
   // Staff pushed this table up against another one for a big group: its seats count for that
   // table (the "main" one, which holds the guests and the bill) until the group leaves.
   joinedTo?: string;
+  // The table needs cleaning: set when a group leaves after paying (or by staff), cleared with "Cleaned".
+  // to / toName: the team member sent to clean it; by: who sent them.
+  cleaning?: TableCleaning;
+}
+export interface TableCleaning {
+  since: string; // ISO
+  to?: string;
+  toName?: string;
+  by?: string;
 }
 
 export type OrderType = "dine-in" | "takeaway" | "delivery";

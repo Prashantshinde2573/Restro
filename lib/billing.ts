@@ -26,7 +26,7 @@ export function closeBill(opts: {
 }): "paid" | "waiting" {
   const r = opts.ids.length ? orderActions.settle(opts.ids, opts.payments, opts.by, { discount: opts.discount, coupon: opts.coupon, discounts: opts.discounts }) : "paid";
   if (opts.tableId && opts.partyId) {
-    if (r === "paid") tableActions.close(opts.tableId, opts.partyId, "bill paid");
+    if (r === "paid") tableActions.close(opts.tableId, opts.partyId, "bill paid", { paid: true });
     else tableActions.update(opts.tableId, opts.partyId, { status: "billing", paymentPending: true });
   }
   return r;
@@ -38,7 +38,7 @@ function freeIfSettled(o: Order | undefined) {
   const pid = o.partyId ?? "A";
   const t = getTable(o.tableId);
   if (!t?.parties.some((p) => p.id === pid)) return;
-  if (partyOpenOrders(o.tableId, pid).length === 0) tableActions.close(o.tableId, pid, "payment confirmed");
+  if (partyOpenOrders(o.tableId, pid).length === 0) tableActions.close(o.tableId, pid, "payment confirmed", { paid: true });
 }
 
 export function confirmPayment(claimId: string) {

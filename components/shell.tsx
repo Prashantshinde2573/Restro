@@ -19,6 +19,7 @@ import { OrderAlerts } from "./order-alerts";
 import { GatewayBooking } from "./gateway-booking";
 import { WaAuto } from "./wa-auto";
 import { CallAlerts, WaiterCallBar } from "./waiter-calls";
+import { CleanAlerts } from "./table-cleaning";
 import { TableJanitor } from "./table-janitor";
 import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
@@ -695,6 +696,7 @@ function AppFrame({ children }: { children: ReactNode }) {
             <GatewayBooking />
             <WaAuto />
             <CallAlerts />
+            <CleanAlerts />
             <TableJanitor />
             <WaiterCallBar />
             <HelpSheet />

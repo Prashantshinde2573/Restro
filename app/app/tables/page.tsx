@@ -4,7 +4,7 @@ import { ClaimCheck } from "@/components/claim-check";
 import { useCloud } from "@/lib/cloud";
 import clsx from "clsx";
 import Link from "next/link";
-import { Check, Clock, LayoutGrid, Link2, LogOut, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, Unlink, Users, UserPlus } from "lucide-react";
+import { Check, Clock, LayoutGrid, Link2, LogOut, Merge, Minus, Plus, Printer, QrCode, ReceiptText, Settings2, Smartphone, SprayCan, Unlink, Users, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Button, Empty, Hint, Page, PageHeader, Pill, Segmented, Sheet } from "@/components/ui";
 import { ScanQr } from "@/components/qr";
@@ -17,6 +17,7 @@ import { counterPref, getOrders, payingOnline, orderActions, paymentsText, useCa
 import { closeBill, confirmPayment, rejectPayment } from "@/lib/billing";
 import { capacity, isShared, joinedName, joinedOf, oldestSince, seatsFree, seatsTaken, tableActions, tableState, tableTotal, useLiveTables } from "@/lib/tables";
 import { TableManager } from "@/components/table-manager";
+import { CleanCard, CleanSheet } from "@/components/table-cleaning";
 import { CookingLoader } from "@/components/loader";
 import { useReady } from "@/lib/store";
 import type { Party, Table, TableStatus } from "@/lib/types";
@@ -51,6 +52,7 @@ export default function TablesPage() {
   const [pay, setPay] = useState<{ tableId: string; party: Party; label: string } | null>(null);
   const [manage, setManage] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [cleanId, setCleanId] = useState<string | null>(null);
   const me = useMe();
   const outlet = useCurrentOutlet();
   const canManage = useCan("outletSettings");
@@ -65,6 +67,7 @@ export default function TablesPage() {
   const shown = tables.filter((t) => zone === "all" || t.zone === zone);
   const busy = tables.filter((t) => t.parties.length).length;
   const shared = tables.filter(isShared).length;
+  const toClean = tables.filter((t) => t.cleaning).length;
   const pending = tables.flatMap((t) => t.parties.filter((p) => p.pendingApproval).map((p) => ({ t, p })));
 
   const partyOrders = (tableId: string, partyId: string) =>
@@ -86,7 +89,7 @@ export default function TablesPage() {
     <>
       <PageHeader
         title="Tables"
-        subtitle={tables.length ? `${outlet.name ? `${outlet.name} · ` : ""}${busy} busy · ${tables.filter((t) => tableState(t) === "free").length} free${shared ? ` · ${shared} shared` : ""}` : outlet.name}
+        subtitle={tables.length ? `${outlet.name ? `${outlet.name} · ` : ""}${busy} busy · ${tables.filter((t) => tableState(t) === "free").length} free${shared ? ` · ${shared} shared` : ""}${toClean ? ` · ${toClean} to clean` : ""}` : outlet.name}
         actions={
           <div className="flex gap-2">
             {tables.length > 0 && (me?.role === "owner" || me?.role === "subadmin") && <Link href="/print/tables"><Button variant="plain" size="sm"><Printer size={16} /> QR codes</Button></Link>}
@@ -173,11 +176,13 @@ export default function TablesPage() {
                           ))}
                         </span>
                       ) : (
-                        <span className={clsx("mt-2 h-2.5 w-2.5 rounded-full", s.dot, st === "billing" && "animate-pulse")} />
+                        <span className={clsx("mt-2 h-2.5 w-2.5 rounded-full", st === "free" && t.cleaning ? "bg-rose" : s.dot, st === "billing" && "animate-pulse")} />
                       )}
                     </div>
                     <div className="text-[12px] leading-tight text-muted lg:text-[13px]">
-                      {st === "free" && <span className="flex items-center gap-1"><Users size={12} /> {cap} seats</span>}
+                      {t.cleaning ? (
+                        <span className="flex items-center gap-1 font-semibold text-rose"><SprayCan size={12} /> <span className="truncate">{t.cleaning.toName ? `Clean · ${t.cleaning.toName}` : "To clean"}</span></span>
+                      ) : st === "free" && <span className="flex items-center gap-1"><Users size={12} /> {cap} seats</span>}
                       {st === "reserved" && t.reservedAt && <span>{timeAgo(t.reservedAt).replace("in ", "In ")}</span>}
                       {t.parties.length > 0 && (
                         <>
@@ -196,6 +201,7 @@ export default function TablesPage() {
               {(Object.keys(statusStyle) as TableStatus[]).map((k) => (
                 <span key={k} className="flex items-center gap-1.5"><span className={clsx("h-2 w-2 rounded-full", statusStyle[k].dot)} />{statusStyle[k].label}</span>
               ))}
+              <span className="flex items-center gap-1.5"><SprayCan size={12} className="text-rose" />To clean</span>
               <span className="flex items-center gap-1.5"><span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-ink text-[8px] font-bold text-canvas">A</span>Shared table, one bill per party</span>
             </div>
           </div>
@@ -213,6 +219,8 @@ export default function TablesPage() {
               {sel.zone && <span>· {sel.zone}</span>}
               {isShared(sel) && <Pill tone="neutral">{sel.parties.length} bills</Pill>}
             </div>
+
+            <CleanCard table={sel} onChange={() => setCleanId(sel.id)} />
 
             {sel.parties.length === 0 && (
               <Button size="lg" className="w-full" onClick={() => openSeat(sel)}><Users size={18} /> Seat guests</Button>
@@ -312,6 +320,11 @@ export default function TablesPage() {
                   <Link2 size={15} /> Join a table
                 </Button>
               )}
+              {!sel.cleaning && (
+                <Button size="sm" variant="plain" onClick={() => setCleanId(sel.id)} title="Send someone to clean this table">
+                  <SprayCan size={15} /> Clean table
+                </Button>
+              )}
               <Button size="sm" variant="plain" onClick={() => setQr(true)}><QrCode size={15} /> Table QR</Button>
             </div>
           </div>
@@ -391,6 +404,8 @@ export default function TablesPage() {
           <a href={qrUrl(sel)} target="_blank" rel="noreferrer" className="mt-4 text-[14px] font-semibold text-jade">Preview what guests see</a>
         </div>
       </Sheet>
+
+      <CleanSheet table={tables.find((t) => t.id === cleanId) ?? null} onClose={() => setCleanId(null)} />
 
       <TableManager open={manage} onClose={() => setManage(false)} />
 

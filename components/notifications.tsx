@@ -4,7 +4,7 @@
 // payments to confirm), and "Needs you now" on the home screen.
 import clsx from "clsx";
 import Link from "next/link";
-import { Bell, BellOff, BellRing, CalendarClock, ChefHat, Check, ChevronDown, Clock3, Play, ReceiptText, Smartphone, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, BellOff, BellRing, CalendarClock, ChefHat, Check, ChevronDown, Clock3, Play, ReceiptText, Smartphone, SprayCan, Star, UtensilsCrossed, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createStore } from "@/lib/store";
@@ -15,12 +15,13 @@ import { inr, timeAgo } from "@/lib/format";
 import { Button, Sheet } from "./ui";
 import { useToast } from "./toast";
 import { WaiterCallCards, useOutletCalls } from "./waiter-calls";
+import { CleanNeedsCards, useTablesToClean } from "./table-cleaning";
 import { playSound, setSound, setSoundFor, SOUND_EVENTS, SOUNDS, useSound, useSoundPicks, type SoundId } from "./sound";
 
 export interface Notice {
   id: string;
   at: string;
-  kind: "order" | "call" | "bill" | "claim" | "ready" | "kitchen" | "review" | "plan";
+  kind: "order" | "call" | "bill" | "claim" | "ready" | "kitchen" | "review" | "plan" | "clean";
   title: string;
   body: string;
   href: string;
@@ -36,7 +37,7 @@ export function pushNotice(n: Omit<Notice, "id" | "at">) {
   noticeStore.set([item, ...noticeStore.get()].slice(0, 60));
 }
 
-const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star, plan: CalendarClock };
+const icon = { order: ReceiptText, call: BellRing, bill: Smartphone, claim: Clock3, ready: UtensilsCrossed, kitchen: ChefHat, review: Star, plan: CalendarClock, clean: SprayCan };
 
 /** Bell with the unread count; opens the list. */
 export function NoticeBell({ dark = false }: { dark?: boolean }) {
@@ -83,7 +84,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
                   onClick={markAll}
                   className="flex items-start gap-3 border-b border-line/80 px-4 py-3 last:border-0 hover:bg-sunken/40"
                 >
-                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "plan" ? "bg-rose-soft text-rose" : n.kind === "claim" || n.kind === "review" || n.kind === "call" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
+                  <span className={clsx("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full", n.kind === "plan" || n.kind === "clean" ? "bg-rose-soft text-rose" : n.kind === "claim" || n.kind === "review" || n.kind === "call" ? "bg-saffron-soft text-saffron" : n.kind === "bill" ? "bg-sky-soft text-sky" : "bg-jade-soft text-jade")}>
                     <I size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -122,12 +123,14 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
   const bills = canOrders ? orders.filter((o) => o.payPreference && o.payPreference !== "online" && !o.payClaim && o.status !== "paid" && o.status !== "cancelled") : [];
   const claims = canConfirm ? pendingClaims(orders) : [];
   const calls = useOutletCalls();
-  if (!toAccept.length && !bills.length && !claims.length && !calls.length) return null;
+  const toClean = useTablesToClean();
+  if (!toAccept.length && !bills.length && !claims.length && !calls.length && !toClean.length) return null;
   return (
     <section className={clsx("rounded-[24px] bg-saffron-soft/70", compact ? "p-3" : "p-4 lg:p-5")}>
       <h2 className={clsx("font-semibold tracking-tight", compact ? "px-1 text-[15px]" : "text-[18px]")}>Needs you now</h2>
       <div className="mt-2 space-y-2">
         <WaiterCallCards calls={calls} />
+        <CleanNeedsCards tables={toClean} onGo={onGo} />
         {claims.map((c) => {
           const total = c.claim.payments.reduce((s, p) => s + p.amount, 0);
           return (
