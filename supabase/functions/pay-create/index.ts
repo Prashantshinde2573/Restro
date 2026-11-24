@@ -1,7 +1,7 @@
 // A QR guest pays their bill online. The amount comes from the server (svc_bill_for), never
 // from the phone; the payment opens on the outlet's own gateway.
 import { admin, cors, json } from "../_shared/common.ts";
-import { anyCaller, createPayment, loadGateway } from "../_shared/gateways.ts";
+import { anyCaller, createPayment, fetchStatus, loadGateway, settle } from "../_shared/gateways.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -23,6 +23,23 @@ Deno.serve(async (req) => {
     const gw = await loadGateway(rid, bill.outletId);
     if (!gw || !gw.active) return json({ error: "Online payment is off here", off: true }, 400);
     const amountPaise = Math.round(total * 100);
+
+    // An earlier try on these orders may have gone through after the guest's page lost it (reload while
+    // in the UPI app, checkout closed before the bank answered): ask the gateway before charging again.
+    const recent = new Date(Date.now() - 60 * 60_000).toISOString();
+    const { data: earlier } = await db.from("pay_intents").select("*").eq("rid", rid).eq("status", "created").overlaps("order_ids", ids).gte("created_at", recent).order("created_at", { ascending: false }).limit(5);
+    for (const old of earlier ?? []) {
+      if (!old.provider_order_id || old.provider !== gw.provider) continue;
+      const res = await fetchStatus(gw, old.provider_order_id, old.amount_paise).catch(() => null);
+      if (res?.paid) {
+        const out = await settle(old, res);
+        if (out !== "paid" && out !== "already") continue;
+        const sameSet = [...old.order_ids].sort().join() === [...ids].sort().join();
+        if (sameSet) return json({ intentId: old.id, provider: gw.provider, mode: gw.mode, keyId: gw.keyId, orderId: old.provider_order_id, amount: old.amount_paise / 100, bill, alreadyPaid: true });
+        // part of this bill was paid by that earlier try: the guest sees the rest after a refresh
+        return json({ error: "Part of this bill is already paid. Check the bill and pay the rest." }, 409);
+      }
+    }
 
     // same bill, same amount, opened a moment ago: reuse it (no double payments)
     const since = new Date(Date.now() - 15 * 60_000).toISOString();
