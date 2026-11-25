@@ -1033,6 +1033,10 @@ export default function GuestOrder() {
               : tx(lang, "Served. Enjoy your meal!", "टेबलवर आली");
 
   const placeLabel = counter ? tx(lang, "Counter", "काउंटर") : `${tx(lang, "Table", "टेबल")} ${joinedName(t!, tables)}`;
+  // the note inside the UPI payment (shows in the guest's and the owner's UPI app): plain English,
+  // as UPI apps only take plain characters, with the bill number so the owner can match it
+  const upiNote = (nums: (number | undefined)[]) =>
+    [nums.filter(Boolean).length ? `Bill #${(nums.filter(Boolean) as number[]).sort((a, b) => a - b).join(",")}` : "", counter ? "Counter" : `Table ${joinedName(t!, tables)}`].filter(Boolean).join(" · ");
   const cashWhere = payNow ? "counter" : "table";
 
   return (
@@ -1591,7 +1595,7 @@ export default function GuestOrder() {
             amount={payable}
             upi={settings.upi}
             payee={settings.name}
-            note={`${settings.name} · ${placeLabel}`}
+            note={upiNote([])}
             lang={lang}
             cashWhere="counter"
             onUpiPaid={payFirstUpi}
@@ -1776,7 +1780,7 @@ export default function GuestOrder() {
               amount={billTotal}
               upi={settings.upi}
               payee={settings.name}
-              note={`${settings.name} · ${placeLabel}`}
+              note={upiNote(unbilled.map((o) => o.number))}
               lang={lang}
               cashWhere={cashWhere}
               onUpiPaid={billUpi}

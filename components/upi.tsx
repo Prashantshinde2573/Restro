@@ -18,7 +18,8 @@ export const isValidUpi = (v: string) => /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z
 export function upiUri({ upi, payee, amount, note }: { upi: string; payee: string; amount: number; note?: string }) {
   // Keep "@" in the UPI ID unescaped and the note plain ASCII: a few UPI apps
   // reject "%40" or non-ASCII characters in a scanned link.
-  const enc = (v: string) => encodeURIComponent(v.replace(/[^\x20-\x7E]/g, "-").replace(/\s+/g, " ").trim());
+  // accents become plain letters first ("Café" → "Cafe"), anything else non-ASCII becomes "-"
+  const enc = (v: string) => encodeURIComponent(v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "-").replace(/\s+/g, " ").trim());
   const parts = [`pa=${upi.trim()}`, `pn=${enc(payee.slice(0, 40))}`, `am=${amount.toFixed(2)}`, "cu=INR"];
   if (note) parts.push(`tn=${enc(note.slice(0, 50))}`);
   return `upi://pay?${parts.join("&")}`;
