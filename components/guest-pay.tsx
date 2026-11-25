@@ -5,10 +5,10 @@
 
 import { tx, type GuestLang as Lang } from "@/lib/guest-lang";
 import clsx from "clsx";
-import { Banknote, Check, CreditCard, Layers, Lock, QrCode, Star, Ticket, X } from "lucide-react";
+import { Banknote, BellRing, Check, CreditCard, Layers, Lock, QrCode, Star, Store, Ticket, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./ui";
-import { UpiPayCard } from "./upi";
+import { UpiPayCard, isValidUpi } from "./upi";
 import { useToast } from "./toast";
 import { inr } from "@/lib/format";
 import type { Payment } from "@/lib/types";
@@ -35,7 +35,12 @@ export function PayPanel({
   onOnline,
   onlineBusy = false,
   onlineAmount,
+  onCallBill,
+  billCalled = false,
 }: {
+  /** at a table, no gateway: ask staff to bring the bill (they take the money and mark it paid) */
+  onCallBill?: () => void;
+  billCalled?: boolean;
   /** what the gateway will charge, when it differs (a tip is not taken online) */
   onlineAmount?: number;
   /** the outlet takes payments on its own gateway: the guest can pay in the gateway's checkout */
@@ -87,9 +92,55 @@ export function PayPanel({
   ];
   const where = cashWhere === "counter" ? tx(lang, "at the counter", "काउंटरवर") : tx(lang, "to your captain", "कॅप्टनकडे");
 
+  // No gateway: the QR to download and pay from the guest's own UPI app, then "I've paid";
+  // below it, call staff for the bill (table) or pay at the counter. With a gateway, everything stays as it was.
+  if (!online || !onOnline) {
+    const upiOk = isValidUpi(upi);
+    return (
+      <div className="space-y-4">
+        {upiOk && (
+          <div className="rounded-group bg-surface p-5">
+            <UpiPayCard upi={upi} payee={payee} amount={amount} note={note} downloadOnly onSaved={() => setOpened(true)} onCopy={() => toast(tx(lang, "UPI ID copied", "UPI ID कॉपी केला"))} />
+            {confirmGate(
+              <Button size="lg" className="w-full" onClick={onUpiPaid}>
+                <Check size={18} /> {tx(lang, `I've paid ${inr(amount)}`, `${inr(amount)} भरले`)}
+              </Button>,
+            )}
+          </div>
+        )}
+        {onCallBill ? (
+          <div className="rounded-group bg-surface p-5 text-center">
+            {billCalled ? (
+              <>
+                <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><Check size={20} /></span>
+                <p className="mt-2 text-[15px] font-semibold">{tx(lang, "Staff are coming with your bill", "स्टाफ बिल घेऊन येत आहे")}</p>
+                <p className="mt-1 text-[13.5px] leading-snug text-muted">{tx(lang, "Pay them by QR or cash, or pay at the counter. They'll mark it paid.", "त्यांना QR किंवा रोख द्या, किंवा काउंटरवर भरा. ते पैसे मिळाल्याचं नोंदवतील.")}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[14px] text-muted">{upiOk ? tx(lang, "Or pay to the staff", "किंवा स्टाफकडे भरा") : tx(lang, "Pay to the staff", "स्टाफकडे भरा")}</p>
+                <Button size="lg" variant={upiOk ? "plain" : "primary"} className="mt-3 w-full" onClick={onCallBill}>
+                  <BellRing size={18} /> {tx(lang, "Call for bill", "बिल मागवा")}
+                </Button>
+                <p className="mt-2 text-[12.5px] leading-snug text-faint">{tx(lang, "Staff bring the bill and QR to your table, or pay at the counter.", "स्टाफ टेबलवर बिल आणि QR आणेल, किंवा काउंटरवर भरा.")}</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-group bg-surface p-5 text-center">
+            <p className="text-[14px] text-muted">{upiOk ? tx(lang, "Or pay at the counter", "किंवा काउंटरवर भरा") : tx(lang, "Pay at the counter", "काउंटरवर भरा")}</p>
+            <Button size="lg" variant={upiOk ? "plain" : "primary"} className="mt-3 w-full" onClick={onCash}>
+              <Store size={18} /> {tx(lang, `I'll pay ${inr(amount)} at the counter`, `${inr(amount)} काउंटरवर भरेन`)}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {online && onOnline && (
+      {online && (
         <div className="rounded-group bg-jade-soft p-4">
           <Button size="lg" className="w-full" disabled={onlineBusy} onClick={onOnline}>
             <Lock size={17} /> {onlineBusy ? tx(lang, "Opening payment…", "पेमेंट उघडत आहे…") : tx(lang, `Pay ${inr(onlineAmount ?? amount)} online`, `${inr(onlineAmount ?? amount)} ऑनलाइन भरा`)}
@@ -101,7 +152,7 @@ export function PayPanel({
           </p>
         </div>
       )}
-      {online && onOnline && <div className="text-center text-[12.5px] font-semibold uppercase tracking-wider text-faint">{tx(lang, "or pay another way", "किंवा दुसऱ्या प्रकारे भरा")}</div>}
+      {online && <div className="text-center text-[12.5px] font-semibold uppercase tracking-wider text-faint">{tx(lang, "or pay another way", "किंवा दुसऱ्या प्रकारे भरा")}</div>}
       <div className={clsx("grid gap-2", choices.length === 4 ? "grid-cols-4" : "grid-cols-3")} role="radiogroup" aria-label={tx(lang, "How will you pay?", "कसे भरणार?")}>
         {choices.map(({ v, label, icon: I }) => (
           <button

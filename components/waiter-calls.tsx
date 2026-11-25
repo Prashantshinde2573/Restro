@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFresh } from "@/lib/store";
 import { inOutlet, type Member } from "@/lib/access";
-import { answersCalls, assignsCalls, callActions, liveCalls, useCalls, useCurrentOutlet, useMe, useMembers, useOutlets, type WaiterCall } from "@/lib/live";
+import { answersCall, answersCalls, assignsCalls, callActions, handlesBill, isBillCall, liveCalls, useCalls, useCurrentOutlet, useMe, useMembers, useOutlets, type WaiterCall } from "@/lib/live";
 import { timeAgo } from "@/lib/format";
 import { Avatar, Button, Sheet } from "./ui";
 import { useToast } from "./toast";
@@ -56,13 +56,16 @@ export function CallAlerts() {
       if (c.outletId && outletNow.id && c.outletId !== outletNow.id) continue;
       const where = callWhere(c);
       if (c.status === "open" && !was) {
-        // a new call: every waiter here, and whoever hands out calls
-        if (answersCalls(me, c.outletId) || assignsCalls(me)) {
-          const title = `${where} is calling a waiter`;
-          const body = `${c.reason ? `${c.reason} · ` : ""}${c.customer ? `${c.customer} · ` : ""}tap “I'll go” so the others know${tag(c.outletId)}`;
+        // a new call: every waiter here, and whoever hands out calls (a bill: also whoever takes payments)
+        if (answersCall(me, c) || assignsCalls(me)) {
+          const bill = isBillCall(c);
+          const title = bill ? `${where} is asking for the bill` : `${where} is calling a waiter`;
+          const body = bill
+            ? `${c.customer ? `${c.customer} · ` : ""}take the bill (QR) to the table, or they pay at the counter${tag(c.outletId)}`
+            : `${c.reason ? `${c.reason} · ` : ""}${c.customer ? `${c.customer} · ` : ""}tap “I'll go” so the others know${tag(c.outletId)}`;
           pushNotice({ kind: "call", title, body, href: "/app" });
           notify(title, body);
-          toast(`🔔 ${where} is calling a waiter`);
+          toast(bill ? `🧾 ${where} is asking for the bill` : `🔔 ${where} is calling a waiter`);
           ring = true;
         }
       } else if (c.status === "taken" && c.to) {
@@ -75,7 +78,7 @@ export function CallAlerts() {
             toast(`${c.assignedBy} sent you to ${where}`);
             ring = true;
           }
-        } else if (answersCalls(me, c.outletId) || assignsCalls(me)) {
+        } else if (answersCall(me, c) || assignsCalls(me)) {
           // everyone else: who is on it (quietly)
           toast(`${c.toName} is going to ${where}`);
         }
@@ -88,12 +91,12 @@ export function CallAlerts() {
 }
 
 /** Who can be sent to this call. */
-function useWaiters(outletId?: string) {
-  return useMembers().filter((m) => answersCalls(m, outletId));
+function useWaiters(c: WaiterCall | null) {
+  return useMembers().filter((m) => (c ? answersCall(m, c) : false));
 }
 
 function AssignSheet({ call, onClose }: { call: WaiterCall | null; onClose: () => void }) {
-  const waiters = useWaiters(call?.outletId);
+  const waiters = useWaiters(call);
   const me = useMe();
   const toast = useToast();
   return (
@@ -129,17 +132,18 @@ function AssignSheet({ call, onClose }: { call: WaiterCall | null; onClose: () =
 function CallCard({ c, onAssign }: { c: WaiterCall; onAssign: (c: WaiterCall) => void }) {
   const me = useMe();
   const toast = useToast();
-  const canGo = answersCalls(me, c.outletId);
+  const canGo = answersCall(me, c);
   const canAssign = assignsCalls(me);
   const mine = c.status === "taken" && c.to === me?.id;
   const where = callWhere(c);
+  const bill = isBillCall(c);
   return (
     <div className={clsx("rounded-[16px] bg-surface p-3", c.status === "open" && "ring-2 ring-saffron/40")}>
       <div className="flex items-start gap-2">
         <BellRing size={17} className={clsx("mt-0.5 shrink-0", c.status === "open" ? "animate-pulse text-saffron" : "text-jade")} />
         <div className="min-w-0 flex-1 text-[14px]">
-          <b>{where}</b> {c.status === "open" ? "is calling a waiter" : "called a waiter"}
-          {c.reason && <span className="ml-1.5 rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">{c.reason}</span>}
+          <b>{where}</b> {bill ? (c.status === "open" ? "is asking for the bill" : "asked for the bill") : c.status === "open" ? "is calling a waiter" : "called a waiter"}
+          {c.reason && !bill && <span className="ml-1.5 rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">{c.reason}</span>}
           <div className="text-[12.5px] text-muted">
             {c.customer ? `${c.customer} · ` : ""}
             {timeAgo(c.at)}
@@ -188,7 +192,10 @@ export function useOutletCalls() {
   const outlet = useCurrentOutlet();
   const me = useMe();
   const live = liveCalls(calls).filter((c) => !c.outletId || !outlet.id || c.outletId === outlet.id);
-  return me && (answersCalls(me, outlet.id) || assignsCalls(me)) ? live.slice().reverse() : []; // oldest first
+  if (!me) return [];
+  if (answersCalls(me, outlet.id) || assignsCalls(me)) return live.slice().reverse(); // oldest first
+  // someone who only takes payments: the bill calls
+  return handlesBill(me, outlet.id) ? live.filter(isBillCall).reverse() : [];
 }
 
 export function WaiterCallCards({ calls }: { calls: WaiterCall[] }) {
@@ -216,7 +223,7 @@ export function WaiterCallBar() {
   const c = calls.find((x) => x.status === "open" && !hidden.includes(x.id)) ?? calls.find((x) => x.status === "taken" && x.to === me?.id && !hidden.includes(x.id));
   if (!c) return null;
   const where = callWhere(c);
-  const canGo = answersCalls(me, c.outletId);
+  const canGo = answersCall(me, c);
   const open = c.status === "open";
   const more = calls.filter((x) => x.status === "open").length - (open ? 1 : 0);
   return (
@@ -224,7 +231,7 @@ export function WaiterCallBar() {
       <div className="fixed inset-x-3 bottom-[88px] z-40 mx-auto flex max-w-md animate-pop items-center gap-2 rounded-[18px] bg-ink py-2.5 pl-4 pr-2 text-canvas shadow-float lg:bottom-6 lg:left-auto lg:right-6 lg:mx-0">
         <BellRing size={18} className={clsx("shrink-0", open ? "animate-pulse text-saffron" : "text-jade")} />
         <span className="min-w-0 flex-1 text-[13.5px] leading-tight">
-          <b>{where}</b> {open ? "is calling" : "· you're going"}
+          <b>{where}</b> {open ? (isBillCall(c) ? "wants the bill" : "is calling") : "· you're going"}
           {more > 0 && <span className="block text-[11.5px] text-canvas/60">+{more} more calling</span>}
         </span>
         {open && canGo && (

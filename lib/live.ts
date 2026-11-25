@@ -1083,6 +1083,13 @@ export const liveCalls = (calls: WaiterCall[]) => {
 };
 /** Who answers waiter calls: the owner, and staff with Tables access in that outlet. */
 export const answersCalls = (m: Member | null | undefined, outletId?: string) => !!m && m.active && hasPerm(m, "tables") && (!outletId || inOutlet(m, outletId));
+/** A guest asking for the bill: also the owner and anyone allowed to take or confirm payments. */
+export const isBillCall = (c: Pick<WaiterCall, "reason">) => c.reason === "Bill";
+export const handlesBill = (m: Member | null | undefined, outletId?: string) =>
+  !!m && m.active && (m.role === "owner" || hasPerm(m, "charge") || hasPerm(m, "confirmPay")) && (!outletId || inOutlet(m, outletId));
+/** Who hears this call: waiters, and for a bill also the people who take payments. */
+export const answersCall = (m: Member | null | undefined, c: Pick<WaiterCall, "reason" | "outletId">) =>
+  answersCalls(m, c.outletId) || (isBillCall(c) && handlesBill(m, c.outletId));
 /** Who can hand a call to someone: the owner, and sub admins who manage the team. */
 export const assignsCalls = (m: Member | null | undefined) => !!m && m.active && (m.role === "owner" || hasPerm(m, "team"));
 const patchCall = (id: string, fn: (c: WaiterCall) => WaiterCall) => callStore.set(callStore.get().map((c) => (c.id === id ? fn(c) : c)));
