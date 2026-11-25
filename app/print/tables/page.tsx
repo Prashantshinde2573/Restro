@@ -1,7 +1,7 @@
 "use client";
 
-// Printable table QR cards. All tables print 4 to an A4 page (cut along the light lines);
-// one table prints on its own, larger. ?t=<tableId> opens with just that one.
+// Printable table QR cards: each card is 4 × 6 inches (4 wide, 6 tall), one card per page,
+// for 4×6 photo paper or a print shop. ?t=<tableId> opens with just that one.
 import { hasCounter, hasTables } from "@/lib/access";
 import clsx from "clsx";
 import Link from "next/link";
@@ -60,7 +60,7 @@ export default function PrintTables() {
           <div className="min-w-0 flex-1">
             <h1 className="text-[20px] font-semibold tracking-tight">{only ? "Print one QR" : "QR codes"}</h1>
             <p className="truncate text-[13px] text-muted">
-              {account.name}{outlet.name ? ` · ${outlet.name}` : ""} · {only ? "1 card, large" : `${shown.length} cards · 4 on each A4 page`}
+              {account.name}{outlet.name ? ` · ${outlet.name}` : ""} · {only ? "1 card" : `${shown.length} cards`} · 4 × 6 inch, one per page
             </p>
           </div>
           {only ? (
@@ -98,13 +98,13 @@ export default function PrintTables() {
       <style>{`
         .qr-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         @media print {
-          @page { size: A4; margin: 8mm; }
-          html, body { background: #fff !important; }
-          .qr-sheet { display: grid !important; grid-template-columns: 95mm 95mm; gap: 5mm 6mm; justify-content: center; padding: 0 !important; max-width: none !important; }
-          .qr-cell { break-inside: avoid; page-break-inside: avoid; }
-          .qr-card { width: 105mm; zoom: 0.9; box-shadow: none !important; outline: 0.2mm dashed #c9d2ce; outline-offset: 1.5mm; }
-          .qr-single { grid-template-columns: 137mm !important; padding-top: 4mm !important; }
-          .qr-single .qr-card { zoom: 1.3; }
+          /* one 4 × 6 inch card per page (4 wide, 6 tall) */
+          @page { size: 4in 6in; margin: 0; }
+          html, body { background: #fff !important; margin: 0 !important; }
+          .qr-sheet { display: block !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
+          .qr-cell { display: block !important; width: 4in; height: 6in; overflow: hidden; break-after: page; page-break-after: always; break-inside: avoid; }
+          .qr-cell:last-child { break-after: auto; page-break-after: auto; }
+          .qr-card { width: 4in !important; height: 6in !important; max-width: none !important; border-radius: 0 !important; box-shadow: none !important; outline: none !important; }
         }
       `}</style>
     </div>
@@ -133,7 +133,7 @@ function Card({ item, brand, outlet, logo }: { item: Item; brand: string; outlet
       </div>
 
       {/* table name */}
-      <div className="flex flex-1 flex-col items-center px-5 pt-4">
+      <div className="flex flex-1 flex-col items-center px-5 pt-4 print:justify-evenly print:pt-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#0E7A60]">{item.sub}</div>
         <div className="mt-0.5 max-w-full truncate text-[40px] font-bold leading-none tracking-tight text-[#14201C]">{item.title}</div>
 
@@ -143,15 +143,14 @@ function Card({ item, brand, outlet, logo }: { item: Item; brand: string; outlet
             <span key={c} className={clsx("absolute h-7 w-7 border-[#0E7A60]", c)} />
           ))}
           <div className="rounded-[10px] bg-white p-1.5">
-            <ScanQr value={item.value} size={176} label={`${item.sub} ${item.title} QR`} className="block h-auto w-[176px] print:w-[44mm]" />
+            <ScanQr value={item.value} size={176} label={`${item.sub} ${item.title} QR`} className="block h-auto w-[176px] print:w-[2.35in]" />
           </div>
         </div>
 
-        <div className="mt-4 text-[17px] font-semibold leading-snug text-[#14201C]">Scan to see the menu & order</div>
-        <div className="text-[13px] text-[#5d6863]">मेनू पाहण्यासाठी स्कॅन करा</div>
+        <div className="mt-4 text-[17px] font-semibold leading-snug text-[#14201C] print:text-[19px]">Scan to see the menu & order</div>
 
         {/* three steps */}
-        <div className="mb-4 mt-4 grid w-full grid-cols-3 gap-1.5">
+        <div className="mb-4 mt-4 grid w-full grid-cols-3 gap-1.5 print:mb-3 print:mt-2">
           {["Scan", "Order", "Pay by UPI"].map((s, i) => (
             <div key={s} className="flex flex-col items-center gap-1 rounded-[12px] bg-[#f4f6f5] px-1 py-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0E7A60] text-[12px] font-bold text-white">{i + 1}</span>
