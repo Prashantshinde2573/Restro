@@ -14,7 +14,7 @@
 import { BellRing, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useReady } from "@/lib/store";
+import { useFresh } from "@/lib/store";
 import { inOutlet } from "@/lib/access";
 import { createdHere, payingOnline, paymentsText, pendingClaims, useCan, useCanConfirm, useAllFeedback, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
 import { orderWhere, useAllTables } from "@/lib/tables";
@@ -40,7 +40,8 @@ export function OrderAlerts() {
   const feedback = useAllFeedback(); // every outlet's, so switching outlets never pings old reviews
   const outletNow = useCurrentOutlet();
   const path = usePathname() ?? "";
-  const ready = useReady("orders");
+  // the server's own lists (orders and reviews), not this device's saved copy
+  const ready = useFresh("orders", "feedback");
   const canSee = useCan("orders");
   const canKitchen = useCan("kitchen");
   const canGuests = useCan("guests");
@@ -97,7 +98,9 @@ export function OrderAlerts() {
     // new orders from other devices / guests
     const newOnes = open.filter((o) => !seenNew.current!.has(o.id));
     orders.forEach((o) => seenNew.current!.add(o.id));
-    const fromElsewhere = newOnes.filter((o) => !createdHere.has(o.id) && here(o.outletId));
+    // safety net: anything older than 15 minutes is history, not news (a phone back after a night off)
+    const stale = (iso?: string) => !!iso && Date.now() - Date.parse(iso) > 15 * 60_000;
+    const fromElsewhere = newOnes.filter((o) => !createdHere.has(o.id) && here(o.outletId) && !stale(o.createdAt));
     if (canSee) {
       for (const o of fromElsewhere) {
         const items = o.lines.reduce((s, l) => s + l.qty, 0);
@@ -180,6 +183,7 @@ export function OrderAlerts() {
     // reviews of the outlet on screen
     for (const f of feedback.filter((f) => !seenReview.current!.has(f.id))) {
       seenReview.current!.add(f.id);
+      if (stale(f.at)) continue;
       if (!here(f.outletId) || (f.outletId && !inOutlet(me, f.outletId))) continue;
       if (f.stars <= 3 && (canGuests || me?.role === "owner")) say("review", `${f.stars}★ review · needs a look`, `${f.customer || "A guest"}${f.text ? `: “${f.text.slice(0, 80)}”` : ""}`, "/app/guests", `${f.stars}★ review from ${f.customer || "a guest"}`);
     }

@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { hasPerm, inOutlet, type Member } from "@/lib/access";
 import { timeAgo } from "@/lib/format";
 import { useCurrentOutlet, useMe, useMembers, useOutlets } from "@/lib/live";
-import { useReady } from "@/lib/store";
+import { useFresh } from "@/lib/store";
 import { tableActions, useAllTables } from "@/lib/tables";
 import type { Table } from "@/lib/types";
 import { Avatar, Button, Sheet } from "./ui";
@@ -158,7 +158,7 @@ export function CleanAlerts() {
   const me = useMe();
   const outlets = useOutlets();
   const outletNow = useCurrentOutlet();
-  const ready = useReady("tables");
+  const ready = useFresh("tables");
   const toast = useToast();
   const seen = useRef<Map<string, string> | null>(null); // table id → "since:to"
 
@@ -178,6 +178,7 @@ export function CleanAlerts() {
       seen.current.set(t.id, now);
       const c = t.cleaning;
       if (!c) continue;
+      if (!c.to && Date.now() - Date.parse(c.since) > 30 * 60_000) continue; // left long ago: no ping, it's on the list
       if (c.to) {
         // sent to me (by someone else): always, whatever outlet is on screen
         if (c.to === me.id && c.by !== myLabel(me)) {

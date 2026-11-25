@@ -117,6 +117,26 @@ export function setReady(key: string, v: boolean) {
   ready.set(key, v);
   readyListeners.forEach((l) => l());
 }
+// "fresh": the server has answered for this list since this sign-in. Unlike "ready", this device's
+// saved copy (which can be a day old) never counts, so alerts never take old data as "what's already here".
+const fresh = new Map<string, boolean>();
+const freshListeners = new Set<() => void>();
+export function setFresh(key: string, v: boolean) {
+  if (fresh.get(key) === v) return;
+  fresh.set(key, v);
+  freshListeners.forEach((l) => l());
+}
+/** True once every list in `keys` has its server answer (always true in demo mode). */
+export function useFresh(...keys: string[]) {
+  return useSyncExternalStore(
+    (l) => {
+      freshListeners.add(l);
+      return () => freshListeners.delete(l);
+    },
+    () => !cloudConfigured || keys.every((k) => fresh.get(k) === true),
+    () => true,
+  );
+}
 /** True once the list behind `key` has loaded from the server (always true in demo mode). */
 export function useReady(key: string) {
   return useSyncExternalStore(

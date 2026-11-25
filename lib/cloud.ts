@@ -13,7 +13,7 @@
 //   staff  → 4-digit PIN, checked by the `staff-login` edge function
 //   guest  → anonymous sign-in, no screen
 import { createClient, type RealtimeChannel, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import { cloudConfigured, createStore, remoteBindings, setReady, setRemoteWriter, type RemoteBinding } from "./store";
+import { cloudConfigured, createStore, remoteBindings, setFresh, setReady, setRemoteWriter, type RemoteBinding } from "./store";
 import { diffFields, flushAll, initQueue, send, setQueueScope, waitingIds } from "./sync-queue";
 
 export { cloudConfigured };
@@ -586,6 +586,7 @@ export function connect(rid: string, role: Role, uid: string) {
     if (!table) continue;
     const map = new Map<string, unknown>();
     maps.set(b.key, map);
+    setFresh(b.key, false); // a new sign-in: wait for the server again
     // Show this device's last copy at once; the server's answer replaces it a moment later.
     const saved = cached ? readCache<{ id: string }[]>(scope, b.key) : null;
     if (saved?.length) {
@@ -642,6 +643,7 @@ export function connect(rid: string, role: Role, uid: string) {
           publish(b);
         }
         setReady(b.key, true);
+        setFresh(b.key, true);
         return report(error);
       }
       const rows = (data as unknown as Row[]) ?? [];
@@ -652,6 +654,7 @@ export function connect(rid: string, role: Role, uid: string) {
       for (const id of [...map.keys()]) if (!onServer.has(id) && !touched.has(id) && !pendingIds.has(id) && !waiting.has(id)) map.delete(id);
       publish(b);
       setReady(b.key, true);
+      setFresh(b.key, true);
       });
     };
     load(3);

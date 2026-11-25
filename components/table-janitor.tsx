@@ -4,7 +4,7 @@
 // "how many guests", or a captain seated them) but has no open order 30 minutes
 // later (never ordered, or every order was cancelled). Runs on the owner's and captains' devices; doing it twice is harmless.
 import { useEffect } from "react";
-import { useReady } from "@/lib/store";
+import { useFresh } from "@/lib/store";
 import { hasPerm, inOutlet } from "@/lib/access";
 import { getOrders, useMe } from "@/lib/live";
 import { tableActions, useAllTables } from "@/lib/tables";
@@ -14,8 +14,9 @@ export const EMPTY_TABLE_MINUTES = 30;
 export function TableJanitor() {
   const me = useMe();
   const tables = useAllTables();
-  const tablesReady = useReady("tables");
-  const ordersReady = useReady("orders");
+  // only on the server's answer: never free a table from a day-old copy on this device
+  const tablesReady = useFresh("tables");
+  const ordersReady = useFresh("orders");
   const ready = tablesReady && ordersReady;
 
   useEffect(() => {
