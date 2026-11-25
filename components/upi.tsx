@@ -15,13 +15,14 @@ export const isValidUpi = (v: string) => /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z
  * reads it, so scanning the QR — or tapping the link on the same phone — opens
  * the app with our UPI ID and the exact amount already filled in.
  */
-export function upiUri({ upi, payee, amount, note }: { upi: string; payee: string; amount: number; note?: string }) {
-  // Keep "@" in the UPI ID unescaped and the note plain ASCII: a few UPI apps
+// No message (tn) goes into the payment: only the UPI ID, the name and the amount (owner's choice, 25 Nov 2026).
+// `note` stays in the type so callers don't change; it is not sent.
+export function upiUri({ upi, payee, amount }: { upi: string; payee: string; amount: number; note?: string }) {
+  // Keep "@" in the UPI ID unescaped and the name plain ASCII: a few UPI apps
   // reject "%40" or non-ASCII characters in a scanned link.
   // accents become plain letters first ("Café" → "Cafe"), anything else non-ASCII becomes "-"
   const enc = (v: string) => encodeURIComponent(v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "-").replace(/\s+/g, " ").trim());
   const parts = [`pa=${upi.trim()}`, `pn=${enc(payee.slice(0, 40))}`, `am=${amount.toFixed(2)}`, "cu=INR"];
-  if (note) parts.push(`tn=${enc(note.slice(0, 50))}`);
   return `upi://pay?${parts.join("&")}`;
 }
 
