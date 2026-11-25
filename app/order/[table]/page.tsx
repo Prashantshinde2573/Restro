@@ -952,6 +952,22 @@ export default function GuestOrder() {
     setWaiting({ ids: billIds, kind, amount: billTotal, upiPart, payFirst: false, rejects: rejectCount(unbilled) });
   };
 
+  // "Call for bill" (no gateway): staff bring the bill to the table; they take the money and mark it paid.
+  // The owner and everyone who takes payments get "Table T3 is asking for the bill".
+  const [billCalledAt, setBillCalledAt] = useState(0);
+  const billCalled =
+    !!billCalledAt ||
+    calls.some((c) => c.reason === "Bill" && c.tableId === t?.id && (c.partyId ?? "A") === (myParty ?? "A") && (c.status === "open" || c.status === "taken") && minutesSince(c.at) < 30);
+  const callForBill = () => {
+    if (!t || billCalled) return;
+    orderActions.askReward(billIds, rewardAmt > 0); // staff see the reward and the coupon at checkout
+    orderActions.askCoupon(billIds, couponAmt > 0 ? coupon!.code : undefined);
+    if (party) tableActions.update(t.id, party.id, { status: "billing" });
+    callActions.call({ outletId: t.outletId, tableId: t.id, tableName: t.name, partyId: myParty ?? undefined, customer: guest?.name, reason: "Bill" });
+    setBillCalledAt(Date.now());
+    toast(tx(lang, "Staff are coming with your bill", "स्टाफ बिल घेऊन येत आहे"));
+  };
+
   /** Pay the bill online: the server works out the same bill (stamp card, coupon, GST) and closes it once the gateway confirms. */
   const billOnline = async () => {
     if (onlineBusy || !billIds.length) return;
@@ -1791,6 +1807,8 @@ export default function GuestOrder() {
               onlineAmount={billTotal - tip}
               onOnline={billOnline}
               onlineBusy={onlineBusy}
+              onCallBill={cashWhere === "table" && t && !counter ? callForBill : undefined}
+              billCalled={billCalled}
             />
           </div>
         )}

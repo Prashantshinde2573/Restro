@@ -27,7 +27,7 @@ export function upiUri({ upi, payee, amount }: { upi: string; payee: string; amo
 }
 
 /** The payment QR as a picture on the phone (share sheet, or a download), to scan from the gallery. */
-async function saveQr(uri: string, amount: number) {
+export async function saveQr(uri: string, amount: number) {
   try {
     const url = await QRCode.toDataURL(uri, { margin: 3, width: 720, errorCorrectionLevel: "M" });
     const name = `upi-pay-${Math.round(amount)}.png`;
@@ -60,6 +60,8 @@ export function UpiPayCard({
   compact,
   onCopy,
   onOpen,
+  downloadOnly = false,
+  onSaved,
 }: {
   /** the guest tapped "Pay with a UPI app" */
   onOpen?: () => void;
@@ -70,6 +72,10 @@ export function UpiPayCard({
   size?: number;
   compact?: boolean;
   onCopy?: () => void;
+  /** no "open UPI app" link (UPI apps refuse it for a personal UPI ID): the guest saves the QR and pays from their app */
+  downloadOnly?: boolean;
+  /** the guest saved the QR */
+  onSaved?: () => void;
 }) {
   if (!isValidUpi(upi)) {
     return (
@@ -96,6 +102,18 @@ export function UpiPayCard({
         {upi} <Copy size={13} />
       </button>
       <p className="mt-1 text-[12.5px] text-faint">Scan with any UPI app — the amount fills in by itself.</p>
+      {downloadOnly ? (
+        <>
+          <button
+            onClick={() => { void saveQr(uri, amount); onSaved?.(); }}
+            className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-ctl bg-ink text-[15px] font-semibold text-canvas"
+          >
+            <Download size={17} /> Download QR &amp; pay {inr(amount)}
+          </button>
+          <p className="mt-2 text-[12.5px] leading-snug text-muted">Open your UPI app → Scan → pick the saved QR from your photos.</p>
+        </>
+      ) : (
+      <>
       {/* On a phone the guest can't scan their own screen: open the UPI app directly. */}
       <a
         href={uri}
@@ -112,6 +130,8 @@ export function UpiPayCard({
           <Download size={15} /> Save QR
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }
