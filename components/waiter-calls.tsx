@@ -8,7 +8,7 @@ import clsx from "clsx";
 import { BellRing, Check, UserRound, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useReady } from "@/lib/store";
+import { useFresh } from "@/lib/store";
 import { inOutlet, type Member } from "@/lib/access";
 import { answersCalls, assignsCalls, callActions, liveCalls, useCalls, useCurrentOutlet, useMe, useMembers, useOutlets, type WaiterCall } from "@/lib/live";
 import { timeAgo } from "@/lib/format";
@@ -32,7 +32,7 @@ export function CallAlerts() {
   const me = useMe();
   const outlets = useOutlets();
   const outletNow = useCurrentOutlet();
-  const ready = useReady("calls");
+  const ready = useFresh("calls");
   const toast = useToast();
   const seen = useRef<Map<string, string> | null>(null); // id → "status:to"
 
@@ -51,6 +51,7 @@ export function CallAlerts() {
       const now = key(c);
       if (was === now) continue;
       seen.current.set(c.id, now);
+      if (Date.now() - Date.parse(c.takenAt ?? c.at) > 15 * 60_000) continue; // old news, not a new call
       // only the outlet on screen (another outlet shows a dot on the outlet button)
       if (c.outletId && outletNow.id && c.outletId !== outletNow.id) continue;
       const where = callWhere(c);
