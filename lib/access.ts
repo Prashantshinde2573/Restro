@@ -38,6 +38,7 @@ export type Feature =
   | "insights"
   | "menuEngineering"
   | "payroll"
+  | "activity"
   | "waApi";
 
 const BOTH: BusinessType[] = ["restaurant", "cafe"];
@@ -64,6 +65,7 @@ export const FEATURES: Record<Feature, { label: string; plan: PlanId; types: Bus
   insights: { label: "Insights and Leak guard", plan: "pro", types: BOTH },
   menuEngineering: { label: "What's working (menu engineering)", plan: "pro", types: BOTH },
   payroll: { label: "Staff attendance and salary", plan: "growth", types: BOTH },
+  activity: { label: "Activity log (who did what)", plan: "growth", types: BOTH },
   waApi: { label: "WhatsApp API (automatic messages)", plan: "pro", types: BOTH },
 };
 
@@ -145,7 +147,7 @@ export const PERM_GROUPS: { title: string; perms: { key: Perm; label: string; fe
       { key: "campaigns", label: "Campaigns", feature: "campaigns" },
       { key: "insights", label: "Insights", feature: "insights" },
       { key: "reports", label: "Reports", feature: "reports" },
-      { key: "activity", label: "Activity log (who did what)" },
+      { key: "activity", label: "Activity log (who did what)", feature: "activity" },
     ],
   },
 ];
@@ -221,7 +223,7 @@ export const ROUTES: { href: string; feature?: Feature; perm?: Perm | "ownerOrSe
   { href: "/app/campaigns", feature: "campaigns", perm: "campaigns" },
   { href: "/app/insights", feature: "insights", perm: "insights" },
   { href: "/app/reports", feature: "reports", perm: "reports" },
-  { href: "/app/activity", perm: "activity" },
+  { href: "/app/activity", feature: "activity", perm: "activity" },
 ];
 export const routeFor = (path: string) => ROUTES.find((r) => path === r.href || path.startsWith(r.href + "/"));
 

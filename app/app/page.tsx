@@ -17,6 +17,7 @@ import { NeedsYou } from "@/components/notifications";
 /** Staff without reports see a simple start screen with only their own tools. */
 function StaffHome() {
   const me = useMe();
+  const activityOn = useFeature("activity") === "ok"; // Growth and up
   const outlet = useCurrentOutlet();
   // live counts on the tiles, so the start screen says what needs doing
   const live = useOutletOrders().filter((o) => o.status !== "paid" && o.status !== "cancelled");
@@ -32,7 +33,7 @@ function StaffHome() {
     { href: "/app/tables", label: "Tables", perm: "tables" as const, icon: LayoutGrid, restaurantOnly: true, note: busy ? `${busy} busy${billAsks ? ` · ${plural(billAsks, "bill")} asked` : ""}` : "", hot: billAsks > 0 },
     { href: "/app/kitchen", label: "Kitchen", perm: "kitchen" as const, icon: ChefHat, note: cooking ? `${cooking} cooking` : "" },
     { href: "/app/inventory", label: "Stock", perm: "stock" as const, icon: ShoppingBasket },
-    { href: "/app/activity", label: "Activity", perm: "activity" as const, icon: History },
+    ...(activityOn ? [{ href: "/app/activity", label: "Activity", perm: "activity" as const, icon: History }] : []),
   ].filter((l) => hasPerm(me, l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
   return (
     <>
