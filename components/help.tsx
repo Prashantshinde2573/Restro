@@ -325,7 +325,7 @@ export function HelpChat({ full = false }: { full?: boolean }) {
 
 /* ---------------- the "?" button and its sheet ---------------- */
 let openFn: (() => void) | null = null;
-const openHelp = () => openFn?.();
+export const openHelp = () => openFn?.();
 
 export function HelpButton({ dark = false }: { dark?: boolean }) {
   return (

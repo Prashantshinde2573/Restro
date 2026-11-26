@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
+import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, Gift, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey, L } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
@@ -23,6 +23,19 @@ import { CleanAlerts } from "./table-cleaning";
 import { TableJanitor } from "./table-janitor";
 import { NoticeBell, SoundRow } from "./notifications";
 import { HelpButton, HelpSheet } from "./help";
+import { LATEST_WHATS_NEW, whatsNewSeen } from "@/lib/whats-new";
+
+/** A new "What's new" entry this phone hasn't opened yet. */
+function useNewsUnread() {
+  const [unread, setUnread] = useState(false);
+  useEffect(() => {
+    const check = () => setUnread(!!LATEST_WHATS_NEW && whatsNewSeen() !== LATEST_WHATS_NEW);
+    check();
+    window.addEventListener("restropi:whatsnew", check);
+    return () => window.removeEventListener("restropi:whatsnew", check);
+  }, []);
+  return unread;
+}
 import { PlanSheet, openPlanSheet } from "./plan-sheet";
 import { PlanNotice, RenewBanner, usePlanStatus, useRenewBadge } from "./plan-reminder";
 import { dateIN } from "@/lib/plan-status";
@@ -306,6 +319,7 @@ function Sidebar() {
   const path = usePathname();
   const router = useRouter();
   const { t } = useT();
+  const newsUnread = useNewsUnread();
   const { navGroups } = useNav();
   // Load every page in the menu ahead of time (the lower ones are out of view, so Next.js
   // didn't fetch them), and show at once that a tap was taken while a page opens.
@@ -383,14 +397,15 @@ function Sidebar() {
       </div>
       <div className="mt-3 space-y-1 border-t border-line pt-3">
         <Link
-          href="/app/help"
+          href="/app/whats-new"
           className={clsx(
             "flex items-center gap-3 rounded-[10px] px-3 py-2 text-[14.5px] font-medium",
-            path.startsWith("/app/help") ? "bg-surface shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
+            path.startsWith("/app/whats-new") ? "bg-surface shadow-float" : "text-muted hover:bg-surface/60 hover:text-ink",
           )}
         >
-          <CircleHelp size={18} strokeWidth={1.8} />
-          <span className="flex-1">{t("help")}</span>
+          <Gift size={18} strokeWidth={1.8} />
+          <span className="flex-1">{t("whatsNew")}</span>
+          {newsUnread && <span className="h-2 w-2 rounded-full bg-rose" aria-label={L("New")} />}
         </Link>
         <Link
           href="/app/settings"
@@ -412,6 +427,7 @@ function Sidebar() {
 function TabBar() {
   const path = usePathname();
   const { t, lang, setLang } = useT();
+  const newsUnread = useNewsUnread();
   const [more, setMore] = useState(false);
   const { navGroups, state, badgeOf } = useNav();
   const renew = useRenewDays();
@@ -423,7 +439,7 @@ function TabBar() {
     .map((h) => allItems.find((i) => i.href === h))
     .filter((i): i is NavItem => !!i);
   const myTabs = [...tabs, ...backups].filter((tb) => state(tb.href) === "ok").slice(0, 4);
-  const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }, { href: "/app/help", key: "help" as TKey, icon: CircleHelp, state: "ok" as NavState }].filter(
+  const moreItems = [...navGroups.flatMap((g) => g.items), { href: "/app/settings", key: "settings" as TKey, icon: Settings, state: "ok" as NavState }, { href: "/app/whats-new", key: "whatsNew" as TKey, icon: Gift, state: "ok" as NavState }].filter(
     (i) => !myTabs.some((tb) => tb.href === i.href),
   );
   const moreActive = moreItems.some((i) => isActive(path, i.href));
@@ -454,6 +470,8 @@ function TabBar() {
               <span className="absolute right-[calc(50%-20px)] top-1"><Badge n={renew} /></span>
             ) : moreCount > 0 ? (
               <Bubble n={moreCount} className="right-[calc(50%-20px)] top-1" />
+            ) : newsUnread ? (
+              <span className="absolute right-[calc(50%-14px)] top-1.5 h-2 w-2 rounded-full bg-rose" aria-label={L("New")} />
             ) : null}
           </button>
         </div>
@@ -478,6 +496,7 @@ function TabBar() {
                 {it.state === "locked" && <Lock size={12} className="absolute right-2.5 top-2.5 text-faint" />}
                 {it.href === "/app/settings" && renew !== null && <span className="absolute right-2 top-2"><Badge n={renew} /></span>}
                 {it.state === "ok" && !!badgeOf(it.href) && <Bubble n={badgeOf(it.href)!} className="right-2 top-2" />}
+                {it.href === "/app/whats-new" && newsUnread && <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose" aria-label={L("New")} />}
               </Link>
             );
           })}

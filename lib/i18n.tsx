@@ -26,6 +26,7 @@ const dict = {
   activity: { en: "Activity", mr: "हालचाली", hi: "गतिविधि" },
   settings: { en: "Settings", mr: "सेटिंग्ज", hi: "सेटिंग्स" },
   help: { en: "Help center", mr: "मदत केंद्र", hi: "सहायता केंद्र" },
+  whatsNew: { en: "What's new", mr: "नवीन काय", hi: "नया क्या है" },
   more: { en: "More", mr: "अधिक", hi: "और" },
   run: { en: "Run service", mr: "सर्व्हिस", hi: "सर्विस" },
   manage: { en: "Manage", mr: "व्यवस्थापन", hi: "मैनेज" },

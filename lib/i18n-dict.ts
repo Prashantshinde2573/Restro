@@ -1622,4 +1622,11 @@ export const DICT: Record<string, readonly [string, string]> = {
   "🎁 reward ready": ["🎁 बक्षीस तयार", "🎁 इनाम तैयार"],
   "🔒 Only invited guests ({0})": ["🔒 फक्त आमंत्रित ग्राहक ({0})", "🔒 सिर्फ़ आमंत्रित ग्राहक ({0})"],
   "🧽 {0} needs cleaning": ["🧽 {0} साफ करायचं आहे", "🧽 {0} साफ़ करना है"],
+  "What's new": ["नवीन काय", "नया क्या है"],
+  "New features and changes in Restropi": ["Restropi मधली नवीन फीचर्स आणि बदल", "Restropi की नई सुविधाएँ और बदलाव"],
+  "Better": ["सुधारलं", "बेहतर"],
+  "Fixed": ["दुरुस्त", "ठीक किया"],
+  "Not seen yet": ["अजून पाहिलं नाही", "अभी नहीं देखा"],
+  "Need help?": ["मदत हवी?", "मदद चाहिए?"],
+  "Open the help chat and ask, any time.": ["मदत चॅट उघडा आणि कधीही विचारा.", "मदद चैट खोलें और कभी भी पूछें।"],
 };
