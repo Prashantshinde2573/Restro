@@ -17,7 +17,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFresh } from "@/lib/store";
 import { inOutlet } from "@/lib/access";
-import { createdHere, payingOnline, paymentsText, pendingClaims, useCan, useCanConfirm, useAllFeedback, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
+import { createdHere, inKitchen, payingOnline, paymentsText, pendingClaims, useCan, useCanConfirm, useAllFeedback, useCurrentOutlet, useMe, useOrders, useOutlets } from "@/lib/live";
 import { orderWhere, useAllTables } from "@/lib/tables";
 import { pushNotice, type Notice } from "./notifications";
 import { useToast } from "./toast";
@@ -62,7 +62,8 @@ export function OrderAlerts() {
     if (!ready || !watching) return;
     // remember every outlet this person works in, but alert only for the outlet on screen
     // (another outlet's new orders show as a dot on the outlet button at the top)
-    const orders = all.filter((o) => !o.outletId || inOutlet(me, o.outletId));
+    // an order paid before its food was ready still counts for the kitchen and the "ready" alert
+    const orders = all.filter((o) => !o.outletId || inOutlet(me, o.outletId)).map(inKitchen);
     const here = (id?: string) => !id || !outletNow.id || id === outletNow.id;
     const outletTag = (id?: string) => (outlets.length > 1 && id && !here(id) ? ` · ${outlets.find((x) => x.id === id)?.name ?? ""}` : "");
     const open = orders.filter((o) => o.status !== "paid" && o.status !== "cancelled");

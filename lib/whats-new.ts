@@ -14,6 +14,18 @@ export type WhatsNew = {
 
 export const WHATS_NEW: WhatsNew[] = [
   {
+    id: "2026-11-26-paid-screen",
+    date: "2026-11-26",
+    tag: "fixed",
+    title: { en: "The Paid screen shows the real amount", mr: "Paid स्क्रीनवर खरी रक्कम दिसते", hi: "Paid स्क्रीन पर असली रक़म दिखती है" },
+    points: {
+      en: ["After charging a counter or delivery order, the Paid screen, the receipt, the PDF and the WhatsApp bill showed ₹0. They now show what was paid.", "Orders paid before the food is ready now count on the Kitchen tab bubble, the home screen and the kitchen alerts."],
+      mr: ["काउंटर किंवा डिलिव्हरी ऑर्डर Charge केल्यावर Paid स्क्रीन, पावती, PDF आणि WhatsApp बिलवर ₹0 दिसायचे. आता भरलेली रक्कम दिसते.", "जेवण तयार होण्याआधी भरलेल्या ऑर्डर आता किचन टॅबच्या आकड्यात, होम स्क्रीनवर आणि किचन सूचनांमध्ये मोजल्या जातात."],
+      hi: ["काउंटर या डिलीवरी ऑर्डर Charge करने के बाद Paid स्क्रीन, रसीद, PDF और WhatsApp बिल पर ₹0 दिखता था। अब भुगतान की रक़म दिखती है।", "खाना तैयार होने से पहले भुगतान वाले ऑर्डर अब किचन टैब की गिनती, होम स्क्रीन और किचन सूचनाओं में गिने जाते हैं।"],
+    },
+    href: "/app/kitchen",
+  },
+  {
     id: "2026-11-26-paid-before-food",
     date: "2026-11-26",
     tag: "fixed",

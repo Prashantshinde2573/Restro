@@ -230,6 +230,9 @@ export const ONLINE_PAY_WAIT_MS = 15 * 60_000;
 export const payingOnline = (o: Pick<Order, "status" | "payPreference" | "createdAt" | "gateway">, now = Date.now()) =>
   o.status === "new" && o.payPreference === "online" && !o.gateway && now - new Date(o.createdAt).getTime() < ONLINE_PAY_WAIT_MS;
 /** A "new" order that staff should accept (not one being paid online). */
+/** How the kitchen sees an order: one paid before its food was ready is still at its kitchen stage. */
+export const inKitchen = <O extends Pick<Order, "status" | "kitchenStatus">>(o: O): O =>
+  o.status === "paid" && o.kitchenStatus ? { ...o, status: o.kitchenStatus } : o;
 export const toAccept = (o: Pick<Order, "status" | "payPreference" | "createdAt" | "gateway">) => o.status === "new" && !payingOnline(o);
 export const paymentsText = (p?: Payment[]) => (p?.length ? p.map((x) => `${methodLabel[x.method]} ₹${x.amount.toLocaleString("en-IN")}`).join(" + ") : "—");
 

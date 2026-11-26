@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChannelIcon } from "@/components/channel";
 import { Chips } from "@/components/ui";
 import { useToast } from "@/components/toast";
-import { orderActions, toAccept, useCurrentOutlet, useOutletOrders } from "@/lib/live";
+import { inKitchen, orderActions, toAccept, useCurrentOutlet, useOutletOrders } from "@/lib/live";
 import { minutesSince } from "@/lib/format";
 import { orderWhere, tableActions, useTables } from "@/lib/tables";
 import { useT, L } from "@/lib/i18n";
@@ -35,8 +35,8 @@ export default function KitchenPage() {
   const orders = useMemo(
     () =>
       all
-        .filter((o) => ["accepted", "preparing", "ready"].includes(o.status) || (o.status === "paid" && !!o.kitchenStatus) || (selfService && toAccept(o)))
-        .map((o) => (o.status === "paid" && o.kitchenStatus ? { ...o, status: o.kitchenStatus } : o)),
+        .map(inKitchen)
+        .filter((o) => ["accepted", "preparing", "ready"].includes(o.status) || (selfService && toAccept(o))),
     [all, selfService],
   );
   const waiting = selfService ? 0 : all.filter(toAccept).length;
