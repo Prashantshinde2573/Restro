@@ -156,6 +156,7 @@ export interface Party {
   phoneClaimed?: boolean; // a guest phone has joined this party via QR
   pendingApproval?: boolean; // opened from QR, captain has not confirmed yet
   paymentPending?: boolean; // staff or guest says it's paid; waiting for the owner's OK
+  paid?: boolean; // paid before the food came: still at the table, nothing left to charge (staff frees it with "Guests left")
 }
 
 export interface Table {

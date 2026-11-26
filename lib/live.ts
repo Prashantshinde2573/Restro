@@ -508,7 +508,7 @@ export const orderActions = {
     orderStore.set(
       orderStore.get().map((o) =>
         ids.includes(o.id) && o.status === "paid"
-          ? { ...o, status: "served", payments: undefined, payment: undefined, payClaim: undefined, confirmedBy: undefined, discounts: undefined, paymentLog: [...(o.paymentLog ?? []), { at, by: who, text: `Marked unpaid (was ${paymentsText(o.payments)})` }] }
+          ? { ...o, status: o.kitchenStatus ?? "served", kitchenStatus: undefined, payments: undefined, payment: undefined, payClaim: undefined, confirmedBy: undefined, discounts: undefined, paymentLog: [...(o.paymentLog ?? []), { at, by: who, text: `Marked unpaid (was ${paymentsText(o.payments)})` }] }
           : o,
       ),
     );

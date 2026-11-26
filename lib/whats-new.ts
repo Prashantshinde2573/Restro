@@ -14,6 +14,18 @@ export type WhatsNew = {
 
 export const WHATS_NEW: WhatsNew[] = [
   {
+    id: "2026-11-26-paid-before-food",
+    date: "2026-11-26",
+    tag: "fixed",
+    title: { en: "Guests who pay before the food keep their table", mr: "जेवणाआधी पैसे दिले तरी ग्राहकांचं टेबल राहतं", hi: "खाने से पहले भुगतान करने पर भी ग्राहकों की टेबल रहती है" },
+    points: {
+      en: ["Charge a dine-in bill while the food is still cooking: the table stays busy with a green “Paid”, no “Charge” and no “To clean”.", "When they leave, open the table and tap “Guests left”: then it goes to “To clean”.", "If they order more, only the new dishes are charged."],
+      mr: ["जेवण बनत असताना डाइन-इन बिल Charge केलं तर टेबल भरलेलंच राहतं, हिरवं “भरलं” दिसतं; “Charge” आणि “साफ करायचं” दिसत नाही.", "ग्राहक गेले की टेबल उघडून “ग्राहक गेले” दाबा: मग ते “साफ करायचं” मध्ये जातं.", "त्यांनी आणखी मागवलं तर फक्त नवीन डिशचंच Charge होतं."],
+      hi: ["खाना बनते समय डाइन-इन बिल Charge करें तो टेबल भरी रहती है, हरा “भुगतान हुआ” दिखता है; “Charge” और “साफ़ करना है” नहीं दिखता।", "ग्राहक जाएँ तो टेबल खोलकर “ग्राहक चले गए” दबाएँ: फिर वह “साफ़ करना है” में जाती है।", "और मँगाएँ तो सिर्फ़ नई डिश का Charge होता है।"],
+    },
+    href: "/app/tables",
+  },
+  {
     id: "2026-11-26-charge-first",
     date: "2026-11-26",
     tag: "fixed",
