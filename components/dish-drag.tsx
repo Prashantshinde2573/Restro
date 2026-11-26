@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Drag a dish by its handle and drop it on another category (mouse or finger).
 // Every category box carries data-drop-cat="<category id>".
 import { GripVertical } from "lucide-react";
@@ -84,8 +85,8 @@ export function DragHandle({ name, onPointerDown }: { name: string; onPointerDow
   return (
     <button
       type="button"
-      aria-label={`Drag ${name} to another category`}
-      title="Drag to another category"
+      aria-label={L("Drag {0} to another category", name)}
+      title={L("Drag to another category")}
       onPointerDown={onPointerDown}
       className="-ml-2 flex h-10 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-[10px] text-faint hover:bg-sunken hover:text-ink active:cursor-grabbing"
     >
@@ -102,7 +103,7 @@ export function DragGhost({ drag, label }: { drag: DishDrag | null; label: (catI
     <div className="pointer-events-none fixed z-[80] -translate-x-1/2 -translate-y-[130%]" style={{ left: drag.x, top: drag.y }}>
       <div className="whitespace-nowrap rounded-[14px] bg-ink px-3.5 py-2 text-[14px] font-semibold text-canvas shadow-float">
         {drag.name}
-        <span className="block text-[12px] font-medium text-canvas/70">{moving ? `→ ${label(drag.over)}` : "Drop on a category"}</span>
+        <span className="block text-[12px] font-medium text-canvas/70">{moving ? `→ ${label(drag.over)}` : L("Drop on a category")}</span>
       </div>
     </div>
   );

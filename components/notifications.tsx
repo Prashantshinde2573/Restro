@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // The bell: everything that pinged on this device (new orders, bill requests,
 // payments to confirm), and "Needs you now" on the home screen.
 import clsx from "clsx";
@@ -53,7 +54,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label={unread ? `${unread} new notifications` : "Notifications"}
+        aria-label={unread ? L("{0} new notifications", unread) : L("Notifications")}
         className={clsx("relative flex h-[34px] w-[34px] items-center justify-center rounded-full", dark ? "text-white hover:bg-white/10" : "bg-surface text-ink shadow-float hover:bg-sunken")}
       >
         {sound ? <Bell size={18} /> : <BellOff size={18} />}
@@ -67,12 +68,12 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
           setOpen(false);
           markAll();
         }}
-        title="Notifications"
+        title={L("Notifications")}
       >
         <SoundRow />
         <NeedsYou compact />
         {list.length === 0 ? (
-          <p className="py-10 text-center text-[14px] text-muted">Nothing yet. New orders, bill requests and payments to confirm show up here.</p>
+          <p className="py-10 text-center text-[14px] text-muted">{L("Nothing yet. New orders, bill requests and payments to confirm show up here.")}</p>
         ) : (
           <div className="mt-3 overflow-hidden rounded-group bg-surface">
             {list.map((n) => {
@@ -89,7 +90,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
-                      <span className={clsx("text-[14.5px]", n.read ? "font-medium" : "font-semibold")}>{n.title}</span>
+                      <span className={clsx("text-[14.5px]", n.read ? "font-medium" : "font-semibold")}>{L(n.title)}</span>
                       {!n.read && <span className="h-2 w-2 rounded-full bg-rose" />}
                     </span>
                     <span className="block text-[13px] text-muted">{n.body}</span>
@@ -102,8 +103,7 @@ export function NoticeBell({ dark = false }: { dark?: boolean }) {
         )}
         {list.length > 0 && (
           <button onClick={() => noticeStore.set([])} className="mt-3 w-full text-center text-[13px] font-semibold text-muted">
-            Clear list
-          </button>
+            {L("Clear list")}</button>
         )}
       </Sheet>
     </>
@@ -127,7 +127,7 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
   if (!toAccept.length && !bills.length && !claims.length && !calls.length && !toClean.length) return null;
   return (
     <section className={clsx("rounded-[24px] bg-saffron-soft/70", compact ? "p-3" : "p-4 lg:p-5")}>
-      <h2 className={clsx("font-semibold tracking-tight", compact ? "px-1 text-[15px]" : "text-[18px]")}>Needs you now</h2>
+      <h2 className={clsx("font-semibold tracking-tight", compact ? "px-1 text-[15px]" : "text-[18px]")}>{L("Needs you now")}</h2>
       <div className="mt-2 space-y-2">
         <WaiterCallCards calls={calls} />
         <CleanNeedsCards tables={toClean} onGo={onGo} />
@@ -138,13 +138,13 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
               <div className="flex items-start gap-2">
                 <Clock3 size={17} className="mt-0.5 shrink-0 text-saffron" />
                 <div className="min-w-0 flex-1 text-[14px]">
-                  <b>{orderWhere(c.orders[0], tables)}</b> marked paid · {inr(total)}
-                  <div className="text-[12.5px] text-muted">{paymentsText(c.claim.payments)} · by {c.claim.by} · {timeAgo(c.claim.at)}</div>
+                  <b>{orderWhere(c.orders[0], tables)}</b> {L("marked paid ·")} {inr(total)}
+                  <div className="text-[12.5px] text-muted">{paymentsText(c.claim.payments)} {L("· by")} {c.claim.by} · {timeAgo(c.claim.at)}</div>
                 </div>
               </div>
               <div className="mt-2 flex gap-2">
-                <Button size="sm" className="flex-1" onClick={() => { confirmPayment(c.claim.id); toast("Payment confirmed · bill closed"); }}><Check size={15} /> Money received</Button>
-                <Button size="sm" variant="plain" onClick={() => { rejectPayment(c.claim.id); toast("Marked not received · the bill is open again"); }}><X size={15} /> Not received</Button>
+                <Button size="sm" className="flex-1" onClick={() => { confirmPayment(c.claim.id); toast(L("Payment confirmed · bill closed")); }}><Check size={15} /> {L("Money received")}</Button>
+                <Button size="sm" variant="plain" onClick={() => { rejectPayment(c.claim.id); toast(L("Marked not received · the bill is open again")); }}><X size={15} /> {L("Not received")}</Button>
               </div>
             </div>
           );
@@ -152,17 +152,16 @@ export function NeedsYou({ compact = false, onGo }: { compact?: boolean; onGo?: 
         {toAccept.length > 0 && (
           <Link href="/app/orders" onClick={onGo} className="flex items-center gap-2 rounded-[16px] bg-surface p-3 text-[14px] hover:shadow-float">
             <ReceiptText size={17} className="text-jade" />
-            <span className="flex-1"><b>{toAccept.length} QR order{toAccept.length > 1 ? "s" : ""}</b> waiting to be accepted</span>
-            <span className="text-[13px] font-semibold text-jade">Open</span>
+            <span className="flex-1"><b>{toAccept.length} {L("QR order")}{toAccept.length > 1 ? "s" : ""}</b> {L("waiting to be accepted")}</span>
+            <span className="text-[13px] font-semibold text-jade">{L("Open")}</span>
           </Link>
         )}
         {bills.length > 0 && (
           <Link href={bills.some((o) => o.tableName) ? "/app/tables" : "/app/orders"} onClick={onGo} className="flex items-center gap-2 rounded-[16px] bg-surface p-3 text-[14px] hover:shadow-float">
             <Smartphone size={17} className="text-sky" />
             <span className="flex-1">
-              <b>{[...new Set(bills.map((o) => o.tableName ?? "Counter"))].join(", ")}</b> asked for the bill
-            </span>
-            <span className="text-[13px] font-semibold text-jade">Open</span>
+              <b>{[...new Set(bills.map((o) => o.tableName ?? "Counter"))].join(", ")}</b> {L("asked for the bill")}</span>
+            <span className="text-[13px] font-semibold text-jade">{L("Open")}</span>
           </Link>
         )}
       </div>
@@ -182,13 +181,13 @@ export function SoundRow() {
           {on ? <Volume2 size={16} /> : <VolumeX size={16} />}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[14.5px] font-semibold">Sound</span>
-          <span className="block text-[12.5px] text-muted">{on ? "A different sound for each kind of alert" : "Muted on this device · alerts still show here"}</span>
+          <span className="block text-[14.5px] font-semibold">{L("Sound")}</span>
+          <span className="block text-[12.5px] text-muted">{on ? L("A different sound for each kind of alert") : L("Muted on this device · alerts still show here")}</span>
         </span>
         <button
           role="switch"
           aria-checked={on}
-          aria-label="Sound for alerts"
+          aria-label={L("Sound for alerts")}
           onClick={() => setSound(!on)}
           className={clsx("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors", on ? "bg-jade" : "bg-line")}
         >
@@ -200,38 +199,37 @@ export function SoundRow() {
         aria-expanded={open}
         className="flex w-full items-center justify-between border-t border-line/80 px-4 py-2.5 text-[13.5px] font-semibold text-jade"
       >
-        Choose sounds
-        <ChevronDown size={16} className={clsx("transition-transform", open && "rotate-180")} />
+        {L("Choose sounds")}<ChevronDown size={16} className={clsx("transition-transform", open && "rotate-180")} />
       </button>
       {open && (
         <div className={clsx("border-t border-line/80", !on && "opacity-60")}>
           {SOUND_EVENTS.map((ev) => (
             <div key={ev.id} className="flex items-center gap-2 border-b border-line/60 px-4 py-2.5 last:border-0">
               <span className="min-w-0 flex-1">
-                <span className="block text-[14px] font-medium">{ev.label}</span>
-                <span className="block text-[12px] leading-snug text-muted">{ev.hint}</span>
+                <span className="block text-[14px] font-medium">{L(ev.label)}</span>
+                <span className="block text-[12px] leading-snug text-muted">{L(ev.hint)}</span>
               </span>
               <select
-                aria-label={`Sound for ${ev.label}`}
+                aria-label={L("Sound for {0}", ev.label)}
                 value={picks[ev.id]}
                 onChange={(e) => setSoundFor(ev.id, e.target.value as SoundId)}
                 className="h-9 max-w-[140px] rounded-[10px] bg-sunken px-2 text-[13px] font-medium outline-none"
               >
                 {SOUNDS.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                  <option key={s.id} value={s.id}>{L(s.label)}</option>
                 ))}
               </select>
               <button
                 onClick={() => playSound(picks[ev.id])}
                 disabled={picks[ev.id] === "none"}
-                aria-label={`Play ${ev.label} sound`}
+                aria-label={L("Play {0} sound", ev.label)}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink disabled:opacity-40"
               >
                 <Play size={14} />
               </button>
             </div>
           ))}
-          {!on && <p className="px-4 pb-3 pt-1 text-[12px] text-muted">Sound is off, so these won't play until you turn it on.</p>}
+          {!on && <p className="px-4 pb-3 pt-1 text-[12px] text-muted">{L("Sound is off, so these won't play until you turn it on.")}</p>}
         </div>
       )}
     </div>

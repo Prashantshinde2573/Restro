@@ -1,5 +1,6 @@
 "use client";
 
+import { L, dateLocale } from "@/lib/i18n";
 // Discount coupons the restaurant gives to guests. A guest shows the code at the
 // counter (or the staff types it at checkout) and the bill is reduced.
 import clsx from "clsx";
@@ -24,7 +25,7 @@ export function couponState(c: Coupon): { label: string; tone: "jade" | "muted" 
 
 /** Message a guest receives with the coupon. */
 export function couponMessage(c: Coupon, restaurant: string) {
-  const until = c.validTo ? ` till ${new Date(c.validTo).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "";
+  const until = c.validTo ? ` till ${new Date(c.validTo).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" })}` : "";
   return [
     `🎁 *A treat from ${restaurant || "us"}*`,
     "",
@@ -66,19 +67,19 @@ export function CouponsPanel() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   };
   const copy = (c: Coupon) => {
-    navigator.clipboard?.writeText(couponMessage(c, account.name)).then(() => toast("Copied"), () => toast("Couldn't copy"));
+    navigator.clipboard?.writeText(couponMessage(c, account.name)).then(() => toast(L("Copied")), () => toast(L("Couldn't copy")));
   };
 
   return (
     <>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[14px] text-muted">Guests show the code when paying. Staff type it at checkout.</p>
-        {coupons.length > 0 && <Button size="sm" className="w-full shrink-0 whitespace-nowrap sm:w-auto" onClick={() => setEdit(newDraft())}><Plus size={16} /> New coupon</Button>}
+        <p className="text-[14px] text-muted">{L("Guests show the code when paying. Staff type it at checkout.")}</p>
+        {coupons.length > 0 && <Button size="sm" className="w-full shrink-0 whitespace-nowrap sm:w-auto" onClick={() => setEdit(newDraft())}><Plus size={16} /> {L("New coupon")}</Button>}
       </div>
 
       {coupons.length === 0 ? (
         <div className="rounded-group bg-surface">
-          <Empty icon={<Ticket size={22} />} title="No coupons yet" body="Make a code like WELCOME10 and send it to your guests on WhatsApp." action={<Button onClick={() => setEdit(newDraft())}><Plus size={16} /> New coupon</Button>} />
+          <Empty icon={<Ticket size={22} />} title={L("No coupons yet")} body={L("Make a code like WELCOME10 and send it to your guests on WhatsApp.")} action={<Button onClick={() => setEdit(newDraft())}><Plus size={16} /> {L("New coupon")}</Button>} />
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -86,26 +87,26 @@ export function CouponsPanel() {
             const st = couponState(c);
             return (
               <div key={c.id} className="rounded-group bg-surface p-4">
-                <button onClick={() => (canEdit(c) ? setEdit({ ...c }) : toast("The owner made this coupon for all outlets · only they can change it"))} className="block w-full text-left">
+                <button onClick={() => (canEdit(c) ? setEdit({ ...c }) : toast(L("The owner made this coupon for all outlets · only they can change it")))} className="block w-full text-left">
                   <div className="flex items-start justify-between gap-2">
                     <span className="rounded-[8px] border-2 border-dashed border-jade/50 px-2.5 py-1 font-mono text-[16px] font-bold tracking-wider text-jade-deep">{c.code}</span>
-                    <span className={clsx("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", st.tone === "jade" ? "bg-jade-soft text-jade-deep" : st.tone === "rose" ? "bg-rose-soft text-rose" : "bg-sunken text-muted")}>{st.label}</span>
+                    <span className={clsx("rounded-full px-2.5 py-0.5 text-[12px] font-semibold", st.tone === "jade" ? "bg-jade-soft text-jade-deep" : st.tone === "rose" ? "bg-rose-soft text-rose" : "bg-sunken text-muted")}>{L(st.label)}</span>
                   </div>
                   <div className="mt-3 text-[16px] font-semibold">{couponLabel(c)}</div>
                   <div className="mt-0.5 text-[13px] text-muted">
-                    Used {c.uses ?? 0}{c.maxUses ? ` of ${c.maxUses}` : ""} time{(c.uses ?? 0) === 1 ? "" : "s"}
-                    {c.validTo ? ` · till ${new Date(c.validTo).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                    {L("Used")} {c.uses ?? 0}{c.maxUses ? L(" of {0}", c.maxUses) : ""} {L("time")}{(c.uses ?? 0) === 1 ? "" : "s"}
+                    {c.validTo ? L(" · till {0}", new Date(c.validTo).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" })) : ""}
                   </div>
                   <div className="mt-1 text-[12.5px] font-medium text-muted">
-                    {couponIsPrivate(c) ? `🔒 Only invited guests (${c.forPhones?.length ?? 0})` : "Anyone with the code"}
-                    {c.oncePerGuest !== false ? " · once each" : ""}
+                    {couponIsPrivate(c) ? L("🔒 Only invited guests ({0})", c.forPhones?.length ?? 0) : L("Anyone with the code")}
+                    {c.oncePerGuest !== false ? L(" · once each") : ""}
                   </div>
-                  {c.note && <div className="mt-1 truncate text-[13px] text-faint">{c.note}</div>}
+                  {c.note && <div className="mt-1 truncate text-[13px] text-faint">{L(c.note)}</div>}
                   {where(c) && <div className="mt-1 truncate text-[12.5px] font-medium text-jade">📍 {where(c)}</div>}
                 </button>
                 <div className="mt-3 flex gap-2">
-                  <Button size="sm" className="flex-1 !bg-[#25D366] hover:!bg-[#1fb757]" onClick={() => share(c)}><Share2 size={15} /> Send</Button>
-                  <Button size="sm" variant="tinted" onClick={() => copy(c)} aria-label="Copy message"><Copy size={15} /></Button>
+                  <Button size="sm" className="flex-1 !bg-[#25D366] hover:!bg-[#1fb757]" onClick={() => share(c)}><Share2 size={15} /> {L("Send")}</Button>
+                  <Button size="sm" variant="tinted" onClick={() => copy(c)} aria-label={L("Copy message")}><Copy size={15} /></Button>
                 </div>
               </div>
             );
@@ -138,21 +139,21 @@ function CouponSheet({ draft, onClose, taken }: { draft: Draft | null; onClose: 
     <Sheet
       open={!!draft}
       onClose={onClose}
-      title={d.id ? "Edit coupon" : "New coupon"}
+      title={d.id ? L("Edit coupon") : L("New coupon")}
       footer={
         <div className="flex gap-2">
           {d.id && (
-            <Button variant="danger" aria-label="Delete coupon" onClick={() => { couponActions.remove(d.id!); onClose(); }}><Trash2 size={16} /></Button>
+            <Button variant="danger" aria-label={L("Delete coupon")} onClick={() => { couponActions.remove(d.id!); onClose(); }}><Trash2 size={16} /></Button>
           )}
-          <Button size="lg" className="flex-1" disabled={!!err} onClick={() => { couponActions.save({ ...d, code }); onClose(); }}>{err ?? "Save coupon"}</Button>
+          <Button size="lg" className="flex-1" disabled={!!err} onClick={() => { couponActions.save({ ...d, code }); onClose(); }}>{err ?? L("Save coupon")}</Button>
         </div>
       }
     >
       <div className="space-y-4">
-        <Field label="Code" hint="Letters and numbers, like WELCOME10">
+        <Field label={L("Code")} hint={L("Letters and numbers, like WELCOME10")}>
           <input className={clsx(inputCls, "font-mono uppercase tracking-wider")} value={d.code} onChange={(e) => set({ code: normCode(e.target.value) })} placeholder="WELCOME10" autoFocus={!d.id} />
         </Field>
-        <Field label="Discount">
+        <Field label={L("Discount")}>
           <div className="flex gap-2">
             <Segmented value={d.kind} onChange={(kind) => set({ kind })} options={[{ value: "percent", label: "% off" }, { value: "flat", label: "₹ off" }]} className="shrink-0" />
             <input className={inputCls} type="number" inputMode="numeric" min={1} value={d.value || ""} onChange={(e) => set({ value: Number(e.target.value) })} placeholder={d.kind === "percent" ? "10" : "100"} />
@@ -160,22 +161,22 @@ function CouponSheet({ draft, onClose, taken }: { draft: Draft | null; onClose: 
         </Field>
         <div className="grid grid-cols-2 gap-3">
           {d.kind === "percent" && (
-            <Field label="Max ₹ off (optional)">
-              <input className={inputCls} type="number" inputMode="numeric" value={d.maxOff ?? ""} onChange={(e) => set({ maxOff: num(e.target.value) })} placeholder="No limit" />
+            <Field label={L("Max ₹ off (optional)")}>
+              <input className={inputCls} type="number" inputMode="numeric" value={d.maxOff ?? ""} onChange={(e) => set({ maxOff: num(e.target.value) })} placeholder={L("No limit")} />
             </Field>
           )}
-          <Field label="Min bill ₹ (optional)">
-            <input className={inputCls} type="number" inputMode="numeric" value={d.minBill ?? ""} onChange={(e) => set({ minBill: num(e.target.value) })} placeholder="Any bill" />
+          <Field label={L("Min bill ₹ (optional)")}>
+            <input className={inputCls} type="number" inputMode="numeric" value={d.minBill ?? ""} onChange={(e) => set({ minBill: num(e.target.value) })} placeholder={L("Any bill")} />
           </Field>
-          <Field label="Valid till (optional)">
+          <Field label={L("Valid till (optional)")}>
             <input className={inputCls} type="date" min={today()} value={d.validTo ?? ""} onChange={(e) => set({ validTo: e.target.value || undefined })} />
           </Field>
-          <Field label="Max uses (optional)">
-            <input className={inputCls} type="number" inputMode="numeric" value={d.maxUses ?? ""} onChange={(e) => set({ maxUses: num(e.target.value) || undefined })} placeholder="No limit" />
+          <Field label={L("Max uses (optional)")}>
+            <input className={inputCls} type="number" inputMode="numeric" value={d.maxUses ?? ""} onChange={(e) => set({ maxUses: num(e.target.value) || undefined })} placeholder={L("No limit")} />
           </Field>
         </div>
         {outlets.length > 1 && (
-          <Field label="Works at">
+          <Field label={L("Works at")}>
             {owner ? (
               <div className="flex flex-wrap gap-2">
                 {[{ id: "", name: "All outlets" }, ...outlets].map((o) => {
@@ -188,26 +189,26 @@ function CouponSheet({ draft, onClose, taken }: { draft: Draft | null; onClose: 
                 })}
               </div>
             ) : (
-              <p className="rounded-ctl bg-surface px-4 py-3 text-[14px] text-muted">{(d.outletIds ?? []).map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") || "Your outlet"} only</p>
+              <p className="rounded-ctl bg-surface px-4 py-3 text-[14px] text-muted">{(d.outletIds ?? []).map((id) => outlets.find((o) => o.id === id)?.name ?? id).join(", ") || L("Your outlet")} {L("only")}</p>
             )}
           </Field>
         )}
-        <Field label="Who can use it" hint={d.audience === "invited" ? `Only guests you send it to from Campaigns${d.forPhones?.length ? ` (${d.forPhones.length} so far)` : ""}. Others see “only for the guests it was sent to”.` : "Anyone who has the code."}>
+        <Field label={L("Who can use it")} hint={d.audience === "invited" ? L("Only guests you send it to from Campaigns{0}. Others see “only for the guests it was sent to”.", d.forPhones?.length ? ` (${d.forPhones.length} so far)` : "") : L("Anyone who has the code.")}>
           <Segmented className="w-full" value={d.audience === "invited" ? "invited" : "anyone"} onChange={(v) => set({ audience: v === "invited" ? "invited" : undefined })} options={[{ value: "anyone", label: "Anyone with the code" }, { value: "invited", label: "Only guests I send it to" }]} />
         </Field>
         <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
           <span className="min-w-0">
-            <span className="block text-[15px]">Each guest only once</span>
-            <span className="block text-[12.5px] text-muted">Checked by the guest&apos;s mobile number</span>
+            <span className="block text-[15px]">{L("Each guest only once")}</span>
+            <span className="block text-[12.5px] text-muted">{L("Checked by the guest's mobile number")}</span>
           </span>
-          <Toggle checked={d.oncePerGuest !== false} onChange={(v) => set({ oncePerGuest: v ? undefined : false })} label="Each guest only once" />
+          <Toggle checked={d.oncePerGuest !== false} onChange={(v) => set({ oncePerGuest: v ? undefined : false })} label={L("Each guest only once")} />
         </div>
-        <Field label="Note (optional)">
-          <input className={inputCls} value={d.note ?? ""} onChange={(e) => set({ note: e.target.value || undefined })} placeholder="Diwali offer for regulars" />
+        <Field label={L("Note (optional)")}>
+          <input className={inputCls} value={d.note ?? ""} onChange={(e) => set({ note: e.target.value || undefined })} placeholder={L("Diwali offer for regulars")} />
         </Field>
         <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface px-4 py-3">
-          <span className="text-[15px]">Coupon is on</span>
-          <Toggle checked={d.active} onChange={(active) => set({ active })} label="Coupon is on" />
+          <span className="text-[15px]">{L("Coupon is on")}</span>
+          <Toggle checked={d.active} onChange={(active) => set({ active })} label={L("Coupon is on")} />
         </div>
       </div>
     </Sheet>

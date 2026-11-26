@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import { AlertTriangle } from "lucide-react";
 import { claimSummary } from "@/lib/billing";
 import { inr } from "@/lib/format";
@@ -10,17 +11,16 @@ export function ClaimCheck({ claimId }: { claimId: string }) {
   if (!s) return null;
   return (
     <div className="mt-1.5 text-[13px]">
-      Bill <b className="tnum">{inr(s.bill)}</b> · paid <b className="tnum">{inr(s.paid)}</b>
+      {L("Bill")} <b className="tnum">{inr(s.bill)}</b> {L("· paid")} <b className="tnum">{inr(s.paid)}</b>
       {s.discount > 0 && (
         <>
-          {" "}· discount <b className="tnum">{inr(s.discount)}</b>
-          {s.labels.length ? ` (${s.labels.join(", ")}${s.guest ? ", from the guest's phone" : ""})` : s.guest ? " (from the guest's phone)" : ""}
+          {" "}{L("· discount")} <b className="tnum">{inr(s.discount)}</b>
+          {s.labels.length ? ` (${s.labels.join(", ")}${s.guest ? L(", from the guest's phone") : ""})` : s.guest ? L(" (from the guest's phone)") : ""}
         </>
       )}
       {s.short > 0 && (
         <div className="mt-1 flex items-center gap-1.5 font-semibold text-[#B42318]">
-          <AlertTriangle size={14} /> {inr(s.short)} less than the bill. Check before you confirm.
-        </div>
+          <AlertTriangle size={14} /> {inr(s.short)} {L("less than the bill. Check before you confirm.")}</div>
       )}
     </div>
   );

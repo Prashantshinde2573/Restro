@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Plan reminders in the app: a banner and a bell notice every day from N days before the plan
 // ends (N set by the Restropi team in the super admin), and every day during a grace period.
 import clsx from "clsx";
@@ -70,14 +71,14 @@ export function RenewBanner() {
       <BellRing size={16} className="shrink-0" />
       <span className="min-w-0 flex-1">
         {st.inGrace ? (
-          <><b>Your {PLAN_NAME[plan]} plan has ended. Your store is running on a grace period until {dateIN(st.deadline)}</b> ({when}). Please renew to keep billing and the QR menu on.</>
+          <><b>{L("Your")} {PLAN_NAME[plan]} {L("plan has ended. Your store is running on a grace period until")} {dateIN(st.deadline)}</b> ({when}{L("). Please renew to keep billing and the QR menu on.")}</>
         ) : (
-          <><b>{PLAN_NAME[plan]} plan ends {when}</b> ({dateIN(st.deadline)}). Renew to avoid any break.</>
+          <><b>{PLAN_NAME[plan]} {L("plan ends")} {when}</b> ({dateIN(st.deadline)}{L("). Renew to avoid any break.")}</>
         )}
       </span>
-      <button onClick={() => openPlanSheet()} className={clsx("shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold", st.inGrace ? "bg-white text-rose" : "bg-rose text-white")}>Renew</button>
+      <button onClick={() => openPlanSheet()} className={clsx("shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold", st.inGrace ? "bg-white text-rose" : "bg-rose text-white")}>{L("Renew")}</button>
       <button
-        aria-label="Hide for today"
+        aria-label={L("Hide for today")}
         onClick={() => {
           setHidden(true);
           try {

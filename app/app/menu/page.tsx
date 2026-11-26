@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import { hasPerm, hasTables, inOutlet } from "@/lib/access";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Camera, FolderPlus, Pencil, Plus, Search, Trash2, X } from "lucide-react";
@@ -103,12 +104,12 @@ export default function MenuPage() {
   const addCategory = (): string | null => {
     if (!newCat?.name.trim()) return null;
     if (cats.some((c) => c.name.toLowerCase() === newCat.name.trim().toLowerCase())) {
-      toast("That category already exists");
+      toast(L("That category already exists"));
       return null;
     }
     const c = categoryActions.add(newCat.name, newCat.icon);
     setNewCat(null);
-    toast(`“${c.name}” added · guests see it as a filter now`);
+    toast(L("“{0}” added · guests see it as a filter now", c.name));
     return c.id;
   };
   // sizes: at least two, each with a name and a price; the dish's price is then the smallest
@@ -140,19 +141,19 @@ export default function MenuPage() {
   const { drag, start: startDrag } = useDishDrag((dishId, toCat) => {
     const m = items.find((x) => x.id === dishId);
     menuActions.update(dishId, { categoryId: toCat });
-    toast(`${m?.name ?? "Dish"} moved to ${catName(toCat)}`);
+    toast(L("{0} moved to {1}", m?.name ?? "Dish", catName(toCat)));
   });
 
   return (
     <>
       <PageHeader
-        title="Menu"
-        subtitle={`${many ? `${outletNow.name} · ` : ""}${items.length} dish${items.length === 1 ? "" : "es"} · ${items.filter((m) => !m.available).length} sold out`}
+        title={L("Menu")}
+        subtitle={L("{0}{1} dish{2} · {3} sold out", many ? `${outletNow.name} · ` : "", items.length, items.length === 1 ? "" : "es", items.filter((m) => !m.available).length)}
         actions={
           <div className="flex gap-2">
-            <Button size="sm" variant="plain" aria-label="Categories" onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /> Categories</Button>
-            {canEditDishes && <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">From photo</span><span className="sm:hidden">Photo</span></Button>}
-            {canEditDishes && <Button size="sm" onClick={() => setEdit("new")}><Plus size={16} /> Add dish</Button>}
+            <Button size="sm" variant="plain" aria-label={L("Categories")} onClick={() => { setNewCat(null); setCatsOpen(true); }}><FolderPlus size={16} /> {L("Categories")}</Button>
+            {canEditDishes && <Button size="sm" variant="tinted" onClick={() => setFromPhoto(true)}><Camera size={16} /> <span className="hidden sm:inline">{L("From photo")}</span><span className="sm:hidden">{L("Photo")}</span></Button>}
+            {canEditDishes && <Button size="sm" onClick={() => setEdit("new")}><Plus size={16} /> {L("Add dish")}</Button>}
           </div>
         }
       >
@@ -165,10 +166,9 @@ export default function MenuPage() {
         {many && canEditDishes && otherOutlets.length > 0 && items.length === 0 && (
           <div className="mb-5 flex flex-wrap items-center gap-3 rounded-group bg-surface px-4 py-3">
             <div className="min-w-0 flex-1 text-[14px] font-semibold">
-              {outletNow.name} has no dishes yet
-              <Hint className="ml-1">Each outlet has its own menu and prices. Copy one to start, then change what you need.</Hint>
+              {outletNow.name} {L("has no dishes yet")}<Hint className="ml-1">{L("Each outlet has its own menu and prices. Copy one to start, then change what you need.")}</Hint>
             </div>
-            <Button size="sm" variant="tinted" onClick={() => setCopyOpen(true)}>Copy a menu</Button>
+            <Button size="sm" variant="tinted" onClick={() => setCopyOpen(true)}>{L("Copy a menu")}</Button>
           </div>
         )}
         {tab === "dishes" || !engineeringOn ? (
@@ -178,7 +178,7 @@ export default function MenuPage() {
             canEdit={canEditDishes}
             drag={drag}
             startDrag={startDrag}
-            onOpen={(m) => (canEditDishes ? setEdit(m) : toast("Ask the owner or your manager to change this dish. You can mark it sold out here."))}
+            onOpen={(m) => (canEditDishes ? setEdit(m) : toast(L("Ask the owner or your manager to change this dish. You can mark it sold out here.")))}
             onAdd={(catId) => setEdit("new", catId)}
             onEditCat={(c) => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })}
             onNewCat={() => { setNewCat(null); setCatsOpen(true); }}
@@ -200,20 +200,20 @@ export default function MenuPage() {
                     <button onClick={() => setEdit(star)} className="flex items-center gap-3 rounded-group bg-surface px-4 py-3 text-left">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jade-soft text-[17px]">⭐</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[12px] font-semibold uppercase tracking-wide text-jade-deep">Your star</span>
+                        <span className="block text-[12px] font-semibold uppercase tracking-wide text-jade-deep">{L("Your star")}</span>
                         <span className="block truncate text-[15px] font-semibold">{star.name}</span>
                       </span>
-                      <span className="shrink-0 text-[13px] text-muted tnum">{star.soldThisWeek} sold</span>
+                      <span className="shrink-0 text-[13px] text-muted tnum">{star.soldThisWeek} {L("sold")}</span>
                     </button>
                   )}
                   {gem && (
-                    <button onClick={() => setEdit(gem)} className="flex items-center gap-3 rounded-group bg-surface px-4 py-3 text-left" title="Earns well but few people order it: ask captains to suggest it">
+                    <button onClick={() => setEdit(gem)} className="flex items-center gap-3 rounded-group bg-surface px-4 py-3 text-left" title={L("Earns well but few people order it: ask captains to suggest it")}>
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-[17px]">💎</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[12px] font-semibold uppercase tracking-wide text-saffron">Push this</span>
+                        <span className="block text-[12px] font-semibold uppercase tracking-wide text-saffron">{L("Push this")}</span>
                         <span className="block truncate text-[15px] font-semibold">{gem.name}</span>
                       </span>
-                      <span className="shrink-0 text-[13px] text-muted tnum">{inr(gem.price - gem.cost)}/plate</span>
+                      <span className="shrink-0 text-[13px] text-muted tnum">{inr(gem.price - gem.cost)}{L("/plate")}</span>
                     </button>
                   )}
                 </div>
@@ -228,7 +228,7 @@ export default function MenuPage() {
                   <Group key={q} flush>
                     <div className="flex items-center gap-1 px-4 pt-3.5 lg:px-5">
                       <Pill tone={qMeta[q].tone}>{qMeta[q].name} · {byQ[q].length}</Pill>
-                      <Hint align="left">{qMeta[q].hint}</Hint>
+                      <Hint align="left">{L(qMeta[q].hint)}</Hint>
                     </div>
                     <div className="flex flex-wrap gap-1.5 px-4 pb-4 pt-2.5 lg:px-5">
                       {byQ[q].map((m) => (
@@ -245,8 +245,8 @@ export default function MenuPage() {
         )}
       </Page>
 
-      <Sheet open={copyOpen} onClose={() => setCopyOpen(false)} title={`Copy dishes to ${outletNow.name}`}>
-        <p className="text-[14.5px] text-muted">The dishes are copied with their prices, photos and categories. After that each outlet changes its own; dishes {outletNow.name} already has (same name) are skipped.</p>
+      <Sheet open={copyOpen} onClose={() => setCopyOpen(false)} title={L("Copy dishes to {0}", outletNow.name)}>
+        <p className="text-[14.5px] text-muted">{L("The dishes are copied with their prices, photos and categories. After that each outlet changes its own; dishes")} {outletNow.name} {L("already has (same name) are skipped.")}</p>
         <div className="mt-4 space-y-2.5">
           {otherOutlets.map((o) => (
             <Button
@@ -260,8 +260,7 @@ export default function MenuPage() {
                 toast(n ? `Copied ${n} dishes from ${o.name}` : `${outletNow.name} already has all of ${o.name}'s dishes`);
               }}
             >
-              From {o.name} ({o.dishes} dishes)
-            </Button>
+              {L("From")} {o.name} ({o.dishes} {L("dishes)")}</Button>
           ))}
         </div>
       </Sheet>
@@ -269,7 +268,7 @@ export default function MenuPage() {
       <Sheet
         open={!!edit}
         onClose={() => setEdit(null)}
-        title={editing ? editing.name : "New dish"}
+        title={editing ? editing.name : L("New dish")}
         footer={
           <Button
             size="lg"
@@ -306,29 +305,29 @@ export default function MenuPage() {
               toast(editing ? "Dish saved · guests see it on the QR menu now" : "Dish added · it's on the guest menu now");
             }}
           >
-            {sizesBad ? "Give every size a name and price" : !draftOk ? "Add a name, price and category" : editing ? "Save dish" : "Add dish"}
+            {sizesBad ? L("Give every size a name and price") : !draftOk ? L("Add a name, price and category") : editing ? L("Save dish") : L("Add dish")}
           </Button>
         }
       >
         <div className="space-y-4">
           <PhotoUploader photos={draft.photos} onChange={(photos) => setDraft({ ...draft, photos })} />
-          <Field label="Dish name"><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Paneer Tikka" /></Field>
+          <Field label={L("Dish name")}><input className={inputCls} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={L("e.g. Paneer Tikka")} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Price (₹, before GST)">
+            <Field label={L("Price (₹, before GST)")}>
               {sized ? (
-                <div className="flex h-12 items-center rounded-ctl bg-sunken/60 px-4 text-[15px] text-muted">from ₹{priceNum} · sizes below</div>
+                <div className="flex h-12 items-center rounded-ctl bg-sunken/60 px-4 text-[15px] text-muted">{L("from ₹")}{priceNum} {L("· sizes below")}</div>
               ) : (
                 <input className={inputCls} inputMode="decimal" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
               )}
             </Field>
-            <Field label="Category">
+            <Field label={L("Category")}>
               <select
                 className={inputCls}
                 value={newCat ? "__new" : draft.categoryId}
                 onChange={(e) => (e.target.value === "__new" ? setNewCat({ name: "", icon: "🍽️" }) : (setNewCat(null), setDraft({ ...draft, categoryId: e.target.value })))}
               >
                 {cats.map((c) => <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ""}{c.name}</option>)}
-                <option value="__new">+ New category…</option>
+                <option value="__new">{L("+ New category…")}</option>
               </select>
             </Field>
           </div>
@@ -343,13 +342,13 @@ export default function MenuPage() {
               onCancel={() => setNewCat(null)}
             />
           )}
-          <Field label="Veg or non-veg">
+          <Field label={L("Veg or non-veg")}>
             <Segmented className="w-full" value={draft.diet} onChange={(diet) => setDraft({ ...draft, diet })} options={[{ value: "veg", label: "Veg" }, { value: "egg", label: "Egg" }, { value: "nonveg", label: "Non-veg" }]} />
           </Field>
-          <Field label="Cooked at">
+          <Field label={L("Cooked at")}>
             <Segmented className="w-full" value={draft.station} onChange={(station) => setDraft({ ...draft, station })} options={[{ value: "kitchen", label: "Kitchen" }, ...(cafe ? [] : [{ value: "tandoor" as const, label: "Tandoor" }]), { value: "bar", label: "Bar / drinks" }, { value: "dessert", label: "Desserts" }]} />
           </Field>
-          <Field label="How spicy?">
+          <Field label={L("How spicy?")}>
             <Segmented
               className="w-full"
               value={String(draft.spice)}
@@ -359,12 +358,12 @@ export default function MenuPage() {
           </Field>
           <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
             <div>
-              <div className="text-[15px] font-medium">🍬 Sweet</div>
-              <div className="text-[12.5px] text-muted">Shows under the guest “Sweet” filter (desserts, shakes, sweet drinks).</div>
+              <div className="text-[15px] font-medium">{L("🍬 Sweet")}</div>
+              <div className="text-[12.5px] text-muted">{L("Shows under the guest “Sweet” filter (desserts, shakes, sweet drinks).")}</div>
             </div>
-            <Toggle checked={draft.sweet} onChange={(sweet) => setDraft({ ...draft, sweet })} label="Sweet" />
+            <Toggle checked={draft.sweet} onChange={(sweet) => setDraft({ ...draft, sweet })} label={L("Sweet")} />
           </div>
-          <Field label="Labels guests see (also the “Specials” filter)">
+          <Field label={L("Labels guests see (also the “Specials” filter)")}>
             <div className="flex flex-wrap gap-2">
               {[["New", draft.isNew], ["Bestseller", draft.tags.includes("Bestseller")], ["Chef special", draft.tags.includes("Chef special")], ["Seasonal", draft.tags.includes("Seasonal")]].map(([l, on]) => (
                 <button
@@ -377,41 +376,40 @@ export default function MenuPage() {
                   }
                   className={clsx("rounded-full px-3.5 py-2 text-[14px] font-semibold", on ? "bg-ink text-canvas" : "bg-surface")}
                 >
-                  {l === "Chef special" ? "Chef's special" : String(l)}
+                  {l === "Chef special" ? L("Chef's special") : String(l)}
                 </button>
               ))}
             </div>
           </Field>
           <div>
-            <div className="mb-1.5 text-[13px] font-medium text-muted">Sizes (each with its own price)</div>
+            <div className="mb-1.5 text-[13px] font-medium text-muted">{L("Sizes (each with its own price)")}</div>
             <SizesEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
           </div>
-          <Field label="Choices for guests (spice, add-ons)">
+          <Field label={L("Choices for guests (spice, add-ons)")}>
             <OptionsEditor groups={draft.options} onChange={(options) => setDraft({ ...draft, options })} />
           </Field>
           {stockOn && (
             <div>
-              <div className="mb-1.5 flex items-center gap-1 text-[13px] font-medium text-muted">Uses from stock (per plate) <RecipeHint /></div>
+              <div className="mb-1.5 flex items-center gap-1 text-[13px] font-medium text-muted">{L("Uses from stock (per plate)")} <RecipeHint /></div>
               <RecipeEditor value={draft.recipe} onChange={(recipe) => setDraft({ ...draft, recipe })} stock={stockHere} onUseCost={(rs) => setDraft({ ...draft, recipe: draft.recipe, cost: String(rs) })} />
             </div>
           )}
-          <Field label="Cost per plate (₹)" hint="What the ingredients cost you. Used for margins in “What's working”. Optional.">
+          <Field label={L("Cost per plate (₹)")} hint={L("What the ingredients cost you. Used for margins in “What's working”. Optional.")}>
             <input className={inputCls} inputMode="decimal" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value.replace(/[^\d.]/g, "") })} placeholder="0" />
           </Field>
           {editing && canEditDishes && (
             confirmDel ? (
               <div className="space-y-2 rounded-group bg-rose-soft/50 p-4">
                 <p className="text-[14px]">
-                  Delete <b>{editing.name}</b> from {outletNow.name}? Old bills and reports keep its name.
-                  {isStampReward(editing.id) && " It is the free dish of your stamp card: pick another dish there after this."}
+                  {L("Delete")} <b>{editing.name}</b> {L("from")} {outletNow.name}{L("? Old bills and reports keep its name.")}{isStampReward(editing.id) && L(" It is the free dish of your stamp card: pick another dish there after this.")}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="plain" onClick={() => setConfirmDel(false)}>Keep</Button>
-                  <Button variant="danger" onClick={() => { menuActions.remove(editing.id); setConfirmDel(false); setEdit(null); toast(`${editing.name} deleted`); }}>Delete dish</Button>
+                  <Button variant="plain" onClick={() => setConfirmDel(false)}>{L("Keep")}</Button>
+                  <Button variant="danger" onClick={() => { menuActions.remove(editing.id); setConfirmDel(false); setEdit(null); toast(L("{0} deleted", editing.name)); }}>{L("Delete dish")}</Button>
                 </div>
               </div>
             ) : (
-              <Button variant="danger" className="w-full" onClick={() => setConfirmDel(true)}><Trash2 size={16} /> Delete dish</Button>
+              <Button variant="danger" className="w-full" onClick={() => setConfirmDel(true)}><Trash2 size={16} /> {L("Delete dish")}</Button>
             )
           )}
         </div>
@@ -421,17 +419,17 @@ export default function MenuPage() {
       <Sheet
         open={!!catEdit}
         onClose={() => setCatEdit(null)}
-        title="Edit category"
+        title={L("Edit category")}
         footer={
           catEdit && (() => {
             const name = catEdit.name.trim();
             const taken = cats.some((x) => x.id !== catEdit.id && x.name.trim().toLowerCase() === name.toLowerCase());
             return (
               <div className="space-y-2">
-                {taken && <p className="text-center text-[13px] font-medium text-rose">{name} already exists</p>}
+                {taken && <p className="text-center text-[13px] font-medium text-rose">{name} {L("already exists")}</p>}
                 <div className="grid grid-cols-[auto_1fr] gap-2">
-                  <Button variant="plain" className="!text-rose" onClick={() => askDelete(catEdit.id)}><Trash2 size={16} /> Delete</Button>
-                  <Button disabled={!name || taken} onClick={() => { categoryActions.update(catEdit.id, { name, icon: catEdit.icon }); toast(`${name} saved`); setCatEdit(null); }}>Save</Button>
+                  <Button variant="plain" className="!text-rose" onClick={() => askDelete(catEdit.id)}><Trash2 size={16} /> {L("Delete")}</Button>
+                  <Button disabled={!name || taken} onClick={() => { categoryActions.update(catEdit.id, { name, icon: catEdit.icon }); toast(L("{0} saved", name)); setCatEdit(null); }}>{L("Save")}</Button>
                 </div>
               </div>
             );
@@ -440,11 +438,11 @@ export default function MenuPage() {
       >
         {catEdit && (
           <div className="space-y-4">
-            <Field label="Category name">
-              <input autoFocus className={inputCls} value={catEdit.name} onChange={(e) => setCatEdit({ ...catEdit, name: e.target.value })} placeholder="e.g. Cold drinks" />
+            <Field label={L("Category name")}>
+              <input autoFocus className={inputCls} value={catEdit.name} onChange={(e) => setCatEdit({ ...catEdit, name: e.target.value })} placeholder={L("e.g. Cold drinks")} />
             </Field>
             <div>
-              <div className="mb-1.5 text-[13px] font-medium text-muted">Icon (shown in the guest menu side bar)</div>
+              <div className="mb-1.5 text-[13px] font-medium text-muted">{L("Icon (shown in the guest menu side bar)")}</div>
               <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-10">
                 {[...new Set([catEdit.icon, ...CAT_ICONS])].map((x) => (
                   <button key={x} aria-pressed={catEdit.icon === x} onClick={() => setCatEdit({ ...catEdit, icon: x })} className={clsx("flex aspect-square items-center justify-center rounded-[10px] text-[20px]", catEdit.icon === x ? "bg-jade-soft ring-2 ring-jade" : "bg-sunken")}>
@@ -461,11 +459,11 @@ export default function MenuPage() {
       <Sheet
         open={!!catDel}
         onClose={() => setCatDel(null)}
-        title={`Delete ${cats.find((x) => x.id === catDel?.id)?.name ?? "category"}?`}
+        title={L("Delete {0}?", cats.find((x) => x.id === catDel?.id)?.name ?? "category")}
         footer={
           catDel && (
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="plain" onClick={() => setCatDel(null)}>Cancel</Button>
+              <Button variant="plain" onClick={() => setCatDel(null)}>{L("Cancel")}</Button>
               <Button
                 variant="danger"
                 onClick={() => {
@@ -473,12 +471,11 @@ export default function MenuPage() {
                   const n = items.filter((m) => m.categoryId === catDel.id).length;
                   const to = cats.find((x) => x.id === catDel.dishes);
                   categoryActions.remove(catDel.id, n ? (catDel.dishes === "delete" ? "delete" : { moveTo: catDel.dishes }) : null);
-                  toast(`${c?.name ?? "Category"} deleted${n ? (to ? ` · ${n} dishes moved to ${to.name}` : ` with its ${n} dishes`) : ""}`);
+                  toast(L("{0} deleted{1}", c?.name ?? "Category", n ? (to ? ` · ${n} dishes moved to ${to.name}` : ` with its ${n} dishes`) : ""));
                   setCatDel(null);
                 }}
               >
-                Delete category
-              </Button>
+                {L("Delete category")}</Button>
             </div>
           )
         }
@@ -487,25 +484,25 @@ export default function MenuPage() {
           const n = items.filter((m) => m.categoryId === catDel.id).length;
           const others = cats.filter((x) => x.id !== catDel.id);
           return n === 0 ? (
-            <p className="text-[15px] text-muted">This category has no dishes. Guests won&apos;t see it any more.</p>
+            <p className="text-[15px] text-muted">{L("This category has no dishes. Guests won't see it any more.")}</p>
           ) : (
             <div className="space-y-3">
-              <p className="text-[15px] text-muted">It has <b className="text-ink">{n} {n === 1 ? "dish" : "dishes"}</b>. What should happen to {n === 1 ? "it" : "them"}?</p>
-              <Field label="Dishes in this category">
+              <p className="text-[15px] text-muted">{L("It has")} <b className="text-ink">{n} {n === 1 ? "dish" : "dishes"}</b>{L(". What should happen to")} {n === 1 ? "it" : "them"}?</p>
+              <Field label={L("Dishes in this category")}>
                 <select className={inputCls} value={catDel.dishes} onChange={(e) => setCatDel({ ...catDel, dishes: e.target.value })}>
-                  {others.map((o) => <option key={o.id} value={o.id}>Move to {o.icon ? o.icon + " " : ""}{o.name}</option>)}
-                  <option value="delete">Delete the {n === 1 ? "dish" : `${n} dishes`} too</option>
+                  {others.map((o) => <option key={o.id} value={o.id}>{L("Move to")} {o.icon ? o.icon + " " : ""}{o.name}</option>)}
+                  <option value="delete">{L("Delete the")} {n === 1 ? "dish" : L("{0} dishes", n)} {L("too")}</option>
                 </select>
               </Field>
-              {catDel.dishes === "delete" && <p className="rounded-ctl bg-rose-soft px-3 py-2 text-[13.5px] text-rose">The dishes are removed from your menu. Past bills and reports keep them.</p>}
+              {catDel.dishes === "delete" && <p className="rounded-ctl bg-rose-soft px-3 py-2 text-[13.5px] text-rose">{L("The dishes are removed from your menu. Past bills and reports keep them.")}</p>}
             </div>
           );
         })()}
       </Sheet>
 
-      <Sheet open={catsOpen} onClose={() => setCatsOpen(false)} title="Categories">
+      <Sheet open={catsOpen} onClose={() => setCatsOpen(false)} title={L("Categories")}>
         <div className="space-y-4">
-          <p className="text-[14px] text-muted">Shown to guests as filters and side-bar entries, in this order.</p>
+          <p className="text-[14px] text-muted">{L("Shown to guests as filters and side-bar entries, in this order.")}</p>
           <div className="overflow-hidden rounded-group bg-surface">
             {cats.map((c, i) => {
               const n = items.filter((m) => m.categoryId === c.id).length;
@@ -517,11 +514,11 @@ export default function MenuPage() {
                     <div className="text-[12.5px] text-muted tnum">{n} {n === 1 ? "dish" : "dishes"}</div>
                   </div>
                   <div className="flex">
-                    <button aria-label="Move up" disabled={i === 0} onClick={() => categoryActions.move(c.id, -1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowUp size={16} /></button>
-                    <button aria-label="Move down" disabled={i === cats.length - 1} onClick={() => categoryActions.move(c.id, 1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowDown size={16} /></button>
+                    <button aria-label={L("Move up")} disabled={i === 0} onClick={() => categoryActions.move(c.id, -1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowUp size={16} /></button>
+                    <button aria-label={L("Move down")} disabled={i === cats.length - 1} onClick={() => categoryActions.move(c.id, 1)} className="p-1.5 text-muted disabled:opacity-30"><ArrowDown size={16} /></button>
                   </div>
-                  <button aria-label={`Edit ${c.name}`} onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink"><Pencil size={15} /></button>
-                  <button aria-label={`Delete ${c.name}`} onClick={() => askDelete(c.id)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose/10 text-rose"><Trash2 size={15} /></button>
+                  <button aria-label={L("Edit {0}", c.name)} onClick={() => setCatEdit({ id: c.id, name: c.name, icon: c.icon || "🍽️" })} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-ink"><Pencil size={15} /></button>
+                  <button aria-label={L("Delete {0}", c.name)} onClick={() => askDelete(c.id)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose/10 text-rose"><Trash2 size={15} /></button>
                 </div>
               );
             })}
@@ -529,9 +526,9 @@ export default function MenuPage() {
           {newCat ? (
             <NewCategory value={newCat} onChange={setNewCat} onAdd={addCategory} onCancel={() => setNewCat(null)} />
           ) : (
-            <Button variant="tinted" className="w-full" onClick={() => setNewCat({ name: "", icon: "🍽️" })}><Plus size={16} /> New category</Button>
+            <Button variant="tinted" className="w-full" onClick={() => setNewCat({ name: "", icon: "🍽️" })}><Plus size={16} /> {L("New category")}</Button>
           )}
-          <p className="text-[12.5px] text-faint">Examples: Cold drinks, Shakes, Breakfast, Thalis, Pizzas, Combos.</p>
+          <p className="text-[12.5px] text-faint">{L("Examples: Cold drinks, Shakes, Breakfast, Thalis, Pizzas, Combos.")}</p>
         </div>
       </Sheet>
     </>
@@ -551,12 +548,12 @@ function NewCategory({
 }) {
   return (
     <div className="animate-fade-in space-y-3 rounded-group bg-surface p-4">
-      <div className="text-[14px] font-semibold">New category</div>
+      <div className="text-[14px] font-semibold">{L("New category")}</div>
       <div className="flex gap-2">
         <input
           autoFocus
           className={inputCls}
-          placeholder="e.g. Cold drinks"
+          placeholder={L("e.g. Cold drinks")}
           value={value.name}
           onChange={(e) => onChange({ ...value, name: e.target.value })}
           onKeyDown={(e) => e.key === "Enter" && onAdd()}
@@ -570,8 +567,8 @@ function NewCategory({
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <Button variant="plain" onClick={onCancel}>Cancel</Button>
-        <Button disabled={!value.name.trim()} onClick={onAdd}>Add category</Button>
+        <Button variant="plain" onClick={onCancel}>{L("Cancel")}</Button>
+        <Button disabled={!value.name.trim()} onClick={onAdd}>{L("Add category")}</Button>
       </div>
     </div>
   );
@@ -590,11 +587,10 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
   const noCost = items.some((m) => !m.cost);
   const shown = all ? sold : sold.slice(0, 10);
   return (
-    <Group title="Profit by dish · this week">
+    <Group title={L("Profit by dish · this week")}>
       <div className="-mt-1 flex items-center gap-1.5 text-[12.5px] text-muted">
-        Plates sold × profit per plate
-        <Hint align="left">Longer bar, more money. The colour says what to do with the dish (see the boxes).{noCost ? " Dishes without a cost per plate count the full price as profit." : ""}</Hint>
-        {noCost && <span className="ml-1 rounded-full bg-saffron-soft px-2 py-0.5 text-[11.5px] font-semibold text-saffron">Add costs for exact profit</span>}
+        {L("Plates sold × profit per plate")}<Hint align="left">{L("Longer bar, more money. The colour says what to do with the dish (see the boxes).")}{noCost ? L(" Dishes without a cost per plate count the full price as profit.") : ""}</Hint>
+        {noCost && <span className="ml-1 rounded-full bg-saffron-soft px-2 py-0.5 text-[11.5px] font-semibold text-saffron">{L("Add costs for exact profit")}</span>}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-muted">
         {(["star", "plowhorse", "puzzle", "dog"] as Quadrant[]).map((q) => (
@@ -602,12 +598,12 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
         ))}
       </div>
       {sold.length === 0 ? (
-        <p className="mt-4 rounded-[14px] bg-sunken/60 p-4 text-[14px] text-muted">No orders in the last 7 days yet.</p>
+        <p className="mt-4 rounded-[14px] bg-sunken/60 p-4 text-[14px] text-muted">{L("No orders in the last 7 days yet.")}</p>
       ) : (
         <ul className="mt-4 space-y-2.5">
           {shown.map(({ m, per, q, earned }) => (
             <li key={m.id}>
-              <button onClick={() => onOpen(m)} title={`${m.name}: ${m.soldThisWeek} sold × ${inr(per)} = ${inr(earned)}`} className="group block w-full text-left">
+              <button onClick={() => onOpen(m)} title={L("{0}: {1} sold × {2} = {3}", m.name, m.soldThisWeek, inr(per), inr(earned))} className="group block w-full text-left">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate text-[14.5px] font-medium group-hover:underline">{m.name}</span>
                   <span className="shrink-0 text-[14.5px] font-semibold tnum">{inr(earned)}</span>
@@ -622,17 +618,17 @@ function EarnedChart({ items, quadrant, onOpen }: { items: MenuItem[]; quadrant:
         </ul>
       )}
       {sold.length > 10 && (
-        <button onClick={() => setAll((v) => !v)} className="mt-3 text-[13.5px] font-semibold text-jade">{all ? "Show top 10" : `Show all ${sold.length} dishes`}</button>
+        <button onClick={() => setAll((v) => !v)} className="mt-3 text-[13.5px] font-semibold text-jade">{all ? L("Show top 10") : L("Show all {0} dishes", sold.length)}</button>
       )}
-      {sold.length > 0 && <div className="mt-4 flex justify-between border-t border-line/80 pt-3 text-[14px]"><span className="text-muted">Total this week</span><b className="tnum">{inr(total)}</b></div>}
+      {sold.length > 0 && <div className="mt-4 flex justify-between border-t border-line/80 pt-3 text-[14px]"><span className="text-muted">{L("Total this week")}</span><b className="tnum">{inr(total)}</b></div>}
       {none.length > 0 && (
         <div className="mt-4">
-          <div className="text-[12.5px] font-semibold text-muted">Not ordered this week ({none.length})</div>
+          <div className="text-[12.5px] font-semibold text-muted">{L("Not ordered this week (")}{none.length})</div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {none.slice(0, all ? undefined : 12).map((m) => (
               <button key={m.id} onClick={() => onOpen(m)} className="rounded-full bg-sunken px-2.5 py-1 text-[12.5px] font-medium hover:bg-line">{m.name}</button>
             ))}
-            {!all && none.length > 12 && <span className="px-1 py-1 text-[12.5px] text-muted">+{none.length - 12} more</span>}
+            {!all && none.length > 12 && <span className="px-1 py-1 text-[12.5px] text-muted">+{none.length - 12} {L("more")}</span>}
           </div>
         </div>
       )}
@@ -707,7 +703,7 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
       {/* desktop: the categories down the side (drop a dish on one to move it) */}
       <aside className="hidden lg:block">
         <div className="sticky top-4 space-y-1">
-          <div className="px-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wide text-muted">Categories</div>
+          <div className="px-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wide text-muted">{L("Categories")}</div>
           {cats.map((c) => {
             const n = items.filter((m) => m.categoryId === c.id).length;
             return (
@@ -728,8 +724,7 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
             );
           })}
           <button onClick={onNewCat} className="mt-2 flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-[14px] font-semibold text-jade hover:bg-surface/60">
-            <Plus size={16} /> Category
-          </button>
+            <Plus size={16} /> {L("Category")}</button>
         </div>
       </aside>
 
@@ -739,8 +734,8 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
           <div className="flex flex-wrap gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-              <input className={clsx(inputCls, "h-11 pl-10 pr-9")} placeholder="Search dishes" value={q} onChange={(e) => setQ(e.target.value)} />
-              {q && <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted hover:bg-sunken"><X size={15} /></button>}
+              <input className={clsx(inputCls, "h-11 pl-10 pr-9")} placeholder={L("Search dishes")} value={q} onChange={(e) => setQ(e.target.value)} />
+              {q && <button aria-label={L("Clear search")} onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted hover:bg-sunken"><X size={15} /></button>}
             </div>
             <Segmented value={show} onChange={setShow} options={[{ value: "all", label: `All ${items.length}` }, { value: "on", label: "Available" }, { value: "off", label: `Sold out${off ? ` ${off}` : ""}` }]} />
           </div>
@@ -748,12 +743,12 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
         {!filtering && cats.length > 1 && (
           // phones: jump to a category from one dropdown (no sideways scrolling); dishes still drop onto a category's section
           <div className="sticky z-20 -mx-4 bg-canvas/95 px-4 py-2 backdrop-blur lg:hidden" style={{ top: "calc(54px + env(safe-area-inset-top, 0px))" }}>
-            <SelectMenu label="Category" value={active ?? cats[0].id} onChange={(id) => go(id)} options={cats.map((c) => ({ value: c.id, label: `${c.icon && c.icon !== "🍽️" ? `${c.icon} ` : ""}${c.name}`, count: items.filter((m) => m.categoryId === c.id).length }))} />
+            <SelectMenu label={L("Category")} value={active ?? cats[0].id} onChange={(id) => go(id)} options={cats.map((c) => ({ value: c.id, label: `${c.icon && c.icon !== "🍽️" ? `${c.icon} ` : ""}${c.name}`, count: items.filter((m) => m.categoryId === c.id).length }))} />
           </div>
         )}
 
         {filtering && groups.length === 0 && lost.length === 0 && (
-          <p className="rounded-group bg-surface px-4 py-10 text-center text-[14.5px] text-muted">No dishes match{q ? ` “${q}”` : ""}.</p>
+          <p className="rounded-group bg-surface px-4 py-10 text-center text-[14.5px] text-muted">{L("No dishes match")}{q ? ` “${q}”` : ""}.</p>
         )}
 
         {groups.map(({ c, all, list }) => {
@@ -769,17 +764,17 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
                 <CatIcon c={c} />
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-[17px] font-semibold leading-tight">{c.name}</h2>
-                  <p className="text-[12.5px] text-muted">{all.length} dish{all.length === 1 ? "" : "es"}{soldOut ? ` · ${soldOut} sold out` : ""}</p>
+                  <p className="text-[12.5px] text-muted">{all.length} {L("dish")}{all.length === 1 ? "" : "es"}{soldOut ? L(" · {0} sold out", soldOut) : ""}</p>
                 </div>
-                <button onClick={() => onEditCat(c)} aria-label={`Edit category ${c.name}`} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> <span className="hidden sm:inline">Edit</span></button>
-                {canEdit && <button onClick={() => onAdd(c.id)} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-jade ring-1 ring-line hover:bg-jade-soft"><Plus size={14} /> Dish</button>}
+                <button onClick={() => onEditCat(c)} aria-label={L("Edit category {0}", c.name)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-muted hover:bg-surface hover:text-ink"><Pencil size={13} /> <span className="hidden sm:inline">{L("Edit")}</span></button>
+                {canEdit && <button onClick={() => onAdd(c.id)} className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-[13px] font-semibold text-jade ring-1 ring-line hover:bg-jade-soft"><Plus size={14} /> {L("Dish")}</button>}
               </div>
               <div className="overflow-hidden rounded-group bg-surface">
                 {list.length === 0 ? (
                   canEdit ? (
-                    <button onClick={() => onAdd(c.id)} className="flex w-full items-center justify-center gap-2 px-4 py-6 text-[14px] font-semibold text-jade"><Plus size={16} /> Add the first dish to {c.name}</button>
+                    <button onClick={() => onAdd(c.id)} className="flex w-full items-center justify-center gap-2 px-4 py-6 text-[14px] font-semibold text-jade"><Plus size={16} /> {L("Add the first dish to")} {c.name}</button>
                   ) : (
-                    <p className="px-4 py-6 text-center text-[14px] text-muted">No dishes yet.</p>
+                    <p className="px-4 py-6 text-center text-[14px] text-muted">{L("No dishes yet.")}</p>
                   )
                 ) : (
                   list.map((m) => <DishRow key={m.id} m={m} canEdit={canEdit} dragging={drag?.id === m.id} startDrag={startDrag} onOpen={onOpen} onAvailable={onAvailable} />)
@@ -791,7 +786,7 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
 
         {lost.length > 0 && (
           <section>
-            <h2 className="mb-2 px-1 text-[17px] font-semibold">No category</h2>
+            <h2 className="mb-2 px-1 text-[17px] font-semibold">{L("No category")}</h2>
             <div className="overflow-hidden rounded-group bg-surface">
               {lost.map((m) => <DishRow key={m.id} m={m} canEdit={canEdit} dragging={drag?.id === m.id} startDrag={startDrag} onOpen={onOpen} onAvailable={onAvailable} />)}
             </div>
@@ -799,8 +794,7 @@ function MenuList({ cats, items, canEdit, drag, startDrag, onOpen, onAdd, onEdit
         )}
         {canEdit && !filtering && (
           <button onClick={onNewCat} className="flex w-full items-center justify-center gap-2 rounded-group border border-dashed border-line px-4 py-4 text-[14px] font-semibold text-muted hover:text-ink lg:hidden">
-            <Plus size={16} /> New category
-          </button>
+            <Plus size={16} /> {L("New category")}</button>
         )}
         {ghost}
       </div>
@@ -823,18 +817,18 @@ function DishRow({ m, canEdit, dragging, startDrag, onOpen, onAvailable }: {
           <span className="flex items-center gap-1.5">
             <DietMark diet={m.diet} />
             <span className="truncate text-[15px] font-medium">{m.name}</span>
-            {m.isNew && <span className="shrink-0 rounded-full bg-saffron-soft px-1.5 py-0.5 text-[10.5px] font-bold uppercase text-saffron">New</span>}
+            {m.isNew && <span className="shrink-0 rounded-full bg-saffron-soft px-1.5 py-0.5 text-[10.5px] font-bold uppercase text-saffron">{L("New")}</span>}
           </span>
           <span className="mt-0.5 block truncate text-[13px] text-muted tnum">
             <b className="font-semibold text-ink">{price}</b>
-            {m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}% margin</span></>}
-            {m.soldThisWeek > 0 && <> · {m.soldThisWeek} sold this week</>}
+            {m.cost > 0 && <> · <span className={margin < 60 ? "text-saffron" : undefined}>{margin}{L("% margin")}</span></>}
+            {m.soldThisWeek > 0 && <> · {m.soldThisWeek} {L("sold this week")}</>}
           </span>
         </span>
       </button>
       <span className="flex shrink-0 items-center gap-2.5">
-        <span className={clsx("hidden text-[12.5px] font-semibold sm:inline", m.available ? "text-jade-deep" : "text-rose")}>{m.available ? "Available" : "Sold out"}</span>
-        <Toggle label={`${m.name} available`} checked={m.available} onChange={(v) => onAvailable(m, v)} />
+        <span className={clsx("hidden text-[12.5px] font-semibold sm:inline", m.available ? "text-jade-deep" : "text-rose")}>{m.available ? L("Available") : L("Sold out")}</span>
+        <Toggle label={L("{0} available", m.name)} checked={m.available} onChange={(v) => onAvailable(m, v)} />
       </span>
     </div>
   );

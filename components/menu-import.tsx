@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // "Add from photo": the owner takes photos of their printed or handwritten menu,
 // Gemini reads them (edge function menu-from-photo), and the owner checks the
 // list before anything is added. Existing dishes are never changed.
@@ -102,7 +103,7 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
       }));
       if (!g.length) setErr("No dishes found in these photos. Try a closer, straight photo in good light.");
       else setGroups(g);
-      if (r.left !== null && r.left <= 5) toast(`${r.left} menu photo reads left today`);
+      if (r.left !== null && r.left <= 5) toast(L("{0} menu photo reads left today", r.left));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't read the menu");
     } finally {
@@ -149,7 +150,7 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
       );
     });
     menuActions.addMany(items);
-    toast(`${items.length} dish${items.length === 1 ? "" : "es"} added${newCats ? ` in ${newCats} new categor${newCats === 1 ? "y" : "ies"}` : ""}`);
+    toast(L("{0} dish{1} added{2}", items.length, items.length === 1 ? "" : "es", newCats ? ` in ${newCats} new categor${newCats === 1 ? "y" : "ies"}` : ""));
     reset();
     onClose();
   };
@@ -160,42 +161,39 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
     <Sheet
       open={open}
       onClose={close}
-      title={groups ? "Check the dishes" : "Add menu from photo"}
+      title={groups ? L("Check the dishes") : L("Add menu from photo")}
       wide
       footer={
         groups ? (
           <div className="flex gap-2">
-            <Button variant="plain" className="!bg-sunken" onClick={() => setGroups(null)}>Back</Button>
+            <Button variant="plain" className="!bg-sunken" onClick={() => setGroups(null)}>{L("Back")}</Button>
             <Button size="lg" className="flex-1" disabled={!picked.length} onClick={save}>
-              {picked.length ? `Add ${picked.length} dish${picked.length === 1 ? "" : "es"}` : "Pick dishes to add"}
+              {picked.length ? L("Add {0} dish{1}", picked.length, picked.length === 1 ? "" : "es") : L("Pick dishes to add")}
             </Button>
           </div>
         ) : (
           <Button size="lg" className="w-full" disabled={!shots.length || busy || !cloud.rid} onClick={read}>
-            {busy ? "Reading the menu…" : shots.length ? `Read ${shots.length} photo${shots.length === 1 ? "" : "s"}` : "Add a photo first"}
+            {busy ? L("Reading the menu…") : shots.length ? L("Read {0} photo{1}", shots.length, shots.length === 1 ? "" : "s") : L("Add a photo first")}
           </Button>
         )
       }
     >
       {busy ? (
         <div className="flex flex-col items-center py-14 text-center">
-          <CookingLoader size={72} label="Reading the menu" />
-          <p className="mt-4 text-[15px] font-semibold">Reading your menu…</p>
-          <p className="mt-1 text-[13.5px] text-muted">This takes 10–30 seconds.</p>
+          <CookingLoader size={72} label={L("Reading the menu")} />
+          <p className="mt-4 text-[15px] font-semibold">{L("Reading your menu…")}</p>
+          <p className="mt-1 text-[13.5px] text-muted">{L("This takes 10–30 seconds.")}</p>
         </div>
       ) : !groups ? (
         <div className="space-y-4">
           <p className="text-[14px] text-muted">
-            Take a clear, straight photo of each menu page (printed or handwritten). We&apos;ll list the categories, dishes and prices for you to check before anything is added.
-          </p>
+            {L("Take a clear, straight photo of each menu page (printed or handwritten). We'll list the categories, dishes and prices for you to check before anything is added.")}</p>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-ctl bg-ink text-[15px] font-semibold text-canvas">
-              <Camera size={18} /> Take photo
-              <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
+              <Camera size={18} /> {L("Take photo")}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
             </label>
             <label className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-ctl bg-surface text-[15px] font-semibold ring-1 ring-line">
-              <ImagePlus size={18} /> From gallery
-              <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
+              <ImagePlus size={18} /> {L("From gallery")}<input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
             </label>
           </div>
           {shots.length > 0 && (
@@ -203,9 +201,9 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
               {shots.map((s, i) => (
                 <div key={s.id} className="relative aspect-[3/4] overflow-hidden rounded-[12px] bg-sunken">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.url} alt={`Menu page ${i + 1}`} className="h-full w-full object-cover" />
+                  <img src={s.url} alt={L("Menu page {0}", i + 1)} className="h-full w-full object-cover" />
                   <button
-                    aria-label="Remove photo"
+                    aria-label={L("Remove photo")}
                     onClick={() => { URL.revokeObjectURL(s.url); setShots((x) => x.filter((y) => y.id !== s.id)); }}
                     className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink/70 text-white"
                   >
@@ -216,16 +214,15 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
             </div>
           )}
           <ul className="space-y-1 text-[13px] text-muted">
-            <li>• One page per photo, flat, in good light, no glare.</li>
-            <li>• Up to {MAX_PHOTOS} photos at a time. Half/full prices become two dishes.</li>
+            <li>{L("• One page per photo, flat, in good light, no glare.")}</li>
+            <li>{L("• Up to")} {MAX_PHOTOS} {L("photos at a time. Half/full prices become two dishes.")}</li>
           </ul>
           {err && <p className="rounded-ctl bg-rose-soft px-3 py-2 text-[13.5px] text-rose">{err}</p>}
         </div>
       ) : (
         <div className="space-y-5">
           <p className="text-[13.5px] text-muted">
-            Fix any name or price, tap the mark to change veg / non-veg / egg, and untick what you don&apos;t want.
-            {noPrice > 0 && <span className="text-saffron"> {noPrice} dish{noPrice === 1 ? " has" : "es have"} no price yet.</span>}
+            {L("Fix any name or price, tap the mark to change veg / non-veg / egg, and untick what you don't want.")}{noPrice > 0 && <span className="text-saffron"> {noPrice} {L("dish")}{noPrice === 1 ? L(" has") : L("es have")} {L("no price yet.")}</span>}
           </p>
           {groups.map((g) => {
             const existing = catByName(g.name);
@@ -233,25 +230,25 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
             return (
               <div key={g.key} className="overflow-hidden rounded-group bg-surface">
                 <div className="flex items-center gap-2 border-b border-line/80 px-3 py-2.5">
-                  <input className="min-w-0 flex-1 bg-transparent text-[15.5px] font-semibold outline-none" value={g.name} onChange={(e) => setGroup(g.key, { name: e.target.value })} aria-label="Category name" />
-                  <span className={clsx("shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold", existing ? "bg-sunken text-muted" : "bg-jade-soft text-jade-deep")}>{existing ? "Existing category" : "New category"}</span>
-                  <button onClick={() => setGroup(g.key, { rows: g.rows.map((r) => ({ ...r, on: !allOn })) })} className="shrink-0 text-[12.5px] font-semibold text-jade">{allOn ? "None" : "All"}</button>
+                  <input className="min-w-0 flex-1 bg-transparent text-[15.5px] font-semibold outline-none" value={g.name} onChange={(e) => setGroup(g.key, { name: e.target.value })} aria-label={L("Category name")} />
+                  <span className={clsx("shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold", existing ? "bg-sunken text-muted" : "bg-jade-soft text-jade-deep")}>{existing ? L("Existing category") : L("New category")}</span>
+                  <button onClick={() => setGroup(g.key, { rows: g.rows.map((r) => ({ ...r, on: !allOn })) })} className="shrink-0 text-[12.5px] font-semibold text-jade">{allOn ? L("None") : L("All")}</button>
                 </div>
                 {g.rows.map((r) => (
                   <div key={r.key} className={clsx("flex items-center gap-2 border-b border-line/60 px-3 py-2 last:border-0", !r.on && "opacity-50")}>
                     <button
-                      aria-label={r.on ? "Don't add" : "Add"}
+                      aria-label={r.on ? L("Don't add") : L("Add")}
                       onClick={() => setRow(g.key, r.key, { on: !r.on })}
                       className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px]", r.on ? "bg-jade text-white" : "ring-1 ring-line")}
                     >
                       {r.on && <Check size={15} />}
                     </button>
-                    <button aria-label="Change veg / non-veg" onClick={() => setRow(g.key, r.key, { diet: nextDiet(r.diet) })} className="p-1">
+                    <button aria-label={L("Change veg / non-veg")} onClick={() => setRow(g.key, r.key, { diet: nextDiet(r.diet) })} className="p-1">
                       <DietMark diet={r.diet} />
                     </button>
                     <div className="min-w-0 flex-1">
-                      <input className="w-full bg-transparent text-[14.5px] outline-none" value={r.name} onChange={(e) => setRow(g.key, r.key, { name: e.target.value })} aria-label="Dish name" />
-                      {r.dup && <div className="text-[11.5px] text-saffron">Already on your menu</div>}
+                      <input className="w-full bg-transparent text-[14.5px] outline-none" value={r.name} onChange={(e) => setRow(g.key, r.key, { name: e.target.value })} aria-label={L("Dish name")} />
+                      {r.dup && <div className="text-[11.5px] text-saffron">{L("Already on your menu")}</div>}
                     </div>
                     <div className="flex shrink-0 items-center rounded-[9px] bg-sunken px-2">
                       <span className="text-[13px] text-muted">₹</span>
@@ -261,7 +258,7 @@ export function MenuFromPhoto({ open, onClose }: { open: boolean; onClose: () =>
                         placeholder="—"
                         value={r.price}
                         onChange={(e) => setRow(g.key, r.key, { price: e.target.value.replace(/[^\d]/g, "") })}
-                        aria-label="Price"
+                        aria-label={L("Price")}
                       />
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Tables to clean:
 //   • a table needs cleaning when a group leaves after paying (or a team member asks for it)
 //   • anyone can send someone to clean it; that person gets a notification
@@ -9,7 +10,7 @@ import Link from "next/link";
 import { Check, SprayCan, UsersRound } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { hasPerm, inOutlet, type Member } from "@/lib/access";
-import { timeAgo } from "@/lib/format";
+import { sinceShort } from "@/lib/format";
 import { useCurrentOutlet, useMe, useMembers, useOutlets } from "@/lib/live";
 import { useFresh } from "@/lib/store";
 import { tableActions, useAllTables } from "@/lib/tables";
@@ -23,7 +24,7 @@ import { chime } from "./sound";
 export const myLabel = (me: Member | null | undefined) => (me ? (me.role === "owner" ? `${me.name} (Owner)` : me.name) : "Staff");
 
 /** "4 min" since the table was left. */
-const ago = (iso: string) => timeAgo(iso).replace(/ ago$/, "");
+const ago = (iso: string) => sinceShort(iso);
 
 function notify(title: string, body: string) {
   try {
@@ -38,20 +39,20 @@ export function CleanSheet({ table, onClose }: { table: Table | null; onClose: (
   const toast = useToast();
   const c = table?.cleaning;
   return (
-    <Sheet open={!!table} onClose={onClose} title={table ? (c ? `Clean ${table.name}` : `Clean ${table.name}?`) : ""}>
+    <Sheet open={!!table} onClose={onClose} title={table ? (c ? L("Clean {0}", table.name) : L("Clean {0}?", table.name)) : ""}>
       {table && (
         <div className="space-y-3">
-          <p className="text-[14px] text-muted">{c?.toName ? `${c.toName} is on it. Pick someone else, or mark it clean.` : "Who should clean it? They get a notification."}</p>
+          <p className="text-[14px] text-muted">{c?.toName ? L("{0} is on it. Pick someone else, or mark it clean.", c.toName) : L("Who should clean it? They get a notification.")}</p>
           <div className="overflow-hidden rounded-group bg-surface">
             {!c && (
               <button
-                onClick={() => { tableActions.needsCleaning(table.id); toast(`${table.name} · marked to clean`); onClose(); }}
+                onClick={() => { tableActions.needsCleaning(table.id); toast(L("{0} · marked to clean", table.name)); onClose(); }}
                 className="flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left hover:bg-sunken/40"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sunken text-muted"><UsersRound size={16} /></span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[14.5px] font-semibold">Anyone free</span>
-                  <span className="block text-[12.5px] text-muted">Everyone on tables sees it</span>
+                  <span className="block text-[14.5px] font-semibold">{L("Anyone free")}</span>
+                  <span className="block text-[12.5px] text-muted">{L("Everyone on tables sees it")}</span>
                 </span>
               </button>
             )}
@@ -67,17 +68,16 @@ export function CleanSheet({ table, onClose }: { table: Table | null; onClose: (
               >
                 <Avatar name={m.name} hue={m.hue} photo={m.photo} size={32} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[14.5px] font-semibold">{m.name}{m.id === me?.id ? " (you)" : ""}</span>
-                  <span className="block text-[12.5px] text-muted">{m.role === "owner" ? "Owner" : m.title || "Staff"}</span>
+                  <span className="block text-[14.5px] font-semibold">{m.name}{m.id === me?.id ? L(" (you)") : ""}</span>
+                  <span className="block text-[12.5px] text-muted">{m.role === "owner" ? L("Owner") : m.title || L("Staff")}</span>
                 </span>
                 {c?.to === m.id && <Check size={17} className="text-jade" />}
               </button>
             ))}
           </div>
           {c && (
-            <Button className="w-full" onClick={() => { tableActions.cleaned(table.id, myLabel(me)); toast(`${table.name} is clean`); onClose(); }}>
-              <Check size={16} /> Cleaned
-            </Button>
+            <Button className="w-full" onClick={() => { tableActions.cleaned(table.id, myLabel(me)); toast(L("{0} is clean", table.name)); onClose(); }}>
+              <Check size={16} /> {L("Cleaned")}</Button>
           )}
         </div>
       )}
@@ -96,13 +96,13 @@ export function CleanCard({ table, onChange }: { table: Table; onChange: () => v
       <span className="flex min-w-0 flex-1 items-start gap-3">
         <SprayCan size={18} className="mt-0.5 shrink-0 text-rose" />
         <span className="min-w-0 text-[14px]">
-          <b>Needs cleaning</b> · {ago(c.since)}
-          <span className="block text-[12.5px] text-muted">{c.toName ? `${c.to === me?.id ? "You" : c.toName}${c.by && c.by !== c.toName ? ` · sent by ${c.by}` : ""}` : "No one yet"}</span>
+          <b>{L("Needs cleaning")}</b> · {ago(c.since)}
+          <span className="block text-[12.5px] text-muted">{c.toName ? `${c.to === me?.id ? L("You") : c.toName}${c.by && c.by !== c.toName ? L(" · sent by {0}", c.by) : ""}` : L("No one yet")}</span>
         </span>
       </span>
       <span className="grid grid-cols-2 gap-2 sm:flex">
-        <Button size="sm" variant="plain" onClick={onChange}>{c.toName ? "Change" : "Assign"}</Button>
-        <Button size="sm" onClick={() => { tableActions.cleaned(table.id, myLabel(me)); toast(`${table.name} is clean`); }}><Check size={15} /> Cleaned</Button>
+        <Button size="sm" variant="plain" onClick={onChange}>{c.toName ? L("Change") : L("Assign")}</Button>
+        <Button size="sm" onClick={() => { tableActions.cleaned(table.id, myLabel(me)); toast(L("{0} is clean", table.name)); }}><Check size={15} /> {L("Cleaned")}</Button>
       </span>
     </div>
   );
@@ -132,20 +132,19 @@ export function CleanNeedsCards({ tables, onGo }: { tables: Table[]; onGo?: () =
         <div key={t.id} className="flex items-center gap-2 rounded-[16px] bg-surface p-3 text-[14px]">
           <SprayCan size={17} className="shrink-0 text-rose" />
           <span className="min-w-0 flex-1">
-            <b>Clean {t.name}</b>
-            <span className="block text-[12.5px] text-muted">{t.cleaning!.by && t.cleaning!.by !== t.cleaning!.toName ? `${t.cleaning!.by} sent you · ` : ""}{ago(t.cleaning!.since)}</span>
+            <b>{L("Clean")} {t.name}</b>
+            <span className="block text-[12.5px] text-muted">{t.cleaning!.by && t.cleaning!.by !== t.cleaning!.toName ? L("{0} sent you · ", t.cleaning!.by) : ""}{ago(t.cleaning!.since)}</span>
           </span>
-          <Button size="sm" onClick={() => { tableActions.cleaned(t.id, myLabel(me)); toast(`${t.name} is clean`); }}><Check size={15} /> Cleaned</Button>
+          <Button size="sm" onClick={() => { tableActions.cleaned(t.id, myLabel(me)); toast(L("{0} is clean", t.name)); }}><Check size={15} /> {L("Cleaned")}</Button>
         </div>
       ))}
       {rest.length > 0 && (
         <Link href="/app/tables" onClick={onGo} className="flex items-center gap-2 rounded-[16px] bg-surface p-3 text-[14px] hover:shadow-float">
           <SprayCan size={17} className="shrink-0 text-rose" />
           <span className="flex-1">
-            <b>{rest.map((t) => t.name).join(", ")}</b> {rest.length > 1 ? "need" : "needs"} cleaning
-            {rest.some((t) => !t.cleaning!.to) && <span className={clsx("block text-[12.5px] text-muted")}>{rest.filter((t) => !t.cleaning!.to).length === rest.length ? "No one assigned yet" : `${rest.filter((t) => !t.cleaning!.to).map((t) => t.name).join(", ")} · no one yet`}</span>}
+            <b>{rest.map((t) => t.name).join(", ")}</b> {rest.length > 1 ? "need" : "needs"} {L("cleaning")}{rest.some((t) => !t.cleaning!.to) && <span className={clsx("block text-[12.5px] text-muted")}>{rest.filter((t) => !t.cleaning!.to).length === rest.length ? L("No one assigned yet") : L("{0} · no one yet", rest.filter((t) => !t.cleaning!.to).map((t) => t.name).join(", "))}</span>}
           </span>
-          <span className="text-[13px] font-semibold text-jade">Open</span>
+          <span className="text-[13px] font-semibold text-jade">{L("Open")}</span>
         </Link>
       )}
     </>
@@ -182,22 +181,22 @@ export function CleanAlerts() {
       if (c.to) {
         // sent to me (by someone else): always, whatever outlet is on screen
         if (c.to === me.id && c.by !== myLabel(me)) {
-          const title = `Clean ${t.name}`;
+          const title = L("Clean {0}", t.name);
           const body = `${c.by ? `${c.by} sent you` : "You were sent"}${tag(t.outletId)}`;
           pushNotice({ kind: "clean", title, body, href: "/app/tables", outletId: t.outletId });
           notify(title, body);
-          toast(`🧽 ${c.by ? `${c.by} sent you to clean` : "Clean"} ${t.name}`);
+          toast(`🧽 ${c.by ? L("{0} sent you to clean", c.by) : L("Clean")} ${t.name}`);
           ring = true;
         }
       } else if (!was.startsWith(c.since)) {
         // newly left to clean, no one yet: everyone who works the tables in that outlet
         if (!hasPerm(me, "tables") || (t.outletId && !inOutlet(me, t.outletId))) continue;
         if (t.outletId && outletNow.id && t.outletId !== outletNow.id) continue;
-        const title = `${t.name} needs cleaning`;
+        const title = L("{0} needs cleaning", t.name);
         const body = "Guests left · tap to send someone";
         pushNotice({ kind: "clean", title, body, href: "/app/tables", outletId: t.outletId });
         notify(title, body);
-        toast(`🧽 ${t.name} needs cleaning`);
+        toast(L("🧽 {0} needs cleaning", t.name));
         ring = true;
       }
     }

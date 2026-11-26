@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Owner's report builder: pick what goes in, filter it, then get a designed PDF
 // (the browser's print box saves it) or one Excel file with the same sections.
 import clsx from "clsx";
@@ -158,7 +159,7 @@ export function ReportBuilder({
   // ---------- PDF ----------
   const pdf = () => {
     const w = window.open("", "_blank");
-    if (!w) return toast("Allow pop-ups to save the PDF");
+    if (!w) return toast(L("Allow pop-ups to save the PDF"));
     const has = (id: SectionId) => sel.includes(id);
     const money = (n: number) => esc(inr(Math.round(n)));
     const table = (head: string[], rows: (string | number)[][], foot?: (string | number)[], numFrom = 1) =>
@@ -318,19 +319,19 @@ export function ReportBuilder({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Build a report"
+      title={L("Build a report")}
       wide
       footer={
         <div className="grid grid-cols-2 gap-2">
-          <Button size="lg" variant="tinted" disabled={!sel.length} onClick={excel}><FileSpreadsheet size={18} /> Excel</Button>
-          <Button size="lg" disabled={!sel.length} onClick={pdf}><FileText size={18} /> PDF</Button>
+          <Button size="lg" variant="tinted" disabled={!sel.length} onClick={excel}><FileSpreadsheet size={18} /> {L("Excel")}</Button>
+          <Button size="lg" disabled={!sel.length} onClick={pdf}><FileText size={18} /> {L("PDF")}</Button>
         </div>
       }
     >
       <div className="space-y-5">
-        <p className="text-[14px] text-muted">{rangeText}{outletName ? ` · ${outletName}` : ""} · {data.paidList.length} paid bill{data.paidList.length === 1 ? "" : "s"} · {inr(Math.round(data.sales))}</p>
+        <p className="text-[14px] text-muted">{rangeText}{outletName ? ` · ${outletName}` : ""} · {data.paidList.length} {L("paid bill")}{data.paidList.length === 1 ? "" : "s"} · {inr(Math.round(data.sales))}</p>
         <div>
-          <div className="mb-2 text-[13px] font-semibold text-muted">What goes in the report</div>
+          <div className="mb-2 text-[13px] font-semibold text-muted">{L("What goes in the report")}</div>
           <div className="grid gap-2 sm:grid-cols-2">
             {SECTIONS.map((s) => {
               const on = sel.includes(s.id);
@@ -338,43 +339,43 @@ export function ReportBuilder({
                 <button key={s.id} onClick={() => toggle(s.id)} className={clsx("flex items-start gap-3 rounded-[14px] px-3 py-2.5 text-left transition", on ? "bg-jade-soft ring-1 ring-jade/40" : "bg-surface hover:bg-sunken")}>
                   <span className={clsx("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px]", on ? "bg-jade text-white" : "ring-2 ring-line")}>{on && <Check size={13} strokeWidth={3} />}</span>
                   <span>
-                    <span className="block text-[14.5px] font-medium">{s.label}</span>
-                    <span className="block text-[12.5px] text-muted">{s.hint}</span>
+                    <span className="block text-[14.5px] font-medium">{L(s.label)}</span>
+                    <span className="block text-[12.5px] text-muted">{L(s.hint)}</span>
                   </span>
                 </button>
               );
             })}
           </div>
           <div className="mt-2 flex gap-3 text-[13px] font-semibold">
-            <button className="text-jade" onClick={() => { setSel(SECTIONS.map((s) => s.id)); try { localStorage.setItem(SAVE, JSON.stringify(SECTIONS.map((s) => s.id))); } catch {} }}>Select all</button>
-            <button className="text-muted" onClick={() => { setSel(DEFAULT); try { localStorage.setItem(SAVE, JSON.stringify(DEFAULT)); } catch {} }}>Reset</button>
+            <button className="text-jade" onClick={() => { setSel(SECTIONS.map((s) => s.id)); try { localStorage.setItem(SAVE, JSON.stringify(SECTIONS.map((s) => s.id))); } catch {} }}>{L("Select all")}</button>
+            <button className="text-muted" onClick={() => { setSel(DEFAULT); try { localStorage.setItem(SAVE, JSON.stringify(DEFAULT)); } catch {} }}>{L("Reset")}</button>
           </div>
         </div>
         <div>
-          <div className="mb-2 text-[13px] font-semibold text-muted">Only include</div>
+          <div className="mb-2 text-[13px] font-semibold text-muted">{L("Only include")}</div>
           <div className="grid gap-2 sm:grid-cols-3">
-            <select aria-label="Payment method" value={method} onChange={(e) => setMethod(e.target.value as typeof method)} className={clsx(inputCls, "!h-11 !text-[14px]")}>
-              <option value="all">Every payment method</option>
-              <option value="upi">UPI</option>
-              <option value="cash">Cash</option>
-              <option value="card">Card</option>
+            <select aria-label={L("Payment method")} value={method} onChange={(e) => setMethod(e.target.value as typeof method)} className={clsx(inputCls, "!h-11 !text-[14px]")}>
+              <option value="all">{L("Every payment method")}</option>
+              <option value="upi">{L("UPI")}</option>
+              <option value="cash">{L("Cash")}</option>
+              <option value="card">{L("Card")}</option>
             </select>
-            <select aria-label="Order type" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={clsx(inputCls, "!h-11 !text-[14px]")}>
-              <option value="all">Every order type</option>
-              <option value="dine-in">Dine-in</option>
-              <option value="takeaway">Counter / takeaway</option>
-              <option value="delivery">Delivery</option>
-              <option value="qr">QR (guest phone)</option>
+            <select aria-label={L("Order type")} value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={clsx(inputCls, "!h-11 !text-[14px]")}>
+              <option value="all">{L("Every order type")}</option>
+              <option value="dine-in">{L("Dine-in")}</option>
+              <option value="takeaway">{L("Counter / takeaway")}</option>
+              <option value="delivery">{L("Delivery")}</option>
+              <option value="qr">{L("QR (guest phone)")}</option>
             </select>
-            <select aria-label="Staff" value={staff} onChange={(e) => setStaff(e.target.value)} className={clsx(inputCls, "!h-11 !text-[14px]")}>
-              <option value="all">Every staff member</option>
+            <select aria-label={L("Staff")} value={staff} onChange={(e) => setStaff(e.target.value)} className={clsx(inputCls, "!h-11 !text-[14px]")}>
+              <option value="all">{L("Every staff member")}</option>
               {people.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </div>
         </div>
-        <p className="text-[12.5px] text-faint">PDF opens a print-ready page: choose &ldquo;Save as PDF&rdquo;. On a phone, share the saved file on WhatsApp.</p>
+        <p className="text-[12.5px] text-faint">{L("PDF opens a print-ready page: choose “Save as PDF”. On a phone, share the saved file on WhatsApp.")}</p>
       </div>
     </Sheet>
   );

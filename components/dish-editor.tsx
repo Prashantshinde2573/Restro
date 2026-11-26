@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import clsx from "clsx";
 import { ImagePlus, Plus, Star, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
@@ -51,20 +52,20 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-[13px] font-medium text-muted">Photos</span>
-        <span className="text-[12px] text-faint">{photos.length}/{max} · first one is the cover</span>
+        <span className="text-[13px] font-medium text-muted">{L("Photos")}</span>
+        <span className="text-[12px] text-faint">{photos.length}/{max} {L("· first one is the cover")}</span>
       </div>
       {err && <p className="mb-2 text-[13px] font-medium text-rose">{err}</p>}
       <div className="grid grid-cols-3 gap-2">
         {photos.map((src, i) => (
           <div key={src} className="group relative aspect-square overflow-hidden rounded-[14px] bg-sunken">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+            <img src={src} alt={L("Photo {0}", i + 1)} className="h-full w-full object-cover" />
             {i === 0 ? (
-              <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white">Cover</span>
+              <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white">{L("Cover")}</span>
             ) : (
               <button
-                aria-label="Make cover photo"
+                aria-label={L("Make cover photo")}
                 onClick={() => onChange([src, ...photos.filter((p) => p !== src)])}
                 className="absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white"
               >
@@ -72,7 +73,7 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
               </button>
             )}
             <button
-              aria-label="Remove photo"
+              aria-label={L("Remove photo")}
               onClick={() => onChange(photos.filter((p) => p !== src))}
               className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white"
             >
@@ -94,12 +95,12 @@ export function PhotoUploader({ photos, onChange, max = 6 }: { photos: string[];
             )}
           >
             <ImagePlus size={22} />
-            <span className="text-[13px] font-medium">{busy > 0 ? "Uploading…" : photos.length ? "Add more" : "Add photos — take or upload"}</span>
+            <span className="text-[13px] font-medium">{busy > 0 ? L("Uploading…") : photos.length ? L("Add more") : L("Add photos — take or upload")}</span>
           </button>
         )}
       </div>
       <input ref={input} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; void addFiles(fs); }} />
-      <p className="mt-1.5 text-[12px] text-faint">Tip: shoot from above in daylight. Photos are shown square everywhere, so the menu looks even.</p>
+      <p className="mt-1.5 text-[12px] text-faint">{L("Tip: shoot from above in daylight. Photos are shown square everywhere, so the menu looks even.")}</p>
     </div>
   );
 }
@@ -111,19 +112,19 @@ export function SizesEditor({ sizes, onChange }: { sizes: Size[]; onChange: (s: 
   return (
     <div className="rounded-group bg-surface p-3">
       {sizes.length === 0 ? (
-        <p className="flex items-center gap-1 px-1 pb-2 text-[13px] text-muted">One price · or add sizes <Hint align="left">Sold in sizes (pizza, shakes, half / full)? Add them here; each size has its own price.</Hint></p>
+        <p className="flex items-center gap-1 px-1 pb-2 text-[13px] text-muted">{L("One price · or add sizes")} <Hint align="left">{L("Sold in sizes (pizza, shakes, half / full)? Add them here; each size has its own price.")}</Hint></p>
       ) : (
         <div className="space-y-1.5">
           {sizes.map((z, i) => (
             <div key={z.id} className="flex items-center gap-2">
-              <input aria-label="Size name" value={z.name} placeholder="e.g. Medium" onChange={(e) => set(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/50 px-3 text-[15px] font-medium outline-none focus:ring-1 focus:ring-jade/40" />
+              <input aria-label={L("Size name")} value={z.name} placeholder={L("e.g. Medium")} onChange={(e) => set(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/50 px-3 text-[15px] font-medium outline-none focus:ring-1 focus:ring-jade/40" />
               <span className="text-[13px] text-muted">₹</span>
-              <input aria-label={`Price for ${z.name || "this size"}`} inputMode="numeric" value={z.price || ""} placeholder="0" onChange={(e) => set(i, { price: Number(e.target.value.replace(/\D/g, "")) || 0 })} className="h-10 w-20 rounded-[10px] bg-sunken/50 px-2 text-right text-[15px] font-semibold outline-none tnum focus:ring-1 focus:ring-jade/40" />
-              <button aria-label="Remove size" onClick={() => onChange(sizes.filter((_, j) => j !== i))} className="p-1 text-faint"><X size={15} /></button>
+              <input aria-label={L("Price for {0}", z.name || "this size")} inputMode="numeric" value={z.price || ""} placeholder="0" onChange={(e) => set(i, { price: Number(e.target.value.replace(/\D/g, "")) || 0 })} className="h-10 w-20 rounded-[10px] bg-sunken/50 px-2 text-right text-[15px] font-semibold outline-none tnum focus:ring-1 focus:ring-jade/40" />
+              <button aria-label={L("Remove size")} onClick={() => onChange(sizes.filter((_, j) => j !== i))} className="p-1 text-faint"><X size={15} /></button>
             </div>
           ))}
-          <button onClick={() => onChange([...sizes, { id: `s${Date.now()}`, name: "", price: 0 }])} className="pt-1 text-[13px] font-semibold text-jade">+ Add size</button>
-          {sizes.length === 1 && <p className="text-[12px] text-saffron">Add at least two sizes, or remove this one.</p>}
+          <button onClick={() => onChange([...sizes, { id: `s${Date.now()}`, name: "", price: 0 }])} className="pt-1 text-[13px] font-semibold text-jade">{L("+ Add size")}</button>
+          {sizes.length === 1 && <p className="text-[12px] text-saffron">{L("Add at least two sizes, or remove this one.")}</p>}
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
@@ -145,18 +146,18 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
       {groups.map((g, i) => (
         <div key={g.id + i} className="rounded-group bg-surface p-3">
           <div className="flex items-center gap-2">
-            <input aria-label="Option group name" value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/60 px-3 text-[15px] font-semibold outline-none focus:ring-1 focus:ring-jade/40" />
+            <input aria-label={L("Option group name")} value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} className="h-10 min-w-0 flex-1 rounded-[10px] bg-sunken/60 px-3 text-[15px] font-semibold outline-none focus:ring-1 focus:ring-jade/40" />
             <select
-              aria-label="Choice type"
+              aria-label={L("Choice type")}
               value={g.type === "single" ? (g.required ? "one" : "one-opt") : "any"}
               onChange={(e) => setGroup(i, { type: e.target.value === "any" ? "multi" : "single", required: e.target.value === "one" })}
               className="h-10 rounded-[10px] bg-sunken/60 pl-3 text-[13px] outline-none"
             >
-              <option value="one">Must pick one</option>
-              <option value="one-opt">Pick one (optional)</option>
-              <option value="any">Pick any</option>
+              <option value="one">{L("Must pick one")}</option>
+              <option value="one-opt">{L("Pick one (optional)")}</option>
+              <option value="any">{L("Pick any")}</option>
             </select>
-            <button aria-label="Remove group" onClick={() => onChange(groups.filter((_, j) => j !== i))} className="flex h-9 w-9 items-center justify-center rounded-full text-faint hover:bg-sunken">
+            <button aria-label={L("Remove group")} onClick={() => onChange(groups.filter((_, j) => j !== i))} className="flex h-9 w-9 items-center justify-center rounded-full text-faint hover:bg-sunken">
               <Trash2 size={15} />
             </button>
           </div>
@@ -164,24 +165,24 @@ export function OptionsEditor({ groups, onChange }: { groups: OptionGroup[]; onC
             {g.choices.map((c, k) => (
               <div key={k} className="flex items-center gap-2">
                 <input
-                  aria-label="Choice name"
+                  aria-label={L("Choice name")}
                   value={c.name}
                   onChange={(e) => setGroup(i, { choices: g.choices.map((x, m) => (m === k ? { ...x, name: e.target.value } : x)) })}
                   className="h-9 min-w-0 flex-1 rounded-[10px] bg-sunken/40 px-3 text-[14px] outline-none focus:ring-1 focus:ring-jade/40"
                 />
                 <span className="text-[13px] text-muted">+₹</span>
                 <input
-                  aria-label="Extra price"
+                  aria-label={L("Extra price")}
                   inputMode="numeric"
                   value={c.price || ""}
                   placeholder="0"
                   onChange={(e) => setGroup(i, { choices: g.choices.map((x, m) => (m === k ? { ...x, price: Number(e.target.value.replace(/\D/g, "")) || 0 } : x)) })}
                   className="h-9 w-16 rounded-[10px] bg-sunken/40 px-2 text-right text-[14px] outline-none tnum focus:ring-1 focus:ring-jade/40"
                 />
-                <button aria-label="Remove choice" onClick={() => setGroup(i, { choices: g.choices.filter((_, m) => m !== k) })} className="p-1 text-faint"><X size={14} /></button>
+                <button aria-label={L("Remove choice")} onClick={() => setGroup(i, { choices: g.choices.filter((_, m) => m !== k) })} className="p-1 text-faint"><X size={14} /></button>
               </div>
             ))}
-            <button onClick={() => setGroup(i, { choices: [...g.choices, { id: `c${Date.now()}`, name: "", price: 0 }] })} className="text-[13px] font-semibold text-jade">+ Add choice</button>
+            <button onClick={() => setGroup(i, { choices: [...g.choices, { id: `c${Date.now()}`, name: "", price: 0 }] })} className="text-[13px] font-semibold text-jade">{L("+ Add choice")}</button>
           </div>
         </div>
       ))}

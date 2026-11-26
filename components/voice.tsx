@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Voice ordering: the browser listens (Chrome / Edge / Android; Safari partly),
 // and what was said is matched to this restaurant's own menu.
 // Say it like: "two butter chicken, four butter naan, one dal makhani".
@@ -134,35 +135,35 @@ export function VoiceOrder({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Speak the order"
+      title={L("Speak the order")}
       footer={
         supported ? (
           <Button size="lg" className="w-full" disabled={!lines.length} onClick={() => { stop(); onAdd(lines); onClose(); }}>
-            {lines.length ? `Add ${lines.reduce((s, l) => s + l.qty, 0)} items to order` : listening ? "Listening…" : "Nothing matched yet"}
+            {lines.length ? L("Add {0} items to order", lines.reduce((s, l) => s + l.qty, 0)) : listening ? L("Listening…") : L("Nothing matched yet")}
           </Button>
         ) : undefined
       }
     >
       {!supported ? (
-        <p className="rounded-group bg-surface p-4 text-[14.5px] text-muted">This browser can&apos;t listen. Use Chrome on Android or a computer.</p>
+        <p className="rounded-group bg-surface p-4 text-[14.5px] text-muted">{L("This browser can't listen. Use Chrome on Android or a computer.")}</p>
       ) : (
         <>
           <div className="flex flex-col items-center py-4">
-            <button onClick={listening ? stop : start} className="relative flex h-20 w-20 items-center justify-center" aria-label={listening ? "Stop" : "Listen"}>
+            <button onClick={listening ? stop : start} className="relative flex h-20 w-20 items-center justify-center" aria-label={listening ? L("Stop") : L("Listen")}>
               {listening && <span className="absolute inset-0 animate-pulse-ring rounded-full bg-jade/40" />}
               <span className={clsx("relative flex h-20 w-20 items-center justify-center rounded-full", listening ? "bg-jade text-white" : "bg-jade-soft text-jade")}>
                 {listening ? <Mic size={30} /> : <MicOff size={28} />}
               </span>
             </button>
-            <p className="mt-2 text-[13px] text-muted">{listening ? "Listening… tap to stop" : "Tap to speak again"}</p>
+            <p className="mt-2 text-[13px] text-muted">{listening ? L("Listening… tap to stop") : L("Tap to speak again")}</p>
             <p className="mt-4 min-h-[60px] text-center text-[18px] font-medium leading-snug">
-              {text || <span className="text-faint">Say the dishes with how many, e.g. &ldquo;two butter chicken, four naan&rdquo;</span>}
+              {text || <span className="text-faint">{L("Say the dishes with how many, e.g. “two butter chicken, four naan”")}</span>}
             </p>
             {error && <p className="text-[14px] font-medium text-rose">{error}</p>}
           </div>
           {lines.length > 0 && (
             <div className="animate-fade-in overflow-hidden rounded-group bg-surface">
-              <div className="border-b border-line px-4 py-2.5 text-[13px] text-muted">Understood as</div>
+              <div className="border-b border-line px-4 py-2.5 text-[13px] text-muted">{L("Understood as")}</div>
               {lines.map((l) => (
                 <div key={l.item.id} className="flex items-center gap-3 border-b border-line/70 px-4 py-3 last:border-0">
                   <DietMark diet={l.item.diet} />

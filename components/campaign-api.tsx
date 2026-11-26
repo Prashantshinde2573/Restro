@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Campaigns → "Send all at once" (WhatsApp API, Pro): an approved template to the chosen guests.
 // The server sends only to guests of this outlet who said yes to offers, never after STOP, at most
 // one offer a day to each guest, and stops at once if WhatsApp starts limiting the number.
@@ -48,18 +49,18 @@ export function CampaignApi({ guests, outletId, onSent }: { guests: Customer[]; 
     }
   };
 
-  if (templates === null) return <p className="text-[14px] text-muted">Loading your approved templates…</p>;
+  if (templates === null) return <p className="text-[14px] text-muted">{L("Loading your approved templates…")}</p>;
   return (
     <div className="space-y-4">
-      <Field label="Approved template" hint="Make offer templates in WhatsApp Manager → Message templates (category Marketing). {{1}} becomes each guest's first name.">
+      <Field label={L("Approved template")} hint="Make offer templates in WhatsApp Manager → Message templates (category Marketing). {{1}} becomes each guest's first name.">
         <select className={inputCls} value={pick} onChange={(e) => setPick(e.target.value)}>
-          <option value="">Choose…</option>
+          <option value="">{L("Choose…")}</option>
           {templates.map((x) => <option key={key(x)} value={key(x)}>{x.name} · {x.language} · {x.category.toLowerCase()}</option>)}
         </select>
       </Field>
-      {templates.length === 0 && !err && <p className="text-[13px] text-muted">No approved templates yet. Meta usually approves a template within a few minutes to a day.</p>}
+      {templates.length === 0 && !err && <p className="text-[13px] text-muted">{L("No approved templates yet. Meta usually approves a template within a few minutes to a day.")}</p>}
       {extra.map((v, i) => (
-        <Field key={i} label={`Blank {{${i + 2}}}`}>
+        <Field key={i} label={L("Blank {{{0}}}", i + 2)}>
           <input className={inputCls} maxLength={200} value={v} onChange={(e) => setExtra((x) => x.map((y, j) => (j === i ? e.target.value : y)))} />
         </Field>
       ))}
@@ -69,20 +70,19 @@ export function CampaignApi({ guests, outletId, onSent }: { guests: Customer[]; 
         </div>
       )}
       <p className="text-[13px] text-muted">
-        Goes to <b>{many.length}</b> guest{many.length === 1 ? "" : "s"} in this group who said yes to offers{yes.length > 300 ? " (the first 300; send again for the rest)" : ""}. Guests who wrote STOP, or got an offer in the last 24 hours, are skipped.
-      </p>
+        {L("Goes to")} <b>{many.length}</b> {L("guest")}{many.length === 1 ? "" : "s"} {L("in this group who said yes to offers")}{yes.length > 300 ? L(" (the first 300; send again for the rest)") : ""}{L(". Guests who wrote STOP, or got an offer in the last 24 hours, are skipped.")}</p>
       {err && <p className="text-[13.5px] font-medium text-rose">{err}</p>}
       {res ? (
         <div className="rounded-group bg-jade-soft p-4 text-[14px] text-jade-deep">
-          <div className="flex items-center gap-2 font-semibold"><Check size={16} /> Sent to {res.sent}</div>
+          <div className="flex items-center gap-2 font-semibold"><Check size={16} /> {L("Sent to")} {res.sent}</div>
           <div className="mt-1 text-[13px]">
-            {[res.failed && `${res.failed} failed`, res.noOptIn && `${res.noOptIn} not OK with offers`, res.stopped && `${res.stopped} wrote STOP`, res.recent && `${res.recent} got an offer today`, res.limit && `${res.limit} over today's limit`].filter(Boolean).join(" · ") || "Nobody skipped."}
+            {[res.failed && `${res.failed} failed`, res.noOptIn && `${res.noOptIn} not OK with offers`, res.stopped && `${res.stopped} wrote STOP`, res.recent && `${res.recent} got an offer today`, res.limit && `${res.limit} over today's limit`].filter(Boolean).join(" · ") || L("Nobody skipped.")}
           </div>
           {res.errors.length > 0 && <div className="mt-1 text-[12.5px] text-rose">{res.errors.join(" · ")}</div>}
         </div>
       ) : (
         <Button size="lg" className="w-full" variant={sure ? "danger" : "primary"} disabled={!t || !filled || !many.length || busy} onClick={send}>
-          <Send size={16} /> {busy ? "Sending…" : sure ? `Yes, send to ${many.length} now` : `Send to ${many.length} guest${many.length === 1 ? "" : "s"}`}
+          <Send size={16} /> {busy ? L("Sending…") : sure ? L("Yes, send to {0} now", many.length) : L("Send to {0} guest{1}", many.length, many.length === 1 ? "" : "s")}
         </Button>
       )}
     </div>

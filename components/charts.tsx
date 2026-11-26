@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Charts that read at a glance: gridlines with values, the peak and the latest
 // point labelled, an average line, and a tooltip on hover / tap.
 import clsx from "clsx";
@@ -99,7 +100,7 @@ export function TrendChart({
           onTouchStart={(e) => pick(e.touches[0].clientX, e.currentTarget)}
           onTouchMove={(e) => pick(e.touches[0].clientX, e.currentTarget)}
           role="img"
-          aria-label={`Chart: ${data.map((d) => `${d.label} ${format(d.value)}`).join(", ")}`}
+          aria-label={L("Chart: {0}", data.map((d) => `${d.label} ${format(d.value)}`).join(", "))}
         >
           <defs>
             <linearGradient id={`a${gid}`} x1="0" x2="0" y1="0" y2="1">
@@ -125,13 +126,13 @@ export function TrendChart({
             </g>
           )}
           {data.map((d, i) => (i % every === 0 || i === last ? (
-            <text key={i} x={x(i)} y={height - 6} textAnchor="middle" className={clsx("text-[10.5px]", i === last ? "fill-ink font-semibold" : "fill-faint")}>{d.label}</text>
+            <text key={i} x={x(i)} y={height - 6} textAnchor="middle" className={clsx("text-[10.5px]", i === last ? "fill-ink font-semibold" : "fill-faint")}>{L(d.label)}</text>
           ) : null))}
           {/* peak + latest */}
           {data.length > 1 && data[peak].value > 0 && peak !== last && h === null && (
             <g>
               <circle cx={x(peak)} cy={y(data[peak].value)} r={3.5} fill="rgb(var(--surface))" stroke="rgb(var(--jade))" strokeWidth={2} />
-              <text x={x(peak)} y={y(data[peak].value) - 9} textAnchor="middle" className="fill-muted text-[10.5px] font-semibold">Best {format(data[peak].value)}</text>
+              <text x={x(peak)} y={y(data[peak].value) - 9} textAnchor="middle" className="fill-muted text-[10.5px] font-semibold">{L("Best")} {format(data[peak].value)}</text>
             </g>
           )}
           {pts[last] && h === null && (
@@ -149,7 +150,7 @@ export function TrendChart({
         </svg>
       )}
       {h !== null && pts[h] && (
-        <Tip x={pts[h][0]} y={pts[h][1]} w={w} title={data[h].hint ?? data[h].label} value={format(data[h].value)} sub={data[h].ghost !== undefined ? `Last time ${format(data[h].ghost!)}` : undefined} />
+        <Tip x={pts[h][0]} y={pts[h][1]} w={w} title={data[h].hint ?? data[h].label} value={format(data[h].value)} sub={data[h].ghost !== undefined ? L("Last time {0}", format(data[h].ghost!)) : undefined} />
       )}
     </div>
   );
@@ -186,7 +187,7 @@ export function BarChart({
   return (
     <div ref={ref} className={clsx("relative w-full select-none", className)} style={{ height }} onMouseLeave={() => setHover(null)}>
       {w > 0 && (
-        <svg width={w} height={height} className="overflow-visible" role="img" aria-label={`Chart: ${data.map((d) => `${d.label} ${format(d.value)}`).join(", ")}`}>
+        <svg width={w} height={height} className="overflow-visible" role="img" aria-label={L("Chart: {0}", data.map((d) => `${d.label} ${format(d.value)}`).join(", "))}>
           <defs>
             <linearGradient id={`b${gid}`} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="rgb(var(--jade))" />
@@ -218,7 +219,7 @@ export function BarChart({
                   style={{ transition: "opacity .2s" }}
                 />
                 {(i % every === 0 || i === data.length - 1) && (
-                  <text x={g.cx} y={height - 6} textAnchor="middle" className={clsx("text-[10.5px]", i === data.length - 1 && highlightLast ? "fill-ink font-semibold" : "fill-faint")}>{d.label}</text>
+                  <text x={g.cx} y={height - 6} textAnchor="middle" className={clsx("text-[10.5px]", i === data.length - 1 && highlightLast ? "fill-ink font-semibold" : "fill-faint")}>{L(d.label)}</text>
                 )}
               </g>
             );
@@ -229,7 +230,7 @@ export function BarChart({
         </svg>
       )}
       {hover !== null && geo[hover] && (
-        <Tip x={geo[hover].cx} y={geo[hover].top} w={w} title={data[hover].hint ?? data[hover].label} value={format(data[hover].value)} sub={data[hover].ghost !== undefined ? `Usual ${format(data[hover].ghost!)}` : undefined} />
+        <Tip x={geo[hover].cx} y={geo[hover].top} w={w} title={data[hover].hint ?? data[hover].label} value={format(data[hover].value)} sub={data[hover].ghost !== undefined ? L("Usual {0}", format(data[hover].ghost!)) : undefined} />
       )}
     </div>
   );
@@ -288,7 +289,7 @@ export function Donut({
         {parts.map((p) => (
           <li key={p.label} className="flex items-center gap-2.5 text-[14px]">
             <span className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: p.color }} />
-            <span className="flex-1 font-medium">{p.label}</span>
+            <span className="flex-1 font-medium">{L(p.label)}</span>
             <span className="text-[12.5px] text-muted tnum">{sum ? Math.round((p.value / sum) * 100) : 0}%</span>
             <span className="w-20 text-right font-semibold tnum">{format(p.value)}</span>
           </li>

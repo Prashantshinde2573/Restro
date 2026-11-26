@@ -1,3 +1,4 @@
+import { L } from "@/lib/i18n";
 import clsx from "clsx";
 import { Mic, QrCode, MessageCircle, Store, Bike } from "lucide-react";
 import type { OrderChannel, OrderStatus } from "@/lib/types";
@@ -34,5 +35,5 @@ export function StatusPill({ status }: { status: OrderStatus }) {
     cancelled: { tone: "rose", label: "Cancelled" },
   };
   const s = map[status];
-  return <Pill tone={s.tone}>{s.label}</Pill>;
+  return <Pill tone={s.tone}>{L(s.label)}</Pill>;
 }

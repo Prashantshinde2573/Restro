@@ -1,5 +1,6 @@
 "use client";
 
+import { L, dateLocale } from "@/lib/i18n";
 import clsx from "clsx";
 import { ClaimCheck } from "@/components/claim-check";
 import { Check, History, PenLine, Phone, Printer, RotateCcw, XCircle } from "lucide-react";
@@ -97,7 +98,7 @@ export default function OrdersPage() {
   /** The one next step for a card. */
   const nextStep = (o: Order): { label: string; onClick: () => void; tone?: "primary" | "dark" } | null => {
     if (o.payClaim && o.status !== "paid" && o.status !== "cancelled")
-      return canConfirm ? { label: "Money received", onClick: () => { confirmPayment(o.payClaim!.id); toast(`Payment confirmed · #${o.number} closed`); } } : null;
+      return canConfirm ? { label: "Money received", onClick: () => { confirmPayment(o.payClaim!.id); toast(L("Payment confirmed · #{0} closed", o.number)); } } : null;
     if (payingOnline(o)) return null; // the guest is paying online: it accepts itself once paid
     if (o.status === "new") return { label: "Accept & send to kitchen", onClick: () => setStatus(o, "accepted", "Accepted · KOT sent to kitchen") };
     if (o.status === "accepted") return { label: "Mark cooking", onClick: () => setStatus(o, "preparing", "Kitchen started"), tone: "dark" };
@@ -109,7 +110,7 @@ export default function OrdersPage() {
 
   return (
     <>
-      <PageHeader title="Orders" subtitle={`${count("open")} open · ${inr(paidToday)} collected today`} >
+      <PageHeader title={L("Orders")} subtitle={L("{0} open · {1} collected today", count("open"), inr(paidToday))} >
         <Chips
           value={filter}
           onChange={setFilter}
@@ -138,8 +139,8 @@ export default function OrdersPage() {
           <OrderHistory list={list} where={(o) => orderWhere(o, tables)} onOpen={(o) => setSelId(o.id)} />
         ) : shown.length === 0 ? (
           <div className="rounded-[22px] bg-surface px-5 py-14 text-center">
-            <p className="text-[16px] font-semibold">Nothing here right now</p>
-            <p className="mt-1 text-[14px] text-muted">{filter === "paid" ? "Paid bills from today show here." : "New orders from New order, captains and the QR show up here live."}</p>
+            <p className="text-[16px] font-semibold">{L("Nothing here right now")}</p>
+            <p className="mt-1 text-[14px] text-muted">{filter === "paid" ? L("Paid bills from today show here.") : L("New orders from New order, captains and the QR show up here live.")}</p>
           </div>
         ) : (
           <div className="grid items-start gap-2.5 md:grid-cols-2 xl:grid-cols-3">
@@ -177,30 +178,29 @@ export default function OrdersPage() {
             <div className="flex gap-2">
               {sel.status === "new" && (
                 <>
-                  <Button variant="danger" size="lg" onClick={() => setStatus(sel, "cancelled", `Order #${sel.number} rejected · the guest sees it on their phone`)}>Reject</Button>
-                  <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "accepted", "Accepted · KOT sent to kitchen")}>Accept and send to kitchen</Button>
+                  <Button variant="danger" size="lg" onClick={() => setStatus(sel, "cancelled", `Order #${sel.number} rejected · the guest sees it on their phone`)}>{L("Reject")}</Button>
+                  <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "accepted", "Accepted · KOT sent to kitchen")}>{L("Accept and send to kitchen")}</Button>
                 </>
               )}
-              {sel.status === "accepted" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "preparing", "Kitchen started")}>Mark cooking</Button>}
-              {sel.status === "preparing" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "ready", "Marked ready")}>Mark ready</Button>}
-              {sel.status === "ready" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "served", pickup(sel) ? `Token ${sel.number} picked up` : "Marked served")}>{pickup(sel) ? "Picked up" : "Mark served"}</Button>}
+              {sel.status === "accepted" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "preparing", "Kitchen started")}>{L("Mark cooking")}</Button>}
+              {sel.status === "preparing" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "ready", "Marked ready")}>{L("Mark ready")}</Button>}
+              {sel.status === "ready" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "served", pickup(sel) ? `Token ${sel.number} picked up` : "Marked served")}>{pickup(sel) ? L("Picked up") : L("Mark served")}</Button>}
               {sel.payClaim && sel.status !== "paid" && sel.status !== "cancelled" ? (
                 canConfirm ? (
                   <>
-                    <Button variant="plain" size="lg" onClick={() => { rejectPayment(sel.payClaim!.id); setSelId(null); toast("Marked not received · the bill is open again"); }}>Not received</Button>
-                    <Button size="lg" className="flex-1" onClick={() => { confirmPayment(sel.payClaim!.id); setSelId(null); toast(`Payment confirmed · #${sel.number} closed`); }}><Check size={17} /> Money received</Button>
+                    <Button variant="plain" size="lg" onClick={() => { rejectPayment(sel.payClaim!.id); setSelId(null); toast(L("Marked not received · the bill is open again")); }}>{L("Not received")}</Button>
+                    <Button size="lg" className="flex-1" onClick={() => { confirmPayment(sel.payClaim!.id); setSelId(null); toast(L("Payment confirmed · #{0} closed", sel.number)); }}><Check size={17} /> {L("Money received")}</Button>
                   </>
                 ) : null
               ) : sel.status === "served" && canCharge ? (
-                <Button size="lg" className="flex-1" onClick={() => { setPay(billFor(sel)); setSelId(null); }}>Charge {inr(billFor(sel).reduce((s, o) => s + billOf(o), 0))}</Button>
+                <Button size="lg" className="flex-1" onClick={() => { setPay(billFor(sel)); setSelId(null); }}>{L("Charge")} {inr(billFor(sel).reduce((s, o) => s + billOf(o), 0))}</Button>
               ) : null}
               {sel.status === "paid" && canEditPay && (
                 <Button size="lg" variant="tinted" className="flex-1" onClick={() => setEdit({ order: sel, rows: (sel.payments ?? []).map((p) => ({ ...p })) })}>
-                  <PenLine size={17} /> Change how it was paid
-                </Button>
+                  <PenLine size={17} /> {L("Change how it was paid")}</Button>
               )}
               {sel.status === "paid" && owner && (
-                <Button size="lg" variant="plain" onClick={() => setUnpayAsk(sel)}><RotateCcw size={17} /> Mark unpaid</Button>
+                <Button size="lg" variant="plain" onClick={() => setUnpayAsk(sel)}><RotateCcw size={17} /> {L("Mark unpaid")}</Button>
               )}
             </div>
           )
@@ -214,20 +214,19 @@ export default function OrdersPage() {
             </div>
             {sel.status === "new" && sel.channel === "qr" && (
               <p className="rounded-ctl bg-saffron-soft px-3 py-2 text-[13.5px]">
-                First order from a new group at this table. Check they're seated, then accept.
-              </p>
+                {L("First order from a new group at this table. Check they're seated, then accept.")}</p>
             )}
             {(sel.customer || sel.guestPhone) && (
               <div className="flex items-center gap-3 rounded-group bg-surface px-4 py-3">
                 <Phone size={16} className="text-muted" />
                 <span className="flex-1 text-[14.5px]">{sel.customer}{sel.guestPhone && <span className="text-muted"> · +91 {sel.guestPhone}</span>}</span>
-                {sel.guestPhone && <Pill tone="jade">Number given</Pill>}
+                {sel.guestPhone && <Pill tone="jade">{L("Number given")}</Pill>}
               </div>
             )}
             {sel.payClaim && sel.status !== "paid" && sel.status !== "cancelled" && (
               <div className="rounded-ctl bg-saffron-soft px-3 py-2.5 text-[13.5px]">
-                <b>{sel.payClaim.by}</b> marked this bill paid · {paymentsText(sel.payClaim.payments)} · {timeAgo(sel.payClaim.at)}.{" "}
-                {canConfirm ? "Check the money came in (UPI app, cash drawer), then confirm." : "Waiting for the owner to confirm."}
+                <b>{sel.payClaim.by}</b> {L("marked this bill paid ·")} {paymentsText(sel.payClaim.payments)} · {timeAgo(sel.payClaim.at)}.{" "}
+                {canConfirm ? L("Check the money came in (UPI app, cash drawer), then confirm.") : L("Waiting for the owner to confirm.")}
                 <ClaimCheck claimId={sel.payClaim.id} />
               </div>
             )}
@@ -235,9 +234,9 @@ export default function OrdersPage() {
               <div className="rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
                 {sel.payPreference === "online"
                   ? payingOnline(sel)
-                    ? "The guest is paying online right now. The order is accepted by itself once the money is in."
-                    : "The guest started an online payment but didn't finish it. Collect the money before you accept, or cancel the order."
-                  : <>Guest asked for the bill and wants to pay by <b>{methodLabel[sel.payPreference]}</b>.</>}
+                    ? L("The guest is paying online right now. The order is accepted by itself once the money is in.")
+                    : L("The guest started an online payment but didn't finish it. Collect the money before you accept, or cancel the order.")
+                  : <>{L("Guest asked for the bill and wants to pay by")} <b>{methodLabel[sel.payPreference]}</b>.</>}
               </div>
             )}
             <div className="overflow-hidden rounded-group bg-surface">
@@ -248,9 +247,9 @@ export default function OrdersPage() {
                     {m && <DietMark diet={m.diet} />}
                     <div className="min-w-0 flex-1">
                       <div className="text-[15px]"><b className="tnum">{l.qty}×</b> {l.name}</div>
-                      {l.note && <div className="text-[12.5px] text-saffron">{l.note}</div>}
+                      {l.note && <div className="text-[12.5px] text-saffron">{L(l.note)}</div>}
                     </div>
-                    {l.done && <span className="text-[12px] font-medium text-jade">Done</span>}
+                    {l.done && <span className="text-[12px] font-medium text-jade">{L("Done")}</span>}
                     <span className="w-16 text-right text-[14px] tnum">{inr(l.qty * l.price)}</span>
                   </div>
                 );
@@ -261,21 +260,21 @@ export default function OrdersPage() {
                 const paid = sel.status === "paid" ? bill.reduce((s, o) => s + paidSum(o.payments ?? []), 0) : 0;
                 return (
                   <>
-                    {bill.length > 1 && <div className="border-t border-line/70 px-4 py-2 text-[12.5px] text-muted">One bill with {bill.filter((o) => o.id !== sel.id).map((o) => `#${o.number}`).join(", ")}</div>}
+                    {bill.length > 1 && <div className="border-t border-line/70 px-4 py-2 text-[12.5px] text-muted">{L("One bill with")} {bill.filter((o) => o.id !== sel.id).map((o) => `#${o.number}`).join(", ")}</div>}
                     {offs.map((d, i) => (
                       <div key={i} className="flex justify-between border-t border-line/70 px-4 py-2 text-[14px] text-jade">
-                        <span>{d.label}</span>
+                        <span>{L(d.label)}</span>
                         <span className="tnum">−{inr(d.amount)}</span>
                       </div>
                     ))}
                     {sel.status !== "paid" && sel.wantsCoupon && (
-                      <div className="border-t border-line/70 px-4 py-2 text-[13.5px] text-jade">Guest applied coupon <b>{sel.wantsCoupon}</b> on their phone · it comes off when you charge</div>
+                      <div className="border-t border-line/70 px-4 py-2 text-[13.5px] text-jade">{L("Guest applied coupon")} <b>{sel.wantsCoupon}</b> {L("on their phone · it comes off when you charge")}</div>
                     )}
                     {sel.status !== "paid" && sel.wantsReward && (
-                      <div className="border-t border-line/70 px-4 py-2 text-[13.5px] text-jade">Guest wants to use their stamp card reward · it comes off when you charge</div>
+                      <div className="border-t border-line/70 px-4 py-2 text-[13.5px] text-jade">{L("Guest wants to use their stamp card reward · it comes off when you charge")}</div>
                     )}
                     <div className="flex justify-between bg-sunken/50 px-4 py-3 text-[15px] font-semibold">
-                      <span>{sel.status === "paid" ? (bill.length > 1 ? "Bill paid (all orders)" : "Bill paid") : "Bill incl. GST"}</span>
+                      <span>{sel.status === "paid" ? (bill.length > 1 ? L("Bill paid (all orders)") : L("Bill paid")) : L("Bill incl. GST")}</span>
                       <span className="tnum">{inr(sel.status === "paid" ? paid : billOf(sel))}</span>
                     </div>
                   </>
@@ -285,21 +284,21 @@ export default function OrdersPage() {
 
             {(sel.status === "paid" || (sel.paymentLog?.length ?? 0) > 0) && (
               <div className="rounded-group bg-surface p-4">
-                {sel.status === "paid" && <div className="text-[13px] text-muted">Paid by</div>}
+                {sel.status === "paid" && <div className="text-[13px] text-muted">{L("Paid by")}</div>}
                 {sel.status === "paid" && (
                   <div className="mt-0.5 flex flex-wrap items-center gap-2">
                     <span className="text-[17px] font-semibold">{paymentsText(sel.payments)}</span>
                     {/* paid on the restaurant's own gateway (not a direct UPI to the owner) */}
                     {sel.gateway && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-0.5 text-[12.5px] font-semibold text-jade-deep" title={`${sel.gateway.provider} payment ${sel.gateway.paymentId}`}>
-                        Online · {sel.gateway.provider === "razorpay" ? "Razorpay" : "Cashfree"}
+                      <span className="inline-flex items-center gap-1 rounded-full bg-jade-soft px-2.5 py-0.5 text-[12.5px] font-semibold text-jade-deep" title={L("{0} payment {1}", sel.gateway.provider, sel.gateway.paymentId)}>
+                        {L("Online ·")} {sel.gateway.provider === "razorpay" ? L("Razorpay") : L("Cashfree")}
                       </span>
                     )}
                   </div>
                 )}
                 {sel.paymentLog && sel.paymentLog.length > 0 && (
                   <div className="mt-3 space-y-1.5 border-t border-line pt-3">
-                    <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-muted"><History size={13} /> Payment history</div>
+                    <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-muted"><History size={13} /> {L("Payment history")}</div>
                     {sel.paymentLog.map((e, i) => (
                       <div key={i} className="text-[13px]">
                         <span className="text-muted">{clock(e.at)} · {e.by}:</span> {e.text}
@@ -326,18 +325,16 @@ export default function OrdersPage() {
                     discounts: offs,
                     payments: bill.flatMap((o) => o.payments ?? []),
                   });
-                  if (!ok) toast("Allow pop-ups for this site to print");
+                  if (!ok) toast(L("Allow pop-ups for this site to print"));
                 }}
               >
-                <Printer size={16} /> Print bill
-              </Button>
+                <Printer size={16} /> {L("Print bill")}</Button>
               {sel.status !== "paid" && sel.status !== "cancelled" && (sel.status === "new" || canCancel) && (
                 cancelAsk === sel.id ? (
-                  <Button variant="danger" onClick={() => { orderActions.setStatus(sel.id, "cancelled"); setCancelAsk(null); toast(`#${sel.number} cancelled`); }}>
-                    <XCircle size={16} /> Yes, cancel
-                  </Button>
+                  <Button variant="danger" onClick={() => { orderActions.setStatus(sel.id, "cancelled"); setCancelAsk(null); toast(L("#{0} cancelled", sel.number)); }}>
+                    <XCircle size={16} /> {L("Yes, cancel")}</Button>
                 ) : (
-                  <Button variant="plain" onClick={() => setCancelAsk(sel.id)}><XCircle size={16} /> Cancel order</Button>
+                  <Button variant="plain" onClick={() => setCancelAsk(sel.id)}><XCircle size={16} /> {L("Cancel order")}</Button>
                 )
               )}
             </div>
@@ -349,7 +346,7 @@ export default function OrdersPage() {
       <Sheet
         open={!!edit}
         onClose={() => setEdit(null)}
-        title="Change payment"
+        title={L("Change payment")}
         footer={
           edit && (
             <Button
@@ -359,10 +356,10 @@ export default function OrdersPage() {
               onClick={() => {
                 orderActions.editPayment(edit.order.id, edit.rows, myName);
                 setEdit(null);
-                toast("Payment updated · change saved in history");
+                toast(L("Payment updated · change saved in history"));
               }}
             >
-              Save · {paymentsText(edit.rows.filter((r) => r.amount > 0))}
+              {L("Save ·")} {paymentsText(edit.rows.filter((r) => r.amount > 0))}
             </Button>
           )
         }
@@ -370,10 +367,9 @@ export default function OrdersPage() {
         {edit && (
           <div className="space-y-4">
             <p className="text-[14px] text-muted">
-              Bill #{edit.order.number} · {inr(paidSum(edit.order.payments ?? []))}. Changes are logged with your name.
-            </p>
+              {L("Bill #")}{edit.order.number} · {inr(paidSum(edit.order.payments ?? []))}{L(". Changes are logged with your name.")}</p>
             <PaymentSplit total={paidSum(edit.order.payments ?? [])} rows={edit.rows} onChange={(rows) => setEdit({ ...edit, rows })} />
-            {edit.order.paymentLog?.length ? <p className="text-[12.5px] text-faint">Last change {timeAgo(edit.order.paymentLog[edit.order.paymentLog.length - 1].at)}</p> : null}
+            {edit.order.paymentLog?.length ? <p className="text-[12.5px] text-faint">{L("Last change")} {timeAgo(edit.order.paymentLog[edit.order.paymentLog.length - 1].at)}</p> : null}
           </div>
         )}
       </Sheet>
@@ -403,9 +399,9 @@ export default function OrdersPage() {
       <PasswordCheck
         open={!!unpayAsk}
         onClose={() => setUnpayAsk(null)}
-        title={unpayAsk ? `Mark #${unpayAsk.number} unpaid?` : ""}
-        body={unpayAsk ? `${paymentsText(unpayAsk.payments)} comes off today's sales and the bill opens again${unpayAsk.tableId ? " on its table" : ""}. This is saved in the activity log.` : ""}
-        confirmLabel="Mark unpaid"
+        title={unpayAsk ? L("Mark #{0} unpaid?", unpayAsk.number) : ""}
+        body={unpayAsk ? L("{0} comes off today's sales and the bill opens again{1}. This is saved in the activity log.", paymentsText(unpayAsk.payments), unpayAsk.tableId ? " on its table" : "") : ""}
+        confirmLabel={L("Mark unpaid")}
         onConfirmed={() => {
           if (!unpayAsk) return;
           // a table bill can span several orders paid together: open all of them
@@ -415,7 +411,7 @@ export default function OrdersPage() {
           markUnpaid(group.length ? group : [unpayAsk.id]);
           setUnpayAsk(null);
           setSelId(null);
-          toast(`#${unpayAsk.number} is unpaid again`);
+          toast(L("#{0} is unpaid again", unpayAsk.number));
         }}
       />
     </>
@@ -426,7 +422,7 @@ export default function OrdersPage() {
 type Range = "today" | "yesterday" | "7d" | "30d" | "all";
 type StatusF = "any" | "paid" | "open" | "cancelled";
 const DAY = 86_400_000;
-const dayName = (iso: string | number) => new Date(iso).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: new Date(iso).getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+const dayName = (iso: string | number) => new Date(iso).toLocaleDateString(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: new Date(iso).getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
 
 function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order) => string; onOpen: (o: Order) => void }) {
   const [range, setRange] = useState<Range>("7d");
@@ -475,42 +471,41 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setLimit(80); }}
-          placeholder="Search order no., table, guest, phone, dish…"
-          aria-label="Search orders"
+          placeholder={L("Search order no., table, guest, phone, dish…")}
+          aria-label={L("Search orders")}
           className="col-span-2 h-11 w-full rounded-ctl bg-surface px-4 text-[15px] outline-none ring-1 ring-line placeholder:text-faint focus:ring-1 focus:ring-jade/40 sm:col-span-1"
         />
         <select
           value={range}
           onChange={(e) => { setRange(e.target.value as Range); setLimit(80); }}
-          aria-label="Time range"
+          aria-label={L("Time range")}
           className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
         >
-          <option value="today">Today</option>
-          <option value="yesterday">Yesterday</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="all">All time</option>
+          <option value="today">{L("Today")}</option>
+          <option value="yesterday">{L("Yesterday")}</option>
+          <option value="7d">{L("Last 7 days")}</option>
+          <option value="30d">{L("Last 30 days")}</option>
+          <option value="all">{L("All time")}</option>
         </select>
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value as StatusF); setLimit(80); }}
-          aria-label="Order status"
+          aria-label={L("Order status")}
           className="h-11 w-full rounded-ctl bg-surface pl-4 text-[15px] font-medium outline-none ring-1 ring-line focus:ring-1 focus:ring-jade/40"
         >
-          <option value="any">Any status</option>
-          <option value="paid">Paid</option>
-          <option value="open">Not paid yet</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="any">{L("Any status")}</option>
+          <option value="paid">{L("Paid")}</option>
+          <option value="open">{L("Not paid yet")}</option>
+          <option value="cancelled">{L("Cancelled")}</option>
         </select>
       </div>
       <div className="-mt-1 px-1 text-[13.5px] text-muted">
-        <b className="text-ink tnum">{rows.length}</b> orders · <b className="text-ink tnum">{inr(total)}</b> paid
-      </div>
+        <b className="text-ink tnum">{rows.length}</b> {L("orders ·")} <b className="text-ink tnum">{inr(total)}</b> {L("paid")}</div>
 
       {rows.length === 0 ? (
         <div className="rounded-[22px] bg-surface px-5 py-14 text-center">
-          <p className="text-[16px] font-semibold">No orders found</p>
-          <p className="mt-1 text-[14px] text-muted">Try a longer time range, another status, or a different search.</p>
+          <p className="text-[16px] font-semibold">{L("No orders found")}</p>
+          <p className="mt-1 text-[14px] text-muted">{L("Try a longer time range, another status, or a different search.")}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -519,8 +514,8 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
             return (
               <section key={g.day} className="overflow-hidden rounded-group bg-surface">
                 <div className="flex items-baseline justify-between gap-3 border-b border-line/70 bg-sunken/40 px-4 py-2.5">
-                  <span className="text-[14px] font-semibold">{g.day === t0 ? "Today" : g.day === t0 - DAY ? "Yesterday" : dayName(g.day)}</span>
-                  <span className="text-[12.5px] text-muted tnum">{dt.n} orders · {inr(dt.paid)} paid</span>
+                  <span className="text-[14px] font-semibold">{g.day === t0 ? L("Today") : g.day === t0 - DAY ? L("Yesterday") : dayName(g.day)}</span>
+                  <span className="text-[12.5px] text-muted tnum">{dt.n} {L("orders ·")} {inr(dt.paid)} {L("paid")}</span>
                 </div>
                 {g.items.map((o) => (
                   <button key={o.id} onClick={() => onOpen(o)} className="flex w-full items-center gap-3 border-b border-line/60 px-4 py-3 text-left last:border-0 hover:bg-sunken/40">
@@ -528,7 +523,7 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14.5px] font-medium">{where(o)}{o.customer && !where(o).includes(o.customer) ? <span className="text-muted"> · {o.customer}</span> : null}</span>
                       <span className="block truncate text-[12.5px] text-muted">
-                        {clock(o.createdAt)} · {o.lines.reduce((s, l) => s + l.qty, 0)} items · {o.status === "paid" && o.payments?.length ? `${o.gateway ? "Online · " : ""}${paymentsText(o.payments)}` : channelLabel(o.channel)}
+                        {clock(o.createdAt)} · {o.lines.reduce((s, l) => s + l.qty, 0)} {L("items ·")} {o.status === "paid" && o.payments?.length ? `${o.gateway ? L("Online · ") : ""}${paymentsText(o.payments)}` : channelLabel(o.channel)}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1">
@@ -541,7 +536,7 @@ function OrderHistory({ list, where, onOpen }: { list: Order[]; where: (o: Order
             );
           })}
           {rows.length > limit && (
-            <Button variant="plain" className="w-full" onClick={() => setLimit((n) => n + 80)}>Show more · {rows.length - limit} left</Button>
+            <Button variant="plain" className="w-full" onClick={() => setLimit((n) => n + 80)}>{L("Show more ·")} {rows.length - limit} {L("left")}</Button>
           )}
         </div>
       )}

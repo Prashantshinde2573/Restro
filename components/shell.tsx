@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaphone, MoreHorizontal, ReceiptText, Settings, Sparkles, SquarePlus, UtensilsCrossed, Users, UserRound, Check, Lock, KeyRound, Plus, History, CircleHelp, Store, ChevronDown, Wallet, CalendarCheck, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useT, type Lang, type TKey } from "@/lib/i18n";
+import { useT, type Lang, type TKey, L } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
 import { liveCalls, toAccept, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
@@ -80,7 +80,7 @@ export function Wordmark({ className, light = false }: { className?: string; lig
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={light ? "/brand/restropi-logo-light.png" : "/brand/restropi-logo-dark.png"}
-      alt="Restropi"
+      alt={L("Restropi")}
       width={597}
       height={180}
       className={clsx("block h-7 w-auto select-none", className)}
@@ -151,7 +151,7 @@ function Bubble({ n, className }: { n: number; className?: string }) {
 /** The round red number: the same look everywhere (side menu, tabs, More, Settings). */
 function Count({ n }: { n: number }) {
   return (
-    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold leading-none text-white tnum" aria-label={`${n} waiting`}>
+    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold leading-none text-white tnum" aria-label={L("{0} waiting", n)}>
       {n > 99 ? "99+" : n}
     </span>
   );
@@ -162,7 +162,7 @@ const useRenewDays = useRenewBadge;
 
 function Badge({ n }: { n: number }) {
   return (
-    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold text-white tnum" aria-label={`${n} days left on your plan`}>
+    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose px-1 text-[11px] font-bold text-white tnum" aria-label={L("{0} days left on your plan", n)}>
       {n > 0 ? n : "!"}
     </span>
   );
@@ -190,12 +190,12 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
         <button
           onClick={() => setOpen(true)}
           disabled={outlets.length < 2 && !isOwner(me)}
-          aria-label={`Outlet: ${current.name}`}
+          aria-label={L("Outlet: {0}", current.name)}
           className="flex h-[38px] max-w-[160px] items-center gap-2 rounded-full px-3.5 text-[14.5px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10 disabled:hover:bg-transparent"
         >
           <span className="relative shrink-0">
             <Store size={17} strokeWidth={1.9} />
-            {elsewhere && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-saffron ring-2 ring-ink" aria-label="Something waiting in another outlet" />}
+            {elsewhere && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-saffron ring-2 ring-ink" aria-label={L("Something waiting in another outlet")} />}
           </span>
           <span className="min-w-0 truncate">{current.name || account.name}</span>
           {(outlets.length > 1 || isOwner(me)) && <ChevronDown size={15} className="shrink-0 text-white/80" />}
@@ -204,16 +204,16 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
       <button onClick={() => setOpen(true)} disabled={outlets.length < 2 && !isOwner(me)} className="flex w-full items-center gap-3 rounded-ctl px-2 py-2 text-left hover:bg-surface/60 disabled:hover:bg-transparent">
         <span className="relative flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink text-[13px] font-bold text-canvas">
           {initials}
-          {elsewhere && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-canvas" aria-label="Something waiting in another outlet" />}
+          {elsewhere && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-saffron ring-2 ring-canvas" aria-label={L("Something waiting in another outlet")} />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-semibold">{account.name}</span>
-          <span className="block truncate text-[12px] text-muted">{current.name} · {current.businessType === "cafe" ? "Café" : "Restaurant"}</span>
+          <span className="block truncate text-[12px] text-muted">{current.name} · {current.businessType === "cafe" ? L("Café") : L("Restaurant")}</span>
         </span>
         {(outlets.length > 1 || isOwner(me)) && <ChevronsUpDown size={15} className="text-faint" />}
       </button>
       )}
-      <Sheet open={open} onClose={() => setOpen(false)} title="Outlet">
+      <Sheet open={open} onClose={() => setOpen(false)} title={L("Outlet")}>
         <div className="overflow-hidden rounded-group bg-surface">
           {outlets.map((o) => (
             <button
@@ -226,17 +226,16 @@ function OutletSwitcher({ compact }: { compact?: boolean }) {
             >
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] font-medium">{o.name}</span>
-                <span className="block text-[12.5px] text-muted">{o.businessType === "cafe" ? "Café" : "Restaurant"}</span>
+                <span className="block text-[12.5px] text-muted">{o.businessType === "cafe" ? L("Café") : L("Restaurant")}</span>
               </span>
-              {o.id !== current.id && waitingIn(o.id) && <span className="rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">Waiting</span>}
+              {o.id !== current.id && waitingIn(o.id) && <span className="rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">{L("Waiting")}</span>}
               {o.id === current.id && <Check size={18} className="text-jade" />}
             </button>
           ))}
         </div>
         {isOwner(me) && (
           <Link href="/app/access" className="mt-3 flex items-center gap-2 px-1 text-[14px] font-semibold text-jade">
-            <Plus size={16} /> Add or edit outlets
-          </Link>
+            <Plus size={16} /> {L("Add or edit outlets")}</Link>
         )}
       </Sheet>
     </>
@@ -253,16 +252,16 @@ function MeButton({ compact }: { compact?: boolean }) {
   if (!me) return null;
   return (
     <>
-      <button onClick={() => setOpen(true)} className={clsx("flex items-center gap-2.5 rounded-[10px] text-left", compact ? "" : "w-full px-2 py-1.5 hover:bg-surface/60")} aria-label="Signed in as">
+      <button onClick={() => setOpen(true)} className={clsx("flex items-center gap-2.5 rounded-[10px] text-left", compact ? "" : "w-full px-2 py-1.5 hover:bg-surface/60")} aria-label={L("Signed in as")}>
         <Avatar name={me.name} hue={me.hue} photo={me.photo} size={compact ? 32 : 30} />
         {!compact && (
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13.5px] font-semibold">{me.name}</span>
-            <span className="block truncate text-[12px] text-muted">{me.role === "owner" ? "Owner · admin" : me.role === "subadmin" ? `Sub admin · ${me.title}` : me.title}</span>
+            <span className="block truncate text-[12px] text-muted">{me.role === "owner" ? L("Owner · admin") : me.role === "subadmin" ? L("Sub admin · {0}", me.title) : me.title}</span>
           </span>
         )}
       </button>
-      <Sheet open={open} onClose={() => { setOpen(false); setPw(false); }} title={pw ? "Change password" : "Signed in as"}>
+      <Sheet open={open} onClose={() => { setOpen(false); setPw(false); }} title={pw ? L("Change password") : L("Signed in as")}>
         {pw ? (
           <ChangePassword title="" onDone={() => { setPw(false); setOpen(false); }} />
         ) : (
@@ -271,21 +270,20 @@ function MeButton({ compact }: { compact?: boolean }) {
               <Avatar name={me.name} hue={me.hue} photo={me.photo} size={40} />
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold">{me.name}</div>
-                <div className="truncate text-[13px] text-muted">{me.role === "owner" ? `Owner · ${cloud.email ?? ""}` : me.title}</div>
+                <div className="truncate text-[13px] text-muted">{me.role === "owner" ? L("Owner · {0}", cloud.email ?? "") : me.title}</div>
               </div>
             </div>
-            <div className="mt-3 flex gap-1 rounded-ctl bg-sunken p-1" role="radiogroup" aria-label="Language">
+            <div className="mt-3 flex gap-1 rounded-ctl bg-sunken p-1" role="radiogroup" aria-label={L("Language")}>
               {langs.map((l) => (
                 <button key={l.v} role="radio" aria-checked={lang === l.v} onClick={() => setLang(l.v)} className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", lang === l.v ? "bg-surface shadow-float" : "text-muted")}>
-                  {l.label}
+                  {L(l.label)}
                 </button>
               ))}
             </div>
             <div className="mt-3"><SoundRow /></div>
             {cloud.role === "owner" && (
               <button onClick={() => setPw(true)} className="mt-3 flex w-full items-center gap-2 rounded-group bg-surface px-4 py-3 text-left text-[15px] font-medium">
-                <KeyRound size={17} className="text-jade" /> Change password
-              </button>
+                <KeyRound size={17} className="text-jade" /> {L("Change password")}</button>
             )}
             {cloud.role === "owner" && <div className="mt-3"><TwoStepCard /></div>}
             <button
@@ -296,8 +294,7 @@ function MeButton({ compact }: { compact?: boolean }) {
               }}
               className="mt-4 block w-full text-center text-[14px] font-semibold text-rose"
             >
-              Sign out
-            </button>
+              {L("Sign out")}</button>
           </>
         )}
       </Sheet>
@@ -381,8 +378,7 @@ function Sidebar() {
           onClick={() => navRef.current?.scrollBy({ top: 200, behavior: "smooth" })}
           className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-10 items-end justify-center bg-gradient-to-t from-sunken via-sunken/90 to-transparent pb-1 text-[12px] font-semibold text-muted"
         >
-          More ↓
-        </button>
+          {L("More ↓")}</button>
       )}
       </div>
       <div className="mt-3 space-y-1 border-t border-line pt-3">
@@ -493,7 +489,7 @@ function TabBar() {
               onClick={() => setLang(l.v)}
               className={clsx("flex-1 rounded-[9px] py-2 text-[14px] font-semibold", lang === l.v ? "bg-surface shadow-float" : "text-muted")}
             >
-              {l.label}
+              {L(l.label)}
             </button>
           ))}
         </div>
@@ -522,23 +518,22 @@ function RouteGate({ children }: { children: ReactNode }) {
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-sunken text-muted"><Lock size={24} /></span>
       {f === "type" ? (
         <>
-          <h1 className="mt-4 text-[22px] font-semibold">{outlet.businessType === "cafe" ? "Not on for counter service" : "Not on for table service"}</h1>
+          <h1 className="mt-4 text-[22px] font-semibold">{outlet.businessType === "cafe" ? L("Not on for counter service") : L("Not on for table service")}</h1>
           <p className="mt-1 max-w-sm text-[15px] text-muted">
-            {outlet.name} is set up for {outlet.businessType === "cafe" ? "counter orders only" : "table service only"}, so {need?.label.toLowerCase()} is off here.
-            {isOwner(me) && <> To use both, turn on <Link href="/app/settings" className="font-semibold text-jade">{outlet.businessType === "cafe" ? "“Also serve at tables”" : "“Also take counter orders”"}</Link> in Settings → Ordering.</>}
+            {outlet.name} {L("is set up for")} {outlet.businessType === "cafe" ? L("counter orders only") : L("table service only")}{L(", so")} {need?.label.toLowerCase()} {L("is off here.")}{isOwner(me) && <> {L("To use both, turn on")} <Link href="/app/settings" className="font-semibold text-jade">{outlet.businessType === "cafe" ? L("“Also serve at tables”") : L("“Also take counter orders”")}</Link> {L("in Settings → Ordering.")}</>}
           </p>
         </>
       ) : !allowed ? (
         <>
-          <h1 className="mt-4 text-[22px] font-semibold">No access</h1>
-          <p className="mt-1 max-w-sm text-[15px] text-muted">Ask your admin to give you access to this.</p>
+          <h1 className="mt-4 text-[22px] font-semibold">{L("No access")}</h1>
+          <p className="mt-1 max-w-sm text-[15px] text-muted">{L("Ask your admin to give you access to this.")}</p>
         </>
       ) : (
         <>
-          <h1 className="mt-4 text-[22px] font-semibold">{need?.label}</h1>
-          <p className="mt-1 max-w-sm text-[15px] text-muted">Part of the {PLAN_NAME[need!.plan]} plan. You&apos;re on {PLAN_NAME[plan]}.</p>
-          {isOwner(me) && <Button className="mt-5" onClick={() => openPlanSheet(need!.plan)}>Upgrade to {PLAN_NAME[need!.plan]}</Button>}
-          {!isOwner(me) && <Pill tone="neutral" className="mt-4">Ask your owner to upgrade</Pill>}
+          <h1 className="mt-4 text-[22px] font-semibold">{L(need?.label)}</h1>
+          <p className="mt-1 max-w-sm text-[15px] text-muted">{L("Part of the")} {PLAN_NAME[need!.plan]} {L("plan. You're on")} {PLAN_NAME[plan]}.</p>
+          {isOwner(me) && <Button className="mt-5" onClick={() => openPlanSheet(need!.plan)}>{L("Upgrade to")} {PLAN_NAME[need!.plan]}</Button>}
+          {!isOwner(me) && <Pill tone="neutral" className="mt-4">{L("Ask your owner to upgrade")}</Pill>}
         </>
       )}
     </div>
@@ -586,8 +581,8 @@ function AuthGate({ children }: { children: ReactNode }) {
   if (cloud.status === "off") {
     return (
       <Centered>
-        <h1 className="text-[22px] font-semibold">Setup needed</h1>
-        <p className="mt-2 text-[15px] text-muted">Add the Supabase URL and publishable key to <code>.env.local</code>, then restart the app.</p>
+        <h1 className="text-[22px] font-semibold">{L("Setup needed")}</h1>
+        <p className="mt-2 text-[15px] text-muted">{L("Add the Supabase URL and publishable key to")} <code>{L(".env.local")}</code>{L(", then restart the app.")}</p>
       </Centered>
     );
   }
@@ -595,9 +590,9 @@ function AuthGate({ children }: { children: ReactNode }) {
   if (cloud.status === "needsOnboarding") {
     return (
       <Centered>
-        <h1 className="text-[22px] font-semibold">No restaurant on this login</h1>
-        <p className="mt-2 text-[15px] text-muted">{cloud.email} isn&apos;t linked to a restaurant. Ask Restropi support to set up your restaurant.</p>
-        <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        <h1 className="text-[22px] font-semibold">{L("No restaurant on this login")}</h1>
+        <p className="mt-2 text-[15px] text-muted">{cloud.email} {L("isn't linked to a restaurant. Ask Restropi support to set up your restaurant.")}</p>
+        <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>{L("Sign out")}</Button>
       </Centered>
     );
   }
@@ -605,12 +600,11 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <Centered>
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
-        <h1 className="mt-4 text-[22px] font-semibold">The {PLAN_NAME[account.plan]} plan has ended</h1>
+        <h1 className="mt-4 text-[22px] font-semibold">{L("The")} {PLAN_NAME[account.plan]} {L("plan has ended")}</h1>
         <p className="mt-2 text-[15px] text-muted">
-          {account.name || "This restaurant"}&apos;s plan ended on {dateIN(account.renewsAt)}{account.graceUntil ? ` and the grace period on ${dateIN(account.graceUntil)}` : ""}. Billing and the QR menu are off until it&apos;s renewed. Your data is safe.
-        </p>
-        {cloud.role === "owner" ? <Button className="mt-6" onClick={() => openPlanSheet()}>Renew plan</Button> : <p className="mt-4 text-[14px] text-muted">Please ask the owner to renew.</p>}
-        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+          {account.name || L("This restaurant")}{L("'s plan ended on")} {dateIN(account.renewsAt)}{account.graceUntil ? L(" and the grace period on {0}", dateIN(account.graceUntil)) : ""}{L(". Billing and the QR menu are off until it's renewed. Your data is safe.")}</p>
+        {cloud.role === "owner" ? <Button className="mt-6" onClick={() => openPlanSheet()}>{L("Renew plan")}</Button> : <p className="mt-4 text-[14px] text-muted">{L("Please ask the owner to renew.")}</p>}
+        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>{L("Sign out")}</Button>
         {cloud.role === "owner" && <PlanSheet />}
       </Centered>
     );
@@ -619,10 +613,10 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <Centered>
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-soft text-rose"><Lock size={24} /></span>
-        <h1 className="mt-4 text-[22px] font-semibold">{account.name || "This restaurant"} is paused</h1>
-        <p className="mt-2 text-[15px] text-muted">Billing, orders and the QR menu are off for now. Renew the plan to turn it back on. Your data is safe.</p>
-        {cloud.role === "owner" && <Button className="mt-6" onClick={() => openPlanSheet()}>Renew plan</Button>}
-        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+        <h1 className="mt-4 text-[22px] font-semibold">{account.name || L("This restaurant")} {L("is paused")}</h1>
+        <p className="mt-2 text-[15px] text-muted">{L("Billing, orders and the QR menu are off for now. Renew the plan to turn it back on. Your data is safe.")}</p>
+        {cloud.role === "owner" && <Button className="mt-6" onClick={() => openPlanSheet()}>{L("Renew plan")}</Button>}
+        <Button variant="plain" className="mt-3 !bg-sunken" onClick={signOutAndLeave}>{L("Sign out")}</Button>
         {cloud.role === "owner" && <PlanSheet />}
       </Centered>
     );
@@ -632,9 +626,9 @@ function AuthGate({ children }: { children: ReactNode }) {
     if (cloud.status === "ready" && cloud.role === "staff" && waited && !me) {
       return (
         <Centered>
-          <h1 className="text-[22px] font-semibold">No access</h1>
-          <p className="mt-2 text-[15px] text-muted">Your access was turned off. Ask your manager.</p>
-          <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>Sign out</Button>
+          <h1 className="text-[22px] font-semibold">{L("No access")}</h1>
+          <p className="mt-2 text-[15px] text-muted">{L("Your access was turned off. Ask your manager.")}</p>
+          <Button variant="plain" className="mt-6 !bg-sunken" onClick={signOutAndLeave}>{L("Sign out")}</Button>
         </Centered>
       );
     }
@@ -666,7 +660,7 @@ function MobileTopBar() {
     <div className={clsx("pt-safe sticky top-0 z-30 bg-[#0a0a0a] transition-shadow lg:hidden", scrolled && "shadow-[0_10px_24px_-12px_rgb(0_0_0/.55)]")}>
       {/* dark bar, edge to edge: logo on the left; outlet, alerts and you on the right */}
       <div className="flex h-[54px] items-center gap-2 pl-4 pr-2 text-white">
-        <Link href="/app" aria-label="Restropi home" className="mr-auto shrink-0">
+        <Link href="/app" aria-label={L("Restropi home")} className="mr-auto shrink-0">
           <Wordmark light className="h-[26px]" />
         </Link>
         <OutletSwitcher compact />

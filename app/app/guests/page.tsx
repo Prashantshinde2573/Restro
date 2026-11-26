@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import clsx from "clsx";
 import { BadgeCheck, Gift, MessageCircle, QrCode, Search, Star, Users } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -16,7 +17,7 @@ const daysSince = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86_4
 
 function Stars({ n, size = 13 }: { n: number; size?: number }) {
   return (
-    <span className="inline-flex gap-0.5" aria-label={`${n} stars`}>
+    <span className="inline-flex gap-0.5" aria-label={L("{0} stars", n)}>
       {Array.from({ length: 5 }).map((_, i) => (
         <Star key={i} size={size} className={i < n ? "fill-saffron text-saffron" : "text-line"} />
       ))}
@@ -53,7 +54,7 @@ export default function GuestsPage() {
 
   return (
     <>
-      <PageHeader title="Guests" subtitle={`${outlets.length > 1 ? `${outlet.name} · ` : ""}${all.length ? `${all.length} guest${all.length === 1 ? "" : "s"} · ${back} came back in the last 30 days` : "Your guest book"}`}>
+      <PageHeader title={L("Guests")} subtitle={`${outlets.length > 1 ? `${outlet.name} · ` : ""}${all.length ? L("{0} guest{1} · {2} came back in the last 30 days", all.length, all.length === 1 ? "" : "s", back) : L("Your guest book")}`}>
         <div className="flex flex-wrap items-center gap-3">
           <Segmented value={tab} onChange={setTab} options={[{ value: "guests", label: "Guest book" }, { value: "reviews", label: `Feedback${fb.length ? ` · ${fb.length}` : ""}` }]} />
         </div>
@@ -63,14 +64,14 @@ export default function GuestsPage() {
           all.length === 0 ? (
             <div className="flex flex-col items-center rounded-group bg-surface px-6 py-12 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade"><Users size={26} /></span>
-              <h2 className="mt-4 text-[18px] font-semibold">No guests yet</h2>
-              <p className="mt-1 max-w-sm text-[14.5px] text-muted">Guests are added when they order from the table QR with their phone number, or when you add a number to a bill.</p>
+              <h2 className="mt-4 text-[18px] font-semibold">{L("No guests yet")}</h2>
+              <p className="mt-1 max-w-sm text-[14.5px] text-muted">{L("Guests are added when they order from the table QR with their phone number, or when you add a number to a bill.")}</p>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="relative">
                 <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone" className="h-11 w-full rounded-ctl bg-surface pl-10 pr-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40 lg:max-w-md" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("Search by name or phone")} className="h-11 w-full rounded-ctl bg-surface pl-10 pr-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40 lg:max-w-md" />
               </div>
               <Chips
                 value={seg}
@@ -84,7 +85,7 @@ export default function GuestsPage() {
               />
               {stampsOn && (rewardOnly || all.some((c) => stampsOf(c) >= prog.needed)) && (
                 <button onClick={() => setRewardOnly((v) => !v)} aria-pressed={rewardOnly} className={clsx("-mt-1 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold", rewardOnly ? "border-saffron/40 bg-saffron-soft text-saffron" : "border-line bg-surface text-ink")}>
-                  <Gift size={14} /> Reward ready · {all.filter((c) => stampsOf(c) >= prog.needed).length}
+                  <Gift size={14} /> {L("Reward ready ·")} {all.filter((c) => stampsOf(c) >= prog.needed).length}
                 </button>
               )}
               <Group flush>
@@ -93,19 +94,19 @@ export default function GuestsPage() {
                     <Avatar name={c.name || "Guest"} hue={((c.name || "G").charCodeAt(0) * 37) % 360} size={40} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[15px] font-medium">{c.name || "Guest"}</span>
-                        {c.verified && <BadgeCheck size={15} className="text-jade" aria-label="Number verified" />}
-                        {c.source === "qr" && c.visits <= 1 && <Pill tone="sky"><QrCode size={11} /> New via QR</Pill>}
+                        <span className="text-[15px] font-medium">{c.name || L("Guest")}</span>
+                        {c.verified && <BadgeCheck size={15} className="text-jade" aria-label={L("Number verified")} />}
+                        {c.source === "qr" && c.visits <= 1 && <Pill tone="sky"><QrCode size={11} /> {L("New via QR")}</Pill>}
                       </div>
                       <div className="truncate text-[13px] text-muted">
-                        {c.phone} · {c.visits} {c.visits === 1 ? "visit" : "visits"} · {timeAgo(c.lastVisit)}
-                        {stampsOn && stampsOf(c) > 0 && <span className={clsx("font-semibold", stampsOf(c) >= prog.needed ? "text-saffron" : "text-jade-deep")}> · {stampsOf(c) >= prog.needed ? "🎁 reward ready" : `${stampsOf(c)}/${prog.needed} stamps`}</span>}
+                        {c.phone} · {c.visits} {c.visits === 1 ? L("visit") : L("visits")} · {timeAgo(c.lastVisit)}
+                        {stampsOn && stampsOf(c) > 0 && <span className={clsx("font-semibold", stampsOf(c) >= prog.needed ? "text-saffron" : "text-jade-deep")}> · {stampsOf(c) >= prog.needed ? L("🎁 reward ready") : L("{0}/{1} stamps", stampsOf(c), prog.needed)}</span>}
                       </div>
                     </div>
                     <div className="text-right text-[14px] font-semibold tnum">{inr(c.spend)}</div>
                   </button>
                 ))}
-                {list.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">No one matches.</p>}
+                {list.length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">{L("No one matches.")}</p>}
               </Group>
             </div>
           )
@@ -117,7 +118,7 @@ export default function GuestsPage() {
                 <div className="text-[44px] font-semibold leading-none tracking-tight tnum">{fb.length ? avg.toFixed(1) : "—"}</div>
                 <div>
                   <Stars n={Math.round(avg)} size={16} />
-                  <div className="mt-1 text-[13px] text-muted">{fb.length} rating{fb.length === 1 ? "" : "s"}</div>
+                  <div className="mt-1 text-[13px] text-muted">{fb.length} {L("rating")}{fb.length === 1 ? "" : "s"}</div>
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -138,7 +139,7 @@ export default function GuestsPage() {
 
             {fb.length > 0 && (
               <Chips
-                label="Show feedback"
+                label={L("Show feedback")}
                 value={fbSeg}
                 onChange={setFbSeg}
                 options={[
@@ -154,20 +155,20 @@ export default function GuestsPage() {
               {fb.length === 0 && (
                 <div className="flex flex-col items-center px-6 py-12 text-center">
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-saffron-soft text-saffron"><Star size={22} /></span>
-                  <p className="mt-3 max-w-sm text-[14.5px] text-muted">Guests rate their visit on the thank-you screen after paying. Their ratings show here.</p>
+                  <p className="mt-3 max-w-sm text-[14.5px] text-muted">{L("Guests rate their visit on the thank-you screen after paying. Their ratings show here.")}</p>
                 </div>
               )}
-              {fb.length > 0 && fbShown.length === 0 && <p className="px-4 py-8 text-center text-[14px] text-muted">Nothing here.</p>}
+              {fb.length > 0 && fbShown.length === 0 && <p className="px-4 py-8 text-center text-[14px] text-muted">{L("Nothing here.")}</p>}
               {fbShown.map((f) => (
                 <div key={f.id} className="flex gap-3 border-b border-line/80 px-4 py-3.5 last:border-0 lg:px-5">
                   <Avatar name={f.customer || "Guest"} hue={((f.customer || "G").charCodeAt(0) * 37) % 360} size={38} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate text-[15px] font-medium leading-tight">{f.customer || "Guest"}</div>
+                        <div className="truncate text-[15px] font-medium leading-tight">{f.customer || L("Guest")}</div>
                         <div className="mt-1 flex items-center gap-2">
                           <Stars n={f.stars} />
-                          {f.stars <= 3 && <Pill tone="rose">Needs a look</Pill>}
+                          {f.stars <= 3 && <Pill tone="rose">{L("Needs a look")}</Pill>}
                         </div>
                       </div>
                       <span className="shrink-0 text-[12.5px] text-muted">{timeAgo(f.at)}</span>
@@ -181,17 +182,17 @@ export default function GuestsPage() {
         )}
       </Page>
 
-      <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel?.name || "Guest"}>
+      <Sheet open={!!sel} onClose={() => setSelId(null)} title={sel?.name || L("Guest")}>
         {sel && (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <Avatar name={sel.name || "Guest"} hue={((sel.name || "G").charCodeAt(0) * 37) % 360} size={60} />
               <div className="flex items-center gap-1.5 text-[15px] text-muted">
-                +91 {sel.phone} {sel.verified && <BadgeCheck size={16} className="text-jade" aria-label="Verified" />}
+                +91 {sel.phone} {sel.verified && <BadgeCheck size={16} className="text-jade" aria-label={L("Verified")} />}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-px overflow-hidden rounded-group bg-line/70">
-              {[["Visits", sel.visits], ["Spent", inr(sel.spend)], ["Average bill", inr(Math.round(sel.spend / Math.max(1, sel.visits)))]].map(([l, v]) => (
+              {[[L("Visits"), sel.visits], [L("Spent"), inr(sel.spend)], [L("Average bill"), inr(Math.round(sel.spend / Math.max(1, sel.visits)))]].map(([l, v]) => (
                 <div key={String(l)} className="bg-surface p-3 text-center">
                   <div className="text-[18px] font-semibold tnum">{v}</div>
                   <div className="text-[12px] text-muted">{l}</div>
@@ -203,7 +204,7 @@ export default function GuestsPage() {
                 <StampCard have={stampsOf(sel)} needed={prog.needed} reward={prog.reward} />
                 {mayAct(me, prog.givers) && (
                   <div className="flex items-center justify-between rounded-group bg-surface px-4 py-2.5">
-                    <span className="text-[13.5px] text-muted">Fix the card by hand</span>
+                    <span className="text-[13.5px] text-muted">{L("Fix the card by hand")}</span>
                     <div className="flex gap-2">
                       <Button size="sm" variant="plain" disabled={stampsOf(sel) === 0} onClick={() => stampActions.adjust(sel.phone, -1, me?.name)}>− 1</Button>
                       <Button size="sm" variant="plain" onClick={() => stampActions.adjust(sel.phone, 1, me?.name)}>+ 1</Button>
@@ -212,16 +213,16 @@ export default function GuestsPage() {
                 )}
                 {!!sel.rewards?.length && (
                   <div className="rounded-group bg-surface px-4 py-2.5 text-[13px] text-muted">
-                    {sel.rewards.length} reward{sel.rewards.length > 1 ? "s" : ""} used · last {timeAgo(sel.rewards[0].at)} ({sel.rewards[0].reward})
+                    {sel.rewards.length} {L("reward")}{sel.rewards.length > 1 ? "s" : ""} {L("used · last")} {timeAgo(sel.rewards[0].at)} ({sel.rewards[0].reward})
                   </div>
                 )}
               </div>
             )}
             <div className="overflow-hidden rounded-group bg-surface">
               {[
-                ["Last visit", timeAgo(sel.lastVisit)],
-                ["Came from", sel.source === "qr" ? "Table QR" : sel.source === "whatsapp" ? "WhatsApp" : "Counter"],
-                ["Offers on WhatsApp", sel.optIn ? "Yes" : "No"],
+                [L("Last visit"), timeAgo(sel.lastVisit)],
+                [L("Came from"), sel.source === "qr" ? "Table QR" : sel.source === "whatsapp" ? "WhatsApp" : "Counter"],
+                [L("Offers on WhatsApp"), sel.optIn ? "Yes" : "No"],
               ].map(([l, v]) => (
                 <div key={l} className="flex justify-between gap-4 border-b border-line/80 px-4 py-3 text-[14.5px] last:border-0">
                   <span className="text-muted">{l}</span>
@@ -230,7 +231,7 @@ export default function GuestsPage() {
               ))}
             </div>
             <div>
-              <div className="mb-2 px-1 text-[15px] font-semibold">Bills</div>
+              <div className="mb-2 px-1 text-[15px] font-semibold">{L("Bills")}</div>
               <div className="overflow-hidden rounded-group bg-surface">
                 {(sel.bills ?? []).map((b) => (
                   <div key={b.orderNo + b.at} className="flex items-center justify-between border-b border-line/80 px-4 py-3 text-[14.5px] last:border-0">
@@ -241,11 +242,11 @@ export default function GuestsPage() {
                     <span className="font-semibold tnum">{inr(b.amount)}</span>
                   </div>
                 ))}
-                {!sel.bills?.length && <div className="px-4 py-3 text-[14px] text-muted">No bills yet.</div>}
+                {!sel.bills?.length && <div className="px-4 py-3 text-[14px] text-muted">{L("No bills yet.")}</div>}
               </div>
             </div>
             <a href={waLink(sel.phone)} target="_blank" rel="noreferrer" className="block">
-              <Button variant="tinted" className="w-full"><MessageCircle size={16} /> Message on WhatsApp</Button>
+              <Button variant="tinted" className="w-full"><MessageCircle size={16} /> {L("Message on WhatsApp")}</Button>
             </a>
           </div>
         )}

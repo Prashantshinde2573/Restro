@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import clsx from "clsx";
 import { Info as InfoIcon, X } from "lucide-react";
 import { useEffect, useRef, useState as useLocalState, type ReactNode, type ButtonHTMLAttributes } from "react";
@@ -174,7 +175,7 @@ export function Segmented<T extends string>({
             value === o.value ? "bg-surface text-ink shadow-float" : "text-muted hover:text-ink",
           )}
         >
-          {o.label}
+          {L(o.label)}
         </button>
       ))}
     </div>
@@ -206,7 +207,7 @@ export function SelectMenu<T extends string>({
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
-            {o.label}
+            {L(o.label)}
             {o.count !== undefined ? ` (${o.count})` : ""}
           </option>
         ))}
@@ -231,7 +232,7 @@ export function Chips<T extends string>({
   return (
     <div className="min-w-0">
       {/* phones: one dropdown (no sideways scrolling); wide screens: the chips, wrapping */}
-      <SelectMenu value={value} onChange={onChange} options={options} label={label ?? "Show"} className="lg:hidden" />
+      <SelectMenu value={value} onChange={onChange} options={options} label={label ?? L("Show")} className="lg:hidden" />
       <div className="hidden flex-wrap gap-2 lg:flex">
         {options.map((o) => (
           <button
@@ -242,7 +243,7 @@ export function Chips<T extends string>({
               value === o.value ? "bg-ink text-canvas" : "bg-surface text-ink hover:bg-sunken",
             )}
           >
-            {o.label}
+            {L(o.label)}
             {o.count !== undefined && <span className={clsx("ml-1.5 tnum", value === o.value ? "opacity-60" : "text-muted")}>{o.count}</span>}
           </button>
         ))}
@@ -313,7 +314,7 @@ export function Pill({
 export function DietMark({ diet }: { diet: Diet }) {
   const c = diet === "veg" ? "border-jade text-jade" : diet === "egg" ? "border-saffron text-saffron" : "border-rose text-rose";
   return (
-    <span aria-label={diet === "veg" ? "Vegetarian" : diet === "egg" ? "Contains egg" : "Non-vegetarian"} className={clsx("inline-flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border-[1.5px]", c)}>
+    <span aria-label={diet === "veg" ? L("Vegetarian") : diet === "egg" ? L("Contains egg") : L("Non-vegetarian")} className={clsx("inline-flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border-[1.5px]", c)}>
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
     </span>
   );
@@ -457,7 +458,7 @@ export function Sheet({
         <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-line lg:hidden" />
         <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-3 lg:pt-5">
           <h2 className="text-[20px] font-semibold tracking-tight">{title}</h2>
-          <IconButton label="Close" onClick={onClose} className="bg-sunken !h-8 !w-8">
+          <IconButton label={L("Close")} onClick={onClose} className="bg-sunken !h-8 !w-8">
             <X size={16} />
           </IconButton>
         </div>

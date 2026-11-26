@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Two-step login with Google Authenticator (or any authenticator app):
 //  - TwoStepGate: after the password, ask for the 6-digit code (or, for the super admin, set it up)
 //  - TwoStepSetup: scan the QR, type the first code
@@ -63,13 +64,13 @@ export function TwoStepSetup({ onDone }: { onDone: () => void }) {
   return (
     <div className="space-y-4">
       <ol className="space-y-1.5 text-[14px] text-muted">
-        <li><b className="text-ink">1.</b> Open <b className="text-ink">Google Authenticator</b> on your phone → <b className="text-ink">+</b> → Scan a QR code</li>
-        <li><b className="text-ink">2.</b> Type the 6-digit code it shows</li>
+        <li><b className="text-ink">1.</b> {L("Open")} <b className="text-ink">{L("Google Authenticator")}</b> {L("on your phone →")} <b className="text-ink">+</b> {L("→ Scan a QR code")}</li>
+        <li><b className="text-ink">2.</b> {L("Type the 6-digit code it shows")}</li>
       </ol>
       <div className="flex flex-col items-center rounded-group bg-surface p-4">
         {s ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={s.qr} alt="QR code for your authenticator app" width={180} height={180} className="h-[180px] w-[180px] rounded-[12px] bg-white p-2" />
+          <img src={s.qr} alt={L("QR code for your authenticator app")} width={180} height={180} className="h-[180px] w-[180px] rounded-[12px] bg-white p-2" />
         ) : (
           <div className="h-[180px] w-[180px] animate-pulse rounded-[12px] bg-sunken" />
         )}
@@ -77,7 +78,7 @@ export function TwoStepSetup({ onDone }: { onDone: () => void }) {
           <button
             onClick={() => { navigator.clipboard?.writeText(s.secret).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => undefined); }}
             className="mt-3 flex max-w-full items-center gap-1.5 rounded-full bg-sunken px-3 py-1.5 text-[12px] text-muted"
-            title="Can't scan? Type this key in the app"
+            title={L("Can't scan? Type this key in the app")}
           >
             <span className="truncate font-mono">{s.secret}</span>
             {copied ? <Check size={13} className="shrink-0 text-jade" /> : <Copy size={13} className="shrink-0" />}
@@ -113,9 +114,9 @@ export function TwoStepGate({ mode, email, who }: { mode: "enroll" | "verify"; e
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-5 py-10">
       <div className="w-full max-w-[380px]">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade-deep"><ShieldCheck size={26} /></span>
-        <h1 className="mt-4 text-center text-[22px] font-semibold tracking-tight">{mode === "enroll" ? "Set up two-step login" : "Enter your code"}</h1>
+        <h1 className="mt-4 text-center text-[22px] font-semibold tracking-tight">{mode === "enroll" ? L("Set up two-step login") : L("Enter your code")}</h1>
         <p className="mt-1.5 text-center text-[14.5px] text-muted">
-          {mode === "enroll" ? "Needed for the super admin. Takes a minute." : "Open your authenticator app and type the 6-digit code for Restropi."}
+          {mode === "enroll" ? L("Needed for the super admin. Takes a minute.") : L("Open your authenticator app and type the 6-digit code for Restropi.")}
         </p>
         {email && <p className="mt-1 text-center text-[13px] text-faint">{email}</p>}
         <div className="mt-6">
@@ -126,14 +127,13 @@ export function TwoStepGate({ mode, email, who }: { mode: "enroll" | "verify"; e
               <CodeInput onCode={check} busy={busy} />
               {err && <p className="text-center text-[13.5px] font-medium text-rose" role="alert">{err}</p>}
               <p className="text-center text-[12.5px] text-muted">
-                {who === "owner" ? "Lost your phone? Ask Restropi support to reset two-step login." : "Lost your phone? Use your second device."}
+                {who === "owner" ? L("Lost your phone? Ask Restropi support to reset two-step login.") : L("Lost your phone? Use your second device.")}
               </p>
             </div>
           )}
         </div>
         <button onClick={async () => { await cloudSignOut(); window.location.href = "/login"; }} className="mt-6 block w-full text-center text-[14px] font-semibold text-rose">
-          Sign out
-        </button>
+          {L("Sign out")}</button>
       </div>
     </div>
   );
@@ -155,7 +155,7 @@ export function TwoStepCard({ required = false, onToast }: { required?: boolean;
     return (
       <div className="rounded-group bg-sunken/50 p-4">
         <TwoStepSetup onDone={() => { setAdding(false); void load(); onToast?.(on ? "Phone added" : "Two-step login is on"); void recheckSignIn(); }} />
-        <button onClick={() => setAdding(false)} className="mt-3 block w-full text-center text-[14px] font-semibold text-muted">Cancel</button>
+        <button onClick={() => setAdding(false)} className="mt-3 block w-full text-center text-[14px] font-semibold text-muted">{L("Cancel")}</button>
       </div>
     );
   return (
@@ -163,10 +163,10 @@ export function TwoStepCard({ required = false, onToast }: { required?: boolean;
       <div className="flex items-center gap-3 px-4 py-3.5">
         <span className={clsx("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", on ? "bg-jade-soft text-jade-deep" : "bg-sunken text-muted")}><ShieldCheck size={18} /></span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-medium">Two-step login</span>
-          <span className="block text-[13px] text-muted">{list === null ? "…" : on ? "On · a code from your phone at every new sign-in" : "Off · add Google Authenticator for extra safety"}</span>
+          <span className="block text-[15px] font-medium">{L("Two-step login")}</span>
+          <span className="block text-[13px] text-muted">{list === null ? "…" : on ? L("On · a code from your phone at every new sign-in") : L("Off · add Google Authenticator for extra safety")}</span>
         </span>
-        {list !== null && !on && <Button size="sm" onClick={() => setAdding(true)}>Turn on</Button>}
+        {list !== null && !on && <Button size="sm" onClick={() => setAdding(true)}>{L("Turn on")}</Button>}
       </div>
       {on && (
         <>
@@ -178,7 +178,7 @@ export function TwoStepCard({ required = false, onToast }: { required?: boolean;
                 {!(required && list!.length === 1) && (
                   removing === d.id ? (
                     <span className="flex items-center gap-1.5">
-                      <button onClick={() => setRemoving(null)} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-muted">Keep</button>
+                      <button onClick={() => setRemoving(null)} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-muted">{L("Keep")}</button>
                       <button
                         onClick={async () => {
                           setErr("");
@@ -193,18 +193,17 @@ export function TwoStepCard({ required = false, onToast }: { required?: boolean;
                         }}
                         className="rounded-full bg-rose px-2.5 py-1 text-[12.5px] font-semibold text-white"
                       >
-                        Remove
-                      </button>
+                        {L("Remove")}</button>
                     </span>
                   ) : (
-                    <button onClick={() => setRemoving(d.id)} aria-label={`Remove ${d.name}`} className="rounded-full p-1.5 text-muted hover:bg-sunken hover:text-rose"><Trash2 size={15} /></button>
+                    <button onClick={() => setRemoving(d.id)} aria-label={L("Remove {0}", d.name)} className="rounded-full p-1.5 text-muted hover:bg-sunken hover:text-rose"><Trash2 size={15} /></button>
                   )
                 )}
               </li>
             ))}
           </ul>
           <button onClick={() => setAdding(true)} className="w-full border-t border-line/80 px-4 py-2.5 text-left text-[14px] font-semibold text-jade-deep">
-            + Add another phone{required && list!.length === 1 ? " (recommended)" : ""}
+            {L("+ Add another phone")}{required && list!.length === 1 ? L(" (recommended)") : ""}
           </button>
         </>
       )}

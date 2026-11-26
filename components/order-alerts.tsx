@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Ping the team when something needs them:
 //   • any new order taken on another phone, tablet or from a guest's QR (every outlet you work in)
 //   • a guest asking for the bill
@@ -105,7 +106,7 @@ export function OrderAlerts() {
       for (const o of fromElsewhere) {
         const items = o.lines.reduce((s, l) => s + l.qty, 0);
         const needsOk = o.status === "new";
-        const title = payingOnline(o) ? "New order · guest is paying online" : needsOk ? (o.payPreference ? "New order · take the payment" : "New QR order · accept it") : o.channel === "qr" ? "New QR order" : `New order by ${o.staff}`;
+        const title = payingOnline(o) ? L("New order · guest is paying online") : needsOk ? (o.payPreference ? L("New order · take the payment") : L("New QR order · accept it")) : o.channel === "qr" ? L("New QR order") : L("New order by {0}", o.staff);
         const body = `${orderWhere(o, tables)} · ${items} item${items === 1 ? "" : "s"}${outletTag(o.outletId)}`;
         pushNotice({ kind: "order", title, body, href: "/app/orders", outletId: o.outletId });
         notify(title, body);
@@ -165,7 +166,7 @@ export function OrderAlerts() {
       seenClaim.current!.set(c.claim.id, { by: c.claim.by, ids: c.orders.map((o) => o.id) });
       if (!canConfirm || !here(c.orders[0].outletId)) continue;
       const guest = c.claim.source === "guest";
-      const title = guest ? "Guest paid · please confirm" : "Payment to confirm";
+      const title = guest ? L("Guest paid · please confirm") : L("Payment to confirm");
       const body = `${orderWhere(c.orders[0], tables)} · ${paymentsText(c.claim.payments)} · ${guest ? `paid from the phone by ${c.claim.by}` : `marked by ${c.claim.by}`}${outletTag(c.orders[0].outletId)}`;
       say("claim", title, body, "/app/orders", `Payment to confirm · ${orderWhere(c.orders[0], tables)}`);
     }
@@ -210,7 +211,7 @@ export function OrderAlerts() {
   return (
     <div className="fixed inset-x-3 bottom-[88px] z-40 mx-auto flex max-w-md items-center gap-3 rounded-[18px] bg-ink px-4 py-3 text-canvas shadow-float lg:bottom-6 lg:left-auto lg:right-6 lg:mx-0">
       <BellRing size={18} className="shrink-0 text-saffron" />
-      <span className="flex-1 text-[13.5px]">Get a ping for new orders, bill requests and payments?</span>
+      <span className="flex-1 text-[13.5px]">{L("Get a ping for new orders, bill requests and payments?")}</span>
       <button
         onClick={() => {
           chime();
@@ -218,9 +219,8 @@ export function OrderAlerts() {
         }}
         className="rounded-full bg-canvas px-3 py-1.5 text-[13px] font-semibold text-ink"
       >
-        Turn on
-      </button>
-      <button onClick={close} aria-label="Not now" className="p-1 text-canvas/60"><X size={16} /></button>
+        {L("Turn on")}</button>
+      <button onClick={close} aria-label={L("Not now")} className="p-1 text-canvas/60"><X size={16} /></button>
     </div>
   );
 }

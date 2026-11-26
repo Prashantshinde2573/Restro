@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import clsx from "clsx";
 import { Banknote, CheckCircle2, Clock3, CreditCard, FileText, MessageCircle, QrCode, Users, Minus, Plus, Percent, Layers, Ticket, X, Stamp as StampIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -222,20 +223,19 @@ export function Checkout({
     <Sheet
       open={open}
       onClose={onClose}
-      title={done ? (waiting ? "Sent for confirmation" : "Paid") : `Charge ${label}`}
+      title={done ? (waiting ? L("Sent for confirmation") : L("Paid")) : L("Charge {0}", label)}
       wide
       footer={
         done ? (
           <Button size="lg" className="w-full" onClick={onClose}>
-            Start next order
-          </Button>
+            {L("Start next order")}</Button>
         ) : method === "split" ? (
           <Button size="lg" className="w-full" disabled={paidGuests.length < guests} onClick={finish}>
-            {paidGuests.length < guests ? `${guests - paidGuests.length} share${guests - paidGuests.length > 1 ? "s" : ""} left to collect` : `Close bill · ${inr(t.total)}`}
+            {paidGuests.length < guests ? L("{0} share{1} left to collect", guests - paidGuests.length, guests - paidGuests.length > 1 ? "s" : "") : L("Close bill · {0}", inr(t.total))}
           </Button>
         ) : (
           <Button size="lg" className="w-full" disabled={(method === "cash" && (cash ?? t.total) < t.total) || (method === "mixed" && paidSum(mixed) !== t.total)} onClick={finish}>
-            {method === "upi" ? "UPI received" : method === "cash" ? "Cash received" : method === "card" ? "Card approved" : "All payments received"} · {inr(t.total)}
+            {method === "upi" ? L("UPI received") : method === "cash" ? L("Cash received") : method === "card" ? L("Card approved") : L("All payments received")} · {inr(t.total)}
           </Button>
         )
       }
@@ -248,8 +248,8 @@ export function Checkout({
           <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</div>
           <p className="max-w-sm text-[15px] text-muted">
             {waiting
-              ? `${label} is marked paid. The owner confirms it once the money is in; until then the bill stays open.`
-              : `${label} is paid and closed.`}
+              ? L("{0} is marked paid. The owner confirms it once the money is in; until then the bill stays open.", label)
+              : L("{0} is paid and closed.", label)}
           </p>
           {stampNote && (
             <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-jade-soft px-3.5 py-1.5 text-[14px] font-semibold text-jade-deep">
@@ -257,7 +257,7 @@ export function Checkout({
             </div>
           )}
           <div className="mt-8 w-full max-w-sm space-y-3 text-left">
-            <Field label="Send e-bill on WhatsApp" hint="No paper needed. Opens WhatsApp with the bill typed in.">
+            <Field label={L("Send e-bill on WhatsApp")} hint={L("No paper needed. Opens WhatsApp with the bill typed in.")}>
               <div className="flex gap-2">
                 <input className={inputCls} inputMode="tel" placeholder="98220 41187" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 <Button
@@ -265,12 +265,11 @@ export function Checkout({
                   className="!h-12 shrink-0"
                   onClick={() => {
                     const d = phone.replace(/\D/g, "").slice(-10);
-                    if (d.length !== 10) return toast("Add a 10-digit number first");
+                    if (d.length !== 10) return toast(L("Add a 10-digit number first"));
                     window.open(`https://wa.me/91${d}?text=${encodeURIComponent(receiptText(receipt()) + (stampNote ? `\n\n🎟️ ${stampNote}` : ""))}`, "_blank");
                   }}
                 >
-                  <MessageCircle size={17} /> Send
-                </Button>
+                  <MessageCircle size={17} /> {L("Send")}</Button>
               </div>
             </Field>
             <Button
@@ -295,33 +294,29 @@ export function Checkout({
                 a.download = name;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 2000);
-                toast("PDF saved. Attach it in WhatsApp to send.");
+                toast(L("PDF saved. Attach it in WhatsApp to send."));
               }}
             >
-              <FileText size={17} /> Share bill as PDF
-            </Button>
-            <Button variant="plain" className="w-full" onClick={() => { if (!printReceipt(receipt())) toast("Allow pop-ups for this site to print"); }}>
-              Print receipt
-            </Button>
+              <FileText size={17} /> {L("Share bill as PDF")}</Button>
+            <Button variant="plain" className="w-full" onClick={() => { if (!printReceipt(receipt())) toast(L("Allow pop-ups for this site to print")); }}>
+              {L("Print receipt")}</Button>
           </div>
         </div>
       ) : (
         <div className="space-y-5">
           {/* guest (optional): saved to the guest book and used for the WhatsApp e-bill */}
           <div className="grid grid-cols-[1fr_1.15fr] gap-2">
-            <input className={clsx(inputCls, "!h-11 !text-[15px]")} placeholder="Customer name" value={guestName} onChange={(e) => setGuestName(e.target.value)} aria-label="Customer name (optional)" autoComplete="off" />
-            <input className={clsx(inputCls, "!h-11 !text-[15px]")} inputMode="tel" placeholder="Mobile (optional)" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d +]/g, ""))} aria-label="Customer mobile number (optional)" autoComplete="off" />
+            <input className={clsx(inputCls, "!h-11 !text-[15px]")} placeholder={L("Customer name")} value={guestName} onChange={(e) => setGuestName(e.target.value)} aria-label={L("Customer name (optional)")} autoComplete="off" />
+            <input className={clsx(inputCls, "!h-11 !text-[15px]")} inputMode="tel" placeholder={L("Mobile (optional)")} value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d +]/g, ""))} aria-label={L("Customer mobile number (optional)")} autoComplete="off" />
           </div>
           {/* how the guest pays: first, so it's never missed below the fold */}
           {prepaidSum > 0 && (
             <div className="rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
-              Guest already paid <b>UPI {inr(prepaidSum)}</b> from their phone. Collect <b>{inr(Math.max(0, t.total - prepaidSum))}</b> in cash.
-            </div>
+              {L("Guest already paid")} <b>{L("UPI")} {inr(prepaidSum)}</b> {L("from their phone. Collect")} <b>{inr(Math.max(0, t.total - prepaidSum))}</b> {L("in cash.")}</div>
           )}
           {preferred && !prepaidSum && (
             <div className="flex items-center gap-2 rounded-ctl bg-sky-soft px-3 py-2 text-[13.5px] text-sky">
-              Guest chose <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> from their phone. You can still change it.
-            </div>
+              {L("Guest chose")} <b>{preferred === "upi" ? "UPI" : preferred === "cash" ? "cash" : "card"}</b> {L("from their phone. You can still change it.")}</div>
           )}
           <div className={clsx("grid gap-2", methods.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
             {methods.map((m) => (
@@ -334,7 +329,7 @@ export function Checkout({
                 )}
               >
                 <m.icon size={20} />
-                <span className="text-center leading-tight">{m.label}</span>
+                <span className="text-center leading-tight">{L(m.label)}</span>
               </button>
             ))}
           </div>
@@ -357,16 +352,16 @@ export function Checkout({
           {/* totals */}
           <div className="rounded-group bg-surface p-4">
             <div className="flex items-baseline justify-between">
-              <span className="text-[15px] text-muted">Amount due</span>
+              <span className="text-[15px] text-muted">{L("Amount due")}</span>
               <span className="text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</span>
             </div>
             <dl className="mt-2 space-y-1 text-[13.5px] text-muted">
-              <div className="flex justify-between"><dt>Items</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
-              {t.discount - rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{discounts.find((d) => d.kind !== "reward")?.label ?? "Discount"}{coupon && couponCode && normCode(couponCode) === coupon.code ? " · from the guest" : ""}</dt><dd className="tnum">−{inr(t.discount - rewardAmt, { decimals: true })}</dd></div>}
-              {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>Stamp card · {prog.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
-              <div className="flex justify-between"><dt>CGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
-              <div className="flex justify-between"><dt>SGST {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
-              <div className="flex justify-between"><dt>Round off</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
+              <div className="flex justify-between"><dt>{L("Items")}</dt><dd className="tnum">{inr(t.subtotal, { decimals: true })}</dd></div>
+              {t.discount - rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{discounts.find((d) => d.kind !== "reward")?.label ?? L("Discount")}{coupon && couponCode && normCode(couponCode) === coupon.code ? L(" · from the guest") : ""}</dt><dd className="tnum">−{inr(t.discount - rewardAmt, { decimals: true })}</dd></div>}
+              {rewardAmt > 0 && <div className="flex justify-between text-jade"><dt>{L("Stamp card ·")} {prog.reward}</dt><dd className="tnum">−{inr(rewardAmt, { decimals: true })}</dd></div>}
+              <div className="flex justify-between"><dt>{L("CGST")} {halfGstLabel()}</dt><dd className="tnum">{inr(t.cgst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt>{L("SGST")} {halfGstLabel()}</dt><dd className="tnum">{inr(t.sgst, { decimals: true })}</dd></div>
+              <div className="flex justify-between"><dt>{L("Round off")}</dt><dd className="tnum">{t.roundOff.toFixed(2)}</dd></div>
             </dl>
             {canDiscount && <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
               {[0, 5, 10].map((p) => (
@@ -376,19 +371,18 @@ export function Checkout({
                   className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", !coupon && !custom.on && discountPct === p ? "bg-ink text-canvas" : "bg-sunken text-muted")}
                 >
                   <Percent size={13} />
-                  {p === 0 ? "No discount" : `${p}% off`}
+                  {p === 0 ? L("No discount") : L("{0}% off", p)}
                 </button>
               ))}
               <button
                 onClick={() => { if (coupon) onCoupon?.(undefined); setCoupon(null); setCustom((c) => ({ ...c, on: true })); }}
                 className={clsx("flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold", custom.on && !coupon ? "bg-ink text-canvas" : "bg-sunken text-muted")}
               >
-                Custom
-              </button>
+                {L("Custom")}</button>
             </div>}
             {canDiscount && custom.on && !coupon && (
               <div className="mt-2 flex items-center gap-2">
-                <div className="inline-flex shrink-0 rounded-ctl bg-sunken p-[3px]" role="tablist" aria-label="Discount in % or ₹">
+                <div className="inline-flex shrink-0 rounded-ctl bg-sunken p-[3px]" role="tablist" aria-label={L("Discount in % or ₹")}>
                   {(["pct", "flat"] as const).map((k) => (
                     <button key={k} role="tab" aria-selected={custom.kind === k} onClick={() => setCustom((c) => ({ ...c, kind: k }))} className={clsx("rounded-[9px] px-3 py-1.5 text-[13px] font-semibold", custom.kind === k ? "bg-surface text-ink shadow-float" : "text-muted")}>
                       {k === "pct" ? "%" : "₹"}
@@ -402,7 +396,7 @@ export function Checkout({
                   placeholder={custom.kind === "pct" ? "e.g. 15" : "e.g. 50"}
                   value={custom.value}
                   onChange={(e) => setCustom((c) => ({ ...c, value: e.target.value.replace(/[^\d.]/g, "") }))}
-                  aria-label={custom.kind === "pct" ? "Discount percent" : "Discount in rupees"}
+                  aria-label={custom.kind === "pct" ? L("Discount percent") : L("Discount in rupees")}
                 />
                 <span className="shrink-0 text-[13px] font-semibold text-jade tnum">−{inr(customOff)}</span>
               </div>
@@ -412,7 +406,7 @@ export function Checkout({
                 <div className="mt-3 flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2 text-[13.5px] text-jade-deep">
                   <Ticket size={16} />
                   <span className="flex-1"><b>{coupon.code}</b> · {couponLabel(coupon)}</span>
-                  <button aria-label="Remove coupon" onClick={() => { setCoupon(null); onCoupon?.(undefined); }} className="p-1"><X size={15} /></button>
+                  <button aria-label={L("Remove coupon")} onClick={() => { setCoupon(null); onCoupon?.(undefined); }} className="p-1"><X size={15} /></button>
                 </div>
               ) : (
                 <form
@@ -431,12 +425,12 @@ export function Checkout({
                 >
                   <input
                     className={clsx(inputCls, "!h-10 uppercase")}
-                    placeholder="Coupon code"
+                    placeholder={L("Coupon code")}
                     value={code}
                     onChange={(e) => { setCode(e.target.value); setCodeErr(""); }}
-                    aria-label="Coupon code"
+                    aria-label={L("Coupon code")}
                   />
-                  <Button type="submit" variant="tinted" size="sm" className="!h-10 shrink-0" disabled={!code.trim()}>Apply</Button>
+                  <Button type="submit" variant="tinted" size="sm" className="!h-10 shrink-0" disabled={!code.trim()}>{L("Apply")}</Button>
                 </form>
               )
             )}
@@ -448,13 +442,13 @@ export function Checkout({
             <div className="flex flex-col items-center rounded-group bg-surface p-5 text-center">
               {upi ? (
                 <>
-                  <ScanQr value={upiUri({ upi, payee: settings.name, amount: t.total, note: label })} size={190} label={`UPI QR for ${inr(t.total)}`} />
-                  <div className="mt-3 text-[15px] font-semibold">Scan with any UPI app — {inr(t.total)} fills in by itself</div>
+                  <ScanQr value={upiUri({ upi, payee: settings.name, amount: t.total, note: label })} size={190} label={L("UPI QR for {0}", inr(t.total))} />
+                  <div className="mt-3 text-[15px] font-semibold">{L("Scan with any UPI app —")} {inr(t.total)} {L("fills in by itself")}</div>
                 </>
               ) : (
-                <div className="text-[15px] font-semibold">Collect {inr(t.total)} by UPI</div>
+                <div className="text-[15px] font-semibold">{L("Collect")} {inr(t.total)} {L("by UPI")}</div>
               )}
-              <div className="text-[13px] text-muted">{upi ? `${upi} · exact amount ${inr(t.total)}` : "Add your UPI ID in Settings to show a QR"}</div>
+              <div className="text-[13px] text-muted">{upi ? L("{0} · exact amount {1}", upi, inr(t.total)) : L("Add your UPI ID in Settings to show a QR")}</div>
             </div>
           )}
 
@@ -470,13 +464,13 @@ export function Checkout({
                       onClick={() => setCash(v === t.total ? null : v)}
                       className={clsx("rounded-ctl py-3 text-[16px] font-semibold tnum", (cash ?? t.total) === v ? "bg-jade text-white" : "bg-sunken")}
                     >
-                      {v === t.total ? "Exact" : inr(v)}
+                      {v === t.total ? L("Exact") : inr(v)}
                     </button>
                   ))}
               </div>
               {cash !== null && cash > t.total && (
                 <div className="mt-4 flex items-baseline justify-between rounded-ctl bg-jade-soft px-4 py-3">
-                  <span className="text-[15px] font-medium text-jade-deep">Give back</span>
+                  <span className="text-[15px] font-medium text-jade-deep">{L("Give back")}</span>
                   <span className="text-[24px] font-semibold text-jade-deep tnum">{inr(cash - t.total)}</span>
                 </div>
               )}
@@ -485,8 +479,7 @@ export function Checkout({
 
           {method === "card" && (
             <div className="rounded-group bg-surface p-5 text-center text-[14px] text-muted">
-              Tap, dip or swipe on the card machine for <b className="text-ink">{inr(t.total)}</b>, then confirm here.
-            </div>
+              {L("Tap, dip or swipe on the card machine for")} <b className="text-ink">{inr(t.total)}</b>{L(", then confirm here.")}</div>
           )}
 
           {method === "mixed" && mixed.length > 0 && <PaymentSplit total={t.total} rows={mixed} onChange={setMixed} />}
@@ -495,13 +488,13 @@ export function Checkout({
             <div className="rounded-group bg-surface p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[15px] font-semibold">Split equally</div>
-                  <div className="text-[13px] text-muted">Tap each guest when their share is paid.</div>
+                  <div className="text-[15px] font-semibold">{L("Split equally")}</div>
+                  <div className="text-[13px] text-muted">{L("Tap each guest when their share is paid.")}</div>
                 </div>
                 <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
-                  <button aria-label="Fewer guests" onClick={() => { setGuests((g) => Math.max(2, g - 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Minus size={15} /></button>
+                  <button aria-label={L("Fewer guests")} onClick={() => { setGuests((g) => Math.max(2, g - 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Minus size={15} /></button>
                   <span className="w-6 text-center text-[15px] font-semibold tnum">{guests}</span>
-                  <button aria-label="More guests" onClick={() => { setGuests((g) => Math.min(12, g + 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Plus size={15} /></button>
+                  <button aria-label={L("More guests")} onClick={() => { setGuests((g) => Math.min(12, g + 1)); setPaidGuests([]); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface"><Plus size={15} /></button>
                 </div>
               </div>
               <div className="mt-4 space-y-2">
@@ -512,9 +505,9 @@ export function Checkout({
                       <span className={clsx("flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-semibold", paid ? "bg-jade text-white" : "bg-surface text-muted")}>
                         {paid ? <CheckCircle2 size={16} /> : i + 1}
                       </span>
-                      <span className="flex-1 text-[14px] font-medium">Guest {i + 1}</span>
+                      <span className="flex-1 text-[14px] font-medium">{L("Guest")} {i + 1}</span>
                       <span className="text-[14px] font-semibold tnum">{inr(i === guests - 1 ? t.total - perGuest * (guests - 1) : perGuest)}</span>
-                      <Pill tone={paid ? "jade" : "neutral"}>{paid ? "Paid" : "Tap when paid"}</Pill>
+                      <Pill tone={paid ? "jade" : "neutral"}>{paid ? L("Paid") : L("Tap when paid")}</Pill>
                     </button>
                   );
                 })}
