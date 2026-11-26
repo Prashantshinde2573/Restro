@@ -14,6 +14,30 @@ export type WhatsNew = {
 
 export const WHATS_NEW: WhatsNew[] = [
   {
+    id: "2026-11-26-paid-before-food",
+    date: "2026-11-26",
+    tag: "fixed",
+    title: { en: "Guests who pay before the food keep their table", mr: "जेवणाआधी पैसे दिले तरी ग्राहकांचं टेबल राहतं", hi: "खाने से पहले भुगतान करने पर भी ग्राहकों की टेबल रहती है" },
+    points: {
+      en: ["Charge a dine-in bill while the food is still cooking: the table stays busy with a green “Paid”, no “Charge” and no “To clean”.", "When they leave, open the table and tap “Guests left”: then it goes to “To clean”.", "If they order more, only the new dishes are charged."],
+      mr: ["जेवण बनत असताना डाइन-इन बिल Charge केलं तर टेबल भरलेलंच राहतं, हिरवं “भरलं” दिसतं; “Charge” आणि “साफ करायचं” दिसत नाही.", "ग्राहक गेले की टेबल उघडून “ग्राहक गेले” दाबा: मग ते “साफ करायचं” मध्ये जातं.", "त्यांनी आणखी मागवलं तर फक्त नवीन डिशचंच Charge होतं."],
+      hi: ["खाना बनते समय डाइन-इन बिल Charge करें तो टेबल भरी रहती है, हरा “भुगतान हुआ” दिखता है; “Charge” और “साफ़ करना है” नहीं दिखता।", "ग्राहक जाएँ तो टेबल खोलकर “ग्राहक चले गए” दबाएँ: फिर वह “साफ़ करना है” में जाती है।", "और मँगाएँ तो सिर्फ़ नई डिश का Charge होता है।"],
+    },
+    href: "/app/tables",
+  },
+  {
+    id: "2026-11-26-charge-first",
+    date: "2026-11-26",
+    tag: "fixed",
+    title: { en: "Charge first, and the bill stays paid", mr: "आधी Charge केलं तरी बिल भरलेलंच राहतं", hi: "पहले Charge करें, बिल भुगतान वाला ही रहता है" },
+    points: {
+      en: ["Charging a counter or delivery order without “Send to kitchen” first sometimes lost the payment, so “Charge” came back after the kitchen served it.", "Now the order still goes to the kitchen, and once served it moves to All orders as paid."],
+      mr: ["“किचनला पाठवा” न दाबता काउंटर किंवा डिलिव्हरी ऑर्डर थेट Charge केली की कधी कधी पेमेंट हरवायचं, आणि किचनने served केल्यावर “Charge” परत यायचं.", "आता ऑर्डर किचनला जाते, आणि served झाल्यावर भरलेली म्हणून सर्व ऑर्डरमध्ये जाते."],
+      hi: ["“किचन भेजें” दबाए बिना काउंटर या डिलीवरी ऑर्डर सीधे Charge करने पर कभी-कभी भुगतान खो जाता था, और किचन के served करने पर “Charge” फिर आ जाता था।", "अब ऑर्डर किचन जाता है, और served होने पर भुगतान वाला होकर सभी ऑर्डर में जाता है।"],
+    },
+    href: "/app/pos",
+  },
+  {
     id: "2026-11-26-language",
     date: "2026-11-26",
     tag: "new",

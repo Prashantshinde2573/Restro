@@ -190,7 +190,7 @@ export default function TablesPage() {
                           <span className={clsx("flex items-center gap-1", long && "font-semibold text-rose")}>
                             <Clock size={12} /> {mins} {L("min ·")} {seatsTaken(t)}/{cap}
                           </span>
-                          {toConfirm ? <span className="font-semibold text-saffron">{L("Paid? Confirm")}</span> : total ? <span className="font-semibold text-ink tnum">{inr(Math.round(total * (1 + gstRate())))}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} {L("bills")}</span>}</span> : <span>{L("Not ordered")}</span>}
+                          {toConfirm ? <span className="font-semibold text-saffron">{L("Paid? Confirm")}</span> : total ? <span className="font-semibold text-ink tnum">{inr(Math.round(total * (1 + gstRate())))}{isShared(t) && <span className="font-normal text-muted"> · {t.parties.length} {L("bills")}</span>}</span> : t.parties.every((p) => p.paid) ? <span className="flex items-center gap-1 font-semibold text-jade"><Check size={12} /> {L("Paid")}</span> : <span>{L("Not ordered")}</span>}
                         </>
                       )}
                     </div>
@@ -252,6 +252,7 @@ export default function TablesPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[16px] font-semibold">{label} · {p.guests} {p.guests > 1 ? "guests" : "guest"}</span>
                         <Pill tone={p.status === "billing" ? "saffron" : p.status === "ordered" ? "jade" : "sky"}>{p.status === "billing" ? L("Wants bill") : p.status === "ordered" ? L("Eating") : L("Seated")}</Pill>
+                        {p.paid && <Pill tone="jade"><Check size={12} /> {L("Paid")}</Pill>}
                         {p.pendingApproval && <Pill tone="saffron">{L("Ordered from QR · accept?")}</Pill>}
                         {(() => {
                           const code = partyOrders(sel.id, p.id).find((o) => o.wantsCoupon)?.wantsCoupon;
@@ -267,7 +268,7 @@ export default function TablesPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[18px] font-semibold tnum" title={p.total ? L("Including GST") : L("No order yet")}>{p.total ? inr(Math.round(p.total * (1 + gstRate()))) : "—"}</div>
+                      <div className="text-[18px] font-semibold tnum" title={p.total ? L("Including GST") : p.paid ? L("Bill paid") : L("No order yet")}>{p.total ? inr(Math.round(p.total * (1 + gstRate()))) : p.paid ? <Check size={20} className="ml-auto text-jade" /> : "—"}</div>
                     </div>
                   </div>
                   {claim && (
@@ -294,10 +295,13 @@ export default function TablesPage() {
                     {p.total && !claim && canCharge ? (
                       <Button size="sm" variant="tinted" onClick={() => setPay({ tableId: sel.id, party: p, label: isShared(sel) ? `${sel.name} · Party ${p.id}` : `Table ${sel.name}` })}><ReceiptText size={15} /> {L("Charge")} {inr(Math.round(p.total * (1 + gstRate())))}</Button>
                     ) : null}
-                    {!partyOrders(sel.id, p.id).length && !claim && (
+                    {!partyOrders(sel.id, p.id).length && !claim && (p.paid ? (
+                      <Button size="sm" variant="plain" onClick={() => { tableActions.close(sel.id, p.id, "guests left", { paid: true }); toast(isShared(sel) ? L("Party {0} left · table to clean", p.id) : L("{0} · to clean", sel.name)); if (sel.parties.length <= 1) setSelId(null); }}>
+                        <LogOut size={15} /> {L("Guests left")}</Button>
+                    ) : (
                       <Button size="sm" variant="plain" onClick={() => { tableActions.close(sel.id, p.id, "freed, no order"); toast(isShared(sel) ? `Party ${p.id} removed · no order` : `${sel.name} is free`); if (sel.parties.length <= 1) setSelId(null); }}>
                         <LogOut size={15} /> {L("Free table")}</Button>
-                    )}
+                    ))}
                     {others.map((o) => (
                       <Button key={o.id} size="sm" variant="plain" onClick={() => { tableActions.merge(sel.id, p.id, o.id); orderActions.moveParty(sel.id, p.id, { tableId: sel.id, tableName: sel.name, partyId: o.id }); toast(L("Party {0} joined Party {1} · one bill now", p.id, o.id)); }}>
                         <Merge size={15} /> {L("Merge with")} {o.id}

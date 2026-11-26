@@ -29,7 +29,9 @@ export function TableJanitor() {
           const idle = (Date.now() - Date.parse(p.since)) / 60_000 >= EMPTY_TABLE_MINUTES;
           // the orders decide: a group whose orders were all cancelled has nothing open either
           const ordered = open.some((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id);
-          if (idle && !ordered && p.status !== "billing" && !p.paymentPending) tableActions.close(t.id, p.id, `no order in ${EMPTY_TABLE_MINUTES} min`);
+          // paid before the food came: they are eating here, staff free the table with "Guests left"
+          const paidHere = p.paid || getOrders().some((o) => o.tableId === t.id && (o.partyId ?? "A") === p.id && o.status === "paid" && Date.parse(o.createdAt) >= Date.parse(p.since) - 2 * 60_000);
+          if (idle && !ordered && !paidHere && p.status !== "billing" && !p.paymentPending) tableActions.close(t.id, p.id, `no order in ${EMPTY_TABLE_MINUTES} min`);
         }
       }
     };

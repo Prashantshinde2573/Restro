@@ -75,11 +75,14 @@ export function withOrders(tables: Table[], orders: Order[]): Table[] {
         changed = true;
         return { ...p, status: "seated" as const, total: undefined, pendingApproval: false };
       }
-      const total = mine.reduce((s, o) => s + orderTotal(o.lines), 0);
-      const status: Party["status"] = p.status === "billing" || mine.every((o) => o.status === "paid") ? "billing" : "ordered";
-      if (status === p.status && total === p.total) return p;
+      // what is still to pay: orders paid already (paid before the food came) are not charged again
+      const open = mine.filter((o) => o.status !== "paid");
+      const total = open.reduce((s, o) => s + orderTotal(o.lines), 0);
+      const paid = open.length === 0; // everything ordered is paid, and the group is still here
+      const status: Party["status"] = paid ? "ordered" : p.status === "billing" ? "billing" : "ordered";
+      if (status === p.status && total === p.total && paid === !!p.paid) return p;
       changed = true;
-      return { ...p, status, total };
+      return { ...p, status, total, paid };
     });
     return changed ? { ...t, parties } : t;
   });

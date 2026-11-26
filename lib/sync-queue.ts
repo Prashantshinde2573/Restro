@@ -10,7 +10,9 @@
 // no) is not retried: the person sees a red "Not saved" bar and the error is
 // reported to Admin → App errors.
 //
-// While nothing is waiting, jobs are sent straight away, exactly as before.
+// While nothing is waiting, jobs are sent straight away, exactly as before —
+// except that two jobs for the same row go one after the other (a new order and
+// its payment a moment later must reach the server in that order).
 import { useSyncExternalStore } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -127,26 +129,43 @@ export async function flushAll() {
 
 /** Send a change. Resolves once it is saved, waiting in the queue, or refused. */
 export function send(job: Job): Promise<void> {
-  if (queue.length || flushing) {
+  const enqueue = () => {
     queue.push({ qid: qid(), job, tries: 0, at: Date.now() });
     save();
     void flush();
+  };
+  if (queue.length || flushing) {
+    enqueue();
     return Promise.resolve();
   }
-  const p = run(job).then((r) => {
-    if (r === "ok") return;
-    if (r === "retry") {
-      queue.push({ qid: qid(), job, tries: 1, at: Date.now() });
-      save();
-      later(1);
-      return;
-    }
-    refused(job, r);
-  });
+  // wait for anything still on its way for the same row (the new order before its payment)
+  const ids = idsOf(job);
+  const before = ids.map((id) => rowChain.get(id)).filter((x): x is Promise<void> => !!x);
+  const go = (): Promise<void> => {
+    // the earlier job ended up waiting in the queue: this one waits behind it
+    if (queue.length || flushing) return Promise.resolve(enqueue());
+    return run(job).then((r) => {
+      if (r === "ok") return;
+      if (r === "retry") {
+        queue.push({ qid: qid(), job, tries: 1, at: Date.now() });
+        save();
+        later(1);
+        return;
+      }
+      refused(job, r);
+    });
+  };
+  const p = before.length ? Promise.allSettled(before).then(go) : go();
+  ids.forEach((id) => rowChain.set(id, p));
   inFlight.add(p);
-  void p.finally(() => inFlight.delete(p));
+  void p.finally(() => {
+    inFlight.delete(p);
+    ids.forEach((id) => rowChain.get(id) === p && rowChain.delete(id));
+  });
   return p;
 }
+/** The latest job on its way for each row id. */
+const rowChain = new Map<string, Promise<void>>();
 
 const qid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -166,7 +185,10 @@ async function flush() {
         refused(head.job, "too old to save (the internet was off too long). Please check it and enter it again.");
         continue;
       }
-      const r = await run(head.job);
+      // a job sent straight away for the same row goes first
+      const busy = idsOf(head.job).map((id) => rowChain.get(id)).filter((x): x is Promise<void> => !!x);
+      if (busy.length) await Promise.allSettled(busy);
+      const r = await run(head.job, head.tries);
       if (r === "retry") {
         head.tries += 1;
         save();
@@ -226,7 +248,7 @@ function describe(job: Job) {
 }
 
 /** "retry" for a network problem, "ok", or the server's reason for refusing. */
-async function run(job: Job): Promise<"ok" | "retry" | string> {
+async function run(job: Job, tries = 0): Promise<"ok" | "retry" | string> {
   if (!client) return "retry";
   let res: Result;
   try {
@@ -234,7 +256,15 @@ async function run(job: Job): Promise<"ok" | "retry" | string> {
   } catch (e) {
     return isNetwork(String((e as Error)?.message ?? e), 0) ? "retry" : String((e as Error)?.message ?? e);
   }
-  if (!res.error) return "ok";
+  if (!res.error) {
+    // patch_order found no such order on the server (not saved there yet): never drop the change.
+    // Try again a little later; if it still isn't there, save the whole order (it adds it).
+    if (job.op === "patchOrder" && res.data === false) {
+      if (tries < 3) return "retry";
+      return run({ op: "upsert", table: "orders", rows: [{ rid: job.rid, id: job.id, data: job.full }] });
+    }
+    return "ok";
+  }
   const msg = `${res.error.message ?? ""}`;
   // the insert reached the server last time, only the answer got lost
   if (job.op === "insert" && res.error.code === "23505") return "ok";

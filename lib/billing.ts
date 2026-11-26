@@ -14,6 +14,16 @@ import { gstRate } from "./format";
 export const partyOpenOrders = (tableId: string, partyId: string) =>
   getOrders().filter((o) => o.tableId === tableId && (o.partyId ?? "A") === partyId && o.status !== "paid" && o.status !== "cancelled");
 
+/** The party's food is still being made (paid before it came): the guests are at the table. */
+export const partyFoodComing = (tableId: string, partyId: string) =>
+  getOrders().some((o) => o.tableId === tableId && (o.partyId ?? "A") === partyId && o.status === "paid" && !!o.kitchenStatus);
+
+/** The bill is paid. Guests still waiting for their food keep the table (it shows "Paid"); otherwise they leave and it needs cleaning. */
+export function paidUp(tableId: string, partyId: string, why: string) {
+  if (partyFoodComing(tableId, partyId)) tableActions.update(tableId, partyId, { paid: true, status: "ordered", paymentPending: false });
+  else tableActions.close(tableId, partyId, why, { paid: true });
+}
+
 export function closeBill(opts: {
   ids: string[];
   payments: Payment[];
@@ -26,7 +36,7 @@ export function closeBill(opts: {
 }): "paid" | "waiting" {
   const r = opts.ids.length ? orderActions.settle(opts.ids, opts.payments, opts.by, { discount: opts.discount, coupon: opts.coupon, discounts: opts.discounts }) : "paid";
   if (opts.tableId && opts.partyId) {
-    if (r === "paid") tableActions.close(opts.tableId, opts.partyId, "bill paid", { paid: true });
+    if (r === "paid") paidUp(opts.tableId, opts.partyId, "bill paid");
     else tableActions.update(opts.tableId, opts.partyId, { status: "billing", paymentPending: true });
   }
   return r;
@@ -38,7 +48,7 @@ function freeIfSettled(o: Order | undefined) {
   const pid = o.partyId ?? "A";
   const t = getTable(o.tableId);
   if (!t?.parties.some((p) => p.id === pid)) return;
-  if (partyOpenOrders(o.tableId, pid).length === 0) tableActions.close(o.tableId, pid, "payment confirmed", { paid: true });
+  if (partyOpenOrders(o.tableId, pid).length === 0) paidUp(o.tableId, pid, "payment confirmed");
 }
 
 export function confirmPayment(claimId: string) {
@@ -76,7 +86,7 @@ export function markUnpaid(ids: string[]) {
   const sub = list.reduce((s, x) => s + x.lines.reduce((a, l) => a + l.qty * l.price, 0), 0);
   const party = t.parties.find((p) => p.id === pid);
   if (party) {
-    tableActions.update(t.id, pid, { status: "billing", total: (party.total ?? 0) + sub, paymentPending: false });
+    tableActions.update(t.id, pid, { status: "billing", total: (party.total ?? 0) + sub, paymentPending: false, paid: false });
   } else {
     const p = tableActions.seat(t.id, 1, { status: "billing", total: sub, server: o.staff });
     if (p.id !== pid) orderActions.moveParty(t.id, pid, { tableId: t.id, tableName: t.name, partyId: p.id });
