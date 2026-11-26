@@ -40,6 +40,7 @@ export default function WhatsNewPage() {
     <>
       <PageHeader title={L("What's new")} subtitle={L("New features and changes in Restropi")} />
       <Page className="max-w-2xl space-y-6">
+        {days.length === 0 && <p className="rounded-group bg-surface px-4 py-8 text-center text-[14.5px] text-muted">{L("Nothing new yet. New features will show here.")}</p>}
         {days.map((d) => (
           <section key={d.date}>
             <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">{dayLabel(d.date)}</h2>

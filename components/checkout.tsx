@@ -60,6 +60,9 @@ export function Checkout({
   const [guests, setGuests] = useState(3);
   const [paidGuests, setPaidGuests] = useState<number[]>([]);
   const [done, setDone] = useState(false);
+  // the bill as it was when it was paid: the screen behind clears its cart once paid,
+  // so the "Paid" screen, receipt, PDF and WhatsApp bill must not read the live (now empty) bill
+  const [paidBill, setPaidBill] = useState<{ subtotal: number; label: string; lines?: { name: string; qty: number; price: number }[]; billNo?: number; t: ReturnType<typeof billTotals>; discounts: BillDiscount[] } | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [phone, setPhone] = useState("");
   const [guestName, setGuestName] = useState("");
@@ -87,6 +90,7 @@ export function Checkout({
     wasOpen.current = open;
     if (opening) {
       setDone(false);
+      setPaidBill(null);
       setStampNote(null);
       setWaiting(false);
       setPaidGuests([]);
@@ -168,18 +172,21 @@ export function Checkout({
   const [stampNote, setStampNote] = useState<string | null>(null);
   const outlet = useCurrentOutlet();
   const me = useMe();
-  const receipt = () => ({
-    by: me?.name,
-    customer: guestName.trim() || undefined,
-    settings,
-    outletName: outlet.name,
-    label,
-    billNo,
-    lines: lines?.length ? lines : [{ name: "Food & drinks", qty: 1, price: subtotal }],
-    totals: t,
-    discounts,
-    payments: paidWith,
-  });
+  const receipt = () => {
+    const b = paidBill ?? { subtotal, label, lines, billNo, t, discounts };
+    return {
+      by: me?.name,
+      customer: guestName.trim() || undefined,
+      settings,
+      outletName: outlet.name,
+      label: b.label,
+      billNo: b.billNo,
+      lines: b.lines?.length ? b.lines : [{ name: "Food & drinks", qty: 1, price: b.subtotal }],
+      totals: b.t,
+      discounts: b.discounts,
+      payments: paidWith,
+    };
+  };
   // the number or the bill changed after the coupon went on: check it again (once-each, invited guests, min bill)
   useEffect(() => {
     if (!coupon) return;
@@ -193,6 +200,7 @@ export function Checkout({
   }, [phone, subtotal]);
 
   const finish = () => {
+    setPaidBill({ subtotal, label, lines, billNo, t, discounts });
     setDone(true);
     const payments: Payment[] =
       method === "mixed"
@@ -245,11 +253,11 @@ export function Checkout({
           <div className={clsx("flex h-20 w-20 animate-pop items-center justify-center rounded-full", waiting ? "bg-saffron-soft" : "bg-jade-soft")}>
             {waiting ? <Clock3 size={42} className="text-saffron" /> : <CheckCircle2 size={44} className="text-jade" />}
           </div>
-          <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr(t.total)}</div>
+          <div className="mt-4 text-[34px] font-semibold tracking-tight tnum">{inr((paidBill?.t ?? t).total)}</div>
           <p className="max-w-sm text-[15px] text-muted">
             {waiting
-              ? L("{0} is marked paid. The owner confirms it once the money is in; until then the bill stays open.", label)
-              : L("{0} is paid and closed.", label)}
+              ? L("{0} is marked paid. The owner confirms it once the money is in; until then the bill stays open.", paidBill?.label ?? label)
+              : L("{0} is paid and closed.", paidBill?.label ?? label)}
           </p>
           {stampNote && (
             <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-jade-soft px-3.5 py-1.5 text-[14px] font-semibold text-jade-deep">

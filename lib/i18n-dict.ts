@@ -436,6 +436,7 @@ export const DICT: Record<string, readonly [string, string]> = {
   "Guests left": ["ग्राहक गेले", "ग्राहक चले गए"],
   "Party {0} left · table to clean": ["पार्टी {0} गेली · टेबल साफ करायचं", "पार्टी {0} गई · टेबल साफ़ करना है"],
   "{0} · to clean": ["{0} · साफ करायचं", "{0} · साफ़ करना है"],
+  "Nothing new yet. New features will show here.": ["अजून नवीन काही नाही. नवीन फीचर्स इथे दिसतील.", "अभी कुछ नया नहीं. नए फ़ीचर यहाँ दिखेंगे."],
   "Free table": ["टेबल मोकळं करा", "टेबल खाली करें"],
   "From": ["पासून", "से"],
   "From gallery": ["गॅलरीमधून", "गैलरी से"],

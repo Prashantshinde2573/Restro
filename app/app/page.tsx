@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, ChefHat, History, ShoppingBasket, LayoutGrid, Globe2, SquarePlus, ReceiptText, CalendarDays, MapPin } from "lucide-react";
 import { hasPerm, hasTables, isOwner } from "@/lib/access";
-import { toAccept, useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders, useOutletOrders } from "@/lib/live";
+import { inKitchen, toAccept, useCan, useCurrentOutlet, useFeature, useMe, useMembers, useMenu, useOrders, useOutletOrders } from "@/lib/live";
 import { Group, Page, PageHeader, Pill, Ring, Row } from "@/components/ui";
 import { BarChart, TrendChart } from "@/components/charts";
 import { UserChip } from "@/components/shell";
@@ -21,7 +21,7 @@ function StaffHome() {
   const activityOn = useFeature("activity") === "ok"; // Growth and up
   const outlet = useCurrentOutlet();
   // live counts on the tiles, so the start screen says what needs doing
-  const live = useOutletOrders().filter((o) => o.status !== "paid" && o.status !== "cancelled");
+  const live = useOutletOrders().map(inKitchen).filter((o) => o.status !== "paid" && o.status !== "cancelled");
   const ready = live.filter((o) => o.status === "ready").length;
   const cooking = live.filter((o) => o.status === "accepted" || o.status === "preparing").length;
   const tablesHere = useTables();
@@ -93,7 +93,7 @@ function OwnerHome() {
   const busy = tables.filter((t) => t.parties.length > 0).length;
   const billing = tables.filter((t) => t.parties.some((p) => p.status === "billing")).length;
   const shared = tables.filter(isShared).length;
-  const kitchenQueue = orders.filter((o) => ["new", "accepted", "preparing"].includes(o.status));
+  const kitchenQueue = orders.map(inKitchen).filter((o) => ["new", "accepted", "preparing"].includes(o.status));
   const oldest = kitchenQueue.reduce((m, o) => Math.max(m, minutesSince(o.createdAt)), 0);
   const waiting = orders.filter(toAccept).length;
   const qrOpen = orders.filter((o) => o.channel !== "pos" && o.status !== "paid" && o.status !== "cancelled");

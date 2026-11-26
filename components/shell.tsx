@@ -7,7 +7,7 @@ import { Activity, BarChart3, Boxes, ChefHat, ChevronsUpDown, LayoutGrid, Megaph
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useT, type Lang, type TKey, L } from "@/lib/i18n";
 import { FEATURES, PLAN_NAME, featureState, hasPerm, inOutlet, isOwner, onPayroll, outletKinds, routeFor } from "@/lib/access";
-import { liveCalls, toAccept, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
+import { inKitchen, liveCalls, toAccept, sessionActions, useAccount, useCalls, useCurrentOutlet, useMe, useMembers, useOrders, useOutlets, useStock } from "@/lib/live";
 import { cloudSignOut, useCloud } from "@/lib/cloud";
 import { useReady } from "@/lib/store";
 import { ChangePassword } from "./owner-auth";
@@ -132,7 +132,7 @@ function useNav() {
   const here = (o?: string) => !o || o === outlet.id;
   const orders = useOrders().filter((o) => here(o.outletId));
   const waiting = orders.filter(toAccept).length; // to accept
-  const cooking = orders.filter((o) => o.status === "accepted" || o.status === "preparing").length; // in the kitchen
+  const cooking = orders.map(inKitchen).filter((o) => o.status === "accepted" || o.status === "preparing").length; // in the kitchen (paid ones too)
   const tables = withOrders(useTables(), orders).filter((t) => here(t.outletId));
   const calls = liveCalls(useCalls()).filter((c) => c.status === "open" && here(c.outletId)).length;
   const tableAsks = tables.reduce((n, t) => n + t.parties.filter((p) => p.pendingApproval || p.status === "billing" || p.paymentPending).length, 0);
