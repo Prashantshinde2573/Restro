@@ -14,6 +14,18 @@ export type WhatsNew = {
 
 export const WHATS_NEW: WhatsNew[] = [
   {
+    id: "2026-11-26-charge-first",
+    date: "2026-11-26",
+    tag: "fixed",
+    title: { en: "Charge first, and the bill stays paid", mr: "आधी Charge केलं तरी बिल भरलेलंच राहतं", hi: "पहले Charge करें, बिल भुगतान वाला ही रहता है" },
+    points: {
+      en: ["Charging a counter or delivery order without “Send to kitchen” first sometimes lost the payment, so “Charge” came back after the kitchen served it.", "Now the order still goes to the kitchen, and once served it moves to All orders as paid."],
+      mr: ["“किचनला पाठवा” न दाबता काउंटर किंवा डिलिव्हरी ऑर्डर थेट Charge केली की कधी कधी पेमेंट हरवायचं, आणि किचनने served केल्यावर “Charge” परत यायचं.", "आता ऑर्डर किचनला जाते, आणि served झाल्यावर भरलेली म्हणून सर्व ऑर्डरमध्ये जाते."],
+      hi: ["“किचन भेजें” दबाए बिना काउंटर या डिलीवरी ऑर्डर सीधे Charge करने पर कभी-कभी भुगतान खो जाता था, और किचन के served करने पर “Charge” फिर आ जाता था।", "अब ऑर्डर किचन जाता है, और served होने पर भुगतान वाला होकर सभी ऑर्डर में जाता है।"],
+    },
+    href: "/app/pos",
+  },
+  {
     id: "2026-11-26-language",
     date: "2026-11-26",
     tag: "new",
