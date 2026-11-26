@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import { CalendarRange, Download, FileSpreadsheet, FileText, MessageCircle, SlidersHorizontal } from "lucide-react";
 import { ReportBuilder } from "@/components/report-builder";
 import { useMemo, useState } from "react";
@@ -91,7 +92,7 @@ export default function ReportsPage() {
   const net = Math.max(0, t.sales - t.gst);
   const disc = discountReport(orders);
   const stamp = new Date().toISOString().slice(0, 10);
-  const label = period === "today" ? "today" : period === "custom" ? `${isoDay(from)}-to-${isoDay(end)}` : `last-${days}-days`;
+  const label = period === "today" ? "today" : period === "custom" ? L("{0}-to-{1}", isoDay(from), isoDay(end)) : L("last-{0}-days", days);
   const rangeText = days === 1 ? niceDay(from) : `${niceDay(from)} – ${niceDay(end)}`;
   const chartDays = Math.min(Math.max(days, 7), CHART_MAX);
 
@@ -241,14 +242,14 @@ export default function ReportsPage() {
   const download = (r: (typeof reports)[number]) => {
     const [name, blob] = fileOf(r);
     downloadBlob(name, blob);
-    toast(`${r.name} downloaded`);
+    toast(L("{0} downloaded", r.name));
   };
   const shareCsv = async (r: (typeof reports)[number]) => {
     const [name, blob] = fileOf(r);
     const ok = await shareFile(name, blob, `${r.name} · ${who} · ${rangeText}`);
     if (!ok) {
       downloadBlob(name, blob);
-      toast("Downloaded. Attach it in WhatsApp to send.");
+      toast(L("Downloaded. Attach it in WhatsApp to send."));
     }
   };
 
@@ -258,12 +259,12 @@ export default function ReportsPage() {
   return (
     <>
       <PageHeader
-        title="Reports"
+        title={L("Reports")}
         subtitle={`${outlet.name} · ${rangeText}`}
         actions={
           <div className="hidden gap-2 sm:flex">
-            <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> Build report</Button>
-            <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> Share</Button>
+            <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> {L("Build report")}</Button>
+            <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> {L("Share")}</Button>
           </div>
         }
       >
@@ -275,31 +276,31 @@ export default function ReportsPage() {
               { value: "today", label: "Today" },
               { value: "7d", label: "7 days" },
               { value: "30d", label: "30 days" },
-              { value: "custom", label: <span className="inline-flex items-center gap-1"><CalendarRange size={14} /> Custom</span> },
+              { value: "custom", label: <span className="inline-flex items-center gap-1"><CalendarRange size={14} /> {L("Custom")}</span> },
             ]}
           />
           {period === "custom" && (
             <div className="flex w-full items-center gap-2 sm:w-auto">
-              <input type="date" aria-label="From" className={inputCls + " !h-10 min-w-0 flex-1 !text-[14px] sm:w-[150px] sm:flex-none"} max={today} value={fromIso} onChange={(e) => setFromIso(e.target.value)} />
-              <span className="text-[13px] text-muted">to</span>
-              <input type="date" aria-label="To" className={inputCls + " !h-10 min-w-0 flex-1 !text-[14px] sm:w-[150px] sm:flex-none"} max={today} value={toIso} onChange={(e) => setToIso(e.target.value)} />
+              <input type="date" aria-label={L("From")} className={inputCls + " !h-10 min-w-0 flex-1 !text-[14px] sm:w-[150px] sm:flex-none"} max={today} value={fromIso} onChange={(e) => setFromIso(e.target.value)} />
+              <span className="text-[13px] text-muted">{L("to")}</span>
+              <input type="date" aria-label={L("To")} className={inputCls + " !h-10 min-w-0 flex-1 !text-[14px] sm:w-[150px] sm:flex-none"} max={today} value={toIso} onChange={(e) => setToIso(e.target.value)} />
             </div>
           )}
         </div>
-        {range.loading && <p className="mt-2 text-[13px] text-muted">Loading every bill in this range…</p>}
-        {range.failed && <p className="mt-2 text-[13px] font-medium text-[#B54708]">Couldn&apos;t load older bills. These numbers count only the latest 1,000 orders. Check the internet and open Reports again.</p>}
+        {range.loading && <p className="mt-2 text-[13px] text-muted">{L("Loading every bill in this range…")}</p>}
+        {range.failed && <p className="mt-2 text-[13px] font-medium text-[#B54708]">{L("Couldn't load older bills. These numbers count only the latest 1,000 orders. Check the internet and open Reports again.")}</p>}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
-          <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> Build report</Button>
-          <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> WhatsApp</Button>
+          <Button size="sm" variant="tinted" onClick={printPdf}><SlidersHorizontal size={16} /> {L("Build report")}</Button>
+          <Button size="sm" className="!bg-[#25D366] hover:!bg-[#1fb757]" onClick={shareSummary}><MessageCircle size={16} /> {L("WhatsApp")}</Button>
         </div>
       </PageHeader>
       <Page className="space-y-6">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
           {[
-            ["Sales", inr(t.sales), "Money received on paid bills, with GST, after discounts"],
-            ["Paid bills", String(t.paidOrders), "Orders paid in this period"],
-            ["Average bill", t.avgBill ? inr(t.avgBill) : "—", "Sales ÷ paid bills"],
-            ["Discounts given", inr(disc.total), disc.bills ? `On ${disc.bills} bill${disc.bills === 1 ? "" : "s"} · coupons ${inr(disc.coupon)}` : "Coupons, stamp cards and staff discounts"],
+            [L("Sales"), inr(t.sales), L("Money received on paid bills, with GST, after discounts")],
+            [L("Paid bills"), String(t.paidOrders), L("Orders paid in this period")],
+            [L("Average bill"), t.avgBill ? inr(t.avgBill) : "—", L("Sales ÷ paid bills")],
+            [L("Discounts given"), inr(disc.total), disc.bills ? `On ${disc.bills} bill${disc.bills === 1 ? "" : "s"} · coupons ${inr(disc.coupon)}` : "Coupons, stamp cards and staff discounts"],
           ].map(([l, v, h]) => (
             <div key={l} className="bg-surface p-4">
               <div className="text-[13px] text-muted">{l}</div>
@@ -311,18 +312,18 @@ export default function ReportsPage() {
 
         {orders.length === 0 && (
           <div className="rounded-group bg-surface px-5 py-10 text-center">
-            <p className="text-[16px] font-semibold">No orders in this period</p>
-            <p className="mt-1 text-[14px] text-muted">Reports fill in by themselves as you take orders.</p>
+            <p className="text-[16px] font-semibold">{L("No orders in this period")}</p>
+            <p className="mt-1 text-[14px] text-muted">{L("Reports fill in by themselves as you take orders.")}</p>
           </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <Group title={days === 1 ? "Sales · last 7 days" : days > CHART_MAX ? `Sales by day · last ${CHART_MAX} days of the range` : "Sales by day"}>
+          <Group title={days === 1 ? L("Sales · last 7 days") : days > CHART_MAX ? L("Sales by day · last {0} days of the range", CHART_MAX) : L("Sales by day")}>
             <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="text-[26px] font-semibold tracking-tight tnum">{inr(t.sales)}</span>
               {prevChange !== null && (
                 <span className={prevChange >= 0 ? "rounded-full bg-jade-soft px-2 py-0.5 text-[12.5px] font-semibold text-jade-deep" : "rounded-full bg-rose-soft px-2 py-0.5 text-[12.5px] font-semibold text-rose"}>
-                  {prevChange >= 0 ? "▲" : "▼"} {Math.abs(prevChange)}% vs previous {days === 1 ? "day" : `${days} days`}
+                  {prevChange >= 0 ? "▲" : "▼"} {Math.abs(prevChange)}{L("% vs previous")} {days === 1 ? "day" : L("{0} days", days)}
                 </span>
               )}
             </div>
@@ -330,12 +331,12 @@ export default function ReportsPage() {
               data={byDay(all, chartDays, end).map((d, i, arr) => ({ ...d, hint: new Date(startOfDay(end) - (arr.length - 1 - i) * DAY_MS).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) }))}
               height={230}
               format={(n) => inr(n)}
-              avgLabel="Daily avg"
+              avgLabel={L("Daily avg")}
             />
           </Group>
-          <Group title="How guests paid">
+          <Group title={L("How guests paid")}>
             <Donut
-              centerLabel="Collected"
+              centerLabel={L("Collected")}
               format={(n) => inr(n)}
               parts={[
                 { label: "UPI", value: methods.upi, color: "rgb(var(--jade))" },
@@ -347,41 +348,41 @@ export default function ReportsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <Group title="Top dishes · menu price" flush className="lg:col-span-1">
+          <Group title={L("Top dishes · menu price")} flush className="lg:col-span-1">
             {top.length ? (
               top.map((d, i) => (
                 <div key={d.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0 lg:px-5">
                   <span className="w-5 text-center text-[13px] font-semibold text-faint tnum">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-[14.5px]">{d.name}</span>
-                  <span className="text-[13px] text-muted tnum">{d.qty} sold</span>
+                  <span className="text-[13px] text-muted tnum">{d.qty} {L("sold")}</span>
                   <span className="w-20 text-right text-[14px] font-medium tnum">{inr(d.sales)}</span>
                 </div>
               ))
             ) : (
-              <p className="px-4 py-6 text-center text-[14px] text-muted">No dishes sold yet.</p>
+              <p className="px-4 py-6 text-center text-[14px] text-muted">{L("No dishes sold yet.")}</p>
             )}
           </Group>
 
-          <Group title="By category · menu price" flush>
+          <Group title={L("By category · menu price")} flush>
             {categories.length ? (
               categories.map((c) => (
                 <div key={c.label} className="flex justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] last:border-0 lg:px-5">
-                  <span className="text-muted">{c.label}</span>
+                  <span className="text-muted">{L(c.label)}</span>
                   <span className="font-medium tnum">{inr(c.value)}</span>
                 </div>
               ))
             ) : (
-              <p className="px-4 py-6 text-center text-[14px] text-muted">Nothing yet.</p>
+              <p className="px-4 py-6 text-center text-[14px] text-muted">{L("Nothing yet.")}</p>
             )}
           </Group>
 
           <Group title="GST">
             <div className="space-y-1.5 text-[14px]">
               {[
-                ["Taxable sales", inr(net)],
+                [L("Taxable sales"), inr(net)],
                 [`CGST ${halfGstLabel()}`, inr(Math.round(t.gst / 2))],
                 [`SGST ${halfGstLabel()}`, inr(t.gst - Math.round(t.gst / 2))],
-                ["Total with GST", inr(t.sales)],
+                [L("Total with GST"), inr(t.sales)],
               ].map(([l, v]) => (
                 <div key={l} className="flex justify-between"><span className="text-muted">{l}</span><span className="font-medium tnum">{v}</span></div>
               ))}
@@ -389,13 +390,13 @@ export default function ReportsPage() {
           </Group>
         </div>
 
-        <Group title="Discounts & coupons" flush>
+        <Group title={L("Discounts & coupons")} flush>
           {disc.total ? (
             <>
               {[
-                ["Coupons", disc.coupon],
-                ["Stamp card rewards", disc.reward],
-                ["Other discounts (by staff)", disc.staff],
+                [L("Coupons"), disc.coupon],
+                [L("Stamp card rewards"), disc.reward],
+                [L("Other discounts (by staff)"), disc.staff],
               ].map(([l, v]) => (
                 <div key={l as string} className="flex justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] lg:px-5">
                   <span className="text-muted">{l}</span>
@@ -405,18 +406,18 @@ export default function ReportsPage() {
               {disc.coupons.map((c) => (
                 <div key={c.code} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 text-[14px] last:border-0 lg:px-5">
                   <span className="rounded-md bg-sunken px-2 py-0.5 font-mono text-[13px] font-semibold">{c.code}</span>
-                  <span className="flex-1 text-muted">used {c.uses} time{c.uses === 1 ? "" : "s"}</span>
+                  <span className="flex-1 text-muted">{L("used")} {c.uses} {L("time")}{c.uses === 1 ? "" : "s"}</span>
                   <span className="font-medium tnum">{inr(c.amount)}</span>
                 </div>
               ))}
             </>
           ) : (
-            <p className="px-4 py-6 text-center text-[14px] text-muted">No discounts in this period. Coupons, stamp card rewards and staff discounts show here once bills are paid with them.</p>
+            <p className="px-4 py-6 text-center text-[14px] text-muted">{L("No discounts in this period. Coupons, stamp card rewards and staff discounts show here once bills are paid with them.")}</p>
           )}
         </Group>
 
         <Group
-          title="Download"
+          title={L("Download")}
           action={<Segmented value={format} onChange={setFormat} options={[{ value: "xlsx", label: "Excel" }, { value: "csv", label: "CSV" }]} />}
           flush
         >
@@ -424,17 +425,17 @@ export default function ReportsPage() {
             <div key={r.name} className="flex items-center gap-1 border-b border-line/80 pl-4 pr-2 last:border-0 lg:pl-5 lg:pr-3">
               <FileSpreadsheet size={17} className="shrink-0 text-jade" />
               <span className="ml-2 min-w-0 flex-1 truncate py-3 text-[15px]">{r.name}</span>
-              <button onClick={() => download(r)} aria-label={`Download ${r.name}`} title="Download" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink hover:bg-sunken">
+              <button onClick={() => download(r)} aria-label={L("Download {0}", r.name)} title={L("Download")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink hover:bg-sunken">
                 <Download size={18} />
               </button>
-              <button onClick={() => shareCsv(r)} aria-label={`Send ${r.name} on WhatsApp`} title="WhatsApp" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1fa855] hover:bg-sunken">
+              <button onClick={() => shareCsv(r)} aria-label={L("Send {0} on WhatsApp", r.name)} title={L("WhatsApp")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1fa855] hover:bg-sunken">
                 <MessageCircle size={18} />
               </button>
             </div>
           ))}
           <button onClick={printPdf} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/40 lg:px-5">
             <FileText size={17} className="text-jade" />
-            <span className="flex-1 text-[15px]">PDF report · pick what goes in</span>
+            <span className="flex-1 text-[15px]">{L("PDF report · pick what goes in")}</span>
             <span className="flex h-11 w-11 items-center justify-center rounded-full text-ink"><Download size={18} /></span>
           </button>
         </Group>

@@ -1,8 +1,11 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useState, type ReactNode } from "react";
 
 export type Lang = "en" | "mr" | "hi";
+
+import { L, currentLang, dateLocale, dictLoaded, loadDict, setCurrentLang } from "./i18n-core";
+export { L, currentLang, dateLocale };
 
 const dict = {
   pulse: { en: "Pulse", mr: "आढावा", hi: "पल्स" },
@@ -57,7 +60,18 @@ export function LangProvider({ children }: { children: ReactNode }) {
     } catch {}
   };
 
-  return <Ctx.Provider value={{ lang, setLang, t: (k) => dict[k][lang] }}>{children}</Ctx.Provider>;
+  const [dictReady, setDictReady] = useState(dictLoaded());
+  useEffect(() => {
+    if (lang !== "en" && !dictLoaded()) void loadDict().then(() => setDictReady(true));
+  }, [lang]);
+
+  setCurrentLang(lang);
+  // a new language (or its texts arriving) redraws every screen once: texts are read with L() while drawing
+  return (
+    <Ctx.Provider value={{ lang, setLang, t: (k) => dict[k][lang] }}>
+      <Fragment key={`${lang}${dictReady ? "+" : ""}`}>{children}</Fragment>
+    </Ctx.Provider>
+  );
 }
 
 export const useT = () => useContext(Ctx);

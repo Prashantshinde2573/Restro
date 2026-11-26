@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // One order as a card: where it is, what's in it, its stage, and the one next step.
 import clsx from "clsx";
 import { Bike, Check, ChefHat, Clock3, CookingPot, Gift, HandPlatter, QrCode, ShoppingBag, Ticket, UtensilsCrossed, Wallet } from "lucide-react";
@@ -48,7 +49,7 @@ function StepButton({ a, small }: { a: NonNullable<Step>; small?: boolean }) {
         a.tone === "dark" ? "bg-ink text-canvas hover:bg-ink/90" : "bg-jade text-white hover:bg-jade-deep",
       )}
     >
-      <I size={small ? 14 : 15} /> {small ? shortLabel(a.label) : a.label}
+      <I size={small ? 14 : 15} /> {L(small ? shortLabel(a.label) : a.label)}
     </button>
   );
 }
@@ -58,15 +59,15 @@ function Flags({ o, action }: { o: Order; action?: Step }) {
   const live = !["paid", "cancelled"].includes(o.status);
   return (
     <>
-      {payingOnline(o) && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jade" /> Paying online…</span>}
-      {live && o.lines.some((l) => l.addOn && !l.done) && <span className={clsx(pill, "bg-saffron text-white")}>+ Add-on</span>}
-      {o.status === "new" && o.channel === "qr" && !action && !payingOnline(o) && <span className={clsx(pill, "bg-saffron-soft text-saffron")}>Waiting to be accepted</span>}
-      {o.status === "cancelled" && o.cancelledBy === "guest" && <span className={clsx(pill, "bg-rose-soft text-rose")}>Cancelled by guest</span>}
-      {o.payPreference && o.payPreference !== "online" && live && !o.payClaim && <span className={clsx(pill, "bg-sky-soft text-sky")}><Wallet size={11} /> Bill · {methodLabel[o.payPreference]}</span>}
-      {o.payPreference === "online" && o.status === "new" && !payingOnline(o) && live && <span className={clsx(pill, "bg-rose-soft text-rose")}>Online pay not finished</span>}
-      {o.gateway && <span className={clsx(pill, "bg-jade-soft text-jade-deep")} title={`Paid on your ${o.gateway.provider} gateway · ${o.gateway.paymentId}`}><Check size={11} /> Online{o.gateway.method ? ` · ${o.gateway.method === "card" ? "Card" : "UPI"}` : ""}</span>}
+      {payingOnline(o) && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jade" /> {L("Paying online…")}</span>}
+      {live && o.lines.some((l) => l.addOn && !l.done) && <span className={clsx(pill, "bg-saffron text-white")}>{L("+ Add-on")}</span>}
+      {o.status === "new" && o.channel === "qr" && !action && !payingOnline(o) && <span className={clsx(pill, "bg-saffron-soft text-saffron")}>{L("Waiting to be accepted")}</span>}
+      {o.status === "cancelled" && o.cancelledBy === "guest" && <span className={clsx(pill, "bg-rose-soft text-rose")}>{L("Cancelled by guest")}</span>}
+      {o.payPreference && o.payPreference !== "online" && live && !o.payClaim && <span className={clsx(pill, "bg-sky-soft text-sky")}><Wallet size={11} /> {L("Bill ·")} {methodLabel[o.payPreference]}</span>}
+      {o.payPreference === "online" && o.status === "new" && !payingOnline(o) && live && <span className={clsx(pill, "bg-rose-soft text-rose")}>{L("Online pay not finished")}</span>}
+      {o.gateway && <span className={clsx(pill, "bg-jade-soft text-jade-deep")} title={L("Paid on your {0} gateway · {1}", o.gateway.provider, o.gateway.paymentId)}><Check size={11} /> {L("Online")}{o.gateway.method ? ` · ${o.gateway.method === "card" ? L("Card") : "UPI"}` : ""}</span>}
       {o.wantsCoupon && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><Ticket size={11} /> {o.wantsCoupon}</span>}
-      {o.wantsReward && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><Gift size={11} /> Reward</span>}
+      {o.wantsReward && live && <span className={clsx(pill, "bg-jade-soft text-jade-deep")}><Gift size={11} /> {L("Reward")}</span>}
       {o.status === "paid" && (o.discounts?.length ?? 0) > 0 && (
         <span className={clsx(pill, "bg-jade-soft text-jade-deep")} title={o.discounts!.map((d) => `${d.label} −₹${d.amount}`).join(", ")}>
           <Ticket size={11} /> −₹{o.discounts!.reduce((s, d) => s + d.amount, 0)}
@@ -116,7 +117,7 @@ export function OrderCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5">
-            <span className="truncate text-[15px] font-semibold leading-tight">{where}</span>
+            <span className="truncate text-[15px] font-semibold leading-tight">{L(where)}</span>
             <span className="shrink-0 text-[12px] text-faint tnum">#{o.number || "—"}</span>
           </div>
         </div>
@@ -124,12 +125,12 @@ export function OrderCard({
       </div>
       {/* the dishes, one line */}
       <p className="mt-1.5 truncate text-[13px] text-muted" title={dishLine(o)}>
-        <span className="font-medium text-ink">{items} item{items === 1 ? "" : "s"}</span> · {dishLine(o)}
+        <span className="font-medium text-ink">{items} {L("item")}{items === 1 ? "" : "s"}</span> · {dishLine(o)}
       </p>
       {/* stage · flags · time · next step */}
       <div className="mt-2 flex items-center gap-1.5">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-          <span className={clsx(pill, tone.chip)}>{o.payClaim && live ? "Paid? Confirm" : STAGE_LABEL[o.status]}</span>
+          <span className={clsx(pill, tone.chip)}>{o.payClaim && live ? L("Paid? Confirm") : L(STAGE_LABEL[o.status])}</span>
           <Flags o={o} action={action} />
           <span className={clsx("inline-flex items-center gap-0.5 text-[11.5px] tnum", late ? "font-semibold text-rose" : "text-faint")}>
             <Clock3 size={11} /> {live ? `${mins}m` : clock(o.createdAt)}
@@ -179,8 +180,8 @@ export function BillGroupCard({
           <k.icon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-semibold leading-tight">{where}</div>
-          <div className="text-[11.5px] text-muted"><b className="font-semibold text-ink">{first.length} orders · one bill</b> · <span className="tnum">{live ? `${mins}m` : clock(first[0].createdAt)}</span></div>
+          <div className="truncate text-[15px] font-semibold leading-tight">{L(where)}</div>
+          <div className="text-[11.5px] text-muted"><b className="font-semibold text-ink">{first.length} {L("orders · one bill")}</b> · <span className="tnum">{live ? `${mins}m` : clock(first[0].createdAt)}</span></div>
         </div>
         <span className="shrink-0 text-[15.5px] font-semibold tracking-tight tnum">{inr(total)}</span>
       </button>
@@ -193,7 +194,7 @@ export function BillGroupCard({
             <div key={o.id} role="button" tabIndex={0} onClick={() => onOpen(o)} onKeyDown={(e) => { if (e.key === "Enter") onOpen(o); }} className="flex cursor-pointer items-center gap-2 px-2.5 py-2">
               <span className="shrink-0 text-[12px] font-semibold text-faint tnum">#{o.number || "—"}</span>
               <span className="min-w-0 flex-1 truncate text-[13px]">{dishLine(o)}</span>
-              <span className={clsx(pill, "shrink-0", t.chip)}>{o.payClaim && live ? "Paid?" : STAGE_LABEL[o.status]}</span>
+              <span className={clsx(pill, "shrink-0", t.chip)}>{o.payClaim && live ? L("Paid?") : L(STAGE_LABEL[o.status])}</span>
               {own && <StepButton a={own} small />}
             </div>
           );

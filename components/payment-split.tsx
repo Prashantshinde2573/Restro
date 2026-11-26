@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import clsx from "clsx";
 import { Banknote, CreditCard, Plus, QrCode, X } from "lucide-react";
 import { inr } from "@/lib/format";
@@ -35,14 +36,14 @@ export function PaymentSplit({ total, rows, onChange }: { total: number; rows: P
                 aria-pressed={r.method === m.v}
                 className={clsx("flex items-center gap-1 rounded-[9px] px-2.5 py-1.5 text-[13px] font-semibold", r.method === m.v ? "bg-surface shadow-float" : "text-muted")}
               >
-                <m.icon size={14} /> <span className="hidden sm:inline">{m.label}</span>
+                <m.icon size={14} /> <span className="hidden sm:inline">{L(m.label)}</span>
               </button>
             ))}
           </div>
           <div className="relative min-w-0 flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[15px] text-muted">₹</span>
             <input
-              aria-label={`Amount ${i + 1}`}
+              aria-label={L("Amount {0}", i + 1)}
               inputMode="numeric"
               value={Number.isFinite(r.amount) && r.amount !== 0 ? r.amount : ""}
               onChange={(e) => set(i, { amount: Number(e.target.value.replace(/\D/g, "")) || 0 })}
@@ -51,7 +52,7 @@ export function PaymentSplit({ total, rows, onChange }: { total: number; rows: P
             />
           </div>
           {rows.length > 1 && (
-            <button aria-label="Remove this payment" onClick={() => onChange(rows.filter((_, j) => j !== i))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-faint hover:bg-sunken">
+            <button aria-label={L("Remove this payment")} onClick={() => onChange(rows.filter((_, j) => j !== i))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-faint hover:bg-sunken">
               <X size={16} />
             </button>
           )}
@@ -64,7 +65,7 @@ export function PaymentSplit({ total, rows, onChange }: { total: number; rows: P
             onClick={() => set(rows.length - 1, { amount: (rows[rows.length - 1].amount || 0) + left })}
             className="rounded-full bg-jade-soft px-3 py-1.5 text-[13px] font-semibold text-jade-deep"
           >
-            Put the rest {inr(left)} on {methods.find((m) => m.v === rows[rows.length - 1].method)?.label}
+            {L("Put the rest")} {inr(left)} {L("on")} {L(methods.find((m) => m.v === rows[rows.length - 1].method)?.label)}
           </button>
         )}
         {rows.length < 3 && (
@@ -72,8 +73,7 @@ export function PaymentSplit({ total, rows, onChange }: { total: number; rows: P
             onClick={() => onChange([...rows, { method: unused, amount: Math.max(0, left) }])}
             className="flex items-center gap-1 rounded-full bg-sunken px-3 py-1.5 text-[13px] font-semibold"
           >
-            <Plus size={13} /> Add another payment
-          </button>
+            <Plus size={13} /> {L("Add another payment")}</button>
         )}
       </div>
 
@@ -83,7 +83,7 @@ export function PaymentSplit({ total, rows, onChange }: { total: number; rows: P
           left === 0 ? "bg-jade-soft text-jade-deep" : left > 0 ? "bg-saffron-soft text-ink" : "bg-rose-soft text-rose",
         )}
       >
-        <span>{left === 0 ? "Fully paid" : left > 0 ? "Still to collect" : "More than the bill by"}</span>
+        <span>{left === 0 ? L("Fully paid") : left > 0 ? L("Still to collect") : L("More than the bill by")}</span>
         <span className="text-[17px] font-semibold tnum">{inr(Math.abs(left))}</span>
       </div>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { L, dateLocale } from "@/lib/i18n";
 import clsx from "clsx";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -37,7 +38,7 @@ function StaffHome() {
   ].filter((l) => hasPerm(me, l.perm) && !(l.restaurantOnly && !hasTables(outlet)));
   return (
     <>
-      <PageHeader title={`Hi, ${me?.name.split(" ")[0] ?? ""}`} subtitle={outlet.name} actions={<UserChip />} />
+      <PageHeader title={L("Hi, {0}", me?.name.split(" ")[0] ?? "")} subtitle={outlet.name} actions={<UserChip />} />
       <Page className="space-y-4">
         <NeedsYou />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -45,8 +46,8 @@ function StaffHome() {
             <Link key={l.href} href={l.href} className="flex flex-col gap-3 rounded-group bg-surface p-5 hover:shadow-float">
               <l.icon size={24} className="text-jade" />
               <span>
-                <span className="block text-[16px] font-semibold">{l.label}</span>
-                {"note" in l && l.note ? <span className={clsx("mt-0.5 block text-[13px] font-medium", "hot" in l && l.hot ? "text-saffron" : "text-muted")}>{l.note}</span> : null}
+                <span className="block text-[16px] font-semibold">{L(l.label)}</span>
+                {"note" in l && l.note ? <span className={clsx("mt-0.5 block text-[13px] font-medium", "hot" in l && l.hot ? "text-saffron" : "text-muted")}>{L(l.note)}</span> : null}
               </span>
             </Link>
           ))}
@@ -83,7 +84,7 @@ function OwnerHome() {
   const today = totals(between(orders, today0, today0 + DAY_MS));
   // same weekday last week, up to the same time of day
   const before = totals(between(orders, lastWeek0, lastWeek0 + (now - today0)));
-  const dayName = new Date(lastWeek0).toLocaleDateString("en-IN", { weekday: "short" });
+  const dayName = new Date(lastWeek0).toLocaleDateString(dateLocale(), { weekday: "short" });
   const hourly = byHour(orders, today0, lastWeek0);
   const week = byDay(orders, 7, now);
   const top = topDishes(between(orders, today0 - 6 * DAY_MS, today0 + DAY_MS));
@@ -97,7 +98,7 @@ function OwnerHome() {
   const waiting = orders.filter(toAccept).length;
   const qrOpen = orders.filter((o) => o.channel !== "pos" && o.status !== "paid" && o.status !== "cancelled");
   const hour = new Date(now).getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greeting = hour < 12 ? L("Good morning") : hour < 17 ? L("Good afternoon") : L("Good evening");
 
   const steps = [
     { id: "upi", done: !!outlet.upi, text: "Add your UPI ID for payment QRs", href: "/app/settings" },
@@ -121,15 +122,17 @@ function OwnerHome() {
   const vs = (a: number, b: number) => {
     const c = change(a, b);
     // nothing to compare with (no sales last week): say nothing rather than "—"
-    return c === null ? { note: "", up: true } : { note: `${c >= 0 ? "+" : ""}${c}% vs last ${dayName}`, up: c >= 0 };
+    return c === null ? { note: "", up: true } : { note: L("{0}% vs last {1}", `${c >= 0 ? "+" : ""}${c}`, dayName), up: c >= 0 };
   };
+  // one short line, in the chosen language (each piece is a whole sentence so it translates well)
+  const salesChange = change(today.sales, before.sales);
   const pulse =
     today.orders === 0
-      ? `No orders yet today.${before.orders ? ` Last ${dayName} had ${before.orders} by this time.` : ""}`
-      : `${inr(today.sales)} collected from ${today.paidOrders} paid bill${today.paidOrders === 1 ? "" : "s"} so far` +
-        (change(today.sales, before.sales) !== null ? `, ${Math.abs(change(today.sales, before.sales)!)}% ${today.sales >= before.sales ? "more" : "less"} than last ${dayName}.` : ".") +
-        (kitchenQueue.length ? ` ${kitchenQueue.length} ticket${kitchenQueue.length === 1 ? "" : "s"} in the kitchen.` : "") +
-        (today.open ? ` ${inr(today.open)} still to be paid.` : "");
+      ? L("No orders yet today.") + (before.orders ? " " + L("Last {0} had {1} by this time.", dayName, before.orders) : "")
+      : L(today.paidOrders === 1 ? "{0} collected from {1} paid bill so far" : "{0} collected from {1} paid bills so far", inr(today.sales), today.paidOrders) +
+        (salesChange !== null ? ", " + L(today.sales >= before.sales ? "{0}% more than last {1}." : "{0}% less than last {1}.", Math.abs(salesChange), dayName) : ".") +
+        (kitchenQueue.length ? " " + L(kitchenQueue.length === 1 ? "{0} ticket in the kitchen." : "{0} tickets in the kitchen.", kitchenQueue.length) : "") +
+        (today.open ? " " + L("{0} still to be paid.", inr(today.open)) : "");
 
   return (
     <>
@@ -137,7 +140,7 @@ function OwnerHome() {
         title={`${greeting}, ${me?.name.split(" ")[0] ?? ""}`}
         subtitle={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-1.5"><CalendarDays size={16} strokeWidth={1.8} className="text-faint" />{new Date(now).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</span>
+            <span className="inline-flex items-center gap-1.5"><CalendarDays size={16} strokeWidth={1.8} className="text-faint" />{new Date(now).toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "long" })}</span>
             {outlet.name && (
               <>
                 <span aria-hidden className="h-1 w-1 rounded-full bg-faint" />
@@ -154,10 +157,9 @@ function OwnerHome() {
           <section className="rounded-[24px] bg-surface p-5 lg:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-[19px] font-semibold tracking-tight">Get your restaurant ready</h2>
+                <h2 className="text-[19px] font-semibold tracking-tight">{L("Get your restaurant ready")}</h2>
                 <p className="text-[14px] text-muted">
-                  {doneSteps} of {steps.length} done
-                  <button onClick={() => setSkip(steps.filter((x) => !x.done).map((x) => x.id))} className="ml-2 font-semibold text-ink/60 underline-offset-4 hover:text-ink hover:underline">Skip all for now</button>
+                  {doneSteps} {L("of")} {steps.length} {L("done")}<button onClick={() => setSkip(steps.filter((x) => !x.done).map((x) => x.id))} className="ml-2 font-semibold text-ink/60 underline-offset-4 hover:text-ink hover:underline">{L("Skip all for now")}</button>
                 </p>
               </div>
               <Ring value={doneSteps / steps.length} size={48} stroke={6} />
@@ -173,7 +175,7 @@ function OwnerHome() {
                       </span>
                       <span className={s.done ? "min-w-0 flex-1 text-muted line-through" : skip ? "min-w-0 flex-1 text-muted" : "min-w-0 flex-1 font-medium"}>
                         {s.text}
-                        {skip && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[11.5px] font-semibold text-muted">Skipped</span>}
+                        {skip && <span className="ml-2 rounded-full bg-sunken px-2 py-0.5 text-[11.5px] font-semibold text-muted">{L("Skipped")}</span>}
                       </span>
                       {!s.done && !skip && <ArrowUpRight size={16} className="shrink-0 text-faint" />}
                     </Link>
@@ -182,7 +184,7 @@ function OwnerHome() {
                         onClick={() => setSkip(skip ? skipped.filter((x) => x !== s.id) : [...skipped, s.id])}
                         className="h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold text-muted ring-1 ring-line hover:text-ink"
                       >
-                        {skip ? "Undo" : "Skip"}
+                        {skip ? L("Undo") : L("Skip")}
                       </button>
                     )}
                   </div>
@@ -200,8 +202,7 @@ function OwnerHome() {
                 <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-saffron" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-saffron" />
               </span>
-              Restropi Pulse · live
-            </div>
+              {L("Restropi Pulse · live")}</div>
             <p className="relative mt-3 max-w-3xl text-[19px] font-medium leading-[1.35] tracking-tight lg:text-[26px] lg:leading-[1.3]">{pulse}</p>
           </section>
         )}
@@ -217,63 +218,63 @@ function OwnerHome() {
             { label: "Not paid yet", value: inr(today.open), note: "open bills today", up: true },
           ].map((s) => (
             <div key={s.label} className="bg-surface p-4 lg:p-5">
-              <div className="text-[13px] text-muted">{s.label}</div>
+              <div className="text-[13px] text-muted">{L(s.label)}</div>
               <div className="mt-1 text-[26px] font-semibold tracking-tight tnum lg:text-[30px]">{s.value}</div>
-              {s.note && <div className={s.up ? "text-[12.5px] font-medium text-muted" : "text-[12.5px] font-medium text-rose"}>{s.note}</div>}
+              {s.note && <div className={s.up ? "text-[12.5px] font-medium text-muted" : "text-[12.5px] font-medium text-rose"}>{L(s.note)}</div>}
             </div>
           ))}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
           <Group
-            title="Orders by hour"
+            title={L("Orders by hour")}
             action={
               <span className="flex items-center gap-3 text-[12px] text-muted">
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-jade" />Today</span>
-                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-sunken ring-1 ring-line" />Last {dayName}</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-jade" />{L("Today")}</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-sunken ring-1 ring-line" />{L("Last")} {dayName}</span>
               </span>
             }
           >
             <BarChart data={hourly} height={190} format={(n) => `${n} order${n === 1 ? "" : "s"}`} />
           </Group>
 
-          <Group title="Right now" flush>
+          <Group title={L("Right now")} flush>
             {!cafe && (
               <Row
                 href="/app/tables"
                 leading={<div className="relative"><Ring value={tables.length ? busy / tables.length : 0} size={44} stroke={5} /><LayoutGrid size={16} className="absolute inset-0 m-auto text-jade" /></div>}
-                title={tables.length ? `${busy} of ${tables.length} tables busy` : "No tables yet"}
-                subtitle={[billing ? `${billing} asked for the bill` : "", shared ? `${shared} shared` : ""].filter(Boolean).join(" · ") || (tables.length ? "All calm" : "Add tables to start")}
-                trailing={billing ? <Pill tone="saffron">{billing} bill</Pill> : undefined}
+                title={tables.length ? L("{0} of {1} tables busy", busy, tables.length) : L("No tables yet")}
+                subtitle={[billing ? `${billing} asked for the bill` : "", shared ? `${shared} shared` : ""].filter(Boolean).join(" · ") || (tables.length ? L("All calm") : L("Add tables to start"))}
+                trailing={billing ? <Pill tone="saffron">{billing} {L("bill")}</Pill> : undefined}
               />
             )}
             <Row
               href="/app/kitchen"
               leading={<div className="flex h-11 w-11 items-center justify-center rounded-full bg-jade-soft"><ChefHat size={19} className="text-jade" /></div>}
-              title={`${kitchenQueue.length} ticket${kitchenQueue.length === 1 ? "" : "s"} in the kitchen`}
-              subtitle={kitchenQueue.length ? `Oldest waiting ${oldest} min` : "Nothing cooking"}
-              trailing={oldest >= 20 ? <Pill tone="rose">Late</Pill> : undefined}
+              title={L("{0} ticket{1} in the kitchen", kitchenQueue.length, kitchenQueue.length === 1 ? "" : "s")}
+              subtitle={kitchenQueue.length ? L("Oldest waiting {0} min", oldest) : L("Nothing cooking")}
+              trailing={oldest >= 20 ? <Pill tone="rose">{L("Late")}</Pill> : undefined}
             />
             <Row
               href="/app/orders"
               leading={<div className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-soft"><Globe2 size={19} className="text-sky" /></div>}
-              title={`${qrOpen.length} QR order${qrOpen.length === 1 ? "" : "s"} open`}
-              subtitle={waiting ? `${waiting} waiting to be accepted` : "From guests' phones"}
-              trailing={waiting ? <Pill tone="sky">{waiting} new</Pill> : undefined}
+              title={L("{0} QR order{1} open", qrOpen.length, qrOpen.length === 1 ? "" : "s")}
+              subtitle={waiting ? L("{0} waiting to be accepted", waiting) : L("From guests' phones")}
+              trailing={waiting ? <Pill tone="sky">{waiting} {L("new")}</Pill> : undefined}
             />
           </Group>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <Group title="Last 7 days">
+          <Group title={L("Last 7 days")}>
             <TrendChart data={week} height={170} format={(n) => inr(n)} />
             <div className="mt-4 flex items-baseline justify-between">
-              <span className="text-[13px] text-muted">7-day sales</span>
+              <span className="text-[13px] text-muted">{L("7-day sales")}</span>
               <span className="text-[17px] font-semibold tnum">{inr(week.reduce((s, w) => s + w.value, 0))}</span>
             </div>
           </Group>
 
-          <Group title="Bestsellers · 7 days" flush>
+          <Group title={L("Bestsellers · 7 days")} flush>
             {top.length ? (
               top.map((m, i) => (
                 <Row
@@ -285,11 +286,11 @@ function OwnerHome() {
                 />
               ))
             ) : (
-              <p className="px-4 py-6 text-center text-[14px] text-muted">Your top dishes show up after the first orders.</p>
+              <p className="px-4 py-6 text-center text-[14px] text-muted">{L("Your top dishes show up after the first orders.")}</p>
             )}
           </Group>
 
-          <Group title="Where orders came from · 7 days">
+          <Group title={L("Where orders came from · 7 days")}>
             {channels.length ? (
               <>
                 <div className="flex h-3 overflow-hidden rounded-full bg-sunken">
@@ -301,14 +302,14 @@ function OwnerHome() {
                   {channels.map((c, i) => (
                     <div key={c.key} className="flex items-center gap-2.5 text-[14px]">
                       <span className={`h-2.5 w-2.5 rounded-full ${TONES[i % TONES.length]}`} />
-                      <span className="flex-1">{c.label}</span>
+                      <span className="flex-1">{L(c.label)}</span>
                       <span className="font-semibold tnum">{c.pct}%</span>
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <p className="py-4 text-center text-[14px] text-muted">No orders in the last 7 days.</p>
+              <p className="py-4 text-center text-[14px] text-muted">{L("No orders in the last 7 days.")}</p>
             )}
           </Group>
         </div>

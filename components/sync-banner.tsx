@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import { AlertTriangle, CloudOff, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { dismissFailed, useSyncStatus } from "@/lib/sync-queue";
@@ -37,11 +38,11 @@ export function SyncBanner() {
         <div className="pointer-events-auto flex w-full max-w-md items-start gap-2.5 rounded-2xl bg-[#B42318] px-4 py-3 text-[14px] text-white shadow-float">
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold">Not saved</div>
+            <div className="font-semibold">{L("Not saved")}</div>
             <div className="break-words opacity-90">{failed[0].text}</div>
-            {failed.length > 1 && <div className="opacity-75">and {failed.length - 1} more</div>}
+            {failed.length > 1 && <div className="opacity-75">{L("and")} {failed.length - 1} {L("more")}</div>}
           </div>
-          <button type="button" onClick={dismissFailed} aria-label="Close" className="-m-1 rounded-full p-1.5 hover:bg-white/15">
+          <button type="button" onClick={dismissFailed} aria-label={L("Close")} className="-m-1 rounded-full p-1.5 hover:bg-white/15">
             <X size={16} />
           </button>
         </div>
@@ -55,9 +56,8 @@ export function SyncBanner() {
         <CloudOff size={18} className="shrink-0" />
         <div className="min-w-0 flex-1">
           <span className="font-semibold">
-            {waiting} change{waiting > 1 ? "s" : ""} waiting to save.
-          </span>{" "}
-          <span className="opacity-90">{online ? "Saving now…" : "They will save when the internet is back. Keep this screen open."}</span>
+            {waiting} {L("change")}{waiting > 1 ? "s" : ""} {L("waiting to save.")}</span>{" "}
+          <span className="opacity-90">{online ? L("Saving now…") : L("They will save when the internet is back. Keep this screen open.")}</span>
         </div>
       </div>
     </div>

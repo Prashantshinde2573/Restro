@@ -1,5 +1,6 @@
 "use client";
 
+import { L, dateLocale } from "@/lib/i18n";
 import clsx from "clsx";
 import { MessageCircle, Package, PackagePlus, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -70,9 +71,9 @@ export default function InventoryPage() {
   return (
     <>
       <PageHeader
-        title="Stock"
-        subtitle={items.length ? `${inr(Math.round(value))} in stock · ${low.length} need ordering` : outlet.name}
-        actions={<Button variant="tinted" size="sm" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={15} /> Add item</Button>}
+        title={L("Stock")}
+        subtitle={items.length ? L("{0} in stock · {1} need ordering", inr(Math.round(value)), low.length) : outlet.name}
+        actions={<Button variant="tinted" size="sm" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={15} /> {L("Add item")}</Button>}
       >
         <Segmented
           value={tab}
@@ -90,18 +91,18 @@ export default function InventoryPage() {
           (items.length === 0 ? (
             <div className="flex flex-col items-center rounded-group bg-surface px-6 py-12 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-jade-soft text-jade"><Package size={26} /></span>
-              <h2 className="mt-4 text-[18px] font-semibold">Track your stock</h2>
-              <p className="mt-1 max-w-sm text-[14.5px] text-muted">Add raw materials like paneer, oil or milk with a minimum level. Restropi tells you what to order.</p>
-              <Button className="mt-5" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={17} /> Add first item</Button>
+              <h2 className="mt-4 text-[18px] font-semibold">{L("Track your stock")}</h2>
+              <p className="mt-1 max-w-sm text-[14.5px] text-muted">{L("Add raw materials like paneer, oil or milk with a minimum level. Restropi tells you what to order.")}</p>
+              <Button className="mt-5" onClick={() => setEdit({ unit: "kg", stock: 0, par: 0, costPerUnit: 0, supplier: "" })}><Plus size={17} /> {L("Add first item")}</Button>
             </div>
           ) : (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
                 {[
-                  ["Stock value", inr(Math.round(value))],
-                  ["Need ordering", `${low.length} item${low.length === 1 ? "" : "s"}`],
-                  ["Used today", inr(Math.round(usedToday))],
-                  ["Wasted · 7 days", inr(Math.round(wasted))],
+                  [L("Stock value"), inr(Math.round(value))],
+                  [L("Need ordering"), `${low.length} item${low.length === 1 ? "" : "s"}`],
+                  [L("Used today"), inr(Math.round(usedToday))],
+                  [L("Wasted · 7 days"), inr(Math.round(wasted))],
                 ].map(([l, v]) => (
                   <div key={l} className="bg-surface p-4">
                     <div className="text-[13px] text-muted">{l}</div>
@@ -122,7 +123,7 @@ export default function InventoryPage() {
                         <button className="min-w-0 flex-1 text-left" onClick={() => setEdit(i)}>
                           <div className="flex items-center gap-2">
                             <span className="text-[15px] font-medium">{i.name}</span>
-                            <Pill tone={l.tone}>{l.label}</Pill>
+                            <Pill tone={l.tone}>{L(l.label)}</Pill>
                           </div>
                           <div className="mt-1.5 flex items-center gap-3">
                             <div className="h-1.5 max-w-[220px] flex-1 overflow-hidden rounded-full bg-sunken">
@@ -132,16 +133,16 @@ export default function InventoryPage() {
                           </div>
                           {f.basis !== "learning" && (
                             <div className="mt-1 flex flex-wrap gap-x-3 text-[12px] text-muted tnum">
-                              <span>Today <b className="font-semibold text-ink">{fmt(f.today)} {i.unit}</b></span>
-                              <span>Tomorrow <b className="font-semibold text-ink">~{fmt(f.tomorrow)} {i.unit}</b></span>
-                              {f.daysLeft !== null && <span>Lasts <b className={clsx("font-semibold", f.daysLeft < 1 ? "text-rose" : f.daysLeft < 2.5 ? "text-saffron" : "text-ink")}>{f.daysLeft < 1 ? "<1 day" : `${fmt(f.daysLeft)} days`}</b></span>}
+                              <span>{L("Today")} <b className="font-semibold text-ink">{fmt(f.today)} {i.unit}</b></span>
+                              <span>{L("Tomorrow")} <b className="font-semibold text-ink">~{fmt(f.tomorrow)} {i.unit}</b></span>
+                              {f.daysLeft !== null && <span>{L("Lasts")} <b className={clsx("font-semibold", f.daysLeft < 1 ? "text-rose" : f.daysLeft < 2.5 ? "text-saffron" : "text-ink")}>{f.daysLeft < 1 ? "<1 day" : L("{0} days", fmt(f.daysLeft))}</b></span>}
                             </div>
                           )}
                         </button>
                         <div className="flex gap-1.5">
-                          <Button size="sm" variant="tinted" onClick={() => setMove({ item: i, kind: "in" })}><PackagePlus size={15} /> In</Button>
-                          <Button size="sm" variant="plain" onClick={() => setMove({ item: i, kind: "used" })}>Used</Button>
-                          <Button size="sm" variant="plain" onClick={() => setMove({ item: i, kind: "count" })}>Count</Button>
+                          <Button size="sm" variant="tinted" onClick={() => setMove({ item: i, kind: "in" })}><PackagePlus size={15} /> {L("In")}</Button>
+                          <Button size="sm" variant="plain" onClick={() => setMove({ item: i, kind: "used" })}>{L("Used")}</Button>
+                          <Button size="sm" variant="plain" onClick={() => setMove({ item: i, kind: "count" })}>{L("Count")}</Button>
                         </div>
                       </div>
                     );
@@ -153,8 +154,8 @@ export default function InventoryPage() {
         {tab === "buy" &&
           (toBuy.length === 0 ? (
             <div className="rounded-group bg-surface px-5 py-10 text-center">
-              <p className="text-[16px] font-semibold">Nothing to buy</p>
-              <p className="mt-1 text-[14px] text-muted">Items show up here when they fall below their minimum level.</p>
+              <p className="text-[16px] font-semibold">{L("Nothing to buy")}</p>
+              <p className="mt-1 text-[14px] text-muted">{L("Items show up here when they fall below their minimum level.")}</p>
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-2">
@@ -167,7 +168,7 @@ export default function InventoryPage() {
                   "",
                   ...list.map((i, n) => `${n + 1}. ${i.name} — *${fmt(i.need)} ${i.unit}*`),
                   "",
-                  `Delivery: ${new Date(Date.now() + 86_400_000).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}, before 10 am if possible.`,
+                  `Delivery: ${new Date(Date.now() + 86_400_000).toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "short" })}, before 10 am if possible.`,
                   "Please confirm the rates and total. Thank you!",
                 ].join("\n");
                 return (
@@ -179,9 +180,9 @@ export default function InventoryPage() {
                       </div>
                     ))}
                     <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5">
-                      <span className="text-[13.5px] text-muted">About {inr(Math.round(total))}</span>
+                      <span className="text-[13.5px] text-muted">{L("About")} {inr(Math.round(total))}</span>
                       <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer">
-                        <Button size="sm"><MessageCircle size={15} /> Send on WhatsApp</Button>
+                        <Button size="sm"><MessageCircle size={15} /> {L("Send on WhatsApp")}</Button>
                       </a>
                     </div>
                   </Group>
@@ -193,7 +194,7 @@ export default function InventoryPage() {
         {tab === "prep" && prepOn && <Prep outletId={outlet.id} items={items} />}
       </Page>
 
-      <ItemSheet value={edit} onClose={() => setEdit(null)} onSaved={(n) => toast(`${n} saved`)} forecast={edit?.id ? fc.of(edit as StockItem) : undefined} dishes={edit?.id ? fc.dishesOf(edit.id).map((m) => m.name) : []} />
+      <ItemSheet value={edit} onClose={() => setEdit(null)} onSaved={(n) => toast(L("{0} saved", n))} forecast={edit?.id ? fc.of(edit as StockItem) : undefined} dishes={edit?.id ? fc.dishesOf(edit.id).map((m) => m.name) : []} />
       <MoveSheet
         value={move}
         onClose={() => setMove(null)}
@@ -224,7 +225,7 @@ function ItemSheet({ value, onClose, onSaved, forecast: f, dishes = [] }: { valu
     <Sheet
       open={!!value}
       onClose={onClose}
-      title={value?.id ? "Edit item" : "Add stock item"}
+      title={value?.id ? L("Edit item") : L("Add stock item")}
       footer={
         <Button
           size="lg"
@@ -240,13 +241,12 @@ function ItemSheet({ value, onClose, onSaved, forecast: f, dishes = [] }: { valu
             onClose();
           }}
         >
-          Save
-        </Button>
+          {L("Save")}</Button>
       }
     >
       <div className="space-y-4">
-        <Field label="Name"><input className={inputCls} placeholder="e.g. Paneer" value={d.name ?? ""} onChange={(e) => setD({ ...d, name: e.target.value })} /></Field>
-        <Field label="Unit">
+        <Field label={L("Name")}><input className={inputCls} placeholder={L("e.g. Paneer")} value={d.name ?? ""} onChange={(e) => setD({ ...d, name: e.target.value })} /></Field>
+        <Field label={L("Unit")}>
           <div className="flex flex-wrap gap-2">
             {UNITS.map((u) => (
               <button key={u} type="button" onClick={() => setD({ ...d, unit: u })} className={clsx("rounded-full px-3.5 py-1.5 text-[14px] font-medium", d.unit === u ? "bg-ink text-canvas" : "bg-surface")}>{u}</button>
@@ -254,25 +254,25 @@ function ItemSheet({ value, onClose, onSaved, forecast: f, dishes = [] }: { valu
           </div>
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          {!value?.id && <Field label={`In stock now (${d.unit ?? ""})`}><input className={inputCls} inputMode="decimal" value={d.stock ?? ""} onChange={(e) => setD({ ...d, stock: num(e.target.value) })} /></Field>}
-          <Field label={`Minimum level (${d.unit ?? ""})`} hint="Below this it goes on the buy list."><input className={inputCls} inputMode="decimal" value={d.par ?? ""} onChange={(e) => setD({ ...d, par: num(e.target.value) })} /></Field>
-          <Field label={`Cost per ${d.unit ?? "unit"} (₹)`}><input className={inputCls} inputMode="decimal" value={d.costPerUnit ?? ""} onChange={(e) => setD({ ...d, costPerUnit: num(e.target.value) })} /></Field>
+          {!value?.id && <Field label={L("In stock now ({0})", d.unit ?? "")}><input className={inputCls} inputMode="decimal" value={d.stock ?? ""} onChange={(e) => setD({ ...d, stock: num(e.target.value) })} /></Field>}
+          <Field label={L("Minimum level ({0})", d.unit ?? "")} hint={L("Below this it goes on the buy list.")}><input className={inputCls} inputMode="decimal" value={d.par ?? ""} onChange={(e) => setD({ ...d, par: num(e.target.value) })} /></Field>
+          <Field label={L("Cost per {0} (₹)", d.unit ?? "unit")}><input className={inputCls} inputMode="decimal" value={d.costPerUnit ?? ""} onChange={(e) => setD({ ...d, costPerUnit: num(e.target.value) })} /></Field>
         </div>
-        <Field label="Supplier" hint="Optional"><input className={inputCls} value={d.supplier ?? ""} onChange={(e) => setD({ ...d, supplier: e.target.value })} /></Field>
+        <Field label={L("Supplier")} hint={L("Optional")}><input className={inputCls} value={d.supplier ?? ""} onChange={(e) => setD({ ...d, supplier: e.target.value })} /></Field>
 
         {value?.id && f && <Smart item={value as StockItem} f={f} dishes={dishes} />}
         {value?.id && (d.log?.length ?? 0) > 0 && (
           <div>
-            <div className="mb-1.5 text-[13px] font-medium text-muted">History</div>
+            <div className="mb-1.5 text-[13px] font-medium text-muted">{L("History")}</div>
             <div className="max-h-56 overflow-y-auto rounded-group bg-surface">
               {d.log!.map((l, i) => (
                 <div key={i} className="flex justify-between border-b border-line/70 px-4 py-2 text-[13.5px] last:border-0">
                   <span>
-                    {l.kind === "in" ? `+${fmt(l.qty)}` : l.kind === "count" ? `Counted ${fmt(l.qty)}` : `−${fmt(l.qty)}`} {d.unit}
-                    {l.kind === "waste" && <span className="ml-1.5 text-rose">wasted</span>}
-                    {l.note && <span className="ml-1.5 text-muted">· {l.note}</span>}
+                    {l.kind === "in" ? `+${fmt(l.qty)}` : l.kind === "count" ? L("Counted {0}", fmt(l.qty)) : `−${fmt(l.qty)}`} {d.unit}
+                    {l.kind === "waste" && <span className="ml-1.5 text-rose">{L("wasted")}</span>}
+                    {l.note && <span className="ml-1.5 text-muted">· {L(l.note)}</span>}
                   </span>
-                  <span className="text-muted">{l.by} · {new Date(l.at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                  <span className="text-muted">{l.by} · {new Date(l.at).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" })}</span>
                 </div>
               ))}
             </div>
@@ -281,15 +281,15 @@ function ItemSheet({ value, onClose, onSaved, forecast: f, dishes = [] }: { valu
 
         {value?.id &&
           (!confirm ? (
-            <button onClick={() => setConfirm(true)} className="flex items-center gap-2 text-[14px] font-semibold text-rose"><Trash2 size={16} /> Remove item</button>
+            <button onClick={() => setConfirm(true)} className="flex items-center gap-2 text-[14px] font-semibold text-rose"><Trash2 size={16} /> {L("Remove item")}</button>
           ) : (
             <div className="flex items-center gap-2 rounded-group bg-rose-soft p-3">
-              <span className="flex-1 text-[14px] text-rose">Remove {d.name}?</span>
-              <Button size="sm" variant="plain" onClick={() => setConfirm(false)}>Keep</Button>
-              <Button size="sm" variant="danger" onClick={() => { stockActions.remove(value.id!); onClose(); }}>Remove</Button>
+              <span className="flex-1 text-[14px] text-rose">{L("Remove")} {d.name}?</span>
+              <Button size="sm" variant="plain" onClick={() => setConfirm(false)}>{L("Keep")}</Button>
+              <Button size="sm" variant="danger" onClick={() => { stockActions.remove(value.id!); onClose(); }}>{L("Remove")}</Button>
             </div>
           ))}
-        {value?.id && <p className="flex items-center gap-1.5 text-[12.5px] text-faint"><Pencil size={12} /> Use In / Used / Count on the list to change the stock level.</p>}
+        {value?.id && <p className="flex items-center gap-1.5 text-[12.5px] text-faint"><Pencil size={12} /> {L("Use In / Used / Count on the list to change the stock level.")}</p>}
       </div>
     </Sheet>
   );
@@ -315,26 +315,25 @@ function MoveSheet({ value, onClose, onSave }: { value: { item: StockItem; kind:
       open={!!value}
       onClose={onClose}
       title={i ? i.name : ""}
-      footer={<Button size="lg" className="w-full" disabled={!ok} onClick={() => onSave(n, note.trim(), kind)}>{tooMuch ? `Only ${fmt(i!.stock)} ${i!.unit} in stock` : "Save"}</Button>}
+      footer={<Button size="lg" className="w-full" disabled={!ok} onClick={() => onSave(n, note.trim(), kind)}>{tooMuch ? L("Only {0} {1} in stock", fmt(i!.stock), i!.unit) : L("Save")}</Button>}
     >
       {i && (
         <div className="space-y-4">
-          <p className="text-[14px] text-muted">In stock now: <b className="text-ink">{fmt(i.stock)} {i.unit}</b></p>
+          <p className="text-[14px] text-muted">{L("In stock now:")} <b className="text-ink">{fmt(i.stock)} {i.unit}</b></p>
           <Segmented
             className="w-full"
             value={kind}
             onChange={setKind}
             options={[{ value: "in", label: "Received" }, { value: "used", label: "Used" }, { value: "waste", label: "Wasted" }, { value: "count", label: "Count" }]}
           />
-          <Field label={kind === "count" ? `Counted now (${i.unit})` : `How much (${i.unit})`}>
+          <Field label={kind === "count" ? L("Counted now ({0})", i.unit) : L("How much ({0})", i.unit)}>
             <input className={inputCls} inputMode="decimal" autoFocus value={qty} onChange={(e) => setQty(e.target.value)} />
           </Field>
           {tooMuch && (
             <p className="-mt-2 rounded-ctl bg-saffron-soft px-3 py-2 text-[13px]">
-              That&apos;s more than the {fmt(i.stock)} {i.unit} in stock. If you really have more, use <b>Count</b> to set the right amount first.
-            </p>
+              {L("That's more than the")} {fmt(i.stock)} {i.unit} {L("in stock. If you really have more, use")} <b>{L("Count")}</b> {L("to set the right amount first.")}</p>
           )}
-          <Field label="Note" hint="Optional, e.g. bill number or why it was wasted"><input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <Field label={L("Note")} hint={L("Optional, e.g. bill number or why it was wasted")}><input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
         </div>
       )}
     </Sheet>
@@ -351,7 +350,7 @@ function Prep({ outletId, items }: { outletId: string; items: StockItem[] }) {
   const withData = weeks.filter((w) => w.length > 0).length;
   const all = topDishes(weeks.flat(), 1000);
   const rows = all.map((d) => ({ ...d, plates: Math.ceil(d.qty / Math.max(1, withData)) })).sort((a, b) => b.plates - a.plates).slice(0, 15);
-  const day = new Date(tomorrow0).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
+  const day = new Date(tomorrow0).toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "short" });
 
   return (
     <div className="space-y-6">
@@ -359,26 +358,26 @@ function Prep({ outletId, items }: { outletId: string; items: StockItem[] }) {
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-saffron"><Sparkles size={18} /></span>
           <div>
-            <div className="text-[13px] text-muted">Prep for {day}</div>
+            <div className="text-[13px] text-muted">{L("Prep for")} {day}</div>
             <p className="mt-1 text-[17px] font-medium leading-snug">
-              {withData ? `Based on the last ${withData} ${new Date(tomorrow0).toLocaleDateString("en-IN", { weekday: "long" })}${withData > 1 ? "s" : ""}.` : needs.length ? "Stock below follows your recent use · plates show after a week of sales." : "Not enough orders yet. This fills in after a week of sales."}
+              {withData ? L("Based on the last {0} {1}{2}.", withData, new Date(tomorrow0).toLocaleDateString(dateLocale(), { weekday: "long" }), withData > 1 ? "s" : "") : needs.length ? L("Stock below follows your recent use · plates show after a week of sales.") : L("Not enough orders yet. This fills in after a week of sales.")}
             </p>
           </div>
         </div>
       </section>
       {needs.length > 0 && (
-        <Group title="Stock needed tomorrow" flush>
+        <Group title={L("Stock needed tomorrow")} flush>
           {needs.map(({ i, f }) => (
             <div key={i.id} className="flex items-center justify-between gap-3 border-b border-line/80 px-4 py-2.5 text-[14.5px] last:border-0 lg:px-5">
               <span className="min-w-0 flex-1 truncate">{i.name}</span>
               <span className="font-semibold tnum">~{fmt(f.tomorrow)} {i.unit}</span>
-              <span className={clsx("w-28 text-right text-[12.5px] tnum", f.tomorrow > i.stock ? "font-semibold text-rose" : "text-muted")}>{f.tomorrow > i.stock ? `short ${fmt(Math.round((f.tomorrow - i.stock) * 100) / 100)}` : `${fmt(i.stock)} ${i.unit} in stock`}</span>
+              <span className={clsx("w-28 text-right text-[12.5px] tnum", f.tomorrow > i.stock ? "font-semibold text-rose" : "text-muted")}>{f.tomorrow > i.stock ? L("short {0}", fmt(Math.round((f.tomorrow - i.stock) * 100) / 100)) : L("{0} {1} in stock", fmt(i.stock), i.unit)}</span>
             </div>
           ))}
         </Group>
       )}
       {rows.length > 0 && (
-        <Group title="Expected plates" flush>
+        <Group title={L("Expected plates")} flush>
           {rows.map((r) => (
             <div key={r.id} className="flex items-center justify-between border-b border-line/80 px-4 py-2.5 text-[14.5px] last:border-0 lg:px-5">
               <span>{r.name}</span>
@@ -400,19 +399,18 @@ function Smart({ item, f, dishes }: { item: StockItem; f: StockForecast; dishes:
   return (
     <div className="rounded-group bg-surface p-4">
       <div className="flex items-center gap-1.5 text-[13px] font-semibold text-muted">
-        <Sparkles size={14} className="text-saffron" /> Smart stock
-        <Hint align="left">Each paid plate takes its recipe off stock. Your counts teach how much the kitchen really uses, and the forecast follows the same weekday, the last 7 days and tomorrow&apos;s expected plates.</Hint>
+        <Sparkles size={14} className="text-saffron" /> {L("Smart stock")}<Hint align="left">{L("Each paid plate takes its recipe off stock. Your counts teach how much the kitchen really uses, and the forecast follows the same weekday, the last 7 days and tomorrow's expected plates.")}</Hint>
       </div>
       {f.basis === "learning" ? (
-        <p className="mt-2 text-[13.5px] text-muted">{dishes.length ? "Learning: numbers show after a few days of sales." : "Link dishes to this item (Menu → dish → Uses from stock) to track it by itself."}</p>
+        <p className="mt-2 text-[13.5px] text-muted">{dishes.length ? L("Learning: numbers show after a few days of sales.") : L("Link dishes to this item (Menu → dish → Uses from stock) to track it by itself.")}</p>
       ) : (
         <>
           <div className="mt-3 grid grid-cols-4 gap-2 text-center">
             {[
-              ["Today", fmt(f.today)],
-              ["A day", fmt(f.avg7)],
-              ["Tomorrow", `~${fmt(f.tomorrow)}`],
-              ["Lasts", f.daysLeft === null ? "—" : f.daysLeft < 1 ? "<1 d" : `${fmt(f.daysLeft)} d`],
+              [L("Today"), fmt(f.today)],
+              [L("A day"), fmt(f.avg7)],
+              [L("Tomorrow"), `~${fmt(f.tomorrow)}`],
+              [L("Lasts"), f.daysLeft === null ? "—" : f.daysLeft < 1 ? "<1 d" : `${fmt(f.daysLeft)} d`],
             ].map(([l, v]) => (
               <div key={l} className="rounded-[12px] bg-sunken/60 px-1 py-2">
                 <div className="text-[16px] font-semibold tnum">{v}</div>
@@ -420,7 +418,7 @@ function Smart({ item, f, dishes }: { item: StockItem; f: StockForecast; dishes:
               </div>
             ))}
           </div>
-          <div className="mt-3 flex h-12 items-end gap-1" aria-label="Use in the last 14 days">
+          <div className="mt-3 flex h-12 items-end gap-1" aria-label={L("Use in the last 14 days")}>
             {vals.map((v, k) => (
               <span key={k} title={`${days[k]}: ${fmt(Math.round(v * 100) / 100)} ${item.unit}`} className={clsx("flex-1 rounded-t-[3px]", k === 13 ? "bg-jade" : "bg-jade/35")} style={{ height: `${Math.max(4, (v / max) * 100)}%` }} />
             ))}
@@ -429,11 +427,11 @@ function Smart({ item, f, dishes }: { item: StockItem; f: StockForecast; dishes:
       )}
       <div className="mt-3 space-y-1 text-[12.5px] text-muted">
         {item.adjust && Math.abs(pct) >= 2 ? (
-          <div>Kitchen uses <b className={pct > 0 ? "text-saffron" : "text-jade"}>{Math.abs(pct)}% {pct > 0 ? "more" : "less"}</b> than the recipes (from your counts)</div>
+          <div>{L("Kitchen uses")} <b className={pct > 0 ? "text-saffron" : "text-jade"}>{Math.abs(pct)}% {pct > 0 ? "more" : "less"}</b> {L("than the recipes (from your counts)")}</div>
         ) : item.lastCount ? (
-          <div>Last count matched the recipes</div>
+          <div>{L("Last count matched the recipes")}</div>
         ) : null}
-        {dishes.length > 0 && <div className="truncate">Used in: {dishes.join(", ")}</div>}
+        {dishes.length > 0 && <div className="truncate">{L("Used in:")} {dishes.join(", ")}</div>}
       </div>
     </div>
   );

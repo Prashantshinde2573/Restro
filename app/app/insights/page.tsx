@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 import Link from "next/link";
 import { Banknote, Boxes, Clock, PenLine, Percent, ShieldCheck, Trash2, TrendingDown, TrendingUp, Turtle } from "lucide-react";
 import type { ReactNode } from "react";
@@ -79,22 +80,22 @@ export default function InsightsPage() {
 
   return (
     <>
-      <PageHeader title="Insights" subtitle={`${outlet.name} · last 7 days, from your own orders`} />
+      <PageHeader title={L("Insights")} subtitle={L("{0} · last 7 days, from your own orders", outlet.name)} />
       <Page className="space-y-6">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-group bg-line/70 lg:grid-cols-4">
-          <Stat label="Sales · 7 days" value={inr(t.sales)} note={salesChange === null ? "no data for the week before" : `${salesChange >= 0 ? "+" : ""}${salesChange}% vs the week before`} up={(salesChange ?? 0) >= 0} />
-          <Stat label="Average bill" value={t.avgBill ? inr(t.avgBill) : "—"} note={tl.avgBill ? `${inr(tl.avgBill)} the week before` : ""} up={t.avgBill >= tl.avgBill} />
-          <Stat label="Best day" value={best && best.value ? best.label : "—"} note={best && best.value ? inr(best.value) : ""} up />
-          <Stat label="Busiest hour" value={t.orders ? `${peak % 12 || 12}${peak < 12 ? " am" : " pm"}` : "—"} note={t.orders ? `${hours[peak]} order${hours[peak] === 1 ? "" : "s"} this week` : ""} up />
+          <Stat label={L("Sales · 7 days")} value={inr(t.sales)} note={salesChange === null ? L("no data for the week before") : L("{0}{1}% vs the week before", salesChange >= 0 ? "+" : "", salesChange)} up={(salesChange ?? 0) >= 0} />
+          <Stat label={L("Average bill")} value={t.avgBill ? inr(t.avgBill) : "—"} note={tl.avgBill ? L("{0} the week before", inr(tl.avgBill)) : ""} up={t.avgBill >= tl.avgBill} />
+          <Stat label={L("Best day")} value={best && best.value ? best.label : "—"} note={best && best.value ? inr(best.value) : ""} up />
+          <Stat label={L("Busiest hour")} value={t.orders ? `${peak % 12 || 12}${peak < 12 ? " am" : " pm"}` : "—"} note={t.orders ? L("{0} order{1} this week", hours[peak], hours[peak] === 1 ? "" : "s") : ""} up />
         </div>
 
-        <Group title="Money to check" flush>
+        <Group title={L("Money to check")} flush>
           {alerts.length === 0 ? (
             <div className="flex items-center gap-3 px-4 py-5 lg:px-5">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-jade-soft text-jade"><ShieldCheck size={19} /></span>
               <div>
-                <div className="text-[15px] font-medium">Nothing unusual</div>
-                <div className="text-[13px] text-muted">No cancellations, short payments, changed bills or old open bills this week.</div>
+                <div className="text-[15px] font-medium">{L("Nothing unusual")}</div>
+                <div className="text-[13px] text-muted">{L("No cancellations, short payments, changed bills or old open bills this week.")}</div>
               </div>
             </div>
           ) : (
@@ -103,7 +104,7 @@ export default function InsightsPage() {
                 <>
                   <span className={a.tone === "rose" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-soft text-rose" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-saffron-soft text-saffron"}>{a.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[15px] font-medium">{a.title}</div>
+                    <div className="text-[15px] font-medium">{L(a.title)}</div>
                     <div className="text-[13px] text-muted">{a.detail}</div>
                   </div>
                   {a.amount !== undefined && <Pill tone={a.tone}>{inr(a.amount)}</Pill>}
@@ -119,19 +120,19 @@ export default function InsightsPage() {
         </Group>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Group title="Selling well · 7 days" flush>
+          <Group title={L("Selling well · 7 days")} flush>
             {topDishes(week, 5).map((d, i) => (
               <div key={d.id} className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0 lg:px-5">
                 <TrendingUp size={16} className="text-jade" />
                 <span className="flex-1 text-[14.5px]">{i + 1}. {d.name}</span>
-                <span className="text-[13.5px] text-muted tnum">{d.qty} sold</span>
+                <span className="text-[13.5px] text-muted tnum">{d.qty} {L("sold")}</span>
               </div>
             ))}
-            {topDishes(week, 1).length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">No sales this week yet.</p>}
+            {topDishes(week, 1).length === 0 && <p className="px-4 py-6 text-center text-[14px] text-muted">{L("No sales this week yet.")}</p>}
           </Group>
-          <Group title="Not sold in 14 days" flush>
+          <Group title={L("Not sold in 14 days")} flush>
             {slow.length === 0 ? (
-              <p className="px-4 py-6 text-center text-[14px] text-muted">{orders.length ? "Every dish sold at least once." : "Shows up after your first orders."}</p>
+              <p className="px-4 py-6 text-center text-[14px] text-muted">{orders.length ? L("Every dish sold at least once.") : L("Shows up after your first orders.")}</p>
             ) : (
               slow.slice(0, 8).map((m) => (
                 <Link key={m.id} href="/app/menu" className="flex items-center gap-3 border-b border-line/80 px-4 py-2.5 last:border-0 hover:bg-sunken/40 lg:px-5">
@@ -141,14 +142,13 @@ export default function InsightsPage() {
                 </Link>
               ))
             )}
-            {slow.length > 8 && <p className="px-4 py-2.5 text-[13px] text-muted lg:px-5">and {slow.length - 8} more. Consider removing or reworking them.</p>}
+            {slow.length > 8 && <p className="px-4 py-2.5 text-[13px] text-muted lg:px-5">{L("and")} {slow.length - 8} {L("more. Consider removing or reworking them.")}</p>}
           </Group>
         </div>
 
         {orders.length > 0 && (
           <p className="text-center text-[12.5px] text-faint">
-            Last order {timeAgo(orders[0].createdAt)} · <Banknote size={12} className="inline" /> {inr(totals(between(orders, startOfDay(now), startOfDay(now) + DAY_MS)).sales)} today
-            {salesChange !== null && salesChange < 0 && <> · <TrendingDown size={12} className="inline text-rose" /> sales down this week</>}
+            {L("Last order")} {timeAgo(orders[0].createdAt)} · <Banknote size={12} className="inline" /> {inr(totals(between(orders, startOfDay(now), startOfDay(now) + DAY_MS)).sales)} {L("today")}{salesChange !== null && salesChange < 0 && <> · <TrendingDown size={12} className="inline text-rose" /> {L("sales down this week")}</>}
           </p>
         )}
       </Page>

@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Activity log: who did what — orders taken, bills paid and confirmed, tables
 // freed, prices changed, stock moved, settings and team changes.
 import clsx from "clsx";
@@ -60,7 +61,7 @@ export default function ActivityPage() {
   const days: { label: string; items: ActivityEntry[] }[] = [];
   for (const e of shown) {
     const d = dayStart(new Date(e.at).getTime());
-    const label = d === dayStart(Date.now()) ? "Today" : d === dayStart(Date.now() - DAY) ? "Yesterday" : new Date(d).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
+    const label = d === dayStart(Date.now()) ? L("Today") : d === dayStart(Date.now() - DAY) ? L("Yesterday") : new Date(d).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
     const last = days[days.length - 1];
     if (last?.label === label) last.items.push(e);
     else days.push({ label, items: [e] });
@@ -81,9 +82,9 @@ export default function ActivityPage() {
   return (
     <>
       <PageHeader
-        title="Activity"
-        subtitle={`${outlet.name ? `${outlet.name} · ` : ""}who did what, as it happens`}
-        actions={shown.length > 0 && <Button size="sm" variant="tinted" onClick={download}><Download size={16} /> Excel</Button>}
+        title={L("Activity")}
+        subtitle={L("{0}who did what, as it happens", outlet.name ? `${outlet.name} · ` : "")}
+        actions={shown.length > 0 && <Button size="sm" variant="tinted" onClick={download}><Download size={16} /> {L("Excel")}</Button>}
       >
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -97,15 +98,15 @@ export default function ActivityPage() {
                 { value: "all", label: "All" },
               ]}
             />
-            <select aria-label="Person" value={who} onChange={(e) => setWho(e.target.value)} className={clsx(inputCls, "!h-10 !w-auto min-w-[150px] !text-[14px]")}>
-              <option value="all">Everyone</option>
+            <select aria-label={L("Person")} value={who} onChange={(e) => setWho(e.target.value)} className={clsx(inputCls, "!h-10 !w-auto min-w-[150px] !text-[14px]")}>
+              <option value="all">{L("Everyone")}</option>
               {people.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
             <div className="relative min-w-[180px] flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: table, dish, name…" className={clsx(inputCls, "!h-10 pl-9 !text-[14px]")} />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={L("Search: table, dish, name…")} className={clsx(inputCls, "!h-10 pl-9 !text-[14px]")} />
             </div>
           </div>
           {kinds.length > 1 && <Chips value={kind} onChange={setKind} options={[{ value: "all" as Kind, label: "All" }, ...kinds.map((k) => ({ value: k as Kind, label: KIND[k].label }))]} />}
@@ -113,16 +114,16 @@ export default function ActivityPage() {
       </PageHeader>
       <Page className="space-y-6">
         {!ready && all.length === 0 ? (
-          <div className="flex justify-center py-20"><CookingLoader size={56} label="Loading activity" /></div>
+          <div className="flex justify-center py-20"><CookingLoader size={56} label={L("Loading activity")} /></div>
         ) : shown.length === 0 ? (
           <div className="rounded-group bg-surface px-5 py-12 text-center">
-            <p className="text-[16px] font-semibold">Nothing here yet</p>
-            <p className="mt-1 text-[14px] text-muted">Orders, payments, tables freed, price and stock changes show up here as your team works.</p>
+            <p className="text-[16px] font-semibold">{L("Nothing here yet")}</p>
+            <p className="mt-1 text-[14px] text-muted">{L("Orders, payments, tables freed, price and stock changes show up here as your team works.")}</p>
           </div>
         ) : (
           days.map((d) => (
             <section key={d.label}>
-              <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">{d.label}</h2>
+              <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">{L(d.label)}</h2>
               <div className="overflow-hidden rounded-group bg-surface">
                 {d.items.map((e) => {
                   const k = KIND[e.kind];

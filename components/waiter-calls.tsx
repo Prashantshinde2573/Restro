@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Waiter calls from the guest's phone ("Call a waiter"):
 //   • every waiter in that outlet (and the owner) gets a ping
 //   • one taps "I'll go", or the owner / a sub admin sends someone
@@ -59,7 +60,7 @@ export function CallAlerts() {
         // a new call: every waiter here, and whoever hands out calls (a bill: also whoever takes payments)
         if (answersCall(me, c) || assignsCalls(me)) {
           const bill = isBillCall(c);
-          const title = bill ? `${where} is asking for the bill` : `${where} is calling a waiter`;
+          const title = bill ? L("{0} is asking for the bill", where) : L("{0} is calling a waiter", where);
           const body = bill
             ? `${c.customer ? `${c.customer} · ` : ""}take the bill (QR) to the table, or they pay at the counter${tag(c.outletId)}`
             : `${c.reason ? `${c.reason} · ` : ""}${c.customer ? `${c.customer} · ` : ""}tap “I'll go” so the others know${tag(c.outletId)}`;
@@ -71,16 +72,16 @@ export function CallAlerts() {
       } else if (c.status === "taken" && c.to) {
         if (c.to === me.id) {
           if (c.assignedBy) {
-            const title = `Go to ${where}`;
+            const title = L("Go to {0}", where);
             const body = `${c.assignedBy} sent you · the guest called a waiter${tag(c.outletId)}`;
             pushNotice({ kind: "call", title, body, href: "/app" });
             notify(title, body);
-            toast(`${c.assignedBy} sent you to ${where}`);
+            toast(L("{0} sent you to {1}", c.assignedBy, where));
             ring = true;
           }
         } else if (answersCall(me, c) || assignsCalls(me)) {
           // everyone else: who is on it (quietly)
-          toast(`${c.toName} is going to ${where}`);
+          toast(L("{0} is going to {1}", c.toName, where));
         }
       }
     }
@@ -100,10 +101,10 @@ function AssignSheet({ call, onClose }: { call: WaiterCall | null; onClose: () =
   const me = useMe();
   const toast = useToast();
   return (
-    <Sheet open={!!call} onClose={onClose} title={call ? `Who goes to ${callWhere(call)}?` : ""}>
+    <Sheet open={!!call} onClose={onClose} title={call ? L("Who goes to {0}?", callWhere(call)) : ""}>
       {call && (
         <div className="overflow-hidden rounded-group bg-surface">
-          {waiters.length === 0 && <p className="p-4 text-[14px] text-muted">No one with Tables access in this outlet yet. Give a waiter the “Tables” box in Team.</p>}
+          {waiters.length === 0 && <p className="p-4 text-[14px] text-muted">{L("No one with Tables access in this outlet yet. Give a waiter the “Tables” box in Team.")}</p>}
           {waiters.map((m: Member) => (
             <button
               key={m.id}
@@ -116,8 +117,8 @@ function AssignSheet({ call, onClose }: { call: WaiterCall | null; onClose: () =
             >
               <Avatar name={m.name} hue={m.hue} photo={m.photo} size={32} />
               <span className="min-w-0 flex-1">
-                <span className="block text-[14.5px] font-semibold">{m.name}{m.id === me?.id ? " (you)" : ""}</span>
-                <span className="block text-[12.5px] text-muted">{m.role === "owner" ? "Owner" : m.title || "Staff"}</span>
+                <span className="block text-[14.5px] font-semibold">{m.name}{m.id === me?.id ? L(" (you)") : ""}</span>
+                <span className="block text-[12.5px] text-muted">{m.role === "owner" ? L("Owner") : m.title || L("Staff")}</span>
               </span>
               {call.to === m.id && <Check size={17} className="text-jade" />}
             </button>
@@ -142,7 +143,7 @@ function CallCard({ c, onAssign }: { c: WaiterCall; onAssign: (c: WaiterCall) =>
       <div className="flex items-start gap-2">
         <BellRing size={17} className={clsx("mt-0.5 shrink-0", c.status === "open" ? "animate-pulse text-saffron" : "text-jade")} />
         <div className="min-w-0 flex-1 text-[14px]">
-          <b>{where}</b> {bill ? (c.status === "open" ? "is asking for the bill" : "asked for the bill") : c.status === "open" ? "is calling a waiter" : "called a waiter"}
+          <b>{where}</b> {bill ? (c.status === "open" ? L("is asking for the bill") : L("asked for the bill")) : c.status === "open" ? L("is calling a waiter") : L("called a waiter")}
           {c.reason && !bill && <span className="ml-1.5 rounded-full bg-saffron-soft px-2 py-0.5 text-[12px] font-semibold text-saffron">{c.reason}</span>}
           <div className="text-[12.5px] text-muted">
             {c.customer ? `${c.customer} · ` : ""}
@@ -150,11 +151,11 @@ function CallCard({ c, onAssign }: { c: WaiterCall; onAssign: (c: WaiterCall) =>
             {c.status === "taken" && (
               <>
                 {" · "}
-                <span className="font-semibold text-jade">{mine ? "You're going" : `${c.toName} is going`}</span>
-                {c.assignedBy ? ` · sent by ${c.assignedBy}` : ""}
+                <span className="font-semibold text-jade">{mine ? L("You're going") : L("{0} is going", c.toName)}</span>
+                {c.assignedBy ? L(" · sent by {0}", c.assignedBy) : ""}
               </>
             )}
-            {c.status === "open" && " · no one yet"}
+            {c.status === "open" && L(" · no one yet")}
           </div>
         </div>
       </div>
@@ -168,17 +169,15 @@ function CallCard({ c, onAssign }: { c: WaiterCall; onAssign: (c: WaiterCall) =>
               toast(first ? `${first} is already going` : `You're going to ${where}`);
             }}
           >
-            I&apos;ll go
-          </Button>
+            {L("I'll go")}</Button>
         )}
         {(mine || (c.status === "taken" && canAssign)) && (
-          <Button size="sm" className="flex-1" variant={mine ? "primary" : "plain"} onClick={() => { callActions.done(c.id); toast(`${where} · done`); }}>
-            <Check size={15} /> Done
-          </Button>
+          <Button size="sm" className="flex-1" variant={mine ? "primary" : "plain"} onClick={() => { callActions.done(c.id); toast(L("{0} · done", where)); }}>
+            <Check size={15} /> {L("Done")}</Button>
         )}
         {canAssign && (
           <Button size="sm" variant="plain" className={clsx(!(c.status === "open" && canGo) && !(mine || c.status === "taken") && "flex-1")} onClick={() => onAssign(c)}>
-            <UserRound size={15} /> {c.status === "open" ? "Assign" : "Change"}
+            <UserRound size={15} /> {c.status === "open" ? L("Assign") : L("Change")}
           </Button>
         )}
       </div>
@@ -231,8 +230,8 @@ export function WaiterCallBar() {
       <div className="fixed inset-x-3 bottom-[88px] z-40 mx-auto flex max-w-md animate-pop items-center gap-2 rounded-[18px] bg-ink py-2.5 pl-4 pr-2 text-canvas shadow-float lg:bottom-6 lg:left-auto lg:right-6 lg:mx-0">
         <BellRing size={18} className={clsx("shrink-0", open ? "animate-pulse text-saffron" : "text-jade")} />
         <span className="min-w-0 flex-1 text-[13.5px] leading-tight">
-          <b>{where}</b> {open ? (isBillCall(c) ? "wants the bill" : "is calling") : "· you're going"}
-          {more > 0 && <span className="block text-[11.5px] text-canvas/60">+{more} more calling</span>}
+          <b>{where}</b> {open ? (isBillCall(c) ? L("wants the bill") : L("is calling")) : L("· you're going")}
+          {more > 0 && <span className="block text-[11.5px] text-canvas/60">+{more} {L("more calling")}</span>}
         </span>
         {open && canGo && (
           <button
@@ -242,20 +241,17 @@ export function WaiterCallBar() {
             }}
             className="rounded-full bg-canvas px-3 py-1.5 text-[13px] font-semibold text-ink"
           >
-            I&apos;ll go
-          </button>
+            {L("I'll go")}</button>
         )}
         {open && assignsCalls(me) && (
           <button onClick={() => setAssign(c)} className="rounded-full bg-canvas/15 px-3 py-1.5 text-[13px] font-semibold">
-            Assign
-          </button>
+            {L("Assign")}</button>
         )}
         {!open && (
-          <button onClick={() => { callActions.done(c.id); toast(`${where} · done`); }} className="rounded-full bg-canvas px-3 py-1.5 text-[13px] font-semibold text-ink">
-            Done
-          </button>
+          <button onClick={() => { callActions.done(c.id); toast(L("{0} · done", where)); }} className="rounded-full bg-canvas px-3 py-1.5 text-[13px] font-semibold text-ink">
+            {L("Done")}</button>
         )}
-        <button onClick={() => setHidden((h) => [...h, c.id])} aria-label="Hide" className="p-1 text-canvas/60"><X size={16} /></button>
+        <button onClick={() => setHidden((h) => [...h, c.id])} aria-label={L("Hide")} className="p-1 text-canvas/60"><X size={16} /></button>
       </div>
       <AssignSheet call={assign} onClose={() => setAssign(null)} />
     </>

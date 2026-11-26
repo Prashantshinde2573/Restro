@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // "Type your password to do this" — for risky changes (marking a paid bill unpaid).
 import { useEffect, useState } from "react";
 import { verifyMyPassword } from "@/lib/cloud";
@@ -51,7 +52,7 @@ export function PasswordCheck({
       title={title}
       footer={
         <Button size="lg" variant="danger" className="w-full" disabled={busy} onClick={go}>
-          {busy ? "Checking…" : confirmLabel}
+          {busy ? L("Checking…") : confirmLabel}
         </Button>
       }
     >
@@ -63,7 +64,7 @@ export function PasswordCheck({
         }}
       >
         <p className="text-[14.5px] text-muted">{body}</p>
-        <label className="block text-[13px] font-medium text-muted">Your password</label>
+        <label className="block text-[13px] font-medium text-muted">{L("Your password")}</label>
         <PasswordInput value={pw} onChange={setPw} autoComplete="current-password" autoFocus />
         {err && <p className="text-[13px] font-medium text-rose">{err}</p>}
       </form>

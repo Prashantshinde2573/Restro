@@ -1,5 +1,6 @@
 "use client";
 
+import { L } from "@/lib/i18n";
 // Staff: ask for today's attendance (full or half day, overtime), or a day missed in the
 // last week. The owner or a manager approves it on Attendance & salary.
 import clsx from "clsx";
@@ -62,8 +63,8 @@ export default function MyAttendancePage() {
 
   const send = () => {
     const hours = Number(ot || 0);
-    if (!Number.isFinite(hours) || hours < 0 || hours > 16) return toast("Overtime: 0 to 16 hours");
-    if (date > today && kind !== "leave") return toast("Days ahead can only be asked as leave");
+    if (!Number.isFinite(hours) || hours < 0 || hours > 16) return toast(L("Overtime: 0 to 16 hours"));
+    if (date > today && kind !== "leave") return toast(L("Days ahead can only be asked as leave"));
     attendanceActions.request({ date, kind, otHours: kind === "leave" ? 0 : hours, note });
     setEditing(false);
     toast(current ? "Request changed" : "Sent for approval");
@@ -77,23 +78,23 @@ export default function MyAttendancePage() {
   if (!onPayroll(me))
     return (
       <>
-        <PageHeader title="My attendance" />
+        <PageHeader title={L("My attendance")} />
         <Page>
-          <Empty icon={<CalendarCheck size={22} />} title="Attendance is off for you" body="The owner keeps attendance and salary for staff. They can turn it on for you in Members & access." />
+          <Empty icon={<CalendarCheck size={22} />} title={L("Attendance is off for you")} body={L("The owner keeps attendance and salary for staff. They can turn it on for you in Members & access.")} />
         </Page>
       </>
     );
   return (
     <>
-      <PageHeader title="My attendance" subtitle={`${me.name} · ${monthLabel(month)}`} />
+      <PageHeader title={L("My attendance")} subtitle={`${me.name} · ${monthLabel(month)}`} />
       <Page className="space-y-6">
-        <Group title="Ask for a day">
+        <Group title={L("Ask for a day")}>
           <div className="space-y-4">
-            <Field label="Day">
+            <Field label={L("Day")}>
               <select className={inputCls} value={date} onChange={(e) => pick(e.target.value)}>
                 {lastWeek(today).map((d) => (
                   <option key={d} value={d}>
-                    {d === today ? `Today · ${dayLabel(d)}` : d > today ? `${dayLabel(d)} · leave` : dayLabel(d)}
+                    {d === today ? L("Today · {0}", dayLabel(d)) : d > today ? L("{0} · leave", dayLabel(d)) : dayLabel(d)}
                   </option>
                 ))}
               </select>
@@ -107,14 +108,14 @@ export default function MyAttendancePage() {
                     <StatusPill a={current} />
                   </div>
                   <div className="text-[13px] text-muted">
-                    {current.otHours ? `Overtime ${current.otHours} h · ` : ""}
-                    {current.status === "pending" ? "Your manager will approve it." : current.status === "approved" ? `Approved by ${current.decidedBy ?? "your manager"}` : "Talk to your manager about this day."}
+                    {current.otHours ? L("Overtime {0} h · ", current.otHours) : ""}
+                    {current.status === "pending" ? L("Your manager will approve it.") : current.status === "approved" ? L("Approved by {0}", current.decidedBy ?? "your manager") : L("Talk to your manager about this day.")}
                   </div>
                 </div>
                 {current.status === "pending" && (
                   <div className="flex gap-2">
-                    <Button size="sm" variant="tinted" onClick={() => setEditing(true)}>Change</Button>
-                    <Button size="sm" variant="tinted" onClick={() => { attendanceActions.cancel(current.id); toast("Request taken back"); }} aria-label="Take back"><Trash2 size={15} /></Button>
+                    <Button size="sm" variant="tinted" onClick={() => setEditing(true)}>{L("Change")}</Button>
+                    <Button size="sm" variant="tinted" onClick={() => { attendanceActions.cancel(current.id); toast(L("Request taken back")); }} aria-label={L("Take back")}><Trash2 size={15} /></Button>
                   </div>
                 )}
               </div>
@@ -128,43 +129,43 @@ export default function MyAttendancePage() {
                 />
                 <div className={clsx("grid gap-3", kind === "leave" ? "grid-cols-1" : "grid-cols-2")}>
                   {kind !== "leave" && (
-                    <Field label="Overtime (hours)" hint="Empty if none">
+                    <Field label={L("Overtime (hours)")} hint={L("Empty if none")}>
                       <input className={inputCls} inputMode="decimal" type="number" min={0} max={16} step={0.5} value={ot} onChange={(e) => setOt(e.target.value)} placeholder="0" />
                     </Field>
                   )}
-                  <Field label="Note (optional)">
-                    <input className={inputCls} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder={kind === "leave" ? "e.g. family function" : "e.g. came late"} />
+                  <Field label={L("Note (optional)")}>
+                    <input className={inputCls} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder={kind === "leave" ? L("e.g. family function") : L("e.g. came late")} />
                   </Field>
                 </div>
-                {kind === "leave" && pay && <p className="text-[12.5px] text-muted">{pay.paidLeaves ? `${pay.paidLeaves} paid leave a month${slip.leaveDays ? ` · ${slip.leaveDays} taken this month` : ""}. More is unpaid.` : "Leave is unpaid for you."}</p>}
-                <Button className="w-full" onClick={send}><CalendarCheck size={17} /> {current ? "Save change" : "Send for approval"}</Button>
+                {kind === "leave" && pay && <p className="text-[12.5px] text-muted">{pay.paidLeaves ? L("{0} paid leave a month{1}. More is unpaid.", pay.paidLeaves, slip.leaveDays ? ` · ${slip.leaveDays} taken this month` : "") : L("Leave is unpaid for you.")}</p>}
+                <Button className="w-full" onClick={send}><CalendarCheck size={17} /> {current ? L("Save change") : L("Send for approval")}</Button>
               </>
             )}
           </div>
         </Group>
 
         {pay && (
-          <Group title="This month so far">
+          <Group title={L("This month so far")}>
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div><div className="text-[22px] font-semibold tnum">{+slip.workedDays.toFixed(1)}</div><div className="text-[12.5px] text-muted">days approved</div></div>
+              <div><div className="text-[22px] font-semibold tnum">{+slip.workedDays.toFixed(1)}</div><div className="text-[12.5px] text-muted">{L("days approved")}</div></div>
               <div><div className="text-[22px] font-semibold tnum">{slip.leaveDays ? slip.leaveDays : `${+slip.otHours.toFixed(1)} h`}</div><div className="text-[12.5px] text-muted">{slip.leaveDays ? "leave" : "overtime"}</div></div>
-              <div><div className="text-[22px] font-semibold tnum">{inr(slip.net)}</div><div className="text-[12.5px] text-muted">salary till today</div></div>
+              <div><div className="text-[22px] font-semibold tnum">{inr(slip.net)}</div><div className="text-[12.5px] text-muted">{L("salary till today")}</div></div>
             </div>
-            {slip.pending > 0 && <p className="mt-3 text-center text-[13px] text-muted">{slip.pending} day{slip.pending === 1 ? "" : "s"} still waiting for approval.</p>}
+            {slip.pending > 0 && <p className="mt-3 text-center text-[13px] text-muted">{slip.pending} {L("day")}{slip.pending === 1 ? "" : "s"} {L("still waiting for approval.")}</p>}
           </Group>
         )}
 
         <Group title={monthLabel(month)} flush>
           {!ready ? (
-            <p className="px-5 py-6 text-[14px] text-muted">Loading…</p>
+            <p className="px-5 py-6 text-[14px] text-muted">{L("Loading…")}</p>
           ) : !mine.length ? (
-            <Empty icon={<Clock size={22} />} title="No days yet" body="Ask for today above. Your manager approves it." />
+            <Empty icon={<Clock size={22} />} title={L("No days yet")} body={L("Ask for today above. Your manager approves it.")} />
           ) : (
             mine.map((a) => (
               <button key={a.id} onClick={() => pick(a.date)} className={clsx("flex w-full items-center gap-3 border-b border-line/80 px-4 py-3 text-left last:border-0 hover:bg-sunken/40 lg:px-5", a.date === date && "bg-sunken/40")}>
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-medium">{dayLabel(a.date)}</div>
-                  <div className="text-[13px] text-muted">{KIND_LABEL[a.kind]}{a.otHours ? ` · OT ${a.otHours} h` : ""}{a.note ? ` · ${a.note}` : ""}</div>
+                  <div className="text-[13px] text-muted">{KIND_LABEL[a.kind]}{a.otHours ? L(" · OT {0} h", a.otHours) : ""}{a.note ? ` · ${a.note}` : ""}</div>
                 </div>
                 <StatusPill a={a} />
               </button>

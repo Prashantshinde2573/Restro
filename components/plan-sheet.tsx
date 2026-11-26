@@ -1,5 +1,6 @@
 "use client";
 
+import { L, dateLocale } from "@/lib/i18n";
 // Renew, change or restart a plan. When Restropi's Razorpay is set up the owner pays right here and
 // the plan renews by itself (the server confirms with Razorpay). Otherwise, or if they prefer, they
 // pay by UPI and send it on WhatsApp; the super admin then turns the plan on in /admin.
@@ -89,7 +90,7 @@ export function PlanSheet() {
   // when the new period ends: a running plan continues from its end date, an ended one starts today
   const startAt = ended ? Date.now() : new Date(account.renewsAt).getTime();
   const runsTill = (() => { const d = new Date(startAt); d.setMonth(d.getMonth() + cyc.months); return d; })();
-  const dateText = (d: Date | string) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  const dateText = (d: Date | string) => new Date(d).toLocaleDateString(dateLocale(), { day: "numeric", month: "short", year: "numeric" });
   const payNow = async () => {
     setPaying(true);
     setPayErr("");
@@ -111,7 +112,7 @@ export function PlanSheet() {
     `Restaurant: ${account.name || "-"}`,
     `Restaurant ID: ${cloud.rid ?? "-"}`,
     `Login: ${cloud.email ?? "-"}`,
-    `Current plan: ${PLAN_NAME[account.plan]} (runs until ${new Date(account.renewsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})`,
+    `Current plan: ${PLAN_NAME[account.plan]} (runs until ${new Date(account.renewsAt).toLocaleDateString(dateLocale(), { day: "numeric", month: "short", year: "numeric" })})`,
     `New plan: ${p.name}${custom ? "" : `, ${cyc.short}`}, ${count} outlet${count === 1 ? "" : "s"}`,
     ...(coupon ? [`Coupon: ${coupon.code} (−${inr(off)})`] : []),
     ...(custom ? ["Please share the price."] : [`Amount: ${inr(total)}${PLAN_GST_RATE ? " incl. GST" : ""}`, platform?.upi ? "I have paid by UPI. Screenshot attached." : "Please share how to pay."]),
@@ -137,31 +138,31 @@ export function PlanSheet() {
     <Sheet
       open={open}
       onClose={() => sheet.set({ open: false })}
-      title={`${action === "Change to" ? "Change" : action} plan`}
+      title={L("{0} plan", action === "Change to" ? "Change" : action)}
       wide
       footer={
         result ? (
-          <Button size="lg" className="w-full" onClick={() => window.location.reload()}>Done</Button>
+          <Button size="lg" className="w-full" onClick={() => window.location.reload()}>{L("Done")}</Button>
         ) : online && !otherWay ? (
           <div className="space-y-2">
             <Button size="lg" className="w-full" disabled={paying} onClick={payNow}>
-              <Lock size={16} /> {paying ? "Opening secure payment…" : `Pay ${inr(total)} now`}
+              <Lock size={16} /> {paying ? L("Opening secure payment…") : L("Pay {0} now", inr(total))}
             </Button>
             {platform?.whatsapp && (
               <button type="button" className="block w-full text-center text-[13px] font-semibold text-muted underline" onClick={() => setOtherWay(true)}>
-                {platform.upi ? "Or pay by UPI and send it on WhatsApp" : "Or send a request on WhatsApp"}
+                {platform.upi ? L("Or pay by UPI and send it on WhatsApp") : L("Or send a request on WhatsApp")}
               </button>
             )}
           </div>
         ) : platform?.whatsapp ? (
           <a href={teamWhatsApp(platform.whatsapp, message)} target="_blank" rel="noreferrer" className="block">
             <Button size="lg" className="w-full !bg-[#25D366] hover:!bg-[#1fb757]">
-              <MessageCircle size={18} /> {custom ? "Ask for a price on WhatsApp" : platform.upi ? "Paid? Send it on WhatsApp" : "Send request on WhatsApp"}
+              <MessageCircle size={18} /> {custom ? L("Ask for a price on WhatsApp") : platform.upi ? L("Paid? Send it on WhatsApp") : L("Send request on WhatsApp")}
             </Button>
           </a>
         ) : (
           <p className="py-1 text-center text-[13.5px] text-muted">
-            {platform ? "The Restropi team hasn't added their WhatsApp number yet. Please call your Restropi contact." : "Loading…"}
+            {platform ? L("The Restropi team hasn't added their WhatsApp number yet. Please call your Restropi contact.") : L("Loading…")}
           </p>
         )
       }
@@ -169,11 +170,11 @@ export function PlanSheet() {
       {result ? (
         <div className="flex flex-col items-center py-8 text-center">
           <CheckCircle2 size={56} className={result.status === "paid" ? "text-jade" : "text-saffron"} />
-          <h3 className="mt-3 text-[22px] font-semibold tracking-tight">{result.status === "paid" ? "Payment received" : "Payment is being confirmed"}</h3>
+          <h3 className="mt-3 text-[22px] font-semibold tracking-tight">{result.status === "paid" ? L("Payment received") : L("Payment is being confirmed")}</h3>
           <p className="mt-2 max-w-sm text-[15px] text-muted">
             {result.status === "paid"
-              ? <>Your {p.name} plan now runs till <b className="text-ink">{result.renewsTo ? dateText(result.renewsTo) : dateText(runsTill)}</b>. A receipt is on its way to your email.</>
-              : result.message || "Your plan updates by itself as soon as the bank confirms. You can close this."}
+              ? <>{L("Your")} {p.name} {L("plan now runs till")} <b className="text-ink">{result.renewsTo ? dateText(result.renewsTo) : dateText(runsTill)}</b>{L(". A receipt is on its way to your email.")}</>
+              : result.message || L("Your plan updates by itself as soon as the bank confirms. You can close this.")}
           </p>
         </div>
       ) : (
@@ -188,11 +189,11 @@ export function PlanSheet() {
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-[16px] font-semibold">{x.name}</span>
-                <span className="text-[13.5px] font-semibold tnum">{x.monthly ? `${inr(x.monthly)}/mo` : "Custom"}</span>
+                <span className="text-[13.5px] font-semibold tnum">{x.monthly ? L("{0}/mo", inr(x.monthly)) : L("Custom")}</span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-muted">
                 {x.outlets}
-                {x.id === account.plan && <span className="rounded-full bg-jade-soft px-2 py-0.5 text-[11px] font-semibold text-jade-deep">Current</span>}
+                {x.id === account.plan && <span className="rounded-full bg-jade-soft px-2 py-0.5 text-[11px] font-semibold text-jade-deep">{L("Current")}</span>}
               </div>
             </button>
           ))}
@@ -217,14 +218,14 @@ export function PlanSheet() {
             {coupon ? (
               <div className="flex items-center gap-2 rounded-ctl bg-jade-soft px-3 py-2.5 text-[14px] text-jade-deep">
                 <Ticket size={16} />
-                <span className="flex-1"><b>{coupon.code}</b> · {coupon.kind === "percent" ? `${coupon.value}% off` : `${inr(coupon.value)} off`}</span>
-                <button aria-label="Remove coupon" onClick={() => setCoupon(null)} className="p-1"><X size={15} /></button>
+                <span className="flex-1"><b>{coupon.code}</b> · {coupon.kind === "percent" ? L("{0}% off", coupon.value) : L("{0} off", inr(coupon.value))}</span>
+                <button aria-label={L("Remove coupon")} onClick={() => setCoupon(null)} className="p-1"><X size={15} /></button>
               </div>
             ) : (
               <div>
                 <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void apply(); }}>
-                  <input className={clsx(inputCls, "uppercase placeholder:normal-case")} placeholder="Have a coupon code?" value={code} onChange={(e) => { setCode(e.target.value); setCodeMsg(""); }} aria-label="Coupon code" />
-                  <Button type="submit" variant="tinted" className="!h-12 shrink-0" disabled={!code.trim() || checking}>{checking ? "…" : "Apply"}</Button>
+                  <input className={clsx(inputCls, "uppercase placeholder:normal-case")} placeholder={L("Have a coupon code?")} value={code} onChange={(e) => { setCode(e.target.value); setCodeMsg(""); }} aria-label={L("Coupon code")} />
+                  <Button type="submit" variant="tinted" className="!h-12 shrink-0" disabled={!code.trim() || checking}>{checking ? "…" : L("Apply")}</Button>
                 </form>
                 {codeMsg && <p className="mt-1.5 text-[12.5px] text-rose">{codeMsg}</p>}
               </div>
@@ -233,23 +234,23 @@ export function PlanSheet() {
             {/* 4. total */}
             <dl className="space-y-1.5 rounded-group bg-surface p-4 text-[14px]">
               <div className="flex justify-between"><dt className="text-muted">{p.name} · {cyc.short} · {p.outlets}</dt><dd className="tnum">{inr(base)}</dd></div>
-              {off > 0 && <div className="flex justify-between text-jade"><dt>Coupon {coupon?.code}</dt><dd className="tnum">−{inr(off)}</dd></div>}
-              {PLAN_GST_RATE > 0 && <div className="flex justify-between"><dt className="text-muted">GST {Math.round(PLAN_GST_RATE * 100)}%</dt><dd className="tnum">{inr(gst)}</dd></div>}
-              <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>To pay</dt><dd className="tnum">{inr(total)}</dd></div>
+              {off > 0 && <div className="flex justify-between text-jade"><dt>{L("Coupon")} {coupon?.code}</dt><dd className="tnum">−{inr(off)}</dd></div>}
+              {PLAN_GST_RATE > 0 && <div className="flex justify-between"><dt className="text-muted">{L("GST")} {Math.round(PLAN_GST_RATE * 100)}%</dt><dd className="tnum">{inr(gst)}</dd></div>}
+              <div className="flex justify-between border-t border-line pt-2 text-[17px] font-semibold"><dt>{L("To pay")}</dt><dd className="tnum">{inr(total)}</dd></div>
             </dl>
 
             {online && (
               <p className="-mt-2 rounded-ctl bg-surface px-3.5 py-2.5 text-[13.5px] text-muted">
-                {ended ? "Starts today" : `Continues after ${dateText(account.renewsAt)}`} · runs till <b className="text-ink">{dateText(runsTill)}</b>
+                {ended ? L("Starts today") : L("Continues after {0}", dateText(account.renewsAt))} {L("· runs till")} <b className="text-ink">{dateText(runsTill)}</b>
               </p>
             )}
             {payErr && <p className="rounded-ctl bg-rose-soft px-3.5 py-2.5 text-[13.5px] font-medium text-rose">{payErr}</p>}
-            {pay?.test && online && !otherWay && <p className="text-center text-[12.5px] font-semibold text-saffron">Test mode: no real money is taken.</p>}
+            {pay?.test && online && !otherWay && <p className="text-center text-[12.5px] font-semibold text-saffron">{L("Test mode: no real money is taken.")}</p>}
 
             {/* 5. pay (by UPI + WhatsApp, when not paying online) */}
             {(!online || otherWay) && platform?.upi && isValidUpi(platform.upi) ? (
               <div className="rounded-group bg-surface p-5">
-                <UpiPayCard upi={platform.upi} payee={platform.payee || "Restropi"} amount={total} note={`Restropi ${p.name} ${cyc.short}`} size={180} />
+                <UpiPayCard upi={platform.upi} payee={platform.payee || "Restropi"} amount={total} note={L("Restropi {0} {1}", p.name, cyc.short)} size={180} />
               </div>
             ) : null}
           </>
@@ -270,7 +271,7 @@ export function PlanSheet() {
             </li>
           ))}
         </ol>
-        <p className="flex items-center gap-1.5 text-[12.5px] text-faint"><Check size={13} /> Your data and settings stay as they are.</p>
+        <p className="flex items-center gap-1.5 text-[12.5px] text-faint"><Check size={13} /> {L("Your data and settings stay as they are.")}</p>
       </div>
       )}
     </Sheet>

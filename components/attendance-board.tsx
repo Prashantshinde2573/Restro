@@ -1,5 +1,6 @@
 "use client";
 
+import { L, dateLocale } from "@/lib/i18n";
 // Attendance tab of "Attendance & salary": the whole month at a glance and one-tap marking.
 //
 //   Month  every person × every day of the month (a register). Tap a box to change it.
@@ -35,7 +36,7 @@ const dayNum = (d: string) => Number(d.slice(8, 10));
 const weekday = (d: string) => new Date(d + "T00:00:00Z").getUTCDay();
 const dateOf = (month: string, n: number) => `${month}-${String(n).padStart(2, "0")}`;
 const SHORT = ["S", "M", "T", "W", "T", "F", "S"];
-const longDay = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+const longDay = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 
 /** What one box shows. */
 function cellOf(a: Attendance | undefined, date: string, today: string, pay?: StaffPay): Cell {
@@ -114,8 +115,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
         <div className="flex flex-wrap items-center gap-3 rounded-group bg-saffron-soft px-4 py-3">
           <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-saffron px-2 text-[13px] font-bold text-white">{pending.length}</span>
           <span className="min-w-0 flex-1 text-[14px] font-medium text-ink">
-            {pending.length === 1 ? "day waits" : "days wait"} for your OK
-            <span className="block text-[12.5px] font-normal text-muted">Tap a <b>?</b> box to check one</span>
+            {pending.length === 1 ? L("day waits") : L("days wait")} {L("for your OK")}<span className="block text-[12.5px] font-normal text-muted">{L("Tap a")} <b>?</b> {L("box to check one")}</span>
           </span>
           <Button
             size="sm"
@@ -123,8 +123,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
               pending.filter((a) => { const m = people.find((x) => x.id === a.memberId); return m && canEdit(m); }).forEach((a) => attendanceActions.decide(a.id, "approved", names));
             }}
           >
-            <Check size={15} /> Approve all
-          </Button>
+            <Check size={15} /> {L("Approve all")}</Button>
         </div>
       )}
 
@@ -146,7 +145,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
                         onClick={() => { if (d <= today) { setDay(d); setView("day"); } }}
                         disabled={d > today}
                         className={clsx("flex w-[30px] flex-col items-center rounded-[8px] py-0.5 leading-tight", d === today ? "bg-ink text-canvas" : "text-muted hover:bg-sunken", d > today && "opacity-40")}
-                        aria-label={`Open ${longDay(d)}`}
+                        aria-label={L("Open {0}", longDay(d))}
                       >
                         <span className="text-[10px]">{SHORT[weekday(d)]}</span>
                         <span className="text-[12.5px] font-semibold tnum">{dayNum(d)}</span>
@@ -180,7 +179,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
                               aria-label={`${m.name} ${longDay(d)}: ${k}`}
                               className={clsx("relative flex h-[36px] w-[34px] items-center justify-center rounded-[9px] text-[13px] font-bold transition active:scale-95", CELL[k].cls, d === today && k === "none" && "ring-1 ring-inset ring-ink/30")}
                             >
-                              {CELL[k].label}
+                              {L(CELL[k].label)}
                               {rec?.otHours && rec.status !== "rejected" ? <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-saffron ring-2 ring-surface" /> : null}
                             </button>
                           </td>
@@ -195,7 +194,7 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
               </tbody>
             </table>
           </div>
-          <p className="border-t border-line/70 px-4 py-2.5 text-[12.5px] text-muted"><span className="lg:hidden">Swipe sideways for the whole month · </span>Tap a box to mark that day (a day ahead: set leave) · tap a date to mark everyone · tap a name for their calendar. Orange dot = overtime.</p>
+          <p className="border-t border-line/70 px-4 py-2.5 text-[12.5px] text-muted"><span className="lg:hidden">{L("Swipe sideways for the whole month ·")} </span>{L("Tap a box to mark that day (a day ahead: set leave) · tap a date to mark everyone · tap a name for their calendar. Orange dot = overtime.")}</p>
         </div>
       )}
 
@@ -224,12 +223,12 @@ export function AttendanceBoard({ people, month, names }: { people: Member[]; mo
 }
 
 function Legend() {
-  const items: [Cell, string][] = [["full", "Present"], ["half", "Half"], ["leave", "Leave"], ["absent", "Absent"], ["holiday", "Holiday"], ["pending", "Waiting"], ["unmarked", "Not marked"]];
+  const items: [Cell, string][] = [["full", L("Present")], ["half", L("Half")], ["leave", L("Leave")], ["absent", L("Absent")], ["holiday", L("Holiday")], ["pending", L("Waiting")], ["unmarked", L("Not marked")]];
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted">
       {items.map(([k, l]) => (
         <span key={k} className="flex items-center gap-1.5">
-          <span className={clsx("flex h-5 w-5 items-center justify-center rounded-[6px] text-[10.5px] font-bold", CELL[k].cls)}>{CELL[k].label}</span>
+          <span className={clsx("flex h-5 w-5 items-center justify-center rounded-[6px] text-[10.5px] font-bold", CELL[k].cls)}>{L(CELL[k].label)}</span>
           {l}
         </span>
       ))}
@@ -268,12 +267,12 @@ function DayView({
       if (k === "none" && day !== today) return; // not working here that day
       if (!rec || rec.status !== "approved") attendanceActions.mark(m.id, day, rec?.kind === "half" ? "half" : "full", rec?.otHours ?? 0, names, rec?.note);
     });
-    toast("Everyone marked present");
+    toast(L("Everyone marked present"));
   };
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <button className="rounded-full bg-surface p-2 disabled:opacity-30" disabled={idx <= 0} onClick={() => setDay(days[idx - 1])} aria-label="Previous day"><ChevronLeft size={18} /></button>
+        <button className="rounded-full bg-surface p-2 disabled:opacity-30" disabled={idx <= 0} onClick={() => setDay(days[idx - 1])} aria-label={L("Previous day")}><ChevronLeft size={18} /></button>
         <div ref={strip} className="flex flex-1 gap-1.5 overflow-x-auto py-1 [scrollbar-width:none]">
           {days.map((d) => (
             <button
@@ -288,16 +287,16 @@ function DayView({
             </button>
           ))}
         </div>
-        <button className="rounded-full bg-surface p-2 disabled:opacity-30" disabled={idx >= days.length - 1 || days[idx + 1] > today} onClick={() => setDay(days[idx + 1])} aria-label="Next day"><ChevronRight size={18} /></button>
+        <button className="rounded-full bg-surface p-2 disabled:opacity-30" disabled={idx >= days.length - 1 || days[idx + 1] > today} onClick={() => setDay(days[idx + 1])} aria-label={L("Next day")}><ChevronRight size={18} /></button>
       </div>
 
       <div className="overflow-hidden rounded-group bg-surface">
         <div className="flex flex-wrap items-center gap-3 border-b border-line/70 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[16px] font-semibold">{day === today ? "Today · " : ""}{longDay(day)}</div>
-            <div className="text-[13px] text-muted">{marked} of {people.length} present</div>
+            <div className="text-[16px] font-semibold">{day === today ? L("Today · ") : ""}{longDay(day)}</div>
+            <div className="text-[13px] text-muted">{marked} {L("of")} {people.length} {L("present")}</div>
           </div>
-          <Button size="sm" variant="tinted" onClick={allPresent}><Check size={15} /> All present</Button>
+          <Button size="sm" variant="tinted" onClick={allPresent}><Check size={15} /> {L("All present")}</Button>
         </div>
         {people.map((m) => {
           const rec = byKey.get(attendanceId(m.id, day));
@@ -312,20 +311,20 @@ function DayView({
                   <span className="block truncate text-[15px] font-medium">{m.name}</span>
                   <span className="block truncate text-[12.5px] text-muted">
                     {rec?.status === "pending"
-                      ? `Asked ${rec.kind === "leave" ? "leave" : rec.kind === "half" ? "half day" : "full day"}${rec.otHours ? ` + OT ${rec.otHours} h` : ""}${rec.note ? ` · “${rec.note}”` : ""}`
-                      : k === "holiday" ? "Weekly holiday (paid)"
-                      : k === "none" && day !== today ? "Not working here this day"
-                      : rec?.otHours && rec.status === "approved" ? `Overtime ${rec.otHours} h` : (m.title || "Staff")}
+                      ? L("Asked {0}{1}{2}", rec.kind === "leave" ? "leave" : rec.kind === "half" ? "half day" : "full day", rec.otHours ? ` + OT ${rec.otHours} h` : "", rec.note ? ` · “${rec.note}”` : "")
+                      : k === "holiday" ? L("Weekly holiday (paid)")
+                      : k === "none" && day !== today ? L("Not working here this day")
+                      : rec?.otHours && rec.status === "approved" ? L("Overtime {0} h", rec.otHours) : (m.title || L("Staff"))}
                   </span>
                 </span>
               </button>
               {!editable ? (
-                <span className="text-[12.5px] text-muted">Owner marks yours</span>
+                <span className="text-[12.5px] text-muted">{L("Owner marks yours")}</span>
               ) : (
                 <div className="flex w-full items-center gap-2 sm:w-auto">
-                  {rec?.status === "pending" && <span className="rounded-full bg-saffron-soft px-2 py-1 text-[11.5px] font-semibold text-saffron">Waiting</span>}
-                  <div role="radiogroup" aria-label={`${m.name} attendance`} className="flex flex-1 rounded-[12px] bg-sunken p-[3px] sm:flex-none">
-                    {([["full", "Full"], ["half", "Half"], ["leave", "Leave"], ["absent", "Absent"]] as const).map(([v, l]) => (
+                  {rec?.status === "pending" && <span className="rounded-full bg-saffron-soft px-2 py-1 text-[11.5px] font-semibold text-saffron">{L("Waiting")}</span>}
+                  <div role="radiogroup" aria-label={L("{0} attendance", m.name)} className="flex flex-1 rounded-[12px] bg-sunken p-[3px] sm:flex-none">
+                    {([["full", L("Full")], ["half", L("Half")], ["leave", L("Leave")], ["absent", L("Absent")]] as const).map(([v, l]) => (
                       <button
                         key={v}
                         role="radio"
@@ -340,8 +339,8 @@ function DayView({
                       </button>
                     ))}
                   </div>
-                  <button onClick={() => onOpen(m, day)} className="rounded-[10px] px-2 py-1.5 text-[12.5px] font-semibold text-jade hover:bg-jade-soft" aria-label={`Overtime and note for ${m.name}`}>
-                    {rec?.otHours ? `OT ${rec.otHours}h` : "+ OT"}
+                  <button onClick={() => onOpen(m, day)} className="rounded-[10px] px-2 py-1.5 text-[12.5px] font-semibold text-jade hover:bg-jade-soft" aria-label={L("Overtime and note for {0}", m.name)}>
+                    {rec?.otHours ? L("OT {0}h", rec.otHours) : L("+ OT")}
                   </button>
                 </div>
               )}
@@ -364,7 +363,7 @@ function PersonView({
   const lead = weekday(days[0]);
   return (
     <div className="space-y-3">
-      <SelectMenu label="Person" className="lg:hidden" value={m.id} onChange={setPerson} options={people.map((p) => ({ value: p.id, label: p.name }))} />
+      <SelectMenu label={L("Person")} className="lg:hidden" value={m.id} onChange={setPerson} options={people.map((p) => ({ value: p.id, label: p.name }))} />
       <div className="hidden flex-wrap gap-2 lg:flex">
         {people.map((p) => (
           <button key={p.id} onClick={() => setPerson(p.id)} className={clsx("flex shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[13.5px] font-semibold ring-1", p.id === m.id ? "bg-ink text-canvas ring-ink" : "bg-surface ring-line")}>
@@ -375,7 +374,7 @@ function PersonView({
       <div className="rounded-group bg-surface p-4">
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <div className="text-[16px] font-semibold">{m.name} · {monthLabel(month)}</div>
-          {pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && <div className="text-[12.5px] text-muted">Holiday: {WEEKDAYS[pay.weeklyOff]}</div>}
+          {pay?.type === "monthly" && pay.weeklyOff !== undefined && pay.weeklyOff !== null && <div className="text-[12.5px] text-muted">{L("Holiday:")} {WEEKDAYS[pay.weeklyOff]}</div>}
         </div>
         <div className="grid grid-cols-4 gap-2 text-center">
           <Mini n={count.p} l="Present" cls="text-jade" />
@@ -403,7 +402,7 @@ function PersonView({
             );
           })}
         </div>
-        <p className="mt-3 text-[12.5px] text-muted">Tap a day to mark it · tap a day ahead to set leave.</p>
+        <p className="mt-3 text-[12.5px] text-muted">{L("Tap a day to mark it · tap a day ahead to set leave.")}</p>
       </div>
     </div>
   );
@@ -430,7 +429,7 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
     const setLeave = () => {
       if (asked) attendanceActions.decide(rec!.id, "approved", names);
       else attendanceActions.mark(m.id, date, "leave", 0, names, note);
-      toast(`${m.name.split(" ")[0]} · leave on ${longDay(date)}`);
+      toast(L("{0} · leave on {1}", m.name.split(" ")[0], longDay(date)));
       onClose();
     };
     const drop = () => {
@@ -445,29 +444,29 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
           <div className="text-[15px] text-muted">{longDay(date)}</div>
           {asked && (
             <div className="rounded-group bg-saffron-soft px-4 py-3 text-[14px]">
-              <b>{m.name.split(" ")[0]} asked for leave</b>{rec!.note ? ` · “${rec!.note}”` : ""}
+              <b>{m.name.split(" ")[0]} {L("asked for leave")}</b>{rec!.note ? ` · “${rec!.note}”` : ""}
             </div>
           )}
           <div className="flex items-center gap-3 rounded-group bg-[#efedff] px-4 py-3 text-[#3f3294]">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#5b4bc4] text-[18px] font-bold text-white">L</span>
             <span className="text-[14px] leading-snug">
-              <b className="block text-[15px]">{onLeave ? "On leave this day" : "Set leave for this day"}</b>
-              {pay?.paidLeaves ? `${pay.paidLeaves} paid leave a month; more is unpaid.` : "Leave is unpaid (no paid leave set in Salary)."}
+              <b className="block text-[15px]">{onLeave ? L("On leave this day") : L("Set leave for this day")}</b>
+              {pay?.paidLeaves ? L("{0} paid leave a month; more is unpaid.", pay.paidLeaves) : L("Leave is unpaid (no paid leave set in Salary).")}
             </span>
           </div>
           {!onLeave && !asked && (
             <label className="block">
-              <span className="mb-1 block text-[13px] font-medium text-muted">Reason (optional)</span>
-              <input className="h-12 w-full rounded-ctl bg-surface px-3 text-[15px] outline-none ring-1 ring-line focus:ring-jade/40" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. family function" />
+              <span className="mb-1 block text-[13px] font-medium text-muted">{L("Reason (optional)")}</span>
+              <input className="h-12 w-full rounded-ctl bg-surface px-3 text-[15px] outline-none ring-1 ring-line focus:ring-jade/40" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder={L("e.g. family function")} />
             </label>
           )}
           <div className="flex gap-2">
             {rec ? (
-              <Button variant="tinted" onClick={drop}><X size={16} /> {asked ? "Turn down" : "Remove leave"}</Button>
+              <Button variant="tinted" onClick={drop}><X size={16} /> {asked ? L("Turn down") : L("Remove leave")}</Button>
             ) : (
-              <Button variant="tinted" onClick={onClose}><X size={16} /> Cancel</Button>
+              <Button variant="tinted" onClick={onClose}><X size={16} /> {L("Cancel")}</Button>
             )}
-            {!onLeave && <Button className="flex-1" onClick={setLeave}><Check size={16} /> {asked ? "Approve leave" : "Set leave"}</Button>}
+            {!onLeave && <Button className="flex-1" onClick={setLeave}><Check size={16} /> {asked ? L("Approve leave") : L("Set leave")}</Button>}
           </div>
         </div>
       </Sheet>
@@ -475,27 +474,27 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
   }
   const save = () => {
     const h = Number(ot || 0);
-    if (!Number.isFinite(h) || h < 0 || h > 16) return toast("Overtime: 0 to 16 hours");
+    if (!Number.isFinite(h) || h < 0 || h > 16) return toast(L("Overtime: 0 to 16 hours"));
     if (kind === "absent") {
       if (rec?.status === "pending") attendanceActions.decide(rec.id, "rejected", names);
       else attendanceActions.markAbsent(m.id, date, names);
     } else {
       attendanceActions.mark(m.id, date, kind, kind === "leave" ? 0 : h, names, note);
     }
-    toast(`${m.name.split(" ")[0]} · ${kind === "absent" ? "absent" : kind === "half" ? "half day" : kind === "leave" ? "on leave" : "present"}`);
+    toast(`${m.name.split(" ")[0]} · ${kind === "absent" ? "absent" : kind === "half" ? L("half day") : kind === "leave" ? L("on leave") : "present"}`);
     onClose();
   };
   return (
     <Sheet open onClose={onClose} title={m.name}>
       <div className="space-y-4">
-        <div className="text-[15px] text-muted">{longDay(date)}{holiday ? " · weekly holiday (paid even if absent)" : ""}</div>
+        <div className="text-[15px] text-muted">{longDay(date)}{holiday ? L(" · weekly holiday (paid even if absent)") : ""}</div>
         {rec?.status === "pending" && (
           <div className="rounded-group bg-saffron-soft px-4 py-3 text-[14px]">
-            <b>{m.name.split(" ")[0]} asked:</b> {rec.kind === "leave" ? "leave" : rec.kind === "half" ? "half day" : "full day"}{rec.otHours ? ` + overtime ${rec.otHours} h` : ""}{rec.note ? ` · “${rec.note}”` : ""}
+            <b>{m.name.split(" ")[0]} {L("asked:")}</b> {rec.kind === "leave" ? "leave" : rec.kind === "half" ? L("half day") : L("full day")}{rec.otHours ? L(" + overtime {0} h", rec.otHours) : ""}{rec.note ? ` · “${rec.note}”` : ""}
           </div>
         )}
-        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Attendance">
-          {([["full", "Present", "P"], ["half", "Half day", "½"], ["leave", "Leave", "L"], ["absent", "Absent", "A"]] as const).map(([v, l, s]) => (
+        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label={L("Attendance")}>
+          {([["full", L("Present"), "P"], ["half", L("Half day"), "½"], ["leave", L("Leave"), "L"], ["absent", L("Absent"), "A"]] as const).map(([v, l, s]) => (
             <button
               key={v}
               role="radio"
@@ -511,18 +510,18 @@ function DayEdit({ m, date, rec, pay, names, onClose }: { m: Member; date: strin
         {kind !== "absent" && kind !== "leave" && (
           <div className="grid grid-cols-[120px_1fr] gap-3">
             <label>
-              <span className="mb-1 block text-[13px] font-medium text-muted">Overtime (hours)</span>
+              <span className="mb-1 block text-[13px] font-medium text-muted">{L("Overtime (hours)")}</span>
               <input className="h-12 w-full rounded-ctl bg-surface px-3 text-[15px] outline-none ring-1 ring-line focus:ring-jade/40" inputMode="decimal" type="number" min={0} max={16} step={0.5} value={ot} onChange={(e) => setOt(e.target.value)} placeholder="0" />
             </label>
             <label>
-              <span className="mb-1 block text-[13px] font-medium text-muted">Note (optional)</span>
-              <input className="h-12 w-full rounded-ctl bg-surface px-3 text-[15px] outline-none ring-1 ring-line focus:ring-jade/40" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. came late" />
+              <span className="mb-1 block text-[13px] font-medium text-muted">{L("Note (optional)")}</span>
+              <input className="h-12 w-full rounded-ctl bg-surface px-3 text-[15px] outline-none ring-1 ring-line focus:ring-jade/40" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder={L("e.g. came late")} />
             </label>
           </div>
         )}
         <div className="flex gap-2">
-          <Button variant="tinted" onClick={onClose}><X size={16} /> Cancel</Button>
-          <Button className="flex-1" onClick={save}><Check size={16} /> {rec?.status === "pending" ? (kind === "absent" ? "Reject request" : "Approve") : "Save"}</Button>
+          <Button variant="tinted" onClick={onClose}><X size={16} /> {L("Cancel")}</Button>
+          <Button className="flex-1" onClick={save}><Check size={16} /> {rec?.status === "pending" ? (kind === "absent" ? L("Reject request") : L("Approve")) : L("Save")}</Button>
         </div>
       </div>
     </Sheet>

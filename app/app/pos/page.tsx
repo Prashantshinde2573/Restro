@@ -18,7 +18,7 @@ const VoiceOrder = dynamic(() => import("@/components/voice").then((m) => m.Voic
 import { ItemSheet } from "@/components/item-sheet";
 import { getOrders, orderActions, useCan, useOrders, useMenu, useCategories, useCurrentOutlet, useFeature, useMe } from "@/lib/live";
 import { useToast } from "@/components/toast";
-import { useT } from "@/lib/i18n";
+import { useT, L } from "@/lib/i18n";
 import { capacity, getTable, isShared, joinedName, seatsFree, tableActions, tableState, useLiveTables } from "@/lib/tables";
 import { closeBill, partyOpenOrders } from "@/lib/billing";
 import { inr, gstLabel } from "@/lib/format";
@@ -109,7 +109,7 @@ function PosScreen() {
   const tbShared = tb ? isShared(tb) : false;
   const pty = tb?.parties.find((p) => p.id === party);
   const label =
-    type === "dine-in" ? (pty && tbShared ? `${table} · Party ${party}` : `Table ${table}`) : cust.trim() ? `${type === "delivery" ? "Delivery" : counterToo || cafe ? "Counter" : "Takeaway"} · ${cust.trim()}` : type === "takeaway" ? (counterToo || cafe ? "Counter" : "Takeaway") : "Delivery";
+    type === "dine-in" ? (pty && tbShared ? L("{0} · Party {1}", table, party) : L("Table {0}", table)) : cust.trim() ? `${type === "delivery" ? L("Delivery") : counterToo || cafe ? L("Counter") : L("Takeaway")} · ${cust.trim()}` : type === "takeaway" ? (counterToo || cafe ? L("Counter") : L("Takeaway")) : L("Delivery");
   const noTable = type === "dine-in" && !tb;
   const waitingPay = type === "dine-in" && !!pty?.paymentPending;
   // a new party at a table needs its number of guests before it's sent
@@ -152,7 +152,7 @@ function PosScreen() {
       lines: lines.map((l) => ({ itemId: l.item.id, name: sizedName(l.item.name, l.size), qty: l.qty, price: priceOf(l), station: l.item.station, note: l.note })),
     });
     const kot = type === "dine-in" ? (tb && getTable(tb.id)!.parties.length > 1 ? `${table} · ${pid}` : table) : label;
-    toast(`KOT sent · ${count} items for ${kot}`);
+    toast(L("KOT sent · {0} items for {1}", count, kot));
     if (type !== "dine-in") setSentIds((x) => [...x, order.id]);
     return { id: order.id, pid };
   };
@@ -180,10 +180,10 @@ function PosScreen() {
         {type === "dine-in" && !cafe ? (
           <button onClick={() => setPickTable(true)} className="flex w-full items-center justify-between rounded-ctl bg-sunken/70 px-4 py-2.5 text-left">
             <span>
-              <span className="block text-[12px] text-muted">{tbShared ? "Shared table · separate bill" : "Table"}</span>
+              <span className="block text-[12px] text-muted">{tbShared ? L("Shared table · separate bill") : L("Table")}</span>
               <span className="text-[16px] font-semibold">
                 {table}
-                {pty ? (tbShared ? ` · Party ${pty.id}` : "") : tb && tb.parties.length ? " · new party" : " · new guests"}
+                {pty ? (tbShared ? L(" · Party {0}", pty.id) : "") : tb && tb.parties.length ? L(" · new party") : L(" · new guests")}
               </span>
             </span>
             <ChevronDown size={18} className="text-muted" />
@@ -197,15 +197,15 @@ function PosScreen() {
           />
         )}
         {type === "dine-in" && !cafe ? null : (
-          <input value={cust} onChange={(e) => setCust(e.target.value)} className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40" placeholder={type === "delivery" ? "Guest name, phone or address" : "Guest name (optional, shows on the order)"} />
+          <input value={cust} onChange={(e) => setCust(e.target.value)} className="h-12 w-full rounded-ctl bg-sunken/70 px-4 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40" placeholder={type === "delivery" ? L("Guest name, phone or address") : L("Guest name (optional, shows on the order)")} />
         )}
       </div>
 
       <div className="mt-3 flex-1 overflow-y-auto px-2 lg:px-3">
         {lines.length === 0 ? (
           <div className="flex h-full min-h-[200px] flex-col items-center justify-center px-6 text-center">
-            <p className="text-[15px] font-medium">No dishes yet</p>
-            <p className="mt-1 text-[13.5px] text-muted">Tap a dish to add it, or press the mic and say the order.</p>
+            <p className="text-[15px] font-medium">{L("No dishes yet")}</p>
+            <p className="mt-1 text-[13.5px] text-muted">{L("Tap a dish to add it, or press the mic and say the order.")}</p>
           </div>
         ) : (
           lines.map((l, i) => (
@@ -214,15 +214,15 @@ function PosScreen() {
               <div className="min-w-0 flex-1">
                 <div className="text-[15px] font-medium leading-tight">{sizedName(l.item.name, l.size)}</div>
                 <button onClick={() => setNoteFor(`${i}`)} className={clsx("mt-0.5 text-[12.5px]", l.note ? "font-medium text-saffron" : "text-faint hover:text-jade")}>
-                  {l.note ?? "Add note"}
+                  {l.note ?? L("Add note")}
                 </button>
               </div>
               <div className="flex items-center gap-1 rounded-full bg-sunken p-0.5">
-                <button aria-label="Remove one" onClick={() => change(i, -1)} className="flex h-7 w-7 items-center justify-center rounded-full bg-surface">
+                <button aria-label={L("Remove one")} onClick={() => change(i, -1)} className="flex h-7 w-7 items-center justify-center rounded-full bg-surface">
                   {l.qty === 1 ? <Trash2 size={13} className="text-rose" /> : <Minus size={13} />}
                 </button>
                 <span className="w-5 text-center text-[14px] font-semibold tnum">{l.qty}</span>
-                <button aria-label="Add one" onClick={() => change(i, 1)} className="flex h-7 w-7 items-center justify-center rounded-full bg-surface">
+                <button aria-label={L("Add one")} onClick={() => change(i, 1)} className="flex h-7 w-7 items-center justify-center rounded-full bg-surface">
                   <Plus size={13} />
                 </button>
               </div>
@@ -234,19 +234,19 @@ function PosScreen() {
 
       <div className="pb-safe space-y-3 border-t border-line px-4 pt-3 [--safe-pb:16px] lg:px-5">
         <div className="flex items-baseline justify-between text-[13.5px] text-muted">
-          <span>{count} items · GST {gstLabel()} added at checkout</span>
-          {running > 0 && <span className="tnum">Already on bill {inr(running)}</span>}
+          <span>{count} {L("items · GST")} {gstLabel()} {L("added at checkout")}</span>
+          {running > 0 && <span className="tnum">{L("Already on bill")} {inr(running)}</span>}
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-[15px] font-medium">{running > 0 ? "Bill so far" : "Total"}</span>
+          <span className="text-[15px] font-medium">{running > 0 ? L("Bill so far") : L("Total")}</span>
           <span className="text-[26px] font-semibold tracking-tight tnum">{inr(billTotals(chargeAmount).total)}</span>
         </div>
         <div className={clsx("grid gap-2", canCharge ? "grid-cols-2" : "grid-cols-1")}>
-          {noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">Pick a table first</p>}
-          {needGuests && lines.length > 0 && !noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">Choose how many guests</p>}
-          {waitingPay && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">This bill is marked paid · waiting for the owner&apos;s OK</p>}
+          {noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">{L("Pick a table first")}</p>}
+          {needGuests && lines.length > 0 && !noTable && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">{L("Choose how many guests")}</p>}
+          {waitingPay && <p className="col-span-2 -mb-1 text-center text-[13px] font-medium text-saffron">{L("This bill is marked paid · waiting for the owner's OK")}</p>}
           <Button variant="tinted" size="lg" className="!px-3 whitespace-nowrap !text-[15px]" disabled={!lines.length || sent || noTable || needGuests} onClick={() => sendKitchen()}>
-            {sent ? <><Check size={18} /> Sent</> : <><Send size={17} /> {t("sendKitchen")}</>}
+            {sent ? <><Check size={18} /> {L("Sent")}</> : <><Send size={17} /> {t("sendKitchen")}</>}
           </Button>
           {canCharge && (
             <Button size="lg" className="!text-[15px]" disabled={chargeAmount === 0 || noTable || waitingPay || (needGuests && lines.length > 0 && !sent)} onClick={() => { setCartOpen(false); setPay(true); }}>
@@ -267,8 +267,7 @@ function PosScreen() {
             <h1 className="large-title">{t("pos")}</h1>
             {voiceOn && (
               <Button variant="tinted" size="sm" className="!rounded-full lg:hidden" onClick={() => setVoice(true)}>
-                <Mic size={16} /> Speak
-              </Button>
+                <Mic size={16} /> {L("Speak")}</Button>
             )}
           </div>
           <div className="flex gap-2">
@@ -281,15 +280,14 @@ function PosScreen() {
                 className="h-11 w-full rounded-ctl bg-surface pl-10 pr-9 text-[15px] outline-none placeholder:text-faint focus:ring-1 focus:ring-jade/40"
               />
               {q && (
-                <button aria-label="Clear search" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-faint">
+                <button aria-label={L("Clear search")} onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-faint">
                   <X size={15} />
                 </button>
               )}
             </div>
             {voiceOn && (
               <Button variant="tinted" className="hidden lg:inline-flex" onClick={() => setVoice(true)}>
-                <Mic size={17} /> Speak order
-              </Button>
+                <Mic size={17} /> {L("Speak order")}</Button>
             )}
           </div>
           <Chips
@@ -302,7 +300,7 @@ function PosScreen() {
         <div className="flex-1 overflow-y-auto px-4 pb-36 pt-1 lg:px-8 lg:pb-8">
           {/* the menu as rows, like the guest menu: name and price on the left, ADD / − n + on the right;
               grouped by category (when showing all), never squeezed (one column on narrow screens) */}
-          {items.length === 0 && <p className="rounded-group bg-surface px-4 py-10 text-center text-[14.5px] text-muted">No dishes match{q ? ` “${q}”` : ""}.</p>}
+          {items.length === 0 && <p className="rounded-group bg-surface px-4 py-10 text-center text-[14.5px] text-muted">{L("No dishes match")}{q ? ` “${q}”` : ""}.</p>}
           <div className="space-y-4">
             {sections.map(({ id, name, list }) => (
               <section key={id}>
@@ -310,7 +308,7 @@ function PosScreen() {
                 <div className="grid gap-x-6 overflow-hidden rounded-group bg-surface px-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))]">
                   {list.map((m) => {
                     const n = qtyOf(m.id);
-                    const hint = !m.available ? null : hasSizes(m) ? sizesOf(m).map((z) => z.name).join(" / ") : m.options?.some((g) => g.required) ? "Choices" : m.tags?.[0] ?? null;
+                    const hint = !m.available ? null : hasSizes(m) ? sizesOf(m).map((z) => z.name).join(" / ") : m.options?.some((g) => g.required) ? L("Choices") : m.tags?.[0] ?? null;
                     const tap = () => (needsChoice(m) ? setCustomize(m) : add(m));
                     return (
                       <div key={m.id} className={clsx("flex min-h-[60px] items-center gap-3 border-b border-line/70 py-2", !m.available && "opacity-50")}>
@@ -322,21 +320,21 @@ function PosScreen() {
                               <span className="line-clamp-2 text-[14px] font-semibold leading-snug">{niceName(m.name)}</span>
                             </span>
                             <span className="mt-0.5 flex items-center gap-1.5 pl-5 text-[12.5px]">
-                              <span className="font-semibold tnum">{hasSizes(m) ? `from ${inr(fromPrice(m))}` : inr(m.price)}</span>
-                              {!m.available ? <span className="font-semibold text-rose">· Sold out</span> : hint ? <span className="truncate text-muted">· {hint}</span> : null}
+                              <span className="font-semibold tnum">{hasSizes(m) ? L("from {0}", inr(fromPrice(m))) : inr(m.price)}</span>
+                              {!m.available ? <span className="font-semibold text-rose">{L("· Sold out")}</span> : hint ? <span className="truncate text-muted">· {hint}</span> : null}
                             </span>
                           </span>
                         </button>
                         {m.available &&
                           (n === 0 ? (
-                            <button onClick={tap} aria-label={`Add ${m.name}`} className="flex h-8 w-[76px] shrink-0 items-center justify-center gap-1 rounded-[10px] text-[13px] font-extrabold tracking-wide text-jade-deep ring-1 ring-jade/35 active:scale-95">
-                              ADD<Plus size={13} strokeWidth={3} />
+                            <button onClick={tap} aria-label={L("Add {0}", m.name)} className="flex h-8 w-[76px] shrink-0 items-center justify-center gap-1 rounded-[10px] text-[13px] font-extrabold tracking-wide text-jade-deep ring-1 ring-jade/35 active:scale-95">
+                              {L("ADD")}<Plus size={13} strokeWidth={3} />
                             </button>
                           ) : (
                             <div className="flex h-8 w-[76px] shrink-0 items-center justify-between rounded-[10px] bg-jade-deep text-white">
-                              <button aria-label={`One less ${m.name}`} onClick={() => lessOf(m.id)} className="flex h-8 w-7 items-center justify-center"><Minus size={14} strokeWidth={2.6} /></button>
+                              <button aria-label={L("One less {0}", m.name)} onClick={() => lessOf(m.id)} className="flex h-8 w-7 items-center justify-center"><Minus size={14} strokeWidth={2.6} /></button>
                               <span className="text-[14px] font-bold tnum">{n}</span>
-                              <button aria-label={`One more ${m.name}`} onClick={tap} className="flex h-8 w-7 items-center justify-center"><Plus size={14} strokeWidth={2.6} /></button>
+                              <button aria-label={L("One more {0}", m.name)} onClick={tap} className="flex h-8 w-7 items-center justify-center"><Plus size={14} strokeWidth={2.6} /></button>
                             </div>
                           ))}
                       </div>
@@ -357,7 +355,7 @@ function PosScreen() {
         <div className="fixed inset-x-3 bottom-[76px] z-30 lg:hidden">
           <button onClick={() => setCartOpen(true)} className="flex w-full animate-pop items-center gap-3 rounded-[18px] bg-jade px-4 py-3.5 text-white shadow-float">
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-[13px] font-bold tnum">{count}</span>
-            <span className="flex-1 text-left text-[15px] font-semibold">View order · {label}</span>
+            <span className="flex-1 text-left text-[15px] font-semibold">{L("View order ·")} {label}</span>
             <span className="text-[16px] font-semibold tnum">{inr(billTotals(chargeAmount).total)}</span>
           </button>
         </div>
@@ -367,7 +365,7 @@ function PosScreen() {
       </Sheet>
 
       {/* Table picker: a shared table lists each party separately */}
-      <Sheet open={pickTable} onClose={() => setPickTable(false)} title="Choose table" wide>
+      <Sheet open={pickTable} onClose={() => setPickTable(false)} title={L("Choose table")} wide>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {tables.filter((tb) => !tb.joinedTo).map((tb) => {
             const st = tableState(tb);
@@ -382,7 +380,7 @@ function PosScreen() {
               <div key={tb.id} className={clsx("rounded-[16px] p-3", table === tb.name ? "bg-jade-soft ring-2 ring-jade" : "bg-surface")}>
                 <div className="flex items-baseline justify-between">
                   <span className="text-[18px] font-semibold">{joinedName(tb, tables)}</span>
-                  <span className="text-[11.5px] text-muted">{st === "free" ? `${capacity(tb, tables)} seats` : st === "reserved" ? "reserved" : `${seatsFree(tb, tables)} of ${capacity(tb, tables)} free`}</span>
+                  <span className="text-[11.5px] text-muted">{st === "free" ? L("{0} seats", capacity(tb, tables)) : st === "reserved" ? "reserved" : L("{0} of {1} free", seatsFree(tb, tables), capacity(tb, tables))}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {tb.parties.map((p) => (
@@ -391,11 +389,11 @@ function PosScreen() {
                       onClick={() => pick(p.id)}
                       className={clsx("rounded-full px-2.5 py-1 text-[12.5px] font-semibold", table === tb.name && party === p.id ? "bg-jade text-white" : "bg-sunken")}
                     >
-                      {tb.parties.length > 1 ? `${p.id} · ${p.guests}` : `${p.guests} guests`}
+                      {tb.parties.length > 1 ? `${p.id} · ${p.guests}` : L("{0} guests", p.guests)}
                     </button>
                   ))}
                   <button onClick={() => pick(null)} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-jade hover:bg-jade-soft">
-                    {tb.parties.length ? "+ New party" : "Seat here"}
+                    {tb.parties.length ? L("+ New party") : L("Seat here")}
                   </button>
                 </div>
               </div>
@@ -405,7 +403,7 @@ function PosScreen() {
       </Sheet>
 
       {/* Notes */}
-      <Sheet open={noteFor !== null} onClose={() => setNoteFor(null)} title="Kitchen note">
+      <Sheet open={noteFor !== null} onClose={() => setNoteFor(null)} title={L("Kitchen note")}>
         <div className="flex flex-wrap gap-2">
           {NOTES.map((n) => (
             <button
