@@ -51,6 +51,13 @@ export default function OrdersPage() {
   /** Charging an order at a table charges the party's whole bill. */
   const billFor = (o: Order) => (o.tableId ? partyOpenOrders(o.tableId, o.partyId ?? "A").filter((x) => !x.payClaim) : [o]);
 
+  // the bill can be taken any time after the order is accepted (not only once served):
+  // paid early, it still goes through the kitchen as before
+  const chargeable = (o: Order) =>
+    canCharge && ["accepted", "preparing", "ready", "served"].includes(o.status) && !o.payClaim && !payingOnline(o) &&
+    // early: not while another order on the same bill still waits to be accepted (it must reach the kitchen first)
+    (o.status === "served" || !billFor(o).some((x) => x.status === "new"));
+
   const isOnline = (o: Order) => ["whatsapp", "swiggy", "zomato", "qr"].includes(o.channel);
   const match = (o: Order, f: Filter) =>
     f === "open" ? !["paid", "cancelled"].includes(o.status) : f === "confirm" ? !!o.payClaim && !["paid", "cancelled"].includes(o.status) : f === "online" ? isOnline(o) && !["paid", "cancelled"].includes(o.status) : f === "ready" ? o.status === "ready" : f === "all" ? true : o.status === "paid" && new Date(o.createdAt).getTime() >= startOfDay();
@@ -95,8 +102,9 @@ export default function OrdersPage() {
     m,
     amt: paidTodayList.reduce((s, o) => s + (o.payments ?? []).filter((p) => p.method === m).reduce((a, p) => a + p.amount, 0), 0),
   }));
+  type Step = { label: string; onClick: () => void; tone?: "primary" | "dark" } | null;
   /** The one next step for a card. */
-  const nextStep = (o: Order): { label: string; onClick: () => void; tone?: "primary" | "dark" } | null => {
+  const nextStep = (o: Order): Step => {
     if (o.payClaim && o.status !== "paid" && o.status !== "cancelled")
       return canConfirm ? { label: "Money received", onClick: () => { confirmPayment(o.payClaim!.id); toast(L("Payment confirmed · #{0} closed", o.number)); } } : null;
     if (payingOnline(o)) return null; // the guest is paying online: it accepts itself once paid
@@ -106,6 +114,14 @@ export default function OrdersPage() {
     if (o.status === "ready") return pickup(o) ? { label: "Picked up", onClick: () => setStatus(o, "served", `Token ${o.number} picked up`), tone: "dark" } : { label: "Mark served", onClick: () => setStatus(o, "served", "Marked served"), tone: "dark" };
     if (o.status === "served" && canCharge) return { label: `Charge ${inr(billFor(o).reduce((s, x) => s + billOf(x), 0))}`, onClick: () => setPay(billFor(o)) };
     return null;
+  };
+
+  /** Charge before it is served (served ones already show Charge as their step). */
+  const earlyCharge = (o: Order): Step => {
+    if (!chargeable(o) || o.status === "served") return null;
+    const bill = billFor(o);
+    if (!bill.length) return null;
+    return { label: `Charge ${inr(bill.reduce((s, x) => s + billOf(x), 0))}`, onClick: () => setPay(bill) };
   };
 
   return (
@@ -153,6 +169,7 @@ export default function OrdersPage() {
                   total={g[0].status === "paid" ? paidSum(g[0].payments ?? []) : billOf(g[0])}
                   onOpen={() => setSelId(g[0].id)}
                   action={nextStep(g[0])}
+                  charge={earlyCharge(g[0])}
                 />
               ) : (
                 <BillGroupCard
@@ -162,6 +179,7 @@ export default function OrdersPage() {
                   total={g.reduce((s, o) => s + (o.status === "paid" ? paidSum(o.payments ?? []) : billOf(o)), 0)}
                   onOpen={(o) => setSelId(o.id)}
                   actionOf={nextStep}
+                  charge={g.map(earlyCharge).find(Boolean) ?? null}
                 />
               ),
             )}
@@ -182,9 +200,9 @@ export default function OrdersPage() {
                   <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "accepted", "Accepted · KOT sent to kitchen")}>{L("Accept and send to kitchen")}</Button>
                 </>
               )}
-              {sel.status === "accepted" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "preparing", "Kitchen started")}>{L("Mark cooking")}</Button>}
-              {sel.status === "preparing" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "ready", "Marked ready")}>{L("Mark ready")}</Button>}
-              {sel.status === "ready" && <Button size="lg" className="flex-1" onClick={() => setStatus(sel, "served", pickup(sel) ? `Token ${sel.number} picked up` : "Marked served")}>{pickup(sel) ? L("Picked up") : L("Mark served")}</Button>}
+              {sel.status === "accepted" && <Button size="lg" variant={chargeable(sel) ? "tinted" : undefined} className="flex-1" onClick={() => setStatus(sel, "preparing", "Kitchen started")}>{L("Mark cooking")}</Button>}
+              {sel.status === "preparing" && <Button size="lg" variant={chargeable(sel) ? "tinted" : undefined} className="flex-1" onClick={() => setStatus(sel, "ready", "Marked ready")}>{L("Mark ready")}</Button>}
+              {sel.status === "ready" && <Button size="lg" variant={chargeable(sel) ? "tinted" : undefined} className="flex-1" onClick={() => setStatus(sel, "served", pickup(sel) ? `Token ${sel.number} picked up` : "Marked served")}>{pickup(sel) ? L("Picked up") : L("Mark served")}</Button>}
               {sel.payClaim && sel.status !== "paid" && sel.status !== "cancelled" ? (
                 canConfirm ? (
                   <>
@@ -192,7 +210,7 @@ export default function OrdersPage() {
                     <Button size="lg" className="flex-1" onClick={() => { confirmPayment(sel.payClaim!.id); setSelId(null); toast(L("Payment confirmed · #{0} closed", sel.number)); }}><Check size={17} /> {L("Money received")}</Button>
                   </>
                 ) : null
-              ) : sel.status === "served" && canCharge ? (
+              ) : chargeable(sel) ? (
                 <Button size="lg" className="flex-1" onClick={() => { setPay(billFor(sel)); setSelId(null); }}>{L("Charge")} {inr(billFor(sel).reduce((s, o) => s + billOf(o), 0))}</Button>
               ) : null}
               {sel.status === "paid" && canEditPay && (

@@ -290,6 +290,13 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={!!draft.payFirst} onChange={(v) => saveNow({ payFirst: v }, v ? "Guests now pay before the kitchen starts" : "Guests now pay at the end")} label={L("Guests pay first")} />
             </div>
+            <div className="flex items-center justify-between gap-4 rounded-group bg-surface px-4 py-3">
+              <div>
+                <div className="text-[15px]">{L("Guests pay at the counter")}</div>
+                <div className="text-[12.5px] text-muted">{draft.payAtCounter ? L("On · no QR or online pay on their phone, it says “Please pay at the counter”") : L("Off · guests can pay from their phone")}</div>
+              </div>
+              <Toggle checked={!!draft.payAtCounter} onChange={(v) => saveNow({ payAtCounter: v }, v ? L("Guests now pay at the counter") : L("Guests can pay from their phone again"))} label={L("Guests pay at the counter")} />
+            </div>
             {(draft.businessType === "cafe" || draft.mixed) && (
               <div className="overflow-hidden rounded-group bg-surface">
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
