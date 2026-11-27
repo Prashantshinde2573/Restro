@@ -38,6 +38,21 @@ function dishLine(o: Order) {
 /** Inside a grouped card the button is small: "Accept & send to kitchen" → "Accept". */
 const shortLabel = (l: string) => (l.startsWith("Accept") ? "Accept" : l.startsWith("Mark cooking") ? "Cooking" : l.startsWith("Mark ready") ? "Ready" : l.startsWith("Mark served") ? "Served" : l);
 
+/** Charge before the food is served: a quieter button beside the kitchen step. */
+function ChargeButton({ a, small }: { a: NonNullable<Step>; small?: boolean }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); a.onClick(); }}
+      className={clsx(
+        "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-surface font-semibold text-ink ring-1 ring-inset ring-ink/15 transition hover:bg-sunken active:scale-[.97]",
+        small ? "h-8 px-2.5 text-[12.5px]" : "h-9 px-3 text-[13.5px]",
+      )}
+    >
+      <Wallet size={small ? 14 : 15} /> {L("Charge")}
+    </button>
+  );
+}
+
 function StepButton({ a, small }: { a: NonNullable<Step>; small?: boolean }) {
   const I = a.label.startsWith("Accept") ? Check : a.label.startsWith("Mark cooking") ? CookingPot : a.label.startsWith("Mark ready") ? ChefHat : a.label.startsWith("Mark served") ? HandPlatter : Wallet;
   return (
@@ -87,6 +102,7 @@ export function OrderCard({
   total,
   onOpen,
   action,
+  charge,
 }: {
   o: Order;
   where: string;
@@ -94,6 +110,8 @@ export function OrderCard({
   onOpen: () => void;
   /** the one next step, e.g. Accept / Mark ready / Charge */
   action?: { label: string; onClick: () => void; tone?: "primary" | "dark" } | null;
+  /** take the bill now, before the food is served */
+  charge?: Step;
 }) {
   const k = orderKind(o);
   const mins = minutesSince(o.createdAt);
@@ -136,6 +154,7 @@ export function OrderCard({
             <Clock3 size={11} /> {live ? `${mins}m` : clock(o.createdAt)}
           </span>
         </div>
+        {charge && <ChargeButton a={charge} />}
         {action && <StepButton a={action} />}
       </div>
     </article>
@@ -155,12 +174,15 @@ export function BillGroupCard({
   total,
   onOpen,
   actionOf,
+  charge,
 }: {
   orders: Order[];
   where: string;
   total: number;
   onOpen: (o: Order) => void;
   actionOf: (o: Order) => Step;
+  /** take the bill now, before everything is served */
+  charge?: Step;
 }) {
   const first = [...orders].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const k = orderKind(first[0]);
@@ -200,11 +222,15 @@ export function BillGroupCard({
           );
         })}
       </div>
-      {billStep && (
+      {billStep ? (
         <div className="mt-2 flex justify-end">
           <StepButton a={billStep} />
         </div>
-      )}
+      ) : charge ? (
+        <div className="mt-2 flex justify-end">
+          <ChargeButton a={charge} />
+        </div>
+      ) : null}
     </article>
   );
 }

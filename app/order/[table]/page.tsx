@@ -927,6 +927,8 @@ export default function GuestOrder() {
   const billGst = Math.round(billTaxable * gstRate() * 100) / 100;
   const tip = Math.round((billItems * tipPct) / 100);
   const billTotal = Math.round(billTaxable + billGst + tip);
+  // pay at the counter: the plain bill (tips, rewards and coupons are handled by the staff there)
+  const counterTotal = Math.round(billItems * (1 + gstRate()));
   const billIds = unbilled.map((o) => o.id);
   const who = guest?.name ?? "Guest";
 
@@ -1396,7 +1398,7 @@ export default function GuestOrder() {
                   </button>
                 )}
                 <Button size="lg" className="shadow-float" onClick={() => { setTipPct(0); setUseReward(true); setBillOpen(true); }}>
-                  {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
+                  {waiting && !waiting.payFirst ? tx(lang, "Payment on the way", "पैसे देत आहे") : settings.payAtCounter ? <>{tx(lang, "Bill", "बिल")} <span className="tnum">{inr(counterTotal)}</span></> : <>{tx(lang, "Pay", "भरा")} <span className="tnum">{inr(billTotal)}</span></>}
                 </Button>
               </div>
             )}
@@ -1606,7 +1608,12 @@ export default function GuestOrder() {
 
       {/* ---------- pay-first: pay for this order ---------- */}
       <Sheet open={payOpen} onClose={() => setPayOpen(false)} title={tx(lang, `Pay ${inr(payable)}`, `${inr(payable)} भरा`)}>
-        {payOpen && (
+        {payOpen && settings.payAtCounter ? (
+          <div className="space-y-4">
+            <PayAtCounter lang={lang} card={settings.acceptCard !== false} />
+            <Button size="lg" className="w-full" onClick={() => payFirstLater("cash")}>{tx(lang, "Place order · pay at the counter", "ऑर्डर द्या · काउंटरवर पैसे भरा")}</Button>
+          </div>
+        ) : payOpen && (
           <PayPanel
             amount={payable}
             upi={settings.upi}
@@ -1740,6 +1747,22 @@ export default function GuestOrder() {
           </div>
         ) : unbilled.length === 0 ? (
           <BillDone state={billState} claimTotal={sentClaim ? sentClaim.payments.reduce((a, p) => a + p.amount, 0) : 0} paidTotal={paidTotal} lang={lang} />
+        ) : settings.payAtCounter ? (
+          // the owner takes every payment at the counter: the bill, and where to pay (no QR, no online pay)
+          <div className="space-y-4">
+            <div className="overflow-hidden rounded-group bg-surface">
+              {unbilled.map((o) => (
+                <div key={o.id} className="border-b border-line/80 px-4 py-3 last:border-0">
+                  <div className="mb-1 text-[12.5px] font-semibold text-muted">#{num(o.number)} · {o.customer}</div>
+                  {o.lines.map((l, i) => (
+                    <div key={i} className="flex justify-between text-[14px]"><span>{l.qty}× {l.name}</span><span className="tnum">{inr(l.qty * l.price)}</span></div>
+                  ))}
+                </div>
+              ))}
+              <div className="flex justify-between border-t border-line px-4 py-3 text-[17px] font-semibold"><span>{tx(lang, "Total (incl. GST)", "एकूण (GST सह)")}</span><span className="tnum">{inr(counterTotal)}</span></div>
+            </div>
+            <PayAtCounter lang={lang} card={settings.acceptCard !== false} />
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="overflow-hidden rounded-group bg-surface">
@@ -1813,6 +1836,17 @@ export default function GuestOrder() {
           </div>
         )}
       </Sheet>
+    </div>
+  );
+}
+
+/** "Please pay at the counter": shown instead of the QR and online pay when the owner turned that on. */
+function PayAtCounter({ lang, card }: { lang: Lang; card: boolean }) {
+  return (
+    <div className="flex flex-col items-center rounded-group bg-saffron-soft px-5 py-6 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface text-saffron"><Banknote size={26} /></div>
+      <p className="mt-3 text-[17px] font-semibold">{tx(lang, "Please make the payment at the counter", "कृपया काउंटरवर पैसे भरा")}</p>
+      <p className="mt-1 text-[13.5px] text-ink/70">{card ? tx(lang, "Cash, UPI or card, whatever suits you.", "रोख, UPI किंवा कार्ड, तुम्हाला सोयीचं ते.") : tx(lang, "Cash or UPI, whatever suits you.", "रोख किंवा UPI, तुम्हाला सोयीचं ते.")}</p>
     </div>
   );
 }

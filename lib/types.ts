@@ -38,6 +38,8 @@ export interface Outlet {
   ordersPaused?: boolean;
   /** self-service counter: token on the guest's phone, "ready" alert, Now serving screen, Picked up */
   selfService?: boolean;
+  /** guests pay at the counter: their phone shows no QR / online pay, only "Please pay at the counter" */
+  payAtCounter?: boolean;
   /** GST on bills: 0.05 (default), 0 when not registered, 0.12 or 0.18. */
   gstRate?: number;
   billFooter?: string; // message at the bottom of the bill
@@ -83,6 +85,7 @@ export interface OutletSettings {
   ordersPaused?: boolean;
   /** self-service counter: token on the guest's phone, "ready" alert, Now serving screen, Picked up */
   selfService?: boolean;
+  payAtCounter?: boolean;
   gstRate?: number;
   billFooter?: string; // printed at the bottom of the bill
   acceptCard?: boolean;
